@@ -108,78 +108,119 @@ def get_commit_message_style(project_dir):
     except Exception as e:
         return None
 
-def generate_commit_message(git_status, triggers, style=None):
-    """Generate smart commit message based on changes and triggers"""
+def _load_task_context():
+    """Load actual task context from session data (flow-trace + session-progress + tool-tracker).
+    Returns dict with task_subject, task_description, task_type, files_changed, edits_made."""
+    ctx = {'task_subject': '', 'task_description': '', 'task_type': '', 'edits_summary': []}
+    try:
+        # 1. Get session ID from session-progress
+        progress_file = MEMORY_DIR / 'logs' / 'session-progress.json'
+        session_id = ''
+        if progress_file.exists():
+            with open(progress_file, 'r', encoding='utf-8') as f:
+                prog = json.load(f)
+            session_id = prog.get('session_id', '')
 
-    # Analyze what changed
+        # 2. Get task type + complexity from flow-trace
+        if session_id:
+            trace_file = MEMORY_DIR / 'logs' / 'sessions' / session_id / 'flow-trace.json'
+            if trace_file.exists():
+                with open(trace_file, 'r', encoding='utf-8') as f:
+                    trace = json.load(f)
+                fd = trace.get('final_decision', {})
+                ctx['task_type'] = fd.get('task_type', '')
+
+        # 3. Get last task subject + edits from tool-tracker.jsonl (most recent data)
+        tracker_file = MEMORY_DIR / 'logs' / 'tool-tracker.jsonl'
+        if tracker_file.exists():
+            with open(tracker_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            # Scan from end: find latest TaskCreate subject, and collect recent edits
+            for line in reversed(lines):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    continue
+                tool = entry.get('tool', '')
+                if tool == 'TaskCreate' and not ctx['task_subject']:
+                    ctx['task_subject'] = entry.get('task_subject', '')
+                if tool == 'Edit' and len(ctx['edits_summary']) < 5:
+                    f_path = entry.get('file', '')
+                    hint = entry.get('new_hint', '')
+                    if f_path:
+                        ctx['edits_summary'].append(f_path)
+                if tool == 'Write' and len(ctx['edits_summary']) < 5:
+                    f_path = entry.get('file', '')
+                    if f_path:
+                        ctx['edits_summary'].append(f_path)
+    except Exception:
+        pass
+    return ctx
+
+
+def generate_commit_message(git_status, triggers, style=None):
+    """Generate smart commit message using actual task context from session data."""
+
     staged_files = git_status.get("staged", [])
 
-    # Categorize changes
-    file_types = {}
-    for f in staged_files:
-        ext = os.path.splitext(f)[1] if '.' in f else 'other'
-        file_types[ext] = file_types.get(ext, 0) + 1
+    # Load REAL task context from session chain
+    task_ctx = _load_task_context()
+    task_subject = task_ctx.get('task_subject', '')
+    task_type_raw = task_ctx.get('task_type', '')
 
-    # Determine change type
+    # Determine change_type from task context first, then fallback to file analysis
     change_type = "update"
+    summary = ""
 
-    if "phase_completion" in triggers:
-        change_type = "feat"
-        summary = "Complete implementation phase"
-    elif "todo_completion" in triggers:
-        change_type = "feat"
-        summary = "Complete task milestone"
-    elif "milestone_signals" in triggers:
-        signals = triggers.get("milestone_signals", {}).get("signals", [])
-        if "bug fixed" in signals or "fix" in signals:
+    # Priority 1: Use actual task subject as commit summary
+    if task_subject:
+        subject_lower = task_subject.lower()
+        # Detect type from task subject
+        if any(w in subject_lower for w in ['fix', 'bug', 'error', 'broken', 'crash', 'resolve']):
             change_type = "fix"
-            summary = "Fix reported issues"
-        elif "feature complete" in signals:
-            change_type = "feat"
-            summary = "Complete feature implementation"
+        elif any(w in subject_lower for w in ['refactor', 'cleanup', 'reorganize', 'simplify']):
+            change_type = "refactor"
+        elif any(w in subject_lower for w in ['doc', 'readme', 'documentation']):
+            change_type = "docs"
+        elif any(w in subject_lower for w in ['test', 'spec', 'coverage']):
+            change_type = "test"
+        elif any(w in subject_lower for w in ['update', 'enhance', 'improve', 'optimize']):
+            change_type = "update"
         else:
             change_type = "feat"
-            summary = "Complete milestone"
-    elif len(staged_files) >= 10:
-        change_type = "feat"
-        summary = "Implement major changes"
+        summary = task_subject
+    # Priority 2: Infer from file types if no task context
     else:
-        # Infer from file types
         if any(f.endswith('.test.js') or f.endswith('.spec.ts') or 'test' in f for f in staged_files):
             change_type = "test"
             summary = "Add/update tests"
         elif any('readme' in f.lower() or f.endswith('.md') for f in staged_files):
             change_type = "docs"
             summary = "Update documentation"
-        elif any(f.endswith('.css') or f.endswith('.scss') or f.endswith('.sass') for f in staged_files):
+        elif any(f.endswith('.css') or f.endswith('.scss') for f in staged_files):
             change_type = "style"
             summary = "Update styling"
+        elif len(staged_files) >= 10:
+            change_type = "feat"
+            summary = "Implement major changes across " + str(len(staged_files)) + " files"
         else:
             change_type = "update"
-            summary = "Update implementation"
+            # Use file names as context
+            file_names = [os.path.basename(f) for f in staged_files[:3]]
+            summary = "Update " + ", ".join(file_names)
 
-    # Build message
+    # Build message with type prefix (matching repo style)
     if style and style.get("type_prefix"):
         message = f"{change_type}: {summary}"
     else:
-        message = summary.capitalize()
+        message = summary.capitalize() if summary else "Update implementation"
 
-    # Add file details
-    if len(staged_files) <= 3:
-        message += f"\n\nFiles: {', '.join(os.path.basename(f) for f in staged_files)}"
-    else:
+    # Only add file count for large changesets (no "Files:" noise for small ones)
+    if len(staged_files) > 5:
         message += f"\n\n{len(staged_files)} files modified"
-        # Group by type
-        if file_types:
-            message += "\n" + ", ".join(f"{count} {ext} files" for ext, count in sorted(file_types.items())[:3])
-
-    # Add trigger info
-    trigger_names = [t.replace('_', ' ').title() for t in triggers.keys() if t != 'reason']
-    if trigger_names:
-        message += f"\n\nTriggered by: {', '.join(trigger_names)}"
-
-    # Add co-author
-    message += "\n\nCo-Authored-By: Claude <noreply@anthropic.com>"
 
     return message
 

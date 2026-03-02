@@ -274,8 +274,10 @@ def _get_tool_activity_for_task(task_id):
         if not tracker_log.exists():
             return result
 
-        # Read all entries, find the window for this task
+        # Read all entries, find the activity window for THIS specific task
+        # Strategy: Find the TaskCreate that matches task_id, record until its TaskUpdate(completed)
         recording = False
+        task_id_str = str(task_id)
         with open(tracker_log, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
@@ -288,19 +290,25 @@ def _get_tool_activity_for_task(task_id):
 
                 tool = entry.get('tool', '')
 
-                # Start recording after this task's TaskCreate
-                if tool == 'TaskCreate' and str(entry.get('task_subject', '')) != '':
-                    # Rough match - we start recording from the most recent TaskCreate
-                    # that hasn't been closed yet
-                    recording = True
-                    result = {
-                        'files_read': [], 'files_written': [], 'files_edited': [],
-                        'commands_run': [], 'searches': [], 'edits': [], 'total_tools': 0,
-                    }
+                # Start recording only when we see a TaskCreate followed by
+                # a TaskUpdate for THIS task_id (or the Nth TaskCreate matching task_id order)
+                if not recording and tool == 'TaskCreate':
+                    # Match by checking if this is the Nth task (task_id = "1" means 1st TaskCreate)
+                    # We track a counter to find the right TaskCreate
+                    if not hasattr(result, '_tc_count'):
+                        result['_tc_count'] = 0
+                    result['_tc_count'] = result.get('_tc_count', 0) + 1
+                    if str(result.get('_tc_count', 0)) == task_id_str:
+                        recording = True
+                        result = {
+                            'files_read': [], 'files_written': [], 'files_edited': [],
+                            'commands_run': [], 'searches': [], 'edits': [], 'total_tools': 0,
+                            '_tc_count': result.get('_tc_count', 0),
+                        }
                     continue
 
                 # Stop recording when this task is marked completed
-                if tool == 'TaskUpdate' and entry.get('task_id') == str(task_id):
+                if tool == 'TaskUpdate' and entry.get('task_id') == task_id_str:
                     if entry.get('task_status') == 'completed':
                         break
 
@@ -860,24 +868,17 @@ def close_github_issue(task_id):
         task_key = str(task_id)
         issue_data = mapping.get('task_to_issue', {}).get(task_key)
 
-        # Fallback: if exact key not found, search all entries for matching task
+        # Fallback: if exact key not found, try 'unknown' key
         if not issue_data:
-            # Try 'unknown' key (common when extract_task_id_from_response failed)
             issue_data = mapping.get('task_to_issue', {}).get('unknown')
             if issue_data:
-                # Re-key this entry properly
+                # Re-key this entry properly so future lookups work
                 mapping['task_to_issue'][task_key] = issue_data
                 if 'unknown' in mapping.get('task_to_issue', {}):
                     del mapping['task_to_issue']['unknown']
                 _save_issues_mapping(mapping)
 
-        # Fallback 2: find any open issue in the mapping
-        if not issue_data:
-            for key, data in mapping.get('task_to_issue', {}).items():
-                if data.get('status') == 'open':
-                    issue_data = data
-                    task_key = key
-                    break
+        # NOTE: Removed dangerous "any open issue" fallback - it closed wrong issues
 
         if not issue_data:
             return False

@@ -513,7 +513,11 @@ def main():
             try:
                 gim = _get_github_issue_manager()
                 if gim:
+                    # Use task ID from response first, fallback to sequential count
                     task_id = gim.extract_task_id_from_response(tool_response)
+                    if not task_id:
+                        # Fallback: use tasks_created count as ID (matches TaskUpdate taskId)
+                        task_id = str(state.get('tasks_created', 1))
                     tc_subject = (tool_input or {}).get('subject', '')
                     tc_desc = (tool_input or {}).get('description', '')
                     if tc_subject and len(tc_subject) >= 5:
