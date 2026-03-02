@@ -61,6 +61,18 @@ class PathResolver:
         """Get logs directory"""
         return self.base_dir / 'logs'
 
+    def get_scripts_dir(self):
+        """Get scripts directory (hooks live here, NOT in memory/current/)"""
+        return Path.home() / '.claude' / 'scripts'
+
+    def get_policies_dir(self):
+        """Get policies directory"""
+        return Path.home() / '.claude' / 'policies'
+
+    def get_session_logs_dir(self):
+        """Get per-session logs directory (flow-trace.json, etc.)"""
+        return self.base_dir / 'logs' / 'sessions'
+
     def get_config_dir(self):
         """Get config directory"""
         return self.base_dir / 'config'
@@ -127,3 +139,15 @@ def is_local_mode():
 
 def get_mode_info():
     return path_resolver.get_mode_info()
+
+
+def get_scripts_dir():
+    return path_resolver.get_scripts_dir()
+
+
+def get_policies_dir():
+    return path_resolver.get_policies_dir()
+
+
+def get_session_logs_dir():
+    return path_resolver.get_session_logs_dir()

@@ -32,9 +32,9 @@ class PolicyExecutionTracker:
     """Track policy executions and provide metrics"""
 
     def __init__(self):
-        self.memory_dir = Path.home() / '.claude' / 'memory'
+        self.memory_dir = get_data_dir()
         self.policy_log = self.memory_dir / 'logs' / 'policy-hits.log'
-        self.enforcer_state = self.memory_dir / '.blocking-enforcer-state.json'
+        self.enforcer_state = self.memory_dir / '.blocking-state.json'
         self.tracker_cache = get_data_dir() / 'policy_execution_cache.json'
 
     def get_enforcer_state(self):

@@ -10,7 +10,7 @@ import sys
 
 # Add path resolver for portable paths
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from utils.path_resolver import get_data_dir, get_logs_dir
+from utils.path_resolver import get_data_dir, get_logs_dir, get_scripts_dir, get_policies_dir
 from collections import defaultdict
 
 
@@ -41,7 +41,7 @@ class MemorySystemMonitor:
         Get status of memory system hooks (daemons removed in v3.3.0).
         Now reports on the 3 Claude Code hook scripts instead of daemon PIDs.
         """
-        current_dir = self.memory_dir / 'current'
+        scripts_dir = get_scripts_dir()
 
         # Map hook scripts to friendly names (replaces daemon list)
         hook_scripts = [
@@ -52,7 +52,7 @@ class MemorySystemMonitor:
 
         statuses = []
         for script_file, name, description in hook_scripts:
-            script_path = current_dir / script_file
+            script_path = scripts_dir / script_file
             exists = script_path.exists()
             status = {
                 'name': name,
@@ -360,16 +360,16 @@ class MemorySystemMonitor:
         - 20pts: Core policy scripts present
         - 20pts: Session logs exist (system is active)
         """
-        current_dir = self.memory_dir / 'current'
+        scripts_dir = get_scripts_dir()
 
         # 60pts: Hook scripts (3 scripts, 20pts each)
         hook_scripts = ['3-level-flow.py', 'clear-session-handler.py', 'stop-notifier.py']
-        hooks_present = sum(1 for s in hook_scripts if (current_dir / s).exists())
+        hooks_present = sum(1 for s in hook_scripts if (scripts_dir / s).exists())
         hooks_score = int((hooks_present / len(hook_scripts)) * 60)
 
         # 20pts: Core policy scripts present
-        policy_scripts = ['auto-fix-enforcer.py', 'context-monitor-v2.py', 'blocking-policy-enforcer.py']
-        policies_present = sum(1 for s in policy_scripts if (current_dir / s).exists())
+        policy_scripts = ['auto-fix-enforcer.py', 'context-monitor-v2.py', 'pre-tool-enforcer.py']
+        policies_present = sum(1 for s in policy_scripts if (scripts_dir / s).exists())
         policy_score = int((policies_present / len(policy_scripts)) * 20)
 
         # 20pts: Session logs exist and are recent
@@ -457,8 +457,9 @@ class MemorySystemMonitor:
              'status': 'active'},
         ]
 
+        policies_dir = get_policies_dir()
         for policy in policies:
-            policy_file = self.memory_dir / policy['file']
+            policy_file = policies_dir / policy['file']
             policy['exists'] = policy_file.exists()
             policy['active'] = policy['exists'] and policy['status'] == 'active'
 

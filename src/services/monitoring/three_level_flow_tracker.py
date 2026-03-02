@@ -38,9 +38,9 @@ class ThreeLevelFlowTracker:
     """Track and parse 3-level architecture flow executions from session logs"""
 
     def __init__(self):
-        self.memory_dir = Path.home() / '.claude' / 'memory'
+        self.memory_dir = get_data_dir()
         self.sessions_dir = self.memory_dir / 'logs' / 'sessions'
-        self.auto_enforcement_log = self.memory_dir / 'logs' / 'auto-enforcement.log'
+        self.policy_hits_log = self.memory_dir / 'logs' / 'policy-hits.log'
 
     # -------------------------------------------------------------------------
     # Session Discovery
@@ -597,15 +597,15 @@ class ThreeLevelFlowTracker:
         return data
 
     def get_policy_hits_today(self, hours=24):
-        """Count policy enforcement hits in the last N hours from auto-enforcement.log"""
-        if not self.auto_enforcement_log.exists():
+        """Count policy enforcement hits in the last N hours from policy-hits.log"""
+        if not self.policy_hits_log.exists():
             return {'total': 0, 'success': 0, 'failed': 0}
 
         cutoff = datetime.now() - timedelta(hours=hours)
         total = success = failed = 0
 
         try:
-            with open(self.auto_enforcement_log, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(self.policy_hits_log, 'r', encoding='utf-8', errors='ignore') as f:
                 for line in f:
                     m = re.search(r'\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]', line)
                     if m:
@@ -613,10 +613,10 @@ class ThreeLevelFlowTracker:
                             ts = datetime.strptime(m.group(1), '%Y-%m-%d %H:%M:%S')
                             if ts >= cutoff:
                                 total += 1
-                                if 'ENFORCED' in line or '[OK]' in line or 'SUCCESS' in line:
-                                    success += 1
-                                elif 'FAIL' in line or 'ERROR' in line:
+                                if 'FAIL' in line.upper() or 'ERROR' in line.upper():
                                     failed += 1
+                                else:
+                                    success += 1
                         except Exception:
                             pass
         except Exception:
