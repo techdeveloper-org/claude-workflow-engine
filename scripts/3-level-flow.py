@@ -1533,87 +1533,205 @@ def main():
     print()
 
     # =========================================================================
-    # LEVEL 2: RULES/STANDARDS SYSTEM
+    # TECH STACK DETECTION (needed by Level 2.2 conditional loading)
+    # =========================================================================
+    tech_stack = detect_tech_stack(cwd=hook_cwd if hook_cwd else None)
+    is_spring_boot = 'spring-boot' in tech_stack
+
+    # =========================================================================
+    # LEVEL 2: RULES/STANDARDS SYSTEM (2 sub-levels)
     # =========================================================================
     print("[LEVEL 2] RULES/STANDARDS SYSTEM (MIDDLE LAYER)")
 
-    step_start = datetime.now()
     standards_script = MEMORY_BASE / '02-standards-system' / 'standards-loader.py'
     if not standards_script.exists():
         standards_script = SCRIPT_DIR / 'architecture' / '02-standards-system' / 'standards-loader.py'
-    standards_count = 14
-    rules_count = 89
-    standards_list = []
-    std_dur = 0
+
+    # ------------------------------------------------------------------
+    # LEVEL 2.1: COMMON STANDARDS (always active)
+    # ------------------------------------------------------------------
+    step_start_2_1 = datetime.now()
+    common_count = 12
+    common_rules = 65
+    common_list = []
+    common_dur = 0
 
     if standards_script.exists():
-        std_out, _, std_rc, std_dur = run_script_with_retry(standards_script, ['--load-all'], timeout=10, step_name='Level-2.Standards')
-        for line in std_out.splitlines():
-            if 'Total Standards:' in line:
+        c_out, _, c_rc, common_dur = run_script_with_retry(standards_script, ['--load-common'], timeout=10, step_name='Level-2.1.Common')
+        for line in c_out.splitlines():
+            if 'Common Standards:' in line:
                 try:
-                    standards_count = int(line.split(':')[1].strip())
+                    common_count = int(line.split(':')[1].strip())
                 except Exception:
                     pass
-            if 'Rules Loaded:' in line:
+            if 'Common Rules Loaded:' in line:
                 try:
-                    rules_count = int(line.split(':')[1].strip())
+                    common_rules = int(line.split(':')[1].strip())
                 except Exception:
                     pass
             if line.strip().startswith('-') or line.strip().startswith('*'):
-                standards_list.append(line.strip().lstrip('-* '))
+                common_list.append(line.strip().lstrip('-* '))
 
-    if not standards_list:
-        standards_list = [
-            "java_project_structure", "package_organization",
-            "config_server_patterns", "secret_management",
-            "response_format_ApiResponseDto", "validation_patterns",
-            "database_conventions", "api_design_standards",
-            "error_handling_rules", "common_utility_patterns",
-            "jpa_auditing_pattern", "centralized_auth_security",
-            "devops_patterns", "kubernetes_network_policies"
+    if not common_list:
+        common_list = [
+            "naming_conventions", "error_handling_common", "logging_standards",
+            "security_basics", "code_organization", "api_design_common",
+            "database_common", "constants_common", "testing_approach",
+            "documentation_common", "git_standards", "file_organization"
         ]
 
     trace["pipeline"].append({
-        "step": "LEVEL_2_STANDARDS",
-        "name": "Rules/Standards System",
-        "level": 2,
+        "step": "LEVEL_2_1_COMMON",
+        "name": "Common Standards (Universal)",
+        "level": 2.1,
         "order": 3,
         "is_blocking": False,
-        "timestamp": step_start.isoformat(),
-        "duration_ms": std_dur,
+        "timestamp": step_start_2_1.isoformat(),
+        "duration_ms": common_dur,
         "input": {
             "from_previous": "LEVEL_1_SESSION",
             "session_id": session_id,
             "context_pct": context_pct,
-            "purpose": "Load ALL coding standards BEFORE any code generation"
+            "purpose": "Load universal coding standards BEFORE any code generation"
         },
         "policy": {
             "script": "standards-loader.py",
-            "args": ["--load-all"],
+            "args": ["--load-common"],
             "rules_applied": [
-                "load_all_standards_files",
-                "count_total_rules",
+                "load_common_standards",
+                "count_common_rules",
                 "make_standards_available_to_execution_layer"
             ]
         },
         "policy_output": {
-            "standards_loaded": standards_count,
-            "rules_loaded": rules_count,
-            "standards_list": standards_list,
+            "standards_loaded": common_count,
+            "rules_loaded": common_rules,
+            "standards_list": common_list,
             "exit_code": 0 if standards_script.exists() else -1,
             "fallback_used": not standards_script.exists()
         },
-        "decision": f"All {standards_count} standards ({rules_count} rules) loaded - enforce during code generation",
+        "decision": f"Common: {common_count} standards ({common_rules} rules) loaded",
         "passed_to_next": {
-            "standards_active": standards_count,
-            "rules_active": rules_count,
-            "standards_list": standards_list,
-            "enforce_on_all_code": True
+            "common_standards": common_count,
+            "common_rules": common_rules,
+            "common_list": common_list
         }
     })
 
-    print(f"   [OK] Standards: {standards_count} loaded, {rules_count} rules")
-    print("[OK] LEVEL 2 COMPLETE")
+    print(f"   [2.1] Common Standards: {common_count} loaded, {common_rules} rules")
+
+    # ------------------------------------------------------------------
+    # LEVEL 2.2: MICROSERVICES STANDARDS (conditional on Spring Boot)
+    # ------------------------------------------------------------------
+    micro_count = 0
+    micro_rules = 0
+    micro_list = []
+    micro_dur = 0
+    microservices_active = is_spring_boot
+
+    if is_spring_boot:
+        step_start_2_2 = datetime.now()
+        micro_count = 15
+        micro_rules = 139
+
+        if standards_script.exists():
+            m_out, _, m_rc, micro_dur = run_script_with_retry(standards_script, ['--load-microservices'], timeout=10, step_name='Level-2.2.Microservices')
+            for line in m_out.splitlines():
+                if 'Microservices Standards:' in line:
+                    try:
+                        micro_count = int(line.split(':')[1].strip())
+                    except Exception:
+                        pass
+                if 'Microservices Rules Loaded:' in line:
+                    try:
+                        micro_rules = int(line.split(':')[1].strip())
+                    except Exception:
+                        pass
+                if line.strip().startswith('-') or line.strip().startswith('*'):
+                    micro_list.append(line.strip().lstrip('-* '))
+
+        if not micro_list:
+            micro_list = [
+                "java_project_structure", "config_server_patterns",
+                "secret_management", "response_format_ApiResponseDto",
+                "api_design_standards", "database_conventions",
+                "error_handling_rules", "service_layer_pattern",
+                "entity_pattern", "controller_pattern",
+                "constants_organization", "common_utilities",
+                "documentation_standards", "kubernetes_network_policies",
+                "k8s_docker_jenkins_infra"
+            ]
+
+        trace["pipeline"].append({
+            "step": "LEVEL_2_2_MICROSERVICES",
+            "name": "Microservices Standards (Spring Boot)",
+            "level": 2.2,
+            "order": 4,
+            "is_blocking": False,
+            "timestamp": step_start_2_2.isoformat(),
+            "duration_ms": micro_dur,
+            "input": {
+                "from_previous": "LEVEL_2_1_COMMON",
+                "tech_stack": tech_stack,
+                "is_spring_boot": True,
+                "purpose": "Load Spring Boot microservices standards"
+            },
+            "policy": {
+                "script": "standards-loader.py",
+                "args": ["--load-microservices"],
+                "rules_applied": [
+                    "load_microservices_standards",
+                    "count_microservices_rules",
+                    "spring_boot_specific_enforcement"
+                ]
+            },
+            "policy_output": {
+                "standards_loaded": micro_count,
+                "rules_loaded": micro_rules,
+                "standards_list": micro_list,
+                "exit_code": 0 if standards_script.exists() else -1,
+                "fallback_used": not standards_script.exists()
+            },
+            "decision": f"Microservices: {micro_count} standards ({micro_rules} rules) loaded (Spring Boot detected)",
+            "passed_to_next": {
+                "microservices_standards": micro_count,
+                "microservices_rules": micro_rules,
+                "microservices_list": micro_list
+            }
+        })
+
+        print(f"   [2.2] Microservices Standards: {micro_count} loaded, {micro_rules} rules (Spring Boot detected)")
+    else:
+        trace["pipeline"].append({
+            "step": "LEVEL_2_2_MICROSERVICES",
+            "name": "Microservices Standards (SKIPPED)",
+            "level": 2.2,
+            "order": 4,
+            "is_blocking": False,
+            "timestamp": datetime.now().isoformat(),
+            "duration_ms": 0,
+            "input": {
+                "tech_stack": tech_stack,
+                "is_spring_boot": False
+            },
+            "policy_output": {
+                "skipped": True,
+                "reason": "No Spring Boot detected in tech stack"
+            },
+            "decision": "SKIPPED - not a Spring Boot project",
+            "passed_to_next": {
+                "microservices_standards": 0,
+                "microservices_rules": 0
+            }
+        })
+        print(f"   [2.2] Microservices Standards: SKIPPED (no Spring Boot detected)")
+
+    # Combined totals for backward compatibility
+    standards_count = common_count + micro_count
+    rules_count = common_rules + micro_rules
+    standards_list = common_list + micro_list
+
+    print(f"[OK] LEVEL 2 COMPLETE ({standards_count} standards, {rules_count} rules)")
     print()
 
     # =========================================================================
@@ -1625,6 +1743,11 @@ def main():
     prev_output = {
         "standards_active": standards_count,
         "rules_active": rules_count,
+        "common_standards": common_count,
+        "common_rules": common_rules,
+        "microservices_standards": micro_count,
+        "microservices_rules": micro_rules,
+        "microservices_active": microservices_active,
         "context_pct": context_pct,
         "session_id": session_id
     }
@@ -1983,9 +2106,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     # ------------------------------------------------------------------
     step_start = datetime.now()
 
-    # Step 1: Detect tech stack from project files (secondary input)
-    # Use cwd from hook data (most accurate), fallback to process cwd
-    tech_stack = detect_tech_stack(cwd=hook_cwd if hook_cwd else None)
+    # tech_stack already detected before Level 2 (reused here)
 
     # Step 2: 4-layer selection: task_type -> keyword score -> tech_stack -> adaptive
     # Passes user_message for dynamic keyword analysis (Layer 2)
@@ -2339,10 +2460,21 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         print("   3. Quote all file paths containing spaces")
         print("   4. Auto-translate: del->rm, copy->cp, dir->ls in Bash")
 
-    # Coding standards policy (not auto-enforced — Claude must follow in code generation)
+    # Common standards (Level 2.1) - always enforced
     if loaded_policies.get('level-2', {}):
         print()
-        print("[ENFORCE] CODING STANDARDS (Level 2):")
+        print("[ENFORCE] COMMON STANDARDS (Level 2.1):")
+        print("   1. Use consistent naming: camelCase vars, PascalCase classes, UPPER_SNAKE constants")
+        print("   2. NEVER swallow exceptions - catch specific types, include context")
+        print("   3. NO hardcoded secrets/passwords/API keys in source code")
+        print("   4. NO magic numbers/strings - use named constants")
+        print("   5. Write meaningful commit messages (feat/fix/refactor: description)")
+        print("   6. Validate ALL external input, use parameterized DB queries")
+
+    # Microservices standards (Level 2.2) - only if Spring Boot detected
+    if microservices_active:
+        print()
+        print("[ENFORCE] MICROSERVICES STANDARDS (Level 2.2 - Spring Boot):")
         print("   1. NO hardcoded strings - use constants (MessageConstants, ApiConstants)")
         print("   2. ALL API responses use ApiResponseDto<T> wrapper")
         print("   3. Service implementations are package-private, extend Helper classes")
@@ -2374,6 +2506,11 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "context_pct": context_pct2,
         "standards_active": standards_count,
         "rules_active": rules_count,
+        "common_standards": common_count,
+        "common_rules": common_rules,
+        "microservices_standards": micro_count,
+        "microservices_rules": micro_rules,
+        "microservices_active": microservices_active,
         "session_id": session_id,
         "proceed": True,
         "summary": (
@@ -2506,8 +2643,12 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     print(f"   +-- [1.3] Preferences: {prefs_loaded} loaded")
     print(f"   +-- [1.4] State: {completed_tasks_count} tasks, {files_modified_count} files")
     print()
-    print("LEVEL 2: Standards System")
-    print(f"   +-- [OK] Standards: {standards_count}, Rules: {rules_count}")
+    print("LEVEL 2: Standards System (2 sub-levels)")
+    print(f"   +-- [2.1] Common: {common_count}, Rules: {common_rules}")
+    if microservices_active:
+        print(f"   +-- [2.2] Microservices: {micro_count}, Rules: {micro_rules}")
+    else:
+        print(f"   +-- [2.2] Microservices: SKIPPED (no Spring Boot)")
     print()
     print("LEVEL 3: Execution System (12 Steps)")
     print(f"   +-- [3.0] Complexity={complexity}, Type={task_type}")
