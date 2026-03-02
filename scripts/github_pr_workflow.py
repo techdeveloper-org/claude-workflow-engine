@@ -458,6 +458,89 @@ def _auto_review_pr(repo_root, pr_number, session_summary, build_result=None):
         _log(f"Auto-review error: {e}")
 
 
+def _bump_version_and_changelog(repo_root, session_summary, issue_numbers):
+    """
+    Auto-bump VERSION (patch) and add CHANGELOG entry.
+    Enforces version-release-policy.md requirement that every code push
+    must update VERSION and CHANGELOG.
+    Returns True if files were modified.
+    """
+    try:
+        version_file = Path(repo_root) / 'VERSION'
+        changelog_file = Path(repo_root) / 'docs' / 'CHANGELOG-SYSTEM.md'
+
+        if not version_file.exists():
+            _log("No VERSION file found - skipping version bump")
+            return False
+
+        # Read current version
+        current_version = version_file.read_text(encoding='utf-8').strip()
+        parts = current_version.split('.')
+        if len(parts) != 3:
+            _log(f"Invalid version format: {current_version}")
+            return False
+
+        # Patch increment
+        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+        new_version = f"{major}.{minor}.{patch + 1}"
+
+        # Write new VERSION
+        version_file.write_text(new_version + '\n', encoding='utf-8')
+        _log(f"VERSION bumped: {current_version} -> {new_version}")
+
+        # Build changelog entry from session summary
+        today = datetime.now().strftime('%Y-%m-%d')
+        entry_lines = [f"- v{new_version} ({today}): "]
+
+        if session_summary:
+            types = session_summary.get('task_types', [])
+            if types:
+                entry_lines[0] += ', '.join(types[:3])
+            else:
+                entry_lines[0] += 'Session updates'
+
+            requests = session_summary.get('requests', [])
+            for req in requests[:5]:
+                prompt = req.get('prompt', '')[:100]
+                if prompt:
+                    entry_lines.append(f"  - {prompt}")
+        else:
+            entry_lines[0] += 'Session updates'
+
+        if issue_numbers:
+            closes_str = ', '.join(f"#{n}" for n in issue_numbers)
+            entry_lines.append(f"  - Closes: {closes_str}")
+
+        entry_text = '\n'.join(entry_lines) + '\n'
+
+        # Prepend to CHANGELOG (after header)
+        if changelog_file.exists():
+            content = changelog_file.read_text(encoding='utf-8')
+            # Insert after the "---" separator (after the header)
+            sep_idx = content.find('---\n')
+            if sep_idx >= 0:
+                insert_pos = sep_idx + 4  # After "---\n"
+                new_content = content[:insert_pos] + '\n' + entry_text + content[insert_pos:]
+                changelog_file.write_text(new_content, encoding='utf-8')
+                _log(f"CHANGELOG updated with v{new_version} entry")
+            else:
+                # No separator, just prepend after first line
+                new_content = content.split('\n', 1)
+                if len(new_content) == 2:
+                    changelog_file.write_text(
+                        new_content[0] + '\n' + entry_text + new_content[1],
+                        encoding='utf-8'
+                    )
+        else:
+            _log("No CHANGELOG file found - skipping changelog update")
+
+        return True
+
+    except Exception as e:
+        _log(f"Version bump error: {e}")
+        return False
+
+
 def _merge_pr(repo_root, pr_number):
     """
     Merge the PR via gh CLI. Falls back to leaving PR open if merge fails.
@@ -539,7 +622,9 @@ def _switch_to_main(repo_root):
 def run_pr_workflow(session_id=None):
     """
     Main PR workflow orchestrator. Runs the full flow:
-      1. Commit any uncommitted changes
+      0. Build validation
+      0.5. Version bump + CHANGELOG update (enforces version-release-policy)
+      1. Commit any uncommitted changes (includes version bump)
       2. Push branch to remote
       3. Create PR with session summary body + Closes #N
       4. Post auto-review comment with session metrics
@@ -612,7 +697,11 @@ def run_pr_workflow(session_id=None):
         except Exception as e:
             _log(f"Build validation error (non-fatal): {e}")
 
-        # Step 1: Commit changes
+        # Step 0.5: Version bump + CHANGELOG update (enforces version-release-policy)
+        _log("Step 0.5: Version bump + CHANGELOG...")
+        _bump_version_and_changelog(repo_root, session_summary, issue_numbers)
+
+        # Step 1: Commit changes (includes version bump if successful)
         _log("Step 1: Committing changes...")
         _commit_session_changes(repo_root, session_summary)
 
