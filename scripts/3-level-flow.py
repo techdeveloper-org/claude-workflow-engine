@@ -2425,6 +2425,17 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         print("   4. Create GitHub Release (gh release create) for IDE")
         print("   5. Ensure version consistency across README/CLAUDE.md/badges")
 
+    # GitHub Issues auto-close policy (Claude must include issue refs in commits/PRs)
+    if 'github-issues-integration-policy' in loaded_policies.get('level-3', {}) or \
+       'github-branch-pr-policy' in loaded_policies.get('level-3', {}):
+        print()
+        print("[ENFORCE] GITHUB ISSUES AUTO-CLOSE POLICY:")
+        print("   1. On issue branch (fix/42, feature/123): include 'Closes #N' in commit messages")
+        print("   2. PR body MUST contain 'Closes #N' for ALL related open issues")
+        print("   3. When ALL tasks complete: issues auto-close via post-tool-tracker")
+        print("   4. NEVER leave issues open after PR merge - verify closure")
+        print("   5. Branch format: {label}/{issueId} (e.g. fix/42, feature/123)")
+
     # Task breakdown policy (not auto-enforced — Claude must use TaskCreate)
     if 'automatic-task-breakdown-policy' in loaded_policies.get('level-3', {}):
         print()
