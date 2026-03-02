@@ -680,6 +680,7 @@ def main():
 
     # PRIORITY 4: Branch-based PR detection (fallback when work_done flag was never written)
     # This catches sessions where Claude works without TaskCreate/TaskUpdate
+    # Also ensures version bump + PR workflow runs even for manual PR creation
     if not pr_triggered:
         try:
             branch_result = subprocess.run(
@@ -689,9 +690,12 @@ def main():
             current_branch = branch_result.stdout.strip() if branch_result.returncode == 0 else ''
 
             if current_branch and current_branch not in ('main', 'master'):
-                # On a feature branch - check if all session issues are closed
+                # On a feature branch - check if work is done
+                should_trigger = False
+                trigger_reason = ''
+
+                # Check 1: All session issues are closed
                 session_issues_file = _get_session_issues_file()
-                all_closed = False
                 if session_issues_file and session_issues_file.exists():
                     try:
                         mapping = json.loads(session_issues_file.read_text(encoding='utf-8'))
@@ -701,11 +705,30 @@ def main():
                                 d.get('status') == 'closed'
                                 for d in task_issues.values()
                             )
+                            if all_closed:
+                                should_trigger = True
+                                trigger_reason = 'all issues closed'
                     except Exception:
                         pass
 
-                if all_closed:
-                    log_s(f"[PR-WORKFLOW] Branch detection: on {current_branch} with all issues closed - triggering PR workflow")
+                # Check 2: No tracked issues but all tasks completed
+                # (covers manual PR creation where github-issues.json is missing)
+                if not should_trigger:
+                    try:
+                        progress_file = MEMORY_BASE / 'logs' / 'session-progress.json'
+                        if progress_file.exists():
+                            with open(progress_file, 'r', encoding='utf-8') as f:
+                                progress = json.load(f)
+                            tasks_created = progress.get('tasks_created', 0)
+                            tasks_completed = progress.get('tasks_completed', 0)
+                            if tasks_created > 0 and tasks_completed >= tasks_created:
+                                should_trigger = True
+                                trigger_reason = f'all {tasks_completed} tasks completed'
+                    except Exception:
+                        pass
+
+                if should_trigger:
+                    log_s(f"[PR-WORKFLOW] Branch detection: on {current_branch} ({trigger_reason}) - triggering PR workflow (includes version bump)")
                     script_dir = Path(__file__).parent
                     if str(script_dir) not in sys.path:
                         sys.path.insert(0, str(script_dir))
