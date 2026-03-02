@@ -545,33 +545,20 @@ def create_github_issue(task_id, subject, description):
 
         body = '\n'.join(body_lines)
 
-        # Build labels list
-        labels = ['task-auto-created', 'level-3-execution']
-
-        # Detect issue type for label
+        # Build labels using the comprehensive label system
         issue_type = _detect_issue_type(subject, description)
-        type_label_map = {
-            'fix': 'bugfix',
-            'feature': 'feature',
-            'refactor': 'refactor',
-            'docs': 'docs',
-            'enhancement': 'enhancement',
-            'test': 'test',
-        }
-        labels.append(type_label_map.get(issue_type, 'feature'))
-
-        # Add priority + complexity labels from flow trace
         complexity = flow_ctx.get('complexity', 0)
-        labels.extend(_get_priority_labels(complexity))
+        labels = _build_issue_labels(issue_type, complexity, subject, description)
 
-        # Create issue via gh CLI
+        # Auto-create any missing labels in the repo
+        _ensure_labels_exist(labels, repo_root)
+
+        # Create issue via gh CLI with labels
         cmd = [
             'gh', 'issue', 'create',
             '--title', title,
             '--body', body,
         ]
-
-        # Try with labels, fall back without if labels don't exist
         cmd_with_labels = cmd + ['--label', ','.join(labels)]
 
         result = subprocess.run(
@@ -580,7 +567,7 @@ def create_github_issue(task_id, subject, description):
             cwd=repo_root
         )
 
-        # If label creation failed, retry without labels
+        # If label creation still failed, retry without labels
         if result.returncode != 0 and 'label' in result.stderr.lower():
             result = subprocess.run(
                 cmd,
@@ -950,10 +937,168 @@ def _detect_issue_type(subject, description=''):
     return 'feature'
 
 
+# -----------------------------------------------------------------------
+# LABEL SYSTEM: Auto-create and assign labels to GitHub issues
+# -----------------------------------------------------------------------
+
+# All labels the system uses, with colors and descriptions.
+# These get auto-created in the repo if they don't exist yet.
+LABEL_DEFINITIONS = {
+    # Type labels
+    'bug':              {'color': 'd73a4a', 'description': 'Something isn\'t working'},
+    'enhancement':      {'color': 'a2eeef', 'description': 'New feature or request'},
+    'refactor':         {'color': 'D4C5F9', 'description': 'Code restructuring without behavior change'},
+    'documentation':    {'color': '0075ca', 'description': 'Improvements or additions to documentation'},
+    'test':             {'color': 'BFD4F2', 'description': 'Test coverage or test infrastructure'},
+    # Priority labels
+    'critical-priority': {'color': '8B0000', 'description': 'CRITICAL - blocks other work'},
+    'high-priority':     {'color': 'FF0000', 'description': 'High priority - should be done soon'},
+    'medium-priority':   {'color': 'FFA500', 'description': 'Medium priority - can wait'},
+    'low-priority':      {'color': 'FBCA04', 'description': 'Low priority - nice to have'},
+    # Complexity labels
+    'complexity-high':   {'color': 'B60205', 'description': 'High complexity (10+ score)'},
+    'complexity-medium': {'color': 'D93F0B', 'description': 'Medium complexity (4-9 score)'},
+    'complexity-low':    {'color': '0E8A16', 'description': 'Low complexity (1-3 score)'},
+    # Scope labels
+    'backend':          {'color': '1D76DB', 'description': 'Backend / server-side changes'},
+    'frontend':         {'color': 'C5DEF5', 'description': 'Frontend / UI changes'},
+    'devops':           {'color': 'EDEDED', 'description': 'CI/CD, deployment, infrastructure'},
+    'config':           {'color': 'F9D0C4', 'description': 'Configuration or settings changes'},
+    'scripts':          {'color': 'E99695', 'description': 'Hook scripts or automation'},
+    'policy':           {'color': 'D4C5F9', 'description': 'Policy or architecture changes'},
+    # Auto-management labels
+    'auto-created':     {'color': 'C2E0C6', 'description': 'Auto-created by Claude Memory System'},
+}
+
+# Cache for labels known to exist in the repo (avoids repeated gh calls)
+_repo_labels_cache = None
+
+
+def _get_repo_labels(repo_root):
+    """Fetch all labels currently in the GitHub repo. Cached per invocation."""
+    global _repo_labels_cache
+    if _repo_labels_cache is not None:
+        return _repo_labels_cache
+
+    try:
+        result = subprocess.run(
+            ['gh', 'label', 'list', '--limit', '100', '--json', 'name'],
+            capture_output=True, text=True, timeout=GH_TIMEOUT,
+            cwd=repo_root
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            _repo_labels_cache = {item['name'] for item in data}
+            return _repo_labels_cache
+    except Exception:
+        pass
+    _repo_labels_cache = set()
+    return _repo_labels_cache
+
+
+def _ensure_labels_exist(labels, repo_root):
+    """Create any labels that don't exist in the repo yet."""
+    existing = _get_repo_labels(repo_root)
+    for label_name in labels:
+        if label_name in existing:
+            continue
+        defn = LABEL_DEFINITIONS.get(label_name)
+        if not defn:
+            continue
+        try:
+            subprocess.run(
+                ['gh', 'label', 'create', label_name,
+                 '--color', defn['color'],
+                 '--description', defn['description'],
+                 '--force'],
+                capture_output=True, text=True, timeout=GH_TIMEOUT,
+                cwd=repo_root
+            )
+            existing.add(label_name)
+        except Exception:
+            pass
+
+
+def _detect_scope_labels(subject, description=''):
+    """Detect scope/technology labels from subject and description."""
+    labels = []
+    combined = (subject + ' ' + (description or '')).lower()
+
+    if any(w in combined for w in ['api', 'endpoint', 'server', 'service', 'database', 'backend',
+                                    'spring', 'flask', 'rest', 'query']):
+        labels.append('backend')
+    if any(w in combined for w in ['ui', 'frontend', 'template', 'css', 'html', 'component',
+                                    'dashboard', 'page', 'layout', 'view']):
+        labels.append('frontend')
+    if any(w in combined for w in ['deploy', 'ci', 'cd', 'docker', 'kubernetes', 'pipeline',
+                                    'build', 'release', 'version']):
+        labels.append('devops')
+    if any(w in combined for w in ['config', 'setting', 'environment', 'properties', 'json config']):
+        labels.append('config')
+    if any(w in combined for w in ['script', 'hook', 'automation', 'daemon', 'enforcer',
+                                    'tracker', 'notifier', 'policy script']):
+        labels.append('scripts')
+    if any(w in combined for w in ['policy', 'architecture', 'level-1', 'level-2', 'level-3',
+                                    'enforcement', 'standard']):
+        labels.append('policy')
+
+    return labels
+
+
+def _build_issue_labels(issue_type, complexity, subject, description=''):
+    """
+    Build the complete list of labels for a GitHub issue.
+    Returns list of label name strings.
+    """
+    labels = []
+
+    # 1. Auto-management label
+    labels.append('auto-created')
+
+    # 2. Type label (maps issue_type to actual repo label names)
+    type_label_map = {
+        'fix': 'bug',
+        'feature': 'enhancement',
+        'refactor': 'refactor',
+        'docs': 'documentation',
+        'enhancement': 'enhancement',
+        'test': 'test',
+    }
+    labels.append(type_label_map.get(issue_type, 'enhancement'))
+
+    # 3. Priority label
+    if complexity and isinstance(complexity, (int, float)):
+        c = int(complexity)
+        if c >= 15:
+            labels.append('critical-priority')
+        elif c >= 10:
+            labels.append('high-priority')
+        elif c >= 5:
+            labels.append('medium-priority')
+        else:
+            labels.append('low-priority')
+
+    # 4. Complexity label
+    if complexity and isinstance(complexity, (int, float)):
+        c = int(complexity)
+        if c >= 10:
+            labels.append('complexity-high')
+        elif c >= 4:
+            labels.append('complexity-medium')
+        else:
+            labels.append('complexity-low')
+
+    # 5. Scope/technology labels
+    labels.extend(_detect_scope_labels(subject, description))
+
+    return labels
+
+
 def _get_priority_labels(complexity):
     """
     Get priority and complexity labels based on task complexity score.
     Returns list of label strings.
+    DEPRECATED: Use _build_issue_labels() instead. Kept for backward compatibility.
     """
     labels = []
     if not complexity or not isinstance(complexity, (int, float)):
@@ -961,17 +1106,15 @@ def _get_priority_labels(complexity):
 
     complexity = int(complexity)
 
-    # Priority labels (based on complexity score)
     if complexity >= 15:
-        labels.append('priority-critical')
+        labels.append('critical-priority')
     elif complexity >= 10:
-        labels.append('priority-high')
+        labels.append('high-priority')
     elif complexity >= 5:
-        labels.append('priority-medium')
+        labels.append('medium-priority')
     else:
-        labels.append('priority-low')
+        labels.append('low-priority')
 
-    # Complexity labels
     if complexity >= 10:
         labels.append('complexity-high')
     elif complexity >= 4:
