@@ -11,7 +11,7 @@ import sys
 
 # Add path resolver for portable paths
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from utils.path_resolver import get_data_dir, get_logs_dir
+from utils.path_resolver import get_data_dir, get_logs_dir, get_scripts_dir, get_policies_dir
 from datetime import datetime, timedelta
 
 class MetricsCollector:
@@ -35,19 +35,19 @@ class MetricsCollector:
             hooks_present = 0
             hooks_total = 3
 
-            # Check 1: Hook scripts present in current/ (60 points - most important)
-            current_dir = self.memory_dir / 'current'
+            # Check 1: Hook scripts present in ~/.claude/scripts/ (60 points)
+            scripts_dir = get_scripts_dir()
             hook_scripts = ['3-level-flow.py', 'clear-session-handler.py', 'stop-notifier.py']
             for script in hook_scripts:
-                if (current_dir / script).exists():
+                if (scripts_dir / script).exists():
                     hooks_present += 1
             score += int((hooks_present / hooks_total) * 60)
 
-            # Check 2: Policy files present (20 points)
+            # Check 2: Policy/enforcement scripts present (20 points)
             policy_checks = [
-                current_dir / 'auto-fix-enforcer.py',
-                current_dir / 'context-monitor-v2.py',
-                current_dir / 'blocking-policy-enforcer.py',
+                scripts_dir / 'auto-fix-enforcer.py',
+                scripts_dir / 'context-monitor-v2.py',
+                scripts_dir / 'pre-tool-enforcer.py',
             ]
             policy_ok = sum(1 for p in policy_checks if p.exists())
             score += int((policy_ok / len(policy_checks)) * 20)
@@ -111,21 +111,18 @@ class MetricsCollector:
         return health.get('running_daemons', 0)
 
     def get_context_usage(self):
-        """Get current context usage estimate"""
+        """Get current context usage from session-progress.json (written by post-tool-tracker)"""
         try:
-            result = subprocess.run(
-                ['python', str(self.memory_dir / 'current' / 'context-monitor-v2.py'), '--current-status'],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-
-            if result.returncode == 0:
-                status = json.loads(result.stdout)
+            progress_file = self.memory_dir / 'logs' / 'session-progress.json'
+            if progress_file.exists():
+                with open(progress_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                pct = data.get('context_estimate_pct', 0)
+                level = 'low' if pct < 50 else ('moderate' if pct < 70 else ('high' if pct < 85 else 'critical'))
                 return {
-                    'percentage': status.get('percentage', 0),
-                    'level': status.get('level', 'unknown'),
-                    'status': status.get('status', 'unknown')
+                    'percentage': pct,
+                    'level': level,
+                    'status': 'active' if pct > 0 else 'idle'
                 }
         except Exception as e:
             print(f"Error getting context usage: {e}")
@@ -343,94 +340,46 @@ class MetricsCollector:
             if days:
                 cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-            # Initialize counters
+            # Read REAL data from flow-trace.json files (actual source of truth)
             context_opts = 0
             failure_prevented = 0
             model_selections = 0
             tool_optimizations = 0
 
-            # 1. Read tool-optimization.log
-            tool_log = self.memory_dir / 'logs' / 'tool-optimization.log'
-            if tool_log.exists():
-                with open(tool_log, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        try:
-                            data = json.loads(line.strip())
-                            timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+            sessions_dir = self.memory_dir / 'logs' / 'sessions'
+            if sessions_dir.exists():
+                for session_dir in sessions_dir.iterdir():
+                    if not session_dir.is_dir():
+                        continue
+                    trace_file = session_dir / 'flow-trace.json'
+                    if not trace_file.exists():
+                        continue
+                    try:
+                        with open(trace_file, 'r', encoding='utf-8') as f:
+                            trace = json.load(f)
+                        fd = trace.get('final_decision', {})
 
-                            # Check if within date range
-                            if cutoff_date and timestamp < cutoff_date:
-                                continue
+                        # Model selection: count haiku selections as cost savings
+                        model = fd.get('model_selected', '').lower()
+                        if 'haiku' in model:
+                            model_selections += 1
 
-                            if data.get('optimized', False):
-                                tool_optimizations += 1
-                                context_opts += 1  # Tool optimizations count as context optimizations
-                        except:
-                            continue
+                        # Context optimizations from level results
+                        levels = trace.get('levels', {})
+                        if levels.get('level_1', {}).get('context_pct', 0) > 0:
+                            context_opts += 1
 
-            # 2. Read model-selection.log
-            model_log = self.memory_dir / 'logs' / 'model-selection.log'
-            if model_log.exists():
-                with open(model_log, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        try:
-                            data = json.loads(line.strip())
-                            timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+                        # Tool optimizations from step 3.6
+                        if levels.get('level_3', {}).get('step_3_6', {}).get('rules', 0) > 0:
+                            tool_optimizations += 1
 
-                            # Check if within date range
-                            if cutoff_date and timestamp < cutoff_date:
-                                continue
+                        # Failure prevention from step 3.7
+                        if levels.get('level_3', {}).get('step_3_7', {}).get('status') == 'checked':
+                            failure_prevented += 1
+                    except Exception:
+                        continue
 
-                            # Count model selections (Haiku saves tokens vs Sonnet)
-                            if data.get('model') == 'haiku':
-                                model_selections += 1
-                        except:
-                            continue
-
-            # 3. Read failures.log
-            failures_log = self.memory_dir / 'logs' / 'failures.log'
-            if failures_log.exists():
-                with open(failures_log, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        try:
-                            # Skip header lines
-                            if line.startswith('#'):
-                                continue
-
-                            data = json.loads(line.strip())
-                            timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
-
-                            # Check if within date range
-                            if cutoff_date and timestamp < cutoff_date:
-                                continue
-
-                            # Count warnings (prevented failures)
-                            if data.get('warnings'):
-                                failure_prevented += len(data['warnings'])
-                        except:
-                            continue
-
-            # 4. Read context-daemon.log for context optimizations
-            context_log = self.memory_dir / 'logs' / 'context-daemon.log'
-            if context_log.exists():
-                with open(context_log, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        try:
-                            # Check if within date range (log format: [YYYY-MM-DD HH:MM:SS])
-                            if '[' in line and ']' in line:
-                                timestamp_str = line.split('[')[1].split(']')[0]
-                                timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
-
-                                if cutoff_date and timestamp < cutoff_date:
-                                    continue
-
-                                # Count context optimizations
-                                if 'CLEANUP-COMPLETE' in line or 'OPTIMIZATION' in line:
-                                    context_opts += 1
-                        except:
-                            continue
-
-            total_optimizations = context_opts + failure_prevented + model_selections
+            total_optimizations = context_opts + failure_prevented + model_selections + tool_optimizations
 
             return {
                 'context_optimizations': context_opts,
@@ -571,25 +520,32 @@ class MetricsCollector:
             return 0
 
     def get_model_usage_stats(self):
-        """Get model usage distribution from log file"""
+        """Get model usage distribution from flow-trace.json files (actual source)"""
         try:
-            model_log = self.memory_dir / 'logs' / 'model-usage.log'
-            if not model_log.exists():
-                return {'total_requests': 0, 'counts': {}, 'percentages': {}}
-
-            lines = model_log.read_text(encoding='utf-8', errors='ignore').splitlines()
             counts = {'haiku': 0, 'sonnet': 0, 'opus': 0}
+            total = 0
+            sessions_dir = self.memory_dir / 'logs' / 'sessions'
+            if sessions_dir.exists():
+                for session_dir in sessions_dir.iterdir():
+                    if not session_dir.is_dir():
+                        continue
+                    trace_file = session_dir / 'flow-trace.json'
+                    if not trace_file.exists():
+                        continue
+                    try:
+                        with open(trace_file, 'r', encoding='utf-8') as f:
+                            trace = json.load(f)
+                        model = trace.get('final_decision', {}).get('model_selected', '').lower()
+                        total += 1
+                        if 'haiku' in model:
+                            counts['haiku'] += 1
+                        elif 'opus' in model:
+                            counts['opus'] += 1
+                        elif 'sonnet' in model:
+                            counts['sonnet'] += 1
+                    except Exception:
+                        continue
 
-            for line in lines:
-                lower = line.lower()
-                if 'haiku' in lower:
-                    counts['haiku'] += 1
-                elif 'sonnet' in lower:
-                    counts['sonnet'] += 1
-                elif 'opus' in lower:
-                    counts['opus'] += 1
-
-            total = len(lines)
             percentages = {}
             if total > 0:
                 for model, count in counts.items():
@@ -602,39 +558,48 @@ class MetricsCollector:
         return {'total_requests': 0, 'counts': {}, 'percentages': {}}
 
     def get_model_usage_trend(self, days=7):
-        """Get model usage trend over time (daily breakdown) from log file"""
+        """Get model usage trend over time from flow-trace.json session directories"""
         try:
-            from datetime import datetime, timedelta
-            model_log = self.memory_dir / 'logs' / 'model-usage.log'
-            if not model_log.exists():
-                raise FileNotFoundError("model-usage.log not found")
-
-            lines = model_log.read_text(encoding='utf-8', errors='ignore').splitlines()
             today = datetime.now()
             day_data = {}
-
             for i in range(days - 1, -1, -1):
                 day = today - timedelta(days=i)
                 label = day.strftime('%m/%d')
                 day_data[label] = {'haiku': 0, 'sonnet': 0, 'opus': 0}
 
-            for line in lines:
-                try:
-                    # Parse timestamp from line (expects [YYYY-MM-DD] prefix)
-                    if '[' in line and ']' in line:
-                        ts_str = line.split('[')[1].split(']')[0][:10]
-                        ts = datetime.strptime(ts_str, '%Y-%m-%d')
+            sessions_dir = self.memory_dir / 'logs' / 'sessions'
+            if sessions_dir.exists():
+                for session_dir in sessions_dir.iterdir():
+                    if not session_dir.is_dir():
+                        continue
+                    # Extract date from session dir name: SESSION-YYYYMMDD-HHMMSS-XXXX
+                    dir_name = session_dir.name
+                    if not dir_name.startswith('SESSION-'):
+                        continue
+                    try:
+                        date_part = dir_name.split('-')[1]  # YYYYMMDD
+                        ts = datetime.strptime(date_part, '%Y%m%d')
                         label = ts.strftime('%m/%d')
-                        if label in day_data:
-                            lower = line.lower()
-                            if 'haiku' in lower:
-                                day_data[label]['haiku'] += 1
-                            elif 'sonnet' in lower:
-                                day_data[label]['sonnet'] += 1
-                            elif 'opus' in lower:
-                                day_data[label]['opus'] += 1
-                except Exception:
-                    continue
+                        if label not in day_data:
+                            continue
+                    except Exception:
+                        continue
+
+                    trace_file = session_dir / 'flow-trace.json'
+                    if not trace_file.exists():
+                        continue
+                    try:
+                        with open(trace_file, 'r', encoding='utf-8') as f:
+                            trace = json.load(f)
+                        model = trace.get('final_decision', {}).get('model_selected', '').lower()
+                        if 'haiku' in model:
+                            day_data[label]['haiku'] += 1
+                        elif 'opus' in model:
+                            day_data[label]['opus'] += 1
+                        elif 'sonnet' in model:
+                            day_data[label]['sonnet'] += 1
+                    except Exception:
+                        continue
 
             labels = list(day_data.keys())
             return {
@@ -646,8 +611,6 @@ class MetricsCollector:
         except Exception as e:
             print(f"Error getting model usage trend: {e}")
 
-        # Return empty data if error
-        from datetime import datetime, timedelta
         labels = []
         today = datetime.now()
         for i in range(days - 1, -1, -1):

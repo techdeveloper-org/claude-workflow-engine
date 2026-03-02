@@ -18,54 +18,61 @@ class SessionTracker:
     def __init__(self):
         self.memory_dir = get_data_dir()
         self.sessions_dir = self.memory_dir / 'sessions'
-        self.current_session_file = self.sessions_dir / 'current-session.json'
-        self.sessions_history_file = self.sessions_dir / 'sessions-history.json'
-
-        # Create sessions directory if not exists
-        self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        self.session_logs_dir = self.memory_dir / 'logs' / 'sessions'
+        self.progress_file = self.memory_dir / 'logs' / 'session-progress.json'
 
     def get_current_session(self):
-        """Get current active session"""
-        if self.current_session_file.exists():
-            try:
-                with open(self.current_session_file, 'r', encoding='utf-8') as f:
-                    session = json.load(f)
+        """Get current active session from session-progress.json (written by hooks)"""
+        try:
+            if self.progress_file.exists():
+                with open(self.progress_file, 'r', encoding='utf-8') as f:
+                    progress = json.load(f)
+                session_id = progress.get('session_id', '')
+                if session_id:
+                    # Build session data from progress + flow-trace
+                    started_at = progress.get('started_at', datetime.now().isoformat())
+                    try:
+                        start_time = datetime.fromisoformat(started_at)
+                    except Exception:
+                        start_time = datetime.now()
+                    duration = (datetime.now() - start_time).total_seconds()
 
-                # Calculate duration
-                start_time = datetime.fromisoformat(session['start_time'])
-                duration = (datetime.now() - start_time).total_seconds()
-                session['duration_minutes'] = round(duration / 60, 1)
+                    session = {
+                        'session_id': session_id,
+                        'start_time': started_at,
+                        'status': 'active',
+                        'duration_minutes': round(duration / 60, 1),
+                        'metrics': {
+                            'tokens_used': 0,
+                            'policies_hit': progress.get('total_progress', 0),
+                            'context_optimizations': progress.get('context_estimate_pct', 0),
+                            'failures_prevented': 0,
+                            'model_switches': 0,
+                            'errors': progress.get('errors_seen', 0),
+                            'tasks_completed': progress.get('tasks_completed', 0),
+                            'tool_counts': progress.get('tool_counts', {}),
+                        },
+                        'activities': []
+                    }
+                    return session
+        except Exception as e:
+            print(f"Error reading current session: {e}")
 
-                return session
-            except Exception as e:
-                print(f"Error reading current session: {e}")
+        return self._create_empty_session()
 
-        # No current session, create new one
-        return self._create_new_session()
-
-    def _create_new_session(self):
-        """Create a new session"""
-        session_id = str(uuid.uuid4())[:8]  # Short UUID
-        session = {
-            'session_id': session_id,
+    def _create_empty_session(self):
+        """Return an empty session placeholder (no fake file creation)"""
+        return {
+            'session_id': 'no-active-session',
             'start_time': datetime.now().isoformat(),
-            'status': 'active',
+            'status': 'idle',
+            'duration_minutes': 0,
             'metrics': {
-                'tokens_used': 0,
-                'policies_hit': 0,
-                'context_optimizations': 0,
-                'failures_prevented': 0,
-                'model_switches': 0,
-                'errors': 0
+                'tokens_used': 0, 'policies_hit': 0, 'context_optimizations': 0,
+                'failures_prevented': 0, 'model_switches': 0, 'errors': 0
             },
             'activities': []
         }
-
-        # Save current session
-        with open(self.current_session_file, 'w', encoding='utf-8') as f:
-            json.dump(session, f, indent=2)
-
-        return session
 
     def update_session_metrics(self):
         """Update current session metrics from logs"""
