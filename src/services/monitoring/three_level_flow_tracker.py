@@ -69,7 +69,12 @@ class ThreeLevelFlowTracker:
             'mode': 'summary',
             'level_minus_1': {'status': 'unknown'},
             'level_1': {'context_pct': None, 'session_id': None},
-            'level_2': {'standards': None, 'rules': None, 'status': 'unknown'},
+            'level_2': {
+                'standards': None, 'rules': None, 'status': 'unknown',
+                'common_standards': None, 'common_rules': None,
+                'microservices_standards': None, 'microservices_rules': None,
+                'microservices_active': None,
+            },
             'level_3': {
                 'complexity': None,
                 'task_type': None,
@@ -208,26 +213,65 @@ class ThreeLevelFlowTracker:
         }
 
     def _parse_level_2(self, session_dir, data):
-        """Parse 03-level-2-standards.log"""
+        """Parse 03-level-2-standards.log - supports both old single-block and new 2.1/2.2 format"""
         log_file = session_dir / '03-level-2-standards.log'
         if not log_file.exists():
             return
         content = log_file.read_text(encoding='utf-8', errors='ignore')
 
         standards = None
-        m = re.search(r'Standards Loaded:\s+(\d+)', content)
+        rules = None
+        common_standards = None
+        common_rules = None
+        micro_standards = None
+        micro_rules = None
+        micro_active = None
+
+        # New format: Level 2.1 / 2.2 sub-level output
+        m = re.search(r'Common Standards:\s+(\d+)', content)
+        if m:
+            common_standards = int(m.group(1))
+        m = re.search(r'Common Rules Loaded:\s+(\d+)', content)
+        if m:
+            common_rules = int(m.group(1))
+        m = re.search(r'Microservices Standards:\s+(\d+)', content)
+        if m:
+            micro_standards = int(m.group(1))
+            micro_active = True
+        m = re.search(r'Microservices Rules Loaded:\s+(\d+)', content)
+        if m:
+            micro_rules = int(m.group(1))
+        if 'SKIPPED' in content and 'Microservices' in content:
+            micro_active = False
+
+        # Old format fallback
+        m = re.search(r'Total Standards:\s+(\d+)', content)
         if m:
             standards = int(m.group(1))
+        m_r = re.search(r'(?<!Common |Microservices )Rules Loaded:\s+(\d+)', content)
+        if not standards:
+            m2 = re.search(r'Standards Loaded:\s+(\d+)', content)
+            if m2:
+                standards = int(m2.group(1))
+        if not rules:
+            m3 = re.search(r'Rules Loaded:\s+(\d+)', content)
+            if m3:
+                rules = int(m3.group(1))
 
-        rules = None
-        m = re.search(r'Rules Loaded:\s+(\d+)', content)
-        if m:
-            rules = int(m.group(1))
+        # Compute totals from sub-levels if available
+        if common_standards is not None:
+            standards = (common_standards or 0) + (micro_standards or 0)
+            rules = (common_rules or 0) + (micro_rules or 0)
 
         data['level_2'] = {
             'standards': standards,
             'rules': rules,
-            'status': 'OK' if standards is not None else 'unknown'
+            'status': 'OK' if standards is not None else 'unknown',
+            'common_standards': common_standards,
+            'common_rules': common_rules,
+            'microservices_standards': micro_standards,
+            'microservices_rules': micro_rules,
+            'microservices_active': micro_active,
         }
 
     def _parse_level_3(self, session_dir, data):
@@ -357,6 +401,18 @@ class ThreeLevelFlowTracker:
                 data['level_3']['context_pct'] = fd['context_pct']
             if fd.get('skill_or_agent'):
                 data['level_3']['skill_agent'] = fd['skill_or_agent']
+
+            # Enrich level_2 from final_decision (new 2.1/2.2 sub-level data)
+            if fd.get('common_standards') is not None:
+                data['level_2']['common_standards'] = fd['common_standards']
+            if fd.get('common_rules') is not None:
+                data['level_2']['common_rules'] = fd['common_rules']
+            if fd.get('microservices_standards') is not None:
+                data['level_2']['microservices_standards'] = fd['microservices_standards']
+            if fd.get('microservices_rules') is not None:
+                data['level_2']['microservices_rules'] = fd['microservices_rules']
+            if fd.get('microservices_active') is not None:
+                data['level_2']['microservices_active'] = fd['microservices_active']
 
         # Agent type and supplementary skills from pipeline step 3.5
         for step in trace.get('pipeline', []):
@@ -555,7 +611,12 @@ class ThreeLevelFlowTracker:
             'level_2': {
                 'standards': fd.get('standards_active'),
                 'rules': fd.get('rules_active'),
-                'status': 'OK'
+                'status': 'OK',
+                'common_standards': fd.get('common_standards'),
+                'common_rules': fd.get('common_rules'),
+                'microservices_standards': fd.get('microservices_standards'),
+                'microservices_rules': fd.get('microservices_rules'),
+                'microservices_active': fd.get('microservices_active'),
             },
             'level_3': {
                 'complexity': fd.get('complexity'),
