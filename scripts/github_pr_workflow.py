@@ -131,15 +131,95 @@ def _load_session_summary():
     return {}
 
 
+def _extract_issue_from_branch(branch_name):
+    """
+    Extract issue number from branch name.
+    Supports: fix/42, feature/123, refactor/99, docs/55, enhancement/78, test/34
+    Also supports legacy: issue-42
+    Returns int or None.
+    """
+    if not branch_name:
+        return None
+    try:
+        # Format: {label}/{issueId}
+        if '/' in branch_name:
+            parts = branch_name.rsplit('/', 1)
+            if len(parts) == 2 and parts[1].isdigit():
+                return int(parts[1])
+        # Legacy: issue-{N}
+        if branch_name.startswith('issue-'):
+            num_str = branch_name[6:]
+            if num_str.isdigit():
+                return int(num_str)
+    except Exception:
+        pass
+    return None
+
+
+def _query_open_auto_issues(repo_root):
+    """
+    Query GitHub for open issues with 'task-auto-created' label.
+    Returns list of issue numbers.
+    Fallback mechanism when github-issues.json mapping is missing.
+    """
+    try:
+        result = subprocess.run(
+            ['gh', 'issue', 'list', '--label', 'task-auto-created',
+             '--state', 'open', '--json', 'number', '--limit', '20'],
+            capture_output=True, text=True, timeout=GH_TIMEOUT,
+            cwd=repo_root
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            issues = json.loads(result.stdout.strip())
+            return [i['number'] for i in issues if 'number' in i]
+    except Exception:
+        pass
+    return []
+
+
 def _get_issue_numbers():
-    """Get all issue numbers created in this session."""
+    """
+    Get all issue numbers to close in this PR.
+    Uses 3 sources (in priority order):
+      1. Session mapping (github-issues.json) - most reliable
+      2. Branch name extraction (fix/42 -> #42) - always available
+      3. Open auto-created issues query (gh issue list) - fallback
+    Deduplicates and returns sorted list.
+    """
+    numbers = set()
+
+    # Source 1: Session mapping
     mapping = _load_issues_mapping()
-    numbers = []
     for task_key, issue_data in mapping.get('task_to_issue', {}).items():
         num = issue_data.get('issue_number')
         if num:
-            numbers.append(num)
-    return numbers
+            numbers.add(num)
+
+    # Source 2: Branch name extraction
+    branch = mapping.get('session_branch', '') or mapping.get('branch', '')
+    if not branch:
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                branch = result.stdout.strip()
+        except Exception:
+            pass
+    branch_issue = _extract_issue_from_branch(branch)
+    if branch_issue:
+        numbers.add(branch_issue)
+
+    # Source 3: Query open auto-created issues (only if no numbers found yet)
+    if not numbers:
+        repo_root = _get_repo_root()
+        if repo_root:
+            auto_issues = _query_open_auto_issues(repo_root)
+            for num in auto_issues:
+                numbers.add(num)
+
+    return sorted(numbers)
 
 
 def _has_changes(repo_root):
@@ -157,9 +237,10 @@ def _has_changes(repo_root):
     return False
 
 
-def _commit_session_changes(repo_root, session_summary):
+def _commit_session_changes(repo_root, session_summary, issue_numbers=None):
     """
     Stage and commit all changes with a meaningful message from session summary.
+    Includes 'Closes #N' in commit message for auto-closing GitHub issues.
     Returns True if commit succeeded (or no changes to commit).
     """
     try:
@@ -197,6 +278,14 @@ def _commit_session_changes(repo_root, session_summary):
                         body_lines.append(f"- {prompt}")
                 if body_lines:
                     commit_body = '\n'.join(body_lines[:10])
+
+        # Append Closes #N for auto-closing GitHub issues (policy requirement)
+        if issue_numbers:
+            closes_lines = '\n'.join(f"Closes #{n}" for n in issue_numbers)
+            if commit_body:
+                commit_body = commit_body + '\n\n' + closes_lines
+            else:
+                commit_body = closes_lines
 
         commit_msg = commit_title
         if commit_body:
@@ -702,8 +791,9 @@ def run_pr_workflow(session_id=None):
         _bump_version_and_changelog(repo_root, session_summary, issue_numbers)
 
         # Step 1: Commit changes (includes version bump if successful)
+        # Pass issue_numbers so commit message includes "Closes #N" (auto-close policy)
         _log("Step 1: Committing changes...")
-        _commit_session_changes(repo_root, session_summary)
+        _commit_session_changes(repo_root, session_summary, issue_numbers)
 
         # Step 2: Push branch
         _log("Step 2: Pushing branch...")
