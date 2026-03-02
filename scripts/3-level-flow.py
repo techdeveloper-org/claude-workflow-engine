@@ -1539,6 +1539,8 @@ def main():
 
     step_start = datetime.now()
     standards_script = MEMORY_BASE / '02-standards-system' / 'standards-loader.py'
+    if not standards_script.exists():
+        standards_script = SCRIPT_DIR / 'architecture' / '02-standards-system' / 'standards-loader.py'
     standards_count = 14
     rules_count = 89
     standards_list = []
@@ -1634,6 +1636,8 @@ def main():
     complexity = 5
     task_type = 'General'
     prompt_script = MEMORY_BASE / '03-execution-system' / '00-prompt-generation' / 'prompt-generator.py'
+    if not prompt_script.exists():
+        prompt_script = SCRIPT_DIR / 'architecture' / '03-execution-system' / '00-prompt-generation' / 'prompt-generator.py'
     pr_out = ''
     pr_dur = 0
     enhanced_prompt_summary = ''
@@ -1686,6 +1690,8 @@ def main():
     step_start = datetime.now()
     task_count = 2
     task_script = MEMORY_BASE / '03-execution-system' / '01-task-breakdown' / 'task-auto-analyzer.py'
+    if not task_script.exists():
+        task_script = SCRIPT_DIR / 'architecture' / '03-execution-system' / '01-task-breakdown' / 'task-auto-analyzer.py'
     tk_dur = 0
     if task_script.exists():
         tk_out, _, _, tk_dur = run_script_with_retry(task_script, [user_message], timeout=8, step_name='Step-3.1.Task-Breakdown')
@@ -1780,6 +1786,8 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     plan_required = False
     adj_complexity = complexity
     plan_script = MEMORY_BASE / '03-execution-system' / '02-plan-mode' / 'auto-plan-mode-suggester.py'
+    if not plan_script.exists():
+        plan_script = SCRIPT_DIR / 'architecture' / '03-execution-system' / '02-plan-mode' / 'auto-plan-mode-suggester.py'
     pl_dur = 0
     plan_score_detail = {}
     if plan_script.exists():
@@ -2049,6 +2057,8 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     # ------------------------------------------------------------------
     step_start = datetime.now()
     prompt_script = MEMORY_BASE / '03-execution-system' / '00-prompt-generation' / 'prompt-generator.py'
+    if not prompt_script.exists():
+        prompt_script = SCRIPT_DIR / 'architecture' / '03-execution-system' / '00-prompt-generation' / 'prompt-generator.py'
     pr_dur_3_5 = 0
     if prompt_script.exists():
         pr_out, _, _, pr_dur_3_5 = run_script_with_retry(prompt_script, [user_message], timeout=8, step_name='Step-3.5.Prompt-Skill-Context')
@@ -2161,6 +2171,8 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     # ------------------------------------------------------------------
     step_start = datetime.now()
     fp_script = MEMORY_BASE / '03-execution-system' / 'failure-prevention' / 'pre-execution-checker.py'
+    if not fp_script.exists():
+        fp_script = SCRIPT_DIR / 'architecture' / '03-execution-system' / 'failure-prevention' / 'pre-execution-checker.py'
     fp_dur = 0
     fp_checks = {}
     if fp_script.exists():
@@ -2274,7 +2286,12 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         })
         print(f"   [{step_num}] {step_name}: Active")
 
-    # Inject version-release enforcement into output (Claude sees this)
+    # =========================================================================
+    # POLICY ENFORCEMENT OUTPUT: Print critical rules to stdout (Claude reads these)
+    # Only rules NOT auto-enforced by scripts — Claude must follow these directly.
+    # =========================================================================
+
+    # Version-release policy
     if 'version-release-policy' in loaded_policies.get('level-3', {}):
         print()
         print("[ENFORCE] VERSION-RELEASE POLICY (from policies/03-execution-system/09-git-commit/):")
@@ -2284,6 +2301,53 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         print("   3. Commit version bump + push")
         print("   4. Create GitHub Release (gh release create) for IDE")
         print("   5. Ensure version consistency across README/CLAUDE.md/badges")
+
+    # Task breakdown policy (not auto-enforced — Claude must use TaskCreate)
+    if 'automatic-task-breakdown-policy' in loaded_policies.get('level-3', {}):
+        print()
+        print("[ENFORCE] TASK BREAKDOWN POLICY:")
+        print("   1. ALWAYS create tasks via TaskCreate on EVERY coding request (minimum 1)")
+        print("   2. Break complex tasks into phases (Foundation, Logic, API, Config)")
+        print("   3. Mark tasks completed via TaskUpdate when done")
+        print("   4. Create task dependencies if needed (blockedBy/blocks)")
+
+    # Model selection policy (not auto-enforced — Claude must route correctly)
+    if 'model-selection-enforcement' in loaded_policies.get('level-3', {}) or \
+       'intelligent-model-selection-policy' in loaded_policies.get('level-3', {}):
+        print()
+        print("[ENFORCE] MODEL SELECTION POLICY:")
+        print("   1. Search/explore tasks -> Use Agent(Explore, model=haiku)")
+        print("   2. Architecture/design tasks -> Use Agent(Plan, model=opus)")
+        print("   3. Implementation tasks -> Use current model (Sonnet/Opus)")
+        print("   4. Simple tasks (grep, read) -> Use model=haiku for subagents")
+
+    # Tool optimization policy (partially auto-enforced — these rules need Claude awareness)
+    if 'tool-usage-optimization-policy' in loaded_policies.get('level-3', {}):
+        print()
+        print("[ENFORCE] TOOL OPTIMIZATION POLICY:")
+        print("   1. Add head_limit to EVERY Grep call (default: 100)")
+        print("   2. Use offset/limit for files >500 lines (Read tool)")
+        print("   3. NEVER use 'tree' command - use Glob or 'find' instead")
+        print("   4. Combine sequential Bash commands with && in a single call")
+
+    # Failure prevention policy (partially auto-enforced — Unicode rule needs Claude)
+    if 'common-failures-prevention' in loaded_policies.get('level-3', {}):
+        print()
+        print("[ENFORCE] FAILURE PREVENTION POLICY:")
+        print("   1. NO Unicode/emojis in Python files on Windows (use ASCII: [OK], [WARN])")
+        print("   2. Strip line number prefixes before Edit (remove '  123->' patterns)")
+        print("   3. Quote all file paths containing spaces")
+        print("   4. Auto-translate: del->rm, copy->cp, dir->ls in Bash")
+
+    # Coding standards policy (not auto-enforced — Claude must follow in code generation)
+    if loaded_policies.get('level-2', {}):
+        print()
+        print("[ENFORCE] CODING STANDARDS (Level 2):")
+        print("   1. NO hardcoded strings - use constants (MessageConstants, ApiConstants)")
+        print("   2. ALL API responses use ApiResponseDto<T> wrapper")
+        print("   3. Service implementations are package-private, extend Helper classes")
+        print("   4. Config Server ONLY for DB/Redis/Feign config (never in application.yml)")
+        print("   5. Secrets via Secret Manager: ${SECRET:key-name} syntax")
 
     print("[OK] LEVEL 3 COMPLETE (All 12 steps executed)")
     print()
