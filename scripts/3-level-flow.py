@@ -995,6 +995,8 @@ def main():
             mode = 'verbose'
         elif arg in ('--summary', '-s'):
             mode = 'summary'
+        elif arg == '--checkpoint':
+            pass  # Consumed: checkpoint is always shown (no-op flag for backward compat)
         elif arg in ('--help', '-h'):
             show_help()
             sys.exit(0)
@@ -1766,7 +1768,7 @@ def main():
     enhanced_prompt_summary = ''
     rewritten_prompt = ''
     if prompt_script.exists():
-        pr_out, _, _, pr_dur = run_script_with_retry(prompt_script, [user_message], timeout=8, step_name='Step-3.0.Prompt-Gen')
+        pr_out, _, _, pr_dur = run_script_with_retry(prompt_script, ['--', user_message], timeout=8, step_name='Step-3.0.Prompt-Gen')
         for line in pr_out.splitlines():
             if 'estimated_complexity:' in line:
                 try:
@@ -1817,7 +1819,7 @@ def main():
         task_script = SCRIPT_DIR / 'architecture' / '03-execution-system' / '01-task-breakdown' / 'task-auto-analyzer.py'
     tk_dur = 0
     if task_script.exists():
-        tk_out, _, _, tk_dur = run_script_with_retry(task_script, [user_message], timeout=8, step_name='Step-3.1.Task-Breakdown')
+        tk_out, _, _, tk_dur = run_script_with_retry(task_script, ['--', user_message], timeout=8, step_name='Step-3.1.Task-Breakdown')
         for line in tk_out.splitlines():
             if 'Total Tasks:' in line:
                 try:
@@ -2182,7 +2184,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         prompt_script = SCRIPT_DIR / 'architecture' / '03-execution-system' / '00-prompt-generation' / 'prompt-generator.py'
     pr_dur_3_5 = 0
     if prompt_script.exists():
-        pr_out, _, _, pr_dur_3_5 = run_script_with_retry(prompt_script, [user_message], timeout=8, step_name='Step-3.5.Prompt-Skill-Context')
+        pr_out, _, _, pr_dur_3_5 = run_script_with_retry(prompt_script, ['--', user_message], timeout=8, step_name='Step-3.5.Prompt-Skill-Context')
         pr_data = safe_json(pr_out)
         rewritten_prompt_3_5 = pr_data.get('rewritten_prompt', '')
         enhanced_prompt_3_5 = pr_data.get('enhanced_prompt', '')
