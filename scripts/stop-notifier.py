@@ -748,6 +748,80 @@ def main():
         except Exception as e:
             log_s(f"[PR-WORKFLOW] Branch detection error: {e}")
 
+    # PRIORITY 5: Version bump guard (catches direct-to-main pushes without version bump)
+    # When commits are pushed directly to main (bypassing PR workflow), they miss
+    # the version bump step in run_pr_workflow(). This guard detects the gap and
+    # auto-bumps VERSION + CHANGELOG, then commits and pushes the bump.
+    if not pr_triggered:
+        try:
+            _vb_branch = subprocess.run(
+                ['git', 'branch', '--show-current'],
+                capture_output=True, text=True, timeout=5
+            )
+            _vb_current = _vb_branch.stdout.strip() if _vb_branch.returncode == 0 else ''
+
+            if _vb_current in ('main', 'master'):
+                # Check if latest commit already has a version bump
+                _vb_log = subprocess.run(
+                    ['git', 'log', '-1', '--format=%s'],
+                    capture_output=True, text=True, timeout=5
+                )
+                last_msg = _vb_log.stdout.strip() if _vb_log.returncode == 0 else ''
+
+                # Skip if already bumped or if it's a merge commit (PR merges include bump)
+                if last_msg and not last_msg.startswith('bump:') and not last_msg.startswith('Merge pull request'):
+                    log_s(f"[VERSION-GUARD] Un-bumped commit on main: '{last_msg[:60]}' - auto-bumping...")
+
+                    script_dir = Path(__file__).parent
+                    if str(script_dir) not in sys.path:
+                        sys.path.insert(0, str(script_dir))
+                    import github_pr_workflow
+
+                    _vb_root_r = subprocess.run(
+                        ['git', 'rev-parse', '--show-toplevel'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    _vb_repo_root = _vb_root_r.stdout.strip() if _vb_root_r.returncode == 0 else ''
+
+                    if _vb_repo_root:
+                        # Read old version before bump
+                        _vb_version_file = Path(_vb_repo_root) / 'VERSION'
+                        _vb_old_ver = _vb_version_file.read_text(encoding='utf-8').strip() if _vb_version_file.exists() else ''
+
+                        bumped = github_pr_workflow._bump_version_and_changelog(
+                            _vb_repo_root, None, None
+                        )
+
+                        if bumped and _vb_old_ver:
+                            _vb_new_ver = _vb_version_file.read_text(encoding='utf-8').strip()
+
+                            # Stage and commit version bump
+                            subprocess.run(
+                                ['git', 'add', 'VERSION', 'docs/CHANGELOG-SYSTEM.md'],
+                                capture_output=True, timeout=10, cwd=_vb_repo_root
+                            )
+                            _vb_commit_msg = f"bump: v{_vb_old_ver} -> v{_vb_new_ver} -- auto version bump (direct-to-main guard)"
+                            _vb_commit_r = subprocess.run(
+                                ['git', 'commit', '-m', _vb_commit_msg],
+                                capture_output=True, timeout=15, cwd=_vb_repo_root
+                            )
+                            if _vb_commit_r.returncode == 0:
+                                # Push the bump commit
+                                _vb_push_r = subprocess.run(
+                                    ['git', 'push', 'origin', _vb_current],
+                                    capture_output=True, timeout=30, cwd=_vb_repo_root
+                                )
+                                if _vb_push_r.returncode == 0:
+                                    log_s(f"[VERSION-GUARD] Bumped v{_vb_old_ver} -> v{_vb_new_ver} and pushed to {_vb_current}")
+                                else:
+                                    log_s(f"[VERSION-GUARD] Bump committed but push failed: {_vb_push_r.stderr[:100] if _vb_push_r.stderr else 'unknown'}")
+                            else:
+                                log_s("[VERSION-GUARD] Nothing to commit (VERSION may already be staged)")
+                        elif not bumped:
+                            log_s("[VERSION-GUARD] Bump skipped (no VERSION file or error)")
+        except Exception as e:
+            log_s(f"[VERSION-GUARD] Error: {e}")
+
     if not spoke_something:
         log_s("[OK] Stop hook fired | No voice flags found (normal, most stops are silent)")
 
