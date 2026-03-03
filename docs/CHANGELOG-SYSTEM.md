@@ -3,6 +3,9 @@ All notable changes to the Claude Memory System.
 
 ---
 
+- v4.4.3 (2026-03-03): Session updates
+  - Closes: #88
+
 - v4.4.2 (2026-03-03): Fix version bump placement - bump on main AFTER merge, not on feature branch:
   - FIX: Moved version bump from Step 0.5 (feature branch, before commit) to Step 7 (main, after merge)
   - NEW: `_bump_and_push_on_main()` - bumps VERSION + CHANGELOG on main, commits "bump: vX.Y.Z", pushes
