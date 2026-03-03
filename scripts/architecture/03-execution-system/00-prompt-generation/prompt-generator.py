@@ -411,35 +411,82 @@ class PromptGenerator:
         return unique_keywords
 
     def estimate_complexity(self, message: str) -> int:
-        """Estimate task complexity (1-10)"""
-        complexity = 1
+        """
+        Estimate task complexity on a 1-25 scale.
+        Scale aligns with model selection thresholds:
+          0-4  = SIMPLE   -> HAIKU
+          5-9  = MODERATE -> HAIKU/SONNET
+          10-19 = COMPLEX  -> SONNET
+          20-25 = CRITICAL -> OPUS
+        """
+        msg_lower = message.lower()
+        complexity = 0
 
-        # Longer messages are usually more complex
+        # --- Factor 1: Task type base weight (0-8) ---
+        task_type = self.detect_task_type(msg_lower)
+        task_type_weights = {
+            "API Creation": 7,
+            "Authentication": 8,
+            "Authorization": 7,
+            "Security": 8,
+            "Database": 6,
+            "Dashboard": 5,
+            "Frontend": 5,
+            "UI/UX": 4,
+            "Configuration": 3,
+            "Bug Fix": 4,
+            "Refactoring": 6,
+            "Testing": 4,
+            "Documentation": 2,
+            "System/Script": 5,
+            "Sync/Update": 2,
+            "General Task": 3,
+        }
+        complexity += task_type_weights.get(task_type, 3)
+
+        # --- Factor 2: Message length / detail (0-4) ---
         word_count = len(message.split())
-        if word_count > 50:
+        if word_count > 80:
+            complexity += 4
+        elif word_count > 40:
             complexity += 3
         elif word_count > 20:
             complexity += 2
         elif word_count > 10:
             complexity += 1
 
-        # Multiple entities increase complexity
-        entities = self.extract_entities(message.lower())
+        # --- Factor 3: Entity count (0-3) ---
+        entities = self.extract_entities(msg_lower)
         complexity += min(len(entities), 3)
 
-        # Multiple operations increase complexity
-        operations = self.extract_operations(message.lower())
-        complexity += min(len(operations), 2)
-
-        # Certain keywords increase complexity
-        complex_keywords = [
-            "authentication", "authorization", "security", "migration", "integration",
-            "dashboard", "admin panel", "ui overlapping", "layout fix", "responsive design"
-        ]
-        if any(kw in message.lower() for kw in complex_keywords):
+        # --- Factor 4: Operation count (0-3) ---
+        operations = self.extract_operations(msg_lower)
+        if len(operations) >= 4:
+            complexity += 3  # Full CRUD
+        elif len(operations) >= 2:
             complexity += 2
+        elif len(operations) >= 1:
+            complexity += 1
 
-        return min(complexity, 10)
+        # --- Factor 5: Integration / cross-cutting keywords (0-4) ---
+        integration_keywords = [
+            "integration", "microservice", "service-to-service", "gateway",
+            "eureka", "config server", "cross-service", "distributed",
+            "event-driven", "kafka", "rabbitmq", "message queue",
+        ]
+        integration_hits = sum(1 for kw in integration_keywords if kw in msg_lower)
+        complexity += min(integration_hits * 2, 4)
+
+        # --- Factor 6: Architecture / design keywords (0-3) ---
+        arch_keywords = [
+            "architecture", "design pattern", "refactor", "restructure",
+            "migrate", "migration", "upgrade", "scalab", "microservice",
+            "monolith", "modular", "decouple",
+        ]
+        arch_hits = sum(1 for kw in arch_keywords if kw in msg_lower)
+        complexity += min(arch_hits * 2, 3)
+
+        return max(1, min(complexity, 25))
 
     def find_project_context(self, entities: List[str]) -> Dict:
         """Determine project and service context"""
