@@ -431,7 +431,7 @@ def main():
             # Try to load as file
             with open(prompt_arg, 'r') as f:
                 structured_prompt = yaml.safe_load(f)
-        except FileNotFoundError:
+        except (FileNotFoundError, OSError, ValueError):
             # It's a string description
             structured_prompt = {
                 'metadata': {'original_request': prompt_arg},

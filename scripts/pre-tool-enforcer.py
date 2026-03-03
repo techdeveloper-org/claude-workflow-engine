@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # Script Name: pre-tool-enforcer.py
-# Version: 3.1.0 (Context Chaining from flow-trace)
-# Last Modified: 2026-03-01
+# Version: 3.2.0 (Policy-linked + failure-kb.json integration)
+# Last Modified: 2026-03-03
 # Description: PreToolUse hook - L3.1/3.5 blocking + L3.6 hints + L3.7 prevention
 #              + L3.5+ dynamic per-file skill context switching
 #              + flow-trace.json context chaining for task-aware enforcement
@@ -70,6 +70,9 @@ CHECKPOINT_MAX_AGE_MINUTES = 60
 # Cached flow-trace context (loaded once per hook invocation)
 _flow_trace_cache = None
 
+# Cached failure knowledge base (loaded once per hook invocation)
+_failure_kb_cache = None
+
 
 def _load_flow_trace_context():
     """
@@ -109,6 +112,96 @@ def _load_flow_trace_context():
     except Exception:
         pass
     return _flow_trace_cache
+
+
+def _load_failure_kb():
+    """
+    Load failure-kb.json from architecture/03-execution-system/failure-prevention/.
+    Returns dict keyed by tool name, each containing a list of known failure patterns.
+
+    Policy link: policies/03-execution-system/failure-prevention/common-failures-prevention.md
+    Architecture: scripts/architecture/03-execution-system/failure-prevention/failure-kb.json
+    """
+    global _failure_kb_cache
+    if _failure_kb_cache is not None:
+        return _failure_kb_cache
+
+    _failure_kb_cache = {}
+    try:
+        script_dir = Path(__file__).parent
+        kb_path = script_dir / 'architecture' / '03-execution-system' / 'failure-prevention' / 'failure-kb.json'
+        if kb_path.exists():
+            with open(kb_path, 'r', encoding='utf-8') as f:
+                _failure_kb_cache = json.load(f)
+    except Exception:
+        pass
+    return _failure_kb_cache
+
+
+def check_failure_kb_hints(tool_name, tool_input):
+    """
+    Level 3.7: Consult failure-kb.json for known failure patterns.
+    Returns hints (non-blocking) based on known failure patterns for this tool.
+
+    Policy link: policies/03-execution-system/failure-prevention/common-failures-prevention.md
+    """
+    hints = []
+    kb = _load_failure_kb()
+    if not kb:
+        return hints
+
+    tool_patterns = kb.get(tool_name, [])
+    for pattern in tool_patterns:
+        pattern_id = pattern.get('pattern_id', '')
+        solution = pattern.get('solution', {})
+        sol_type = solution.get('type', '')
+
+        # Check Edit tool: warn about line number prefix
+        if tool_name == 'Edit' and pattern_id == 'edit_line_number_prefix':
+            old_str = tool_input.get('old_string', '')
+            if old_str:
+                import re
+                if re.match(r'^\s*\d+', old_str):
+                    hints.append(
+                        '[FAILURE-KB] Edit: old_string may contain line number prefix. '
+                        'Strip line numbers before Edit (pattern from failure-kb.json).'
+                    )
+
+        # Check Edit tool: warn about editing without reading
+        elif tool_name == 'Edit' and pattern_id == 'edit_without_read':
+            hints.append(
+                '[FAILURE-KB] Edit: Ensure file was Read before Edit '
+                '(known failure pattern from failure-kb.json).'
+            )
+
+        # Check Read tool: warn about large files
+        elif tool_name == 'Read' and pattern_id == 'read_file_too_large':
+            offset = tool_input.get('offset')
+            limit = tool_input.get('limit')
+            if offset is None and limit is None:
+                # Already handled by check_read(), but add KB source attribution
+                pass
+
+        # Check Grep tool: warn about missing head_limit
+        elif tool_name == 'Grep' and pattern_id == 'grep_no_head_limit':
+            head_limit = tool_input.get('head_limit', 0)
+            if not head_limit:
+                # Already handled by check_grep(), but add KB source attribution
+                pass
+
+        # Check Bash tool: known command translations
+        elif tool_name == 'Bash' and sol_type == 'translate':
+            cmd = tool_input.get('command', '').strip().lower()
+            mapping = solution.get('mapping', {})
+            for win_cmd, unix_cmd in mapping.items():
+                if cmd.startswith(win_cmd.lower()):
+                    hints.append(
+                        '[FAILURE-KB] Bash: Translate "' + win_cmd + '" -> "' + unix_cmd + '" '
+                        '(known failure from failure-kb.json, confidence: ' +
+                        str(pattern.get('confidence', 0)) + ')'
+                    )
+
+    return hints
 
 
 def get_current_session_id():
@@ -347,7 +440,9 @@ WINDOWS_CMDS = [
 
 
 def check_bash(command):
-    """Level 3.7: Detect Windows-only commands that fail in bash."""
+    """Level 3.7: Detect Windows-only commands that fail in bash.
+    Policy: policies/03-execution-system/failure-prevention/common-failures-prevention.md
+    KB: scripts/architecture/03-execution-system/failure-prevention/failure-kb.json (bash_windows_command)"""
     hints = []
     blocks = []
     cmd_stripped = command.strip()
@@ -372,7 +467,9 @@ def check_bash(command):
 
 
 def check_python_unicode(content):
-    """Level 3.7: Detect Unicode chars in Python files (crash on Windows cp1252)."""
+    """Level 3.7: Detect Unicode chars in Python files (crash on Windows cp1252).
+    Policy: policies/03-execution-system/failure-prevention/common-failures-prevention.md
+    Architecture: scripts/architecture/03-execution-system/failure-prevention/windows-python-unicode-checker.py"""
     blocks = []
     found_count = 0
     sample = []
@@ -421,7 +518,9 @@ def check_write_edit(tool_name, tool_input):
 
 
 def check_grep(tool_input):
-    """Level 3.6: Grep optimization - warn about missing head_limit. Task-aware."""
+    """Level 3.6: Grep optimization - warn about missing head_limit. Task-aware.
+    Policy: policies/03-execution-system/06-tool-optimization/tool-usage-optimization-policy.md
+    KB: scripts/architecture/03-execution-system/failure-prevention/failure-kb.json (grep_no_head_limit)"""
     hints = []
     head_limit = tool_input.get('head_limit', 0)
 
@@ -839,6 +938,12 @@ def main():
     if tool_name in ('Read', 'Write', 'Edit', 'NotebookEdit', 'Grep', 'Glob'):
         skill_hints = check_dynamic_skill_context(tool_name, tool_input)
         all_hints.extend(skill_hints)
+
+    # FAILURE-KB INTEGRATION (v3.2.0): Consult failure-kb.json for known patterns
+    # Policy: policies/03-execution-system/failure-prevention/common-failures-prevention.md
+    # Data: scripts/architecture/03-execution-system/failure-prevention/failure-kb.json
+    kb_hints = check_failure_kb_hints(tool_name, tool_input)
+    all_hints.extend(kb_hints)
 
     # Route to appropriate checker
     if tool_name == 'Bash':
