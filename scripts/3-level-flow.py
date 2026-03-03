@@ -22,7 +22,7 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-VERSION = "3.7.1"
+VERSION = "3.8.0"
 SCRIPT_NAME = "3-level-flow.py"
 
 # Use ide_paths for IDE self-contained installations (with fallback for standalone mode)
@@ -1555,7 +1555,94 @@ def main():
     else:
         print(f"   [OK] State: Fresh session")
 
-    print("[OK] LEVEL 1 COMPLETE (4 sub-steps)")
+    # =========================================================================
+    # LEVEL 1.5: CROSS-PROJECT PATTERN DETECTION
+    # Architecture script: 01-sync-system/pattern-detection/detect-patterns.py
+    # Policy: cross-project-patterns-policy.md
+    # Detects technology patterns across projects for intelligent suggestions.
+    # Runs full detection on NEW sessions or when patterns file is stale (>24h).
+    # =========================================================================
+    step_start = datetime.now()
+    patterns_arch_dir = SCRIPT_DIR / 'architecture' / '01-sync-system' / 'pattern-detection'
+    detect_script = patterns_arch_dir / 'detect-patterns.py'
+    patterns_file = Path.home() / '.claude' / 'memory' / 'cross-project-patterns.json'
+
+    patterns_detected = 0
+    patterns_dur = 0
+    cross_patterns = []
+    detection_ran = False
+
+    if detect_script.exists():
+        # Run full detection only on NEW sessions or when patterns file is stale
+        run_detection = (_sess_status == "NEW")
+        if not run_detection and not patterns_file.exists():
+            run_detection = True
+        if not run_detection and patterns_file.exists():
+            try:
+                file_age_hours = (datetime.now().timestamp() - patterns_file.stat().st_mtime) / 3600
+                if file_age_hours > 24:
+                    run_detection = True
+            except Exception:
+                pass
+
+        if run_detection:
+            det_out, _, det_rc, det_dur = run_script_with_retry(detect_script, timeout=10, step_name='Level-1.5.Pattern-Detect')
+            patterns_dur += det_dur
+            detection_ran = True
+
+    # Load patterns file (lightweight JSON read, regardless of whether detection ran)
+    if patterns_file.exists():
+        try:
+            with open(patterns_file, 'r', encoding='utf-8') as pf:
+                pdata = json.load(pf)
+            cross_patterns = pdata.get('patterns', [])
+            patterns_detected = len(cross_patterns)
+        except Exception:
+            pass
+
+    trace["pipeline"].append({
+        "step": "LEVEL_1_PATTERNS",
+        "name": "Cross-Project Pattern Detection",
+        "level": 1,
+        "order": 2.9,
+        "is_blocking": False,
+        "timestamp": step_start.isoformat(),
+        "duration_ms": patterns_dur,
+        "input": {
+            "from_previous": "LEVEL_1_STATE",
+            "session_id": session_id,
+            "purpose": "Detect technology patterns across projects for intelligent suggestions"
+        },
+        "policy": {
+            "script": "detect-patterns.py",
+            "policy_file": "cross-project-patterns-policy.md",
+            "rules_applied": [
+                "scan_session_summaries_across_projects",
+                "detect_technology_stack_keywords",
+                "calculate_pattern_confidence",
+                "save_cross_project_patterns_json"
+            ]
+        },
+        "policy_output": {
+            "patterns_detected": patterns_detected,
+            "top_patterns": [{"name": p["name"], "type": p["type"], "confidence": p["confidence"]} for p in cross_patterns[:5]],
+            "detection_ran": detection_ran,
+            "script_exists": detect_script.exists()
+        },
+        "decision": f"Detected {patterns_detected} cross-project patterns" if patterns_detected > 0 else "No patterns detected (insufficient data or first analysis)",
+        "passed_to_next": {
+            "patterns_available": patterns_detected > 0,
+            "patterns_count": patterns_detected,
+            "top_pattern_names": [p["name"] for p in cross_patterns[:5]]
+        }
+    })
+    if patterns_detected > 0:
+        top_names = ", ".join([p["name"] for p in cross_patterns[:3]])
+        print(f"   [OK] Patterns: {patterns_detected} detected (top: {top_names})")
+    else:
+        print(f"   [OK] Patterns: None detected yet")
+
+    print("[OK] LEVEL 1 COMPLETE (5 sub-steps)")
     print()
 
     # =========================================================================
@@ -1615,9 +1702,10 @@ def main():
         "timestamp": step_start_2_1.isoformat(),
         "duration_ms": common_dur,
         "input": {
-            "from_previous": "LEVEL_1_SESSION",
+            "from_previous": "LEVEL_1_PATTERNS",
             "session_id": session_id,
             "context_pct": context_pct,
+            "cross_project_patterns": patterns_detected,
             "purpose": "Load universal coding standards BEFORE any code generation"
         },
         "policy": {
@@ -2470,8 +2558,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         print("   4. Create task dependencies if needed (blockedBy/blocks)")
 
     # Model selection policy (not auto-enforced — Claude must route correctly)
-    if 'model-selection-enforcement' in loaded_policies.get('level-3', {}) or \
-       'intelligent-model-selection-policy' in loaded_policies.get('level-3', {}):
+    if 'intelligent-model-selection-policy' in loaded_policies.get('level-3', {}):
         print()
         print("[ENFORCE] MODEL SELECTION POLICY:")
         print("   1. Search/explore tasks -> Use Agent(Explore, model=haiku)")
@@ -2556,6 +2643,11 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "microservices_rules": micro_rules,
         "microservices_active": microservices_active,
         "session_id": session_id,
+        "cross_project_patterns": {
+            "count": patterns_detected,
+            "top": [{"name": p["name"], "type": p["type"], "confidence": p["confidence"]} for p in cross_patterns[:5]],
+            "detection_ran": detection_ran
+        },
         "proceed": True,
         "risk_level": _risk_level,
         "prompt_transformation": {
