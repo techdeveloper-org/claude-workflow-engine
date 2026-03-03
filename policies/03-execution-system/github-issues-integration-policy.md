@@ -1,15 +1,24 @@
 # GitHub Issues Integration Policy - Level 3 Execution System
 
-**Version:** 2.0.0
+**Version:** 3.0.0 (UPDATED - Problem-centric, one issue per problem)
 **Part of:** Level 3: Execution System (12 Steps)
-**Status:** Active
-**Date:** 2026-02-28
+**Status:** Active - Breaking Changes from v2.0
+**Date:** 2026-03-03
 
 ---
 
 ## Overview
 
-This policy governs how the Level 3 Execution System automatically creates and manages GitHub Issues for task tracking. When tasks are auto-created during execution, corresponding GitHub Issues are created with comprehensive details, labels, and priorities.
+**CHANGED in v3.0:** This policy now creates ONE issue per problem statement (not per task).
+
+Old approach (v2.0): 1 problem → 3 tasks → 3 issues ❌
+New approach (v3.0): 1 problem → 3 tasks → 1 issue ✅
+
+The Level 3 Execution System creates semantic GitHub Issues that aggregates all related tasks. Each issue includes:
+- Clear problem statement (not task-centric)
+- Semantic branch naming (`bugfix/model-selection` not `fix/1`)
+- Semantic labels (`bugfix`, `p1-high` not task-based)
+- When closed: Rich narrative with commit IDs, RCA, and verification
 
 ---
 
@@ -33,98 +42,169 @@ When Level 3 auto-creates a task during execution, it ALSO creates a correspondi
 
 #### Issue Details
 
-**Title Format:**
+**Title Format (CHANGED in v3.0):**
 ```
-[TASK-{task_id}] {task_subject}
-```
-
-Example:
-```
-[TASK-001] Implement GitHub Issues integration for Level 3 flow
+{type}: {problem_statement}
 ```
 
-**Description/Body (Comprehensive Story Format):**
+Where `type` is: `bugfix`, `feature`, `refactor`, `perf`, `docs`, `enhancement`
+
+Examples:
+```
+bugfix: Model selection defaulting to HAIKU for complex tasks
+feature: Implement JWT authentication system
+refactor: Simplify context management
+perf: Improve complexity scoring performance
+docs: Add architecture diagrams to README
+```
+
+**NOT this (old format):**
+```
+❌ [TASK-001] Implement GitHub Issues integration
+❌ [TASK-002] Add tests for issues
+```
+
+**Description/Body (CHANGED in v3.0 - Problem-Centric Format):**
 ```markdown
-## Story
+## Problem Statement
 
-{Narrative describing the task context based on issue type:
-  - fix: Bug identified, needs investigation and resolution
-  - feature: New functionality to be designed and implemented
-  - refactor: Code restructuring for maintainability
-  - docs: Documentation creation or update
-  - enhancement: Improving existing feature
-  - test: Test coverage addition}
+{What is the actual problem from user perspective?
+ Why does it matter? What's broken or needed?}
 
-**What needs to be done:**
+## Context & Background
 
-{task_description}
+{Why is this happening? What's the root cause theory?
+ Any relevant history or related issues?
+ What areas will be affected?}
 
-## Task Overview
+## Solution Approach
 
-| Field | Value |
-|-------|-------|
-| **Task ID** | {task_id} |
-| **Subject** | {subject} |
-| **Type** | {issue_type} |
-| **Complexity** | {complexity}/25 |
-| **Priority** | {Critical/High/Medium/Low} |
-| **Model** | {model} |
-| **Skill/Agent** | {skill} |
+{High-level strategy. What needs investigation/change?
+ Which files/modules are involved?}
 
-## Acceptance Criteria
-- [ ] {criteria derived from description}
-- [ ] {type-specific criteria: e.g., "Root cause identified" for fix}
-- [ ] Changes committed and pushed
+## Success Criteria
 
-## Session Context
+- [ ] {Measurable outcome 1}
+- [ ] {Measurable outcome 2}
+- [ ] All related tasks completed
+- [ ] Changes committed and merged
 
-| Field | Value |
-|-------|-------|
-| **Session ID** | {session_id} |
-| **Created At** | {timestamp} |
-| **Context Usage** | {context_pct}% |
-| **Repository** | {repo_name} |
+## Related Tasks
+
+{If multiple internal tasks, reference them}
 
 ---
 _Auto-created by Claude Memory System (Level 3 Execution) | v3.0.0_
 ```
 
-#### Labels (Fully Implemented in v3.0.0)
+**Real Example:**
+```markdown
+## Problem Statement
 
-**System Labels (Always Applied):**
+Model selection policy isn't working. Tasks that should get SONNET (complex API work)
+are getting HAIKU (simple tasks model) instead. This causes wrong model selection.
 
-| Label | Purpose |
+## Context & Background
+
+Complexity scoring uses 1-10 scale, but policy thresholds expect 1-25 scale.
+This mismatch causes all scores to map to HAIKU range.
+
+## Solution Approach
+
+1. Expand complexity scale from 1-10 → 1-25
+2. Add task-type weights (Auth=8, API=7, Security=8)
+3. Add integration/cross-cutting detection
+4. Test with real task examples
+
+## Success Criteria
+
+- [ ] SIMPLE tasks (typos) → HAIKU
+- [ ] MODERATE tasks (bug fix) → SONNET
+- [ ] COMPLEX tasks (API/auth) → SONNET/OPUS
+- [ ] All edge cases tested
+```
+
+#### Labels (CHANGED in v3.0.0 - Semantic Labels)
+
+**Type Labels (Mutually Exclusive - Auto-Detected):**
+
+| Label | When to Use |
+|-------|-------------|
+| `bugfix` | Fixing broken behavior |
+| `feature` | New capability/functionality |
+| `refactor` | Improving code without user-visible change |
+| `docs` | Documentation only |
+| `enhancement` | Improving existing feature |
+| `perf` | Performance optimization |
+| `test` | Test coverage/infrastructure |
+| `chore` | Maintenance, setup, etc. |
+
+**Priority Labels (Based on Complexity - Mutually Exclusive):**
+
+| Label | Complexity | When to Use |
+|-------|-----------|-------------|
+| `p0-critical` | >= 18 | Blocking, must fix now |
+| `p1-high` | 12-17 | Important, fix soon |
+| `p2-medium` | 6-11 | Regular priority |
+| `p3-low` | 0-5 | Nice to have |
+
+**Status Labels (Auto-Applied):**
+
+| Label | Meaning |
 |-------|---------|
-| `task-auto-created` | Identifies auto-created tasks |
-| `level-3-execution` | Part of Level 3 system |
+| `in-progress` | Work started |
+| `blocked` | Waiting on something |
+| `review` | PR in review |
+| `approved` | Ready to merge |
 
-**Type Labels (Auto-Detected from subject/description):**
+**Example Label Combinations:**
+```
+bugfix + p1-high + in-progress
+feature + p2-medium + review
+refactor + p3-low + approved
+```
 
-| Label | Detected When |
-|-------|---------------|
-| `bugfix` | Contains: fix, bug, error, broken, crash, issue, resolve |
-| `feature` | Default (no other type detected) |
-| `refactor` | Contains: refactor, cleanup, reorganize, simplify, restructure |
-| `docs` | Contains: doc, readme, comment, documentation, javadoc |
-| `enhancement` | Contains: update, enhance, improve, upgrade, optimize |
-| `test` | Contains: test, spec, coverage, unit test, integration test |
+**NO MORE (old format):**
+```
+❌ task-auto-created
+❌ level-3-execution
+❌ priority-critical (use p0-critical)
+❌ complexity-high (use complexity in issue, not as label)
+```
 
-**Priority Labels (Derived from complexity score):**
+### [3.2] Branch Naming (CHANGED in v3.0)
 
-| Label | Complexity Range |
-|-------|-----------------|
-| `priority-critical` | complexity >= 15 |
-| `priority-high` | complexity 10-14 |
-| `priority-medium` | complexity 5-9 |
-| `priority-low` | complexity <= 4 |
+**Format:**
+```
+{type}/{problem-key}
+```
 
-**Complexity Labels (Derived from complexity score):**
+Where:
+- `type` = `bugfix`, `feature`, `refactor`, `perf`, `docs`, `enhancement`, `chore`
+- `problem-key` = Semantic name of what's being fixed/added
 
-| Label | Complexity Range |
-|-------|-----------------|
-| `complexity-high` | complexity >= 10 |
-| `complexity-medium` | complexity 4-9 |
-| `complexity-low` | complexity <= 3 |
+**Examples:**
+```
+bugfix/model-selection
+feature/jwt-authentication
+refactor/context-manager
+perf/complexity-scoring
+docs/architecture-guide
+chore/update-dependencies
+```
+
+**KEY CHANGE - Single Branch Per Problem:**
+- All tasks for one problem → **ONE branch**
+- Multiple commits in one branch is OK
+- One PR from that branch
+- Reuse branch if problem needs additional work
+
+**NOT this (old format):**
+```
+❌ fix/1 (per-task branch)
+❌ fix/86 (issue-ID based)
+❌ feature/task-123 (task-based)
+```
 
 #### Assignees
 
@@ -153,65 +233,92 @@ what files were changed, and how it was verified.
 1. Task marked as completed (status = "completed")
 2. `close_github_issue()` called with comprehensive closing comment
 
-**Closing Comment Format (Resolution Story):**
+**Closing Comment Format (CHANGED in v3.0 - Rich Narrative with Commits):**
 
 ```markdown
 ## Resolution Story
 
-{Narrative paragraph based on issue type:
-  - fix: "This bug has been investigated, root-caused, and fixed.
-          The investigation involved reading N file(s)...
-          The fix was applied across N file(s)...
-          Verification was performed using N command(s)..."
-  - feature: "The new feature has been fully implemented...
-              Research phase: N existing file(s) were studied...
-              Implementation phase: N file(s) were created or modified...
-              Validation phase: N command(s) were executed..."
-  - refactor: "The code has been restructured...
-               First, N file(s) were analyzed...
-               The refactoring touched N file(s)..."
-}
+{Narrative paragraph explaining:
+ - What was the problem (restated for clarity)
+ - How we investigated it (which files, what we learned)
+ - What solution was found (the fix)
+ - How it was verified (tests, commands)
+ - Why this solution was chosen}
+
+## Problem Summary
 
 | Field | Value |
 |-------|-------|
-| **Status** | Completed |
-| **Duration** | {Xh Ym / Xm Ys} |
-| **Closed At** | {timestamp} |
+| **Problem** | {Original problem statement} |
+| **Root Cause** | {Why it was happening} |
+| **Solution** | {How it was fixed} |
+| **Impact** | {User-visible improvement} |
+
+## Commits
+
+| Commit ID | Message |
+|-----------|---------|
+| `abc1234` | fix: Expand complexity scoring 1-10 → 1-25 |
+| `def5678` | test: Add complexity scoring tests |
+| `ghi9012` | docs: Update model selection guide |
 
 ## Files Changed
-- `file1.py`
-- `file2.py`
 
-## Changes Made
-- file1.py (+50 chars)
-- file2.py (120 lines written)
+| File | Change Type | Impact |
+|------|-------------|--------|
+| `prompt-generator.py` | Modified | +45 lines |
+| `test_complexity.py` | Created | +80 lines |
 
-## Files Investigated
-- `file3.py`
-- `file4.py`
+## Verification
 
-## Root Cause Analysis (RCA) [only for fix type]
-**Investigation:** N files investigated
-**Root Cause Location:** `file1.py`, `file2.py`
-**Fix Applied:** N edit(s) made
-**Verification:** N command(s) run to verify fix
-
-## Tool Usage
-| Metric | Value |
-|--------|-------|
-| Total Tool Calls | N |
-| Files Read | N |
-| Files Changed | N |
-
-## Session Context
-| Field | Value |
-|-------|-------|
-| Session | `SESSION-ID` |
-| Complexity | X/25 |
-| Model | HAIKU/SONNET |
+- [x] HAIKU: Simple tasks (<=4) correctly selected
+- [x] SONNET: Moderate tasks (5-19) correctly selected
+- [x] OPUS: Complex tasks (>=20) correctly selected
+- [x] All edge cases tested
+- [x] No regressions in other parts
+- [x] PR reviewed and approved
 
 ---
-_Auto-closed by Claude Memory System (Level 3 Execution) | v3.0.0_
+_Closed by Claude Memory System (Level 3 Execution) | v3.0.0_
+```
+
+**Real Closing Example:**
+```markdown
+## Resolution Story
+
+Model selection was broken because complexity scoring used a 1-10 scale
+while thresholds expected 1-25. This caused all tasks to score in HAIKU range.
+We expanded the scale and added task-type weights. Now API tasks get SONNET
+and typos get HAIKU - working correctly!
+
+## Problem Summary
+
+| Field | Value |
+|-------|-------|
+| **Problem** | Complex tasks getting HAIKU model (wrong) |
+| **Root Cause** | 1-10 scale vs 1-25 threshold mismatch |
+| **Solution** | Expand scale + add task-type weights |
+| **Impact** | Proper model selection (faster inference) |
+
+## Commits
+
+| Commit ID | Message |
+|-----------|---------|
+| `d08ec84` | fix: Expand complexity scoring 1-10 → 1-25 scale |
+| `e172381` | test: Add complexity tests |
+
+## Files Changed
+
+| File | Change Type |
+|------|-------------|
+| `prompt-generator.py` | +45 lines |
+| `test_complexity.py` | +80 lines |
+
+## Verification
+
+- [x] HAIKU: Typo fix (complexity 2) → gets HAIKU ✅
+- [x] SONNET: API work (complexity 12) → gets SONNET ✅
+- [x] OPUS: Refactor (complexity 22) → gets OPUS ✅
 ```
 
 **Commit Message Format:**
