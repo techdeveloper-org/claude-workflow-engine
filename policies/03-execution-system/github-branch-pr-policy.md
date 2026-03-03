@@ -24,22 +24,26 @@ pull request management, and auto-review with session metrics.
 - `{label}` = issue type detected from task subject/description
 - `{issueId}` = GitHub issue number from the first TaskCreate
 
-**Valid Label Prefixes:**
+**Valid Label Prefixes (SEMANTIC - v3.0+):**
 
 | Label | When Used | Example |
 |-------|-----------|---------|
-| `fix` | Bug fixes, error resolution, crash fixes | `fix/42` |
+| `bugfix` | Bug fixes, error resolution, crash fixes | `bugfix/42` |
 | `feature` | New functionality (default) | `feature/123` |
 | `refactor` | Code restructuring, cleanup | `refactor/99` |
 | `docs` | Documentation changes | `docs/55` |
 | `enhancement` | Improving existing features | `enhancement/78` |
-| `test` | Adding or updating tests | `test/34` |
+| `perf` | Performance optimization | `perf/34` |
+| `test` | Adding or updating tests | `test/88` |
+| `chore` | Maintenance, setup, dependencies | `chore/12` |
 
 **Examples:**
-- `fix/42` - Bug fix for issue #42
+- `bugfix/42` - Bug fix for issue #42 (NOT `fix/42`)
 - `feature/123` - New feature for issue #123
 - `refactor/99` - Code refactoring for issue #99
 - `docs/55` - Documentation update for issue #55
+- `perf/34` - Performance optimization for issue #34
+- `enhancement/78` - Feature enhancement for issue #78
 
 **Rules:**
 - One branch per session (first TaskCreate triggers creation)

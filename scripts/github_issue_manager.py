@@ -901,20 +901,24 @@ def close_github_issue(task_id):
 def _detect_issue_type(subject, description=''):
     """
     Detect the issue type from subject and description text.
-    Returns one of: 'fix', 'feature', 'refactor', 'docs', 'enhancement', 'test'.
-    Used for both label assignment and branch naming.
+    Returns SEMANTIC label: 'bugfix', 'feature', 'refactor', 'docs', 'enhancement', 'perf', 'test', 'chore'.
+    Used for both GitHub labels and branch naming (e.g., bugfix/42, feature/123).
     """
     combined = (subject + ' ' + (description or '')).lower()
     if any(w in combined for w in ['fix', 'bug', 'error', 'broken', 'crash', 'issue', 'resolve']):
-        return 'fix'
+        return 'bugfix'
     if any(w in combined for w in ['refactor', 'cleanup', 'reorganize', 'simplify', 'restructure']):
         return 'refactor'
     if any(w in combined for w in ['doc', 'readme', 'comment', 'documentation', 'javadoc']):
         return 'docs'
     if any(w in combined for w in ['test', 'spec', 'coverage', 'unit test', 'integration test']):
         return 'test'
-    if any(w in combined for w in ['update', 'enhance', 'improve', 'upgrade', 'optimize']):
+    if any(w in combined for w in ['performance', 'perf', 'optimize', 'speed', 'faster']):
+        return 'perf'
+    if any(w in combined for w in ['update', 'enhance', 'improve', 'upgrade']):
         return 'enhancement'
+    if any(w in combined for w in ['chore', 'maintenance', 'dependency', 'dependencies']):
+        return 'chore'
     return 'feature'
 
 
@@ -1035,16 +1039,19 @@ def _build_issue_labels(issue_type, complexity, subject, description=''):
     """
     labels = []
 
-    # 1. Type label (semantic format)
+    # 1. Type label (semantic format - matches branch naming!)
     # Supported types: bugfix, feature, refactor, docs, enhancement, perf, test, chore
+    # These also match branch naming: bugfix/42, feature/123, etc.
     type_map = {
-        'fix': 'bugfix',
+        'bugfix': 'bugfix',
+        'fix': 'bugfix',  # backward compatibility
         'feature': 'feature',
         'refactor': 'refactor',
         'docs': 'docs',
         'enhancement': 'enhancement',
         'perf': 'perf',
         'test': 'test',
+        'chore': 'chore',
     }
     labels.append(type_map.get(issue_type, 'feature'))
 
