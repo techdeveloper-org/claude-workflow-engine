@@ -918,45 +918,6 @@ def _detect_issue_type(subject, description=''):
     return 'feature'
 
 
-def _extract_semantic_branch_key(subject):
-    """
-    Extract semantic key from issue subject for branch naming (NEW in v3.0).
-
-    Examples:
-    - "Model selection defaulting to HAIKU" → "model-selection"
-    - "Implement JWT authentication" → "jwt-authentication"
-    - "Refactor context manager" → "context-manager"
-    - "Add performance optimization" → "performance-optimization"
-
-    Returns: Lowercase hyphenated key (max 30 chars).
-    """
-    # Remove common prefixes and special characters
-    key = subject.lower()
-    key = key.replace('[task-', '').replace(']', '')  # Remove old [TASK-X] format
-    key = key.replace('[', '').replace(']', '')
-    key = key.replace('(', '').replace(')', '')
-    key = key.replace(':', '')
-
-    # Extract significant words (skip small words like 'a', 'the', 'by')
-    stop_words = {'a', 'an', 'the', 'to', 'by', 'for', 'in', 'on', 'at', 'and', 'or',
-                  'fix', 'add', 'implement', 'improve', 'update', 'refactor', 'cleanup'}
-    words = key.split()
-    significant_words = [w for w in words if len(w) > 2 and w not in stop_words]
-
-    # Take first 2-3 significant words
-    problem_key = '-'.join(significant_words[:3])
-
-    # Fallback if no significant words found
-    if not problem_key:
-        problem_key = '-'.join(words[:2])
-
-    # Limit to 30 chars and ensure valid (alphanumeric + hyphen)
-    problem_key = problem_key[:30]
-    problem_key = ''.join(c for c in problem_key if c.isalnum() or c == '-')
-
-    return problem_key if problem_key else 'issue'
-
-
 # -----------------------------------------------------------------------
 # LABEL SYSTEM: Auto-create and assign labels to GitHub issues
 # -----------------------------------------------------------------------
@@ -1167,18 +1128,18 @@ def _slugify(text, max_len=40):
 
 def create_issue_branch(issue_number, subject, issue_type=None):
     """
-    Create and checkout a git branch with SEMANTIC naming (CHANGED v3.0).
+    Create and checkout a git branch named {label}/{issueId}.
+    Examples: fix/42, feature/123, refactor/99, docs/55, enhancement/78
 
-    OLD FORMAT: fix/42, feature/123 (issue-ID based)
-    NEW FORMAT: bugfix/model-selection, feature/auth-system (problem-based)
+    IMPORTANT: Must include issue ID for auto-close policy to work!
+    The branch name is used to link issues in github-issues.json and PR workflow.
 
     Only creates if currently on main/master.
     Stores branch name in github-issues.json under 'session_branch'.
-    Reuses branch if problem already has one (doesn't create per-task).
 
     Args:
         issue_number: GitHub issue number (int)
-        subject: Task subject (used to extract problem key)
+        subject: Task subject (used for type detection if issue_type not provided)
         issue_type: Optional explicit type ('fix', 'feature', 'refactor', 'docs', etc.)
 
     Returns:
@@ -1203,17 +1164,13 @@ def create_issue_branch(issue_number, subject, issue_type=None):
             # Already on a feature branch - don't create another
             return None
 
-        # Determine the type prefix
+        # Determine the label prefix for branch naming
         if not issue_type:
             issue_type = _detect_issue_type(subject)
 
-        # CHANGED v3.0: Extract semantic problem key from subject
-        # Example: "Model selection defaulting to HAIKU" → "model-selection"
-        problem_key = _extract_semantic_branch_key(subject)
-
-        # Build branch name: {type}/{problem-key}
-        # Examples: bugfix/model-selection, feature/jwt-auth, refactor/context-manager
-        branch_name = issue_type + '/' + problem_key
+        # Build branch name: {label}/{issueId}
+        # KEEP THIS FORMAT - Required by github-branch-pr-policy.md for auto-close!
+        branch_name = issue_type + '/' + str(issue_number)
 
         # Create and checkout new branch
         result = subprocess.run(

@@ -172,39 +172,38 @@ refactor + p3-low + approved
 ❌ complexity-high (use complexity in issue, not as label)
 ```
 
-### [3.2] Branch Naming (CHANGED in v3.0)
+### [3.2] Branch Naming (COORDINATED with github-branch-pr-policy.md)
 
-**Format:**
+**Format (UNCHANGED - Required for auto-close):**
 ```
-{type}/{problem-key}
+{label}/{issueId}
 ```
 
 Where:
-- `type` = `bugfix`, `feature`, `refactor`, `perf`, `docs`, `enhancement`, `chore`
-- `problem-key` = Semantic name of what's being fixed/added
+- `label` = `fix`, `feature`, `refactor`, `docs`, `enhancement`, `test`, `chore`
+- `issueId` = GitHub issue number (REQUIRED for auto-close policy!)
 
 **Examples:**
 ```
-bugfix/model-selection
-feature/jwt-authentication
-refactor/context-manager
-perf/complexity-scoring
-docs/architecture-guide
-chore/update-dependencies
+fix/42              (Auto-closes issue #42 when merged)
+feature/123         (Auto-closes issue #123 when merged)
+refactor/99         (Auto-closes issue #99 when merged)
+docs/55             (Auto-closes issue #55 when merged)
+enhancement/78      (Auto-closes issue #78 when merged)
 ```
 
-**KEY CHANGE - Single Branch Per Problem:**
-- All tasks for one problem → **ONE branch**
+**IMPORTANT - WHY issue ID in branch name:**
+- Required by `github-branch-pr-policy.md` for auto-close mechanism
+- github-issues.json stores `branch_from_issue` to track which issue is being fixed
+- PR workflow uses issue ID to add "Closes #N" in PR body
+- Without issue ID, auto-close chain breaks!
+
+**Single Branch Per Problem (Session):**
+- First TaskCreate → creates issue + branch (e.g., fix/42)
+- All subsequent tasks in same session → stay on same branch
 - Multiple commits in one branch is OK
-- One PR from that branch
-- Reuse branch if problem needs additional work
-
-**NOT this (old format):**
-```
-❌ fix/1 (per-task branch)
-❌ fix/86 (issue-ID based)
-❌ feature/task-123 (task-based)
-```
+- One PR from that branch when all tasks complete
+- Issue auto-closes when PR merges
 
 #### Assignees
 
