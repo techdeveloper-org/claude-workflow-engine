@@ -183,17 +183,24 @@ def is_gh_available():
 
 
 def extract_task_id_from_response(tool_response):
-    """
-    Parse task ID from a TaskCreate tool response.
+    """Parse the task ID from a TaskCreate tool response.
 
     Handles multiple response formats:
-      - "Task #1 created successfully: ..."
-      - "Task created with id 1"
-      - "Created task 1: ..."
-      - {"id": "1", ...}
-      - Any string containing digits after task-related keywords
 
-    Returns the task ID string (e.g. '1') or empty string.
+    - ``"Task #1 created successfully: ..."``
+    - ``"Task created with id 1"``
+    - ``"Created task 1: ..."``
+    - ``{"id": "1", ...}`` or ``{"taskId": "1", ...}``
+    - Any string containing digits after task-related keywords
+
+    Args:
+        tool_response (str or dict): Raw response from a TaskCreate tool call.
+            Can be a plain string, a dict with an ``id``/``taskId`` field, or
+            a dict with a ``content`` field (str or list of dicts).
+
+    Returns:
+        str: The extracted task ID (e.g. ``'1'``), or an empty string if no
+            numeric ID can be found.
     """
     try:
         content = ''
