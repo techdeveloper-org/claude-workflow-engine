@@ -978,10 +978,20 @@ def close_github_issue(task_id):
 
 
 def _detect_issue_type(subject, description=''):
-    """
-    Detect the issue type from subject and description text.
-    Returns SEMANTIC label: 'bugfix', 'feature', 'refactor', 'docs', 'enhancement', 'perf', 'test', 'chore'.
-    Used for both GitHub labels and branch naming (e.g., bugfix/42, feature/123).
+    """Classify the issue type from the subject and description text.
+
+    Keyword matching selects the most appropriate semantic type label.
+    The result drives both GitHub label assignment and branch naming
+    (e.g. bugfix/42, feature/123).
+
+    Args:
+        subject (str): Issue title or task subject line.
+        description (str): Optional longer description. Defaults to ''.
+
+    Returns:
+        str: One of 'bugfix', 'feature', 'refactor', 'docs', 'enhancement',
+            'perf', 'test', or 'chore'. Defaults to 'feature' when no
+            keywords match.
     """
     combined = (subject + ' ' + (description or '')).lower()
     if any(w in combined for w in ['fix', 'bug', 'error', 'broken', 'crash', 'issue', 'resolve']):
@@ -1039,7 +1049,20 @@ _repo_labels_cache = None
 
 
 def _get_repo_labels(repo_root):
-    """Fetch all labels currently in the GitHub repo. Cached per invocation."""
+    """Fetch all label names currently defined in the GitHub repository.
+
+    The result is cached in the module-level ``_repo_labels_cache`` set so
+    that subsequent calls within the same invocation do not make additional
+    ``gh`` CLI requests.
+
+    Args:
+        repo_root (str): Absolute path to the git repository root, passed as
+            the working directory for the ``gh`` CLI call.
+
+    Returns:
+        set: Label name strings present in the repo, or an empty set if the
+            ``gh label list`` call fails or returns no data.
+    """
     global _repo_labels_cache
     if _repo_labels_cache is not None:
         return _repo_labels_cache

@@ -400,6 +400,7 @@ class SkillAutoRegister:
     """Auto-discover and register skills from ~/.claude/skills/"""
 
     def __init__(self):
+        """Initialize SkillAutoRegister with an empty registry and zero counters."""
         self.registry = self._load_registry()
         self.skills = self.registry.get('skills', {})
         self.registered_count = 0
@@ -791,6 +792,7 @@ class SkillAgentAutoExecutor:
     """
 
     def __init__(self):
+        """Initialize SkillAgentAutoExecutor with log paths and load the built-in registry."""
         self.memory_path = Path.home() / '.claude' / 'memory'
         self.logs_path = self.memory_path / 'logs'
         self.execution_log = self.logs_path / 'skill-agent-execution.log'
