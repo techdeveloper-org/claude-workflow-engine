@@ -335,7 +335,10 @@ def main():
     if command == '--archive':
         result = archive_plan_to_session(session_id)
         print(json.dumps(result, indent=2))
-        sys.exit(0 if result['success'] else 1)
+        # Only exit 1 if there was a real error (not just "no plan found")
+        if not result['success'] and result.get('error'):
+            sys.exit(1)
+        sys.exit(0)
 
     elif command == '--check':
         result = check_plan_archived(session_id)

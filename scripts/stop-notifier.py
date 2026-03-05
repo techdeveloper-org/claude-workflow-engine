@@ -694,6 +694,36 @@ def main():
     except Exception as e:
         log_s('[FAILURE-DETECT] Skipped: ' + str(e))
 
+    # 4. Archive plan file to session folder (if plan mode was used this session)
+    # Policy: 03-execution-system/02-plan-mode/auto-plan-mode-suggestion-policy.md (v2.0)
+    # Script: 03-execution-system/02-plan-mode/plan-session-archiver.py
+    try:
+        plan_archiver_script = script_dir / 'architecture' / '03-execution-system' / '02-plan-mode' / 'plan-session-archiver.py'
+        if plan_archiver_script.exists():
+            _plan_session_id = get_current_session_id()
+            if _plan_session_id:
+                _plan_ok = False
+                for _attempt in range(1, 4):
+                    try:
+                        _r = subprocess.run(
+                            [sys.executable, str(plan_archiver_script), '--archive', _plan_session_id],
+                            timeout=10, capture_output=True
+                        )
+                        if _r.returncode == 0:
+                            _plan_ok = True
+                            break
+                        if _attempt < 3:
+                            log_s('[RETRY ' + str(_attempt) + '/3] plan-session-archiver failed, retrying...')
+                    except Exception:
+                        if _attempt < 3:
+                            log_s('[RETRY ' + str(_attempt) + '/3] plan-session-archiver error, retrying...')
+                if _plan_ok:
+                    log_s('[PLAN-ARCHIVE] Plan checked/archived for session: ' + _plan_session_id)
+                else:
+                    log_s('[POLICY-WARN] plan-session-archiver failed after 3 retries')
+    except Exception as e:
+        log_s('[PLAN-ARCHIVE] Skipped: ' + str(e))
+
     spoke_something = False
 
     # =========================================================================
