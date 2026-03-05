@@ -54,6 +54,20 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+# Metrics emitter (fire-and-forget, never blocks)
+try:
+    _me_dir = os.path.dirname(os.path.abspath(__file__))
+    if _me_dir not in sys.path:
+        sys.path.insert(0, _me_dir)
+    from metrics_emitter import emit_hook_execution
+    _METRICS_AVAILABLE = True
+except Exception:
+    def emit_hook_execution(*a, **kw): pass
+    _METRICS_AVAILABLE = False
+
+# Track hook start time
+_HOOK_START = datetime.now()
+
 # Use ide_paths for IDE self-contained installations (with fallback for standalone mode)
 try:
     from ide_paths import (MEMORY_BASE, SCRIPTS_DIR, CURRENT_DIR, FLAG_DIR,
@@ -801,6 +815,14 @@ def main():
 
     if not spoke_something:
         log_s("[OK] Stop hook fired | No voice flags found (normal, most stops are silent)")
+
+    try:
+        _dur_stop = int((datetime.now() - _HOOK_START).total_seconds() * 1000)
+        emit_hook_execution('stop-notifier.py', _dur_stop,
+                            session_id='', exit_code=0,
+                            extra={'spoke': spoke_something})
+    except Exception:
+        pass
 
     sys.exit(0)
 

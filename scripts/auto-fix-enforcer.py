@@ -42,10 +42,43 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+# File locking for shared JSON state (Loophole #19)
+try:
+    import msvcrt
+    HAS_MSVCRT = True
+except ImportError:
+    HAS_MSVCRT = False
+
+
+def _lock_file(f):
+    """Lock file for exclusive access (Windows msvcrt, no-op on other OS)."""
+    if HAS_MSVCRT:
+        try:
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        except (IOError, OSError):
+            pass  # lock failed - proceed without lock (better than crash)
+
+
+def _unlock_file(f):
+    """Unlock file (Windows msvcrt, no-op on other OS)."""
+    if HAS_MSVCRT:
+        try:
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        except (IOError, OSError):
+            pass
+
+
 class AutoFixEnforcer:
     """Detects and auto-fixes all system failures"""
 
     def __init__(self):
+        """Initialise paths and empty failure/fix tracking lists.
+
+        Attempts to import ide_paths for IDE-embedded installations.
+        Falls back to ~/.claude/scripts/ and ~/.claude/memory/ when
+        ide_paths is not available (standalone mode).
+        """
         # Use ide_paths for IDE self-contained installations (with fallback for standalone mode)
         try:
             from ide_paths import SCRIPTS_DIR, MEMORY_BASE
@@ -228,7 +261,9 @@ class AutoFixEnforcer:
 
         try:
             with open(state_file, 'r') as f:
+                _lock_file(f)
                 state = json.load(f)
+                _unlock_file(f)
 
             # Check if session started
             if not state.get('session_started', False):
@@ -275,16 +310,20 @@ class AutoFixEnforcer:
             return None
 
     def _check_session_state(self):
-        """
-        Check session state with session isolation (Loophole #11 fix).
+        """Check [4/7]: Validate session state flags in blocking-state.json.
 
-        Session isolation: validate that .blocking-state.json belongs to the
-        CURRENT session by comparing the session_id field.  Without this check,
-        a stale state file from a previous session (different session_id) would
-        pass as valid, letting work proceed under the wrong session context.
+        Reads .blocking-state.json from self.memory_path and verifies that
+        session_started and context_checked flags are True.  Missing flags
+        emit a WARNING but do NOT append to self.failures (non-blocking).
 
-        Contract: session_id in .blocking-state.json MUST match the active
-        session_id from .current-session.json.
+        Session isolation (Loophole #11): validates that the session_id
+        field in .blocking-state.json matches the active session from
+        .current-session.json.  A stale state file from a prior session
+        would otherwise pass as valid under the wrong session context.
+
+        Returns:
+            bool: True after the check completes (even on missing flags);
+                  False only when the state file is unreadable.
         """
         print("\n[SEARCH] [4/7] Checking session state...")
 
@@ -295,7 +334,9 @@ class AutoFixEnforcer:
 
         try:
             with open(state_file, 'r', encoding='utf-8') as f:
+                _lock_file(f)
                 state = json.load(f)
+                _unlock_file(f)
 
             # ----------------------------------------------------------------
             # SESSION ISOLATION: verify state belongs to the current session.
@@ -556,7 +597,9 @@ class AutoFixEnforcer:
             }
 
             with open(state_file, 'w') as f:
+                _lock_file(f)
                 json.dump(initial_state, f, indent=2)
+                _unlock_file(f)
 
             return True
         except:

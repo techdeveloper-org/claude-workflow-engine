@@ -662,6 +662,7 @@ def read_json(path):
 
 
 def show_help():
+    """Print usage information for the script."""
     print(f"{SCRIPT_NAME} v{VERSION}")
     print("3-Level Architecture Flow with Full JSON Trace")
     print()

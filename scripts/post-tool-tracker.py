@@ -908,6 +908,15 @@ def main():
     except Exception:
         pass  # NEVER block on tracking errors
 
+    try:
+        _sid_fin = _get_session_id_from_progress() or ''
+        _dur_fin = int((datetime.now() - _HOOK_START).total_seconds() * 1000)
+        emit_hook_execution('post-tool-tracker.py', _dur_fin,
+                            session_id=_sid_fin, exit_code=0,
+                            extra={'tool': tool_name if 'tool_name' in dir() else ''})
+    except Exception:
+        pass
+
     sys.exit(0)
 
 

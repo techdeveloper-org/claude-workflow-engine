@@ -681,3 +681,232 @@ class MetricsCollector:
                 },
                 'policy_hits_today': {'total': 0, 'success': 0, 'failed': 0}
             }
+
+    # =========================================================================
+    # METRICS JSONL METHODS (Task 5 - telemetry from metrics-emitter.py)
+    # =========================================================================
+
+    def _get_metrics_jsonl_path(self):
+        """Return Path to metrics.jsonl."""
+        return self.memory_dir / 'logs' / 'metrics.jsonl'
+
+    def read_metrics_jsonl(self, limit=500, record_type=None):
+        """Read records from ~/.claude/memory/logs/metrics.jsonl.
+
+        Args:
+            limit      : max records to return (most-recent last)
+            record_type: if set, filter to records with this 'type' value
+
+        Returns:
+            list of dicts, each representing one JSONL record.
+            Empty list if file not found or unreadable.
+        """
+        records = []
+        try:
+            mf = self._get_metrics_jsonl_path()
+            if not mf.exists():
+                return records
+            with open(mf, 'r', encoding='utf-8', errors='replace') as fh:
+                for raw in fh:
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        rec = json.loads(raw)
+                        if record_type is None or rec.get('type') == record_type:
+                            records.append(rec)
+                    except Exception:
+                        continue
+            # Return only the most-recent `limit` records
+            return records[-limit:] if len(records) > limit else records
+        except Exception as e:
+            print(f"Error reading metrics.jsonl: {e}")
+            return records
+
+    def get_enforcement_stats(self, hours=24):
+        """Aggregate enforcement event counts from metrics.jsonl.
+
+        Args:
+            hours: look-back window in hours (default 24)
+
+        Returns:
+            dict with keys:
+              total_blocks      - total blocked tool calls
+              total_hints       - total non-blocking hints emitted
+              by_type           - dict mapping event_type -> count
+              by_tool           - dict mapping tool_name -> count
+              recent_blocks     - list of last 10 blocking records
+        """
+        try:
+            from datetime import timezone
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+            records = self.read_metrics_jsonl(limit=2000, record_type='enforcement_event')
+            total_blocks = 0
+            total_hints = 0
+            by_type = {}
+            by_tool = {}
+            recent_blocks = []
+
+            for rec in records:
+                try:
+                    ts_raw = rec.get('ts', '')
+                    if ts_raw:
+                        # Parse with or without timezone info
+                        try:
+                            ts = datetime.fromisoformat(ts_raw)
+                            if ts.tzinfo is None:
+                                ts = ts.replace(tzinfo=timezone.utc)
+                            if ts < cutoff:
+                                continue
+                        except Exception:
+                            pass  # include record if timestamp unparseable
+
+                    blocked = rec.get('blocked', False)
+                    event_type = rec.get('event_type', 'unknown')
+                    tool_name = rec.get('tool_name', '')
+
+                    if blocked:
+                        total_blocks += 1
+                        recent_blocks.append(rec)
+                    else:
+                        total_hints += 1
+
+                    by_type[event_type] = by_type.get(event_type, 0) + 1
+                    if tool_name:
+                        by_tool[tool_name] = by_tool.get(tool_name, 0) + 1
+                except Exception:
+                    continue
+
+            return {
+                'total_blocks': total_blocks,
+                'total_hints': total_hints,
+                'by_type': by_type,
+                'by_tool': by_tool,
+                'recent_blocks': recent_blocks[-10:],
+                'window_hours': hours,
+            }
+        except Exception as e:
+            print(f"Error getting enforcement stats: {e}")
+            return {
+                'total_blocks': 0,
+                'total_hints': 0,
+                'by_type': {},
+                'by_tool': {},
+                'recent_blocks': [],
+                'window_hours': hours,
+            }
+
+    def get_hook_performance(self, hours=24):
+        """Return per-hook execution timing stats from metrics.jsonl.
+
+        Args:
+            hours: look-back window in hours (default 24)
+
+        Returns:
+            dict mapping hook_name -> {
+                count, avg_ms, min_ms, max_ms, errors
+            }
+        """
+        try:
+            from datetime import timezone
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+            records = self.read_metrics_jsonl(limit=2000, record_type='hook_execution')
+            stats = {}
+
+            for rec in records:
+                try:
+                    ts_raw = rec.get('ts', '')
+                    if ts_raw:
+                        try:
+                            ts = datetime.fromisoformat(ts_raw)
+                            if ts.tzinfo is None:
+                                ts = ts.replace(tzinfo=timezone.utc)
+                            if ts < cutoff:
+                                continue
+                        except Exception:
+                            pass
+
+                    hook = rec.get('hook', 'unknown')
+                    dur = int(rec.get('duration_ms', 0))
+                    exit_code = int(rec.get('exit_code', 0))
+
+                    if hook not in stats:
+                        stats[hook] = {'count': 0, 'total_ms': 0,
+                                       'min_ms': dur, 'max_ms': dur, 'errors': 0}
+                    s = stats[hook]
+                    s['count'] += 1
+                    s['total_ms'] += dur
+                    s['min_ms'] = min(s['min_ms'], dur)
+                    s['max_ms'] = max(s['max_ms'], dur)
+                    if exit_code != 0:
+                        s['errors'] += 1
+                except Exception:
+                    continue
+
+            # Add avg_ms
+            for hook, s in stats.items():
+                s['avg_ms'] = round(s['total_ms'] / s['count'], 1) if s['count'] > 0 else 0
+                del s['total_ms']
+
+            return {'hooks': stats, 'window_hours': hours}
+        except Exception as e:
+            print(f"Error getting hook performance: {e}")
+            return {'hooks': {}, 'window_hours': hours}
+
+    def get_policy_step_breakdown(self, hours=24):
+        """Return per-step pass/fail breakdown from metrics.jsonl.
+
+        Args:
+            hours: look-back window in hours (default 24)
+
+        Returns:
+            dict mapping step_name -> {
+                total, passed, failed, pass_rate, avg_ms
+            }
+        """
+        try:
+            from datetime import timezone
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+            records = self.read_metrics_jsonl(limit=2000, record_type='policy_step')
+            breakdown = {}
+
+            for rec in records:
+                try:
+                    ts_raw = rec.get('ts', '')
+                    if ts_raw:
+                        try:
+                            ts = datetime.fromisoformat(ts_raw)
+                            if ts.tzinfo is None:
+                                ts = ts.replace(tzinfo=timezone.utc)
+                            if ts < cutoff:
+                                continue
+                        except Exception:
+                            pass
+
+                    step = rec.get('step', 'unknown')
+                    passed = bool(rec.get('passed', True))
+                    dur = int(rec.get('duration_ms', 0))
+
+                    if step not in breakdown:
+                        breakdown[step] = {'total': 0, 'passed': 0, 'failed': 0,
+                                           'total_ms': 0, 'level': rec.get('level', 0)}
+                    b = breakdown[step]
+                    b['total'] += 1
+                    b['total_ms'] += dur
+                    if passed:
+                        b['passed'] += 1
+                    else:
+                        b['failed'] += 1
+                except Exception:
+                    continue
+
+            # Compute rates and averages
+            for step, b in breakdown.items():
+                b['pass_rate'] = round((b['passed'] / b['total']) * 100, 1) if b['total'] > 0 else 0
+                b['avg_ms'] = round(b['total_ms'] / b['total'], 1) if b['total'] > 0 else 0
+                del b['total_ms']
+
+            return {'steps': breakdown, 'window_hours': hours}
+        except Exception as e:
+            print(f"Error getting policy step breakdown: {e}")
+            return {'steps': {}, 'window_hours': hours}

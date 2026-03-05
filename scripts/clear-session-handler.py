@@ -36,6 +36,20 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+# Metrics emitter (fire-and-forget, never blocks)
+try:
+    _me_dir = os.path.dirname(os.path.abspath(__file__))
+    if _me_dir not in sys.path:
+        sys.path.insert(0, _me_dir)
+    from metrics_emitter import emit_hook_execution
+    _METRICS_AVAILABLE = True
+except Exception:
+    def emit_hook_execution(*a, **kw): pass
+    _METRICS_AVAILABLE = False
+
+# Track hook start time
+_HOOK_START = datetime.now()
+
 # File locking for shared JSON state (Loophole #19)
 try:
     import msvcrt
@@ -479,7 +493,9 @@ def _reset_session_progress(new_session_id=''):
         session_progress_file.parent.mkdir(parents=True, exist_ok=True)
         with open(session_progress_file, 'w', encoding='utf-8') as f:
             import json as _json
+            _lock_file(f)
             _json.dump(fresh, f, indent=2)
+            _unlock_file(f)
         log_event(f"session-progress.json reset for new session {new_session_id}")
     except Exception as e:
         log_event(f"WARNING: Could not reset session-progress.json: {e}")
@@ -693,6 +709,14 @@ def main():
     try:
         from session_window_isolator import cleanup_window
         cleanup_window()
+    except Exception:
+        pass
+
+    try:
+        _dur_csh = int((datetime.now() - _HOOK_START).total_seconds() * 1000)
+        emit_hook_execution('clear-session-handler.py', _dur_csh,
+                            session_id='', exit_code=0,
+                            extra={'reason': reason if 'reason' in dir() else ''})
     except Exception:
         pass
 
