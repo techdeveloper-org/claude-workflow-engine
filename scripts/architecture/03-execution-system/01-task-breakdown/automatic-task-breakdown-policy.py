@@ -121,7 +121,15 @@ class TaskAutoAnalyzer:
         return list(set(entities))
 
     def estimate_file_count(self, message: str, entities: List[str]) -> int:
-        """Estimate number of files based on message analysis"""
+        """Estimate how many files a task will touch based on entities and keywords.
+
+        Args:
+            message (str): Raw task description.
+            entities (list[str]): Extracted entity names.
+
+        Returns:
+            int: Estimated file count.
+        """
         file_count = 0
 
         # Base count from entities
@@ -152,7 +160,16 @@ class TaskAutoAnalyzer:
         return file_count
 
     def detect_phases(self, complexity_score: int, file_count: int) -> tuple:
-        """Automatically detect if phases are needed"""
+        """Decide whether the task requires phase-based execution.
+
+        Args:
+            complexity_score (int): Complexity score from estimate_complexity().
+            file_count (int): Estimated number of files to touch.
+
+        Returns:
+            tuple: (needs_phases (bool), phase_list (list[dict])).
+                   phase_list is empty if phases are not needed.
+        """
         needs_phases = False
         phase_list = []
 
