@@ -76,6 +76,16 @@ from pathlib import Path
 from collections import defaultdict, Counter
 from typing import Dict, List, Optional, Tuple, Any
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 # ---------------------------------------------------------------------------
 # WINDOWS ENCODING FIX - Must be first executable code
 # ---------------------------------------------------------------------------
@@ -2590,15 +2600,27 @@ class CommonFailuresPreventionPolicy:
             Dictionary with status, kb_patterns, detected_failures,
             prevented_failures, learning_patterns
         """
+        _track_start_time = datetime.now()
+        _sub_operations = []
         try:
             log_policy_hit("ENFORCE_START", "common-failures-prevention-enforcement")
 
             # Step 1: Load failure KB and validate
+            _op_start = datetime.now()
             self.checker.reload_kb()
             kb_stats = self.checker.get_kb_stats()
             log_policy_hit("KB_LOADED", f"{kb_stats['total_patterns']} patterns loaded")
+            try:
+                _sub_operations.append(record_sub_operation(
+                    "load_failure_kb", "success",
+                    int((datetime.now() - _op_start).total_seconds() * 1000),
+                    {"kb_patterns": kb_stats['total_patterns']}
+                ))
+            except Exception:
+                pass
 
             # Step 2: Run full detection (both keyword and regex)
+            _op_start = datetime.now()
             failures_v1 = self.detector.analyze_failure_log()
             prevented = self.detector.analyze_policy_log()
             failures_v2 = self.detector.analyze_all_logs_v2()
@@ -2609,6 +2631,14 @@ class CommonFailuresPreventionPolicy:
                 f"{len(failures_v2)} regex-failures, "
                 f"{len(prevented)} prevented"
             )
+            try:
+                _sub_operations.append(record_sub_operation(
+                    "run_failure_detection", "success",
+                    int((datetime.now() - _op_start).total_seconds() * 1000),
+                    {"failures_v1": len(failures_v1), "failures_v2": len(failures_v2), "prevented": len(prevented)}
+                ))
+            except Exception:
+                pass
 
             # Step 3: Generate and save detection report
             report_data = self.detector.generate_detection_report(failures_v1, prevented)
@@ -2616,7 +2646,16 @@ class CommonFailuresPreventionPolicy:
             save_detection_output(report_data)
 
             # Step 4: Run pattern extraction
+            _op_start = datetime.now()
             patterns = self.extractor.extract_patterns()
+            try:
+                _sub_operations.append(record_sub_operation(
+                    "extract_patterns", "success",
+                    int((datetime.now() - _op_start).total_seconds() * 1000),
+                    {"extracted_patterns": len(patterns)}
+                ))
+            except Exception:
+                pass
 
             # Step 5: Update project KB with learning results
             project = get_current_project()
@@ -2642,7 +2681,7 @@ class CommonFailuresPreventionPolicy:
                 f"{len(patterns)} patterns extracted"
             )
 
-            return {
+            result = {
                 "status": "success",
                 "kb_patterns": kb_stats['total_patterns'],
                 "detected_failures": len(failures_v1),
@@ -2651,11 +2690,43 @@ class CommonFailuresPreventionPolicy:
                 "extracted_patterns": len(patterns),
                 "learning_patterns": learned_count
             }
+            try:
+                if HAS_TRACKING:
+                    record_policy_execution(
+                        session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                        policy_name="common-failures-prevention",
+                        policy_script="common-failures-prevention.py",
+                        policy_type="Policy Script",
+                        input_params={},
+                        output_results=result,
+                        decision=f"detected {len(failures_v1)} failures, extracted {len(patterns)} patterns",
+                        duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                        sub_operations=_sub_operations if _sub_operations else None
+                    )
+            except Exception:
+                pass
+            return result
 
         except Exception as e:
             log_policy_hit("ENFORCE_ERROR", str(e))
             print(f"[common-failures-prevention] ERROR: {e}")
-            return {"status": "error", "message": str(e)}
+            error_result = {"status": "error", "message": str(e)}
+            try:
+                if HAS_TRACKING:
+                    record_policy_execution(
+                        session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                        policy_name="common-failures-prevention",
+                        policy_script="common-failures-prevention.py",
+                        policy_type="Policy Script",
+                        input_params={},
+                        output_results=error_result,
+                        decision=f"error: {str(e)}",
+                        duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                        sub_operations=_sub_operations if _sub_operations else None
+                    )
+            except Exception:
+                pass
+            return error_result
 
     def validate(self) -> bool:
         """

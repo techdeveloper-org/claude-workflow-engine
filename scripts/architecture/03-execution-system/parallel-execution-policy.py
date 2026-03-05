@@ -52,6 +52,16 @@ from pathlib import Path
 from datetime import datetime
 from enum import Enum
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 if sys.platform == 'win32':
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -319,20 +329,40 @@ def enforce():
             - 'tokens_used' (current usage)
             - 'message' (descriptive message)
     """
+    _track_start_time = datetime.now()
+    _sub_operations = []
     try:
         log_policy_hit("ENFORCE_START", "parallel-execution-enforcement")
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
         # Detect user plan type
+        _op_start = datetime.now()
         plan_type = detect_user_plan()
         token_limit = get_token_limit(plan_type)
-        usage_data = read_token_usage()
-        current_tokens = usage_data.get('total_tokens', 0)
+        try:
+            _sub_operations.append(record_sub_operation(
+                "detect_user_plan", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"plan_type": plan_type.value}
+            ))
+        except Exception:
+            pass
 
         # Check token availability
+        _op_start = datetime.now()
+        usage_data = read_token_usage()
+        current_tokens = usage_data.get('total_tokens', 0)
         can_execute, token_msg, mode = can_execute_parallel(
             plan_type, current_tokens, 1000
         )
+        try:
+            _sub_operations.append(record_sub_operation(
+                "check_token_availability", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"execution_mode": mode, "tokens_used": current_tokens}
+            ))
+        except Exception:
+            pass
 
         # Log enforcement
         log_policy_hit("ENFORCE_COMPLETE", "parallel-execution-ready")
@@ -349,12 +379,43 @@ def enforce():
         }
 
         print(f"[parallel-execution-policy] {token_msg}")
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="parallel-execution-policy",
+                    policy_script="parallel-execution-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=result,
+                    decision=f"mode={mode} plan={plan_type.value}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
         return result
 
     except Exception as e:
         log_policy_hit("ENFORCE_ERROR", str(e))
         print(f"[parallel-execution-policy] ERROR: {e}")
-        return {"status": "error", "message": str(e)}
+        error_result = {"status": "error", "message": str(e)}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="parallel-execution-policy",
+                    policy_script="parallel-execution-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=error_result,
+                    decision=f"error: {str(e)}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return error_result
 
 
 if __name__ == "__main__":

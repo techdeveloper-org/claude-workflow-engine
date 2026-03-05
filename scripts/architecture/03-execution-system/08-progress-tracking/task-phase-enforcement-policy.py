@@ -25,6 +25,16 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 # Fix encoding for Windows console
 if sys.stdout.encoding != 'utf-8':
     try:
@@ -244,17 +254,61 @@ def enforce():
         dict: Contains 'status' ('success' or 'error').
               On error, contains 'message'.
     """
+    _track_start_time = datetime.now()
+    _sub_operations = []
     try:
         log_policy_hit("ENFORCE_START", "task-phase-enforcement")
 
+        _op_start = datetime.now()
         log_policy_hit("ENFORCE_COMPLETE", "task-phase-enforcement-ready")
+        try:
+            _sub_operations.append(record_sub_operation(
+                "activate_phase_enforcement", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"task_create_required": True, "complexity_threshold": 6}
+            ))
+        except Exception:
+            pass
+
         print("[task-phase-enforcement-policy] Policy enforced - Task/Phase requirements active")
 
-        return {"status": "success"}
+        result = {"status": "success"}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="task-phase-enforcement-policy",
+                    policy_script="task-phase-enforcement-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=result,
+                    decision="task/phase enforcement activated",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return result
     except Exception as e:
         log_policy_hit("ENFORCE_ERROR", str(e))
         print(f"[task-phase-enforcement-policy] ERROR: {e}")
-        return {"status": "error", "message": str(e)}
+        error_result = {"status": "error", "message": str(e)}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="task-phase-enforcement-policy",
+                    policy_script="task-phase-enforcement-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=error_result,
+                    decision=f"error: {str(e)}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return error_result
 
 
 # ============================================================================

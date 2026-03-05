@@ -38,6 +38,16 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 if sys.platform == 'win32':
     try:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -123,16 +133,62 @@ def enforce():
         dict: Result with 'status' ('success' or 'error') and 'policy' name.
               On error, 'message' key contains the exception string.
     """
+    import os
+    _track_start_time = datetime.now()
+    _sub_operations = []
     try:
         log_policy_hit("ENFORCE_START", "github-branch-pr-enforcement")
+
+        _op_start = datetime.now()
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            _sub_operations.append(record_sub_operation(
+                "init_memory_dir", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000)
+            ))
+        except Exception:
+            pass
+
         log_policy_hit("ENFORCE_COMPLETE", "github-branch-pr-ready")
         print("[github-branch-pr-policy] Policy enforced - GitHub branch/PR standards active")
-        return {"status": "success", "policy": "github-branch-pr"}
+
+        result = {"status": "success", "policy": "github-branch-pr"}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="github-branch-pr-policy",
+                    policy_script="github-branch-pr-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=result,
+                    decision="GitHub branch/PR naming standards active",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return result
     except Exception as e:
         log_policy_hit("ENFORCE_ERROR", str(e))
         print(f"[github-branch-pr-policy] ERROR: {e}")
-        return {"status": "error", "message": str(e)}
+        error_result = {"status": "error", "message": str(e)}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="github-branch-pr-policy",
+                    policy_script="github-branch-pr-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=error_result,
+                    decision=f"error: {str(e)}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return error_result
 
 
 if __name__ == "__main__":

@@ -26,6 +26,16 @@ import re
 from pathlib import Path
 from datetime import datetime, timedelta
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 # Fix encoding for Windows console
 if sys.stdout.encoding != 'utf-8':
     try:
@@ -355,21 +365,72 @@ def enforce():
         dict: Contains 'status' ('success' or 'error') and 'projects' count.
               On error, contains 'message'.
     """
+    _track_start_time = datetime.now()
+    _sub_operations = []
     try:
         log_policy_hit("ENFORCE_START", "task-progress-tracking-enforcement")
 
+        _op_start = datetime.now()
         SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            _sub_operations.append(record_sub_operation(
+                "init_sessions_dir", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000)
+            ))
+        except Exception:
+            pass
 
+        _op_start = datetime.now()
         project_count = len([d for d in SESSIONS_DIR.iterdir() if d.is_dir()]) if SESSIONS_DIR.exists() else 0
+        try:
+            _sub_operations.append(record_sub_operation(
+                "scan_projects", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"project_count": project_count}
+            ))
+        except Exception:
+            pass
 
         log_policy_hit("ENFORCE_COMPLETE", f"progress-tracking-ready | projects={project_count}")
         print(f"[task-progress-tracking-policy] {project_count} projects being tracked")
 
-        return {"status": "success", "projects": project_count}
+        result = {"status": "success", "projects": project_count}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="task-progress-tracking-policy",
+                    policy_script="task-progress-tracking-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=result,
+                    decision=f"tracking {project_count} projects",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return result
     except Exception as e:
         log_policy_hit("ENFORCE_ERROR", str(e))
         print(f"[task-progress-tracking-policy] ERROR: {e}")
-        return {"status": "error", "message": str(e)}
+        error_result = {"status": "error", "message": str(e)}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="task-progress-tracking-policy",
+                    policy_script="task-progress-tracking-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=error_result,
+                    decision=f"error: {str(e)}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return error_result
 
 
 # ============================================================================

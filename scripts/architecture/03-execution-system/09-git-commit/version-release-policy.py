@@ -40,6 +40,16 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 if sys.platform == 'win32':
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -114,14 +124,61 @@ def enforce():
         dict: Result with 'status' ('success' or 'error').
               On error, 'message' key contains the exception string.
     """
+    import os
+    _track_start_time = datetime.now()
+    _sub_operations = []
     try:
         log_action("ENFORCE_START", "version-release")
+
+        _op_start = datetime.now()
         log_action("ENFORCE", "version-release-active")
+        try:
+            _sub_operations.append(record_sub_operation(
+                "activate_version_policy", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"semver_required": True, "changelog_required": True}
+            ))
+        except Exception:
+            pass
+
         print("[version-release-policy] Policy enforced")
-        return {"status": "success"}
+
+        result = {"status": "success"}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="version-release-policy",
+                    policy_script="version-release-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=result,
+                    decision="SemVer versioning and release standards active",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return result
     except Exception as e:
         log_action("ENFORCE_ERROR", str(e))
-        return {"status": "error", "message": str(e)}
+        error_result = {"status": "error", "message": str(e)}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="version-release-policy",
+                    policy_script="version-release-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=error_result,
+                    decision=f"error: {str(e)}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return error_result
 
 
 if __name__ == "__main__":

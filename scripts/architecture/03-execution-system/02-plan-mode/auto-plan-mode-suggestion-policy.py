@@ -26,6 +26,16 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 # Fix encoding
 if sys.stdout.encoding != 'utf-8':
     try:
@@ -416,25 +426,76 @@ def enforce():
         dict: Contains 'status' ('success' or 'error') and 'components' list.
               On error, contains 'message'.
     """
+    _track_start_time = datetime.now()
+    _sub_operations = []
     try:
         log_policy_hit("ENFORCE_START", "auto-plan-mode-suggestion-enforcement")
 
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
+        _op_start = datetime.now()
         suggester = AutoPlanModeSuggester()
+        try:
+            _sub_operations.append(record_sub_operation(
+                "init_suggester", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000)
+            ))
+        except Exception:
+            pass
+
+        _op_start = datetime.now()
         decider = PlanModeAutoDecider()
+        try:
+            _sub_operations.append(record_sub_operation(
+                "init_decider", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000)
+            ))
+        except Exception:
+            pass
 
         log_policy_hit("ENFORCE_COMPLETE", "auto-plan-mode-suggestion-system-ready")
         print("[auto-plan-mode-suggestion-policy] Policy enforced - Plan mode suggestion system active")
 
-        return {
+        result = {
             "status": "success",
             "components": ["AutoPlanModeSuggester", "PlanModeAutoDecider"]
         }
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=__import__('os').environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="auto-plan-mode-suggestion-policy",
+                    policy_script="auto-plan-mode-suggestion-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=result,
+                    decision="plan mode suggestion system initialized",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return result
     except Exception as e:
         log_policy_hit("ENFORCE_ERROR", str(e))
         print(f"[auto-plan-mode-suggestion-policy] ERROR: {e}")
-        return {"status": "error", "message": str(e)}
+        error_result = {"status": "error", "message": str(e)}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=__import__('os').environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="auto-plan-mode-suggestion-policy",
+                    policy_script="auto-plan-mode-suggestion-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=error_result,
+                    decision=f"error: {str(e)}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return error_result
 
 
 # ============================================================================

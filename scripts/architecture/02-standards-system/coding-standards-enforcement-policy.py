@@ -42,6 +42,16 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 # Fix encoding for Windows console
 if sys.platform == 'win32':
     try:
@@ -134,10 +144,13 @@ def enforce():
         dict: Result with 'status' ('success' or 'error') and 'standards_count' int.
               On error, 'message' key contains the exception string.
     """
+    _track_start_time = datetime.now()
+    _sub_operations = []
     try:
         log_action("ENFORCE_START", "coding-standards-enforcement")
 
         # Ensure directory exists
+        _op_start = datetime.now()
         STANDARDS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
         # Initialize standards file if needed
@@ -155,21 +168,68 @@ def enforce():
                 "loaded_at": datetime.now().isoformat()
             }
             STANDARDS_FILE.write_text(json.dumps(standards_data, indent=2), encoding='utf-8')
+        try:
+            _sub_operations.append(record_sub_operation(
+                "init_coding_standards_file", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000)
+            ))
+        except Exception:
+            pass
 
         # Load standards
+        _op_start = datetime.now()
         with open(STANDARDS_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-
         standard_count = len(data.get('standards', {}))
+        try:
+            _sub_operations.append(record_sub_operation(
+                "load_coding_standards", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"standards_count": standard_count}
+            ))
+        except Exception:
+            pass
 
         log_action("ENFORCE", f"coding-standards-loaded | count={standard_count}")
         print(f"[coding-standards-enforcement-policy] {standard_count} coding standards loaded")
 
-        return {"status": "success", "standards_count": standard_count}
+        result = {"status": "success", "standards_count": standard_count}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=__import__('os').environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="coding-standards-enforcement-policy",
+                    policy_script="coding-standards-enforcement-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=result,
+                    decision=f"loaded {standard_count} coding standards",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return result
     except Exception as e:
         log_action("ENFORCE_ERROR", str(e))
         print(f"[coding-standards-enforcement-policy] ERROR: {e}")
-        return {"status": "error", "message": str(e)}
+        error_result = {"status": "error", "message": str(e)}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=__import__('os').environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="coding-standards-enforcement-policy",
+                    policy_script="coding-standards-enforcement-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=error_result,
+                    decision=f"error: {str(e)}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return error_result
 
 
 if __name__ == "__main__":

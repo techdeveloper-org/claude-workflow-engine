@@ -76,6 +76,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 # ---------------------------------------------------------------------------
 # Logging configuration
 # ---------------------------------------------------------------------------
@@ -2052,6 +2062,8 @@ class ToolOptimizationPolicy:
         Returns:
             Result dict with 'status', 'subsystems', and 'checks' lists.
         """
+        _track_start_time = datetime.now()
+        _sub_operations = []
         print('\n' + '=' * 65)
         print('[ENFORCE] ' + self.POLICY_NAME + ' v' + self.VERSION)
         print('=' * 65)
@@ -2059,14 +2071,23 @@ class ToolOptimizationPolicy:
         checks: List[Dict[str, Any]] = []
 
         # Ensure required directories exist
+        _op_start = datetime.now()
         for directory in [CACHE_DIR, LOGS_DIR, SUMMARY_CACHE_DIR]:
             try:
                 directory.mkdir(parents=True, exist_ok=True)
                 checks.append({'check': 'Directory: ' + directory.name, 'status': 'OK'})
             except Exception as exc:
                 checks.append({'check': 'Directory: ' + directory.name, 'status': 'FAIL', 'error': str(exc)})
+        try:
+            _sub_operations.append(record_sub_operation(
+                "init_directories", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000)
+            ))
+        except Exception:
+            pass
 
         # Validate subsystem initialization
+        _op_start = datetime.now()
         subsystems = [
             ('ToolUsageOptimizer', self.optimizer),
             ('ToolCallInterceptor', self.interceptor),
@@ -2082,8 +2103,17 @@ class ToolOptimizationPolicy:
             subsystem_status.append({'subsystem': name, 'status': status})
             icon = '[OK]' if status == 'OK' else '[FAIL]'
             print('  ' + icon + ' ' + name)
+        try:
+            _sub_operations.append(record_sub_operation(
+                "validate_subsystems", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"subsystem_count": len(subsystems)}
+            ))
+        except Exception:
+            pass
 
         # Validate configuration thresholds
+        _op_start = datetime.now()
         config_checks = [
             ('SMALL_FILE_THRESHOLD', SMALL_FILE_THRESHOLD, 50, 500),
             ('MEDIUM_FILE_THRESHOLD', MEDIUM_FILE_THRESHOLD, 100, 2000),
@@ -2097,19 +2127,42 @@ class ToolOptimizationPolicy:
             icon = '[OK]' if ok else '[WARN]'
             checks.append({'check': name, 'value': value, 'status': 'OK' if ok else 'WARN'})
             print('  ' + icon + ' ' + name + '=' + str(value))
+        try:
+            _sub_operations.append(record_sub_operation(
+                "validate_config_thresholds", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000)
+            ))
+        except Exception:
+            pass
 
         all_ok = all(s['status'] == 'OK' for s in subsystem_status)
         overall = 'OK' if all_ok else 'DEGRADED'
         print('\n  Overall: ' + overall)
         print('=' * 65 + '\n')
 
-        return {
+        result = {
             'status': overall,
             'version': self.VERSION,
             'policy': self.POLICY_NAME,
             'subsystems': subsystem_status,
             'checks': checks
         }
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="tool-usage-optimization-policy",
+                    policy_script="tool-usage-optimization-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results={"status": overall, "subsystem_count": len(subsystems)},
+                    decision=f"tool optimization subsystems initialized status={overall}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return result
 
     def validate(self) -> Dict[str, Any]:
         """

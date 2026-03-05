@@ -47,6 +47,16 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# ===================================================================
+# NEW: POLICY TRACKING INTEGRATION
+# ===================================================================
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from policy_tracking_helper import record_policy_execution, record_sub_operation
+    HAS_TRACKING = True
+except ImportError:
+    HAS_TRACKING = False
+
 # ---------------------------------------------------------------------------
 # Platform: fix Windows console encoding
 # ---------------------------------------------------------------------------
@@ -2776,9 +2786,22 @@ def enforce():
     Returns:
         dict: Status and results dict.
     """
+    _track_start_time = datetime.now()
+    _sub_operations = []
     try:
         log_policy_hit("ENFORCE_START", "git-auto-commit-enforcement")
+
+        _op_start = datetime.now()
         results = enforce_auto_commit(push=False, dry_run=False)
+        try:
+            _sub_operations.append(record_sub_operation(
+                "run_auto_commit", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"committed": results.get("committed", 0), "failed": results.get("failed", 0)}
+            ))
+        except Exception:
+            pass
+
         log_policy_hit(
             "ENFORCE_COMPLETE",
             "Commits: {}, Failed: {}".format(results["committed"], results["failed"]),
@@ -2788,11 +2811,43 @@ def enforce():
                 results["committed"]
             )
         )
-        return {"status": "success", "results": results}
+        result = {"status": "success", "results": results}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="git-auto-commit-policy",
+                    policy_script="git-auto-commit-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results={"status": "success", "committed": results.get("committed", 0)},
+                    decision=f"{results.get('committed', 0)} commits created",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return result
     except Exception as exc:
         log_policy_hit("ENFORCE_ERROR", str(exc))
         print("[git-auto-commit-policy] ERROR: {}".format(exc))
-        return {"status": "error", "message": str(exc)}
+        error_result = {"status": "error", "message": str(exc)}
+        try:
+            if HAS_TRACKING:
+                record_policy_execution(
+                    session_id=os.environ.get('CLAUDE_SESSION_ID', 'unknown'),
+                    policy_name="git-auto-commit-policy",
+                    policy_script="git-auto-commit-policy.py",
+                    policy_type="Policy Script",
+                    input_params={},
+                    output_results=error_result,
+                    decision=f"error: {str(exc)}",
+                    duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
+                    sub_operations=_sub_operations if _sub_operations else None
+                )
+        except Exception:
+            pass
+        return error_result
 
 
 # ===========================================================================
