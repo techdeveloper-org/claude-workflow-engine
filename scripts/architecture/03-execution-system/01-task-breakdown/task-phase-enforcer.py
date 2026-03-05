@@ -14,6 +14,12 @@ if sys.platform == 'win32':
     sys.stderr.reconfigure(encoding='utf-8')
 
 def log_policy_hit(action, context):
+    """Log a policy enforcement action to the policy hits log.
+
+    Args:
+        action (str): Type of policy enforcement action (e.g., 'WARN', 'BLOCK').
+        context (str): Contextual information about the policy violation.
+    """
     log_file = os.path.expanduser("~/.claude/memory/logs/policy-hits.log")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] task-phase-enforcer | {action} | {context}\n"

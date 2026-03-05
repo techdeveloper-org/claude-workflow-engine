@@ -28,7 +28,27 @@ from pathlib import Path
 from datetime import datetime
 
 class SessionState:
+    """Persist session state to a JSON file outside Claude's context window.
+
+    Stores the current task, completed tasks, modified files, key decisions,
+    pending work, and arbitrary context/metadata for a single project.
+    Each mutating method persists the state immediately to disk.
+
+    Attributes:
+        memory_dir (Path): Base memory directory (~/.claude/memory).
+        state_dir (Path): Directory holding per-project state JSON files.
+        project_name (str): Project name used as the state filename stem.
+        state_file (Path): Path to this project's JSON state file.
+        state (dict): In-memory copy of the current state.
+    """
+
     def __init__(self, project_name=None):
+        """Initialize the SessionState manager.
+
+        Args:
+            project_name (str, optional): Project name for state file identification.
+                If not provided, uses the current working directory name.
+        """
         self.memory_dir = Path.home() / '.claude' / 'memory'
         self.state_dir = self.memory_dir / '.state'
         self.state_dir.mkdir(exist_ok=True)

@@ -27,7 +27,21 @@ from pathlib import Path
 from datetime import datetime
 
 class FailureSolutionLearner:
+    """Learns solutions to failure patterns from successful recoveries.
+
+    Tracks how failures are resolved and builds a knowledge base of effective
+    recovery strategies. Recommends solutions based on past successful outcomes.
+
+    Attributes:
+        memory_dir (Path): Base memory directory for session storage.
+        solutions_kb (dict): Knowledge base of failure solutions.
+    """
     def __init__(self):
+        """Initialize the FailureSolutionLearner.
+
+        Sets up paths for the knowledge base and learning log files.
+        Creates log directory if it does not exist.
+        """
         self.memory_dir = Path.home() / '.claude' / 'memory'
         self.kb_file = self.memory_dir / 'failure-kb.json'
         self.learning_log = self.memory_dir / 'logs' / 'solution-learning.log'
@@ -36,7 +50,11 @@ class FailureSolutionLearner:
         self.learning_log.parent.mkdir(parents=True, exist_ok=True)
 
     def load_kb(self):
-        """Load knowledge base"""
+        """Load the failure solution knowledge base from disk.
+
+        Returns:
+            dict: Knowledge base dictionary, or empty dict if file doesn't exist.
+        """
         if not self.kb_file.exists():
             return {}
 
