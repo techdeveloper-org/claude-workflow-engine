@@ -32,6 +32,17 @@ def log_policy_hit(action, context):
         pass
 
 def calculate_complexity_score(task_desc):
+    """Calculate complexity score based on task description keywords.
+
+    Analyzes keywords related to multi-part requirements, multiple domains,
+    file operations, and complex scope indicators.
+
+    Args:
+        task_desc (str): Task description text to analyze.
+
+    Returns:
+        int: Complexity score from 0-10.
+    """
     score = 0
     requirements_keywords = ['and', 'also', 'plus', 'additionally', 'all']
     req_count = sum(1 for kw in requirements_keywords if kw in task_desc.lower())
@@ -56,6 +67,16 @@ def calculate_complexity_score(task_desc):
     return min(10, score)
 
 def calculate_size_score(task_desc):
+    """Calculate size/scope score based on task description length and indicators.
+
+    Evaluates word count and multi-item indicators to estimate task size.
+
+    Args:
+        task_desc (str): Task description text to analyze.
+
+    Returns:
+        int: Size score from 0-10.
+    """
     score = 0
     word_count = len(task_desc.split())
     if word_count > 20:
@@ -72,6 +93,16 @@ def calculate_size_score(task_desc):
     return min(10, score)
 
 def analyze_task(task_desc):
+    """Analyze task for complexity and size scoring.
+
+    Calculates complexity and size scores and prints analysis to console.
+
+    Args:
+        task_desc (str): Task description to analyze.
+
+    Returns:
+        dict: Analysis results with complexity and size scores.
+    """
     print("\n" + "="*70)
     print("TASK/PHASE ENFORCEMENT CHECK")
     print("="*70 + "\n")

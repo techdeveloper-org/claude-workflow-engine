@@ -27,7 +27,23 @@ from datetime import datetime
 
 
 class AutoPlanModeSuggester:
+    """Automatically suggests whether to use plan mode based on task complexity.
+
+    Analyzes task complexity, risk factors, and prerequisite information to
+    determine if plan mode should be enabled. Plan mode is recommended for
+    complex tasks that require breaking down into smaller subtasks before
+    execution.
+
+    Attributes:
+        decision_log (list): Log of all plan mode decisions made.
+    """
+
     def __init__(self):
+        """Initialize the AutoPlanModeSuggester.
+
+        Sets up an empty decision log for tracking all plan mode decisions
+        throughout the session.
+        """
         self.decision_log = []
 
     def should_use_plan_mode(
@@ -35,8 +51,32 @@ class AutoPlanModeSuggester:
         complexity_analysis: Dict,
         structured_prompt: Dict
     ) -> Dict:
-        """
-        Main decision function
+        """Determine if plan mode should be used for the current task.
+
+        Analyzes complexity score, risk factors, and task structure to decide
+        whether plan mode would be beneficial. Plan mode is recommended for
+        tasks with complexity score >= 6.
+
+        Args:
+            complexity_analysis (Dict): Analysis object containing complexity
+                score, level, factors, and breakdown information.
+            structured_prompt (Dict): Structured prompt containing task details,
+                entities, operations, success criteria, and examples.
+
+        Returns:
+            Dict: Decision object containing:
+                - recommended (bool): Whether plan mode is recommended.
+                - confidence (float): Confidence level (0-1) for the decision.
+                - complexity_score (int): Adjusted complexity score.
+                - risk_factors (list): List of identified risk factors.
+                - reasoning (str): Human-readable explanation.
+                - action (str): Suggested action for the user.
+
+        Examples:
+            >>> suggester = AutoPlanModeSuggester()
+            >>> result = suggester.should_use_plan_mode(analysis, prompt)
+            >>> if result['recommended']:
+            ...     print(f"Use plan mode: {result['reasoning']}")
         """
         print("=" * 80)
         print("[TARGET] AUTO PLAN MODE SUGGESTION")
