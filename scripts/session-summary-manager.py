@@ -1595,7 +1595,16 @@ def _generate_insights(data):
 
 
 def _update_chain_summary(session_id, data):
-    """Update chain-index.json with the session summary"""
+    """Update the session's 'summary' field in chain-index.json after finalization.
+
+    Reads the chain index, sets the one-liner summary for session_id (if it
+    exists in the index), and writes back with an updated 'last_updated'
+    timestamp.  Uses _lock_file/_unlock_file for Windows file locking.
+
+    Args:
+        session_id (str): Session identifier to update in the chain index.
+        data (dict): Finalised summary dict used to generate the one-liner.
+    """
     chain_index_file = SESSIONS_DIR / 'chain-index.json'
     if not chain_index_file.exists():
         return
@@ -1624,7 +1633,18 @@ def _update_chain_summary(session_id, data):
 # =============================================================================
 
 def read_summary(session_id, fmt='md'):
-    """Read session summary in specified format"""
+    """Read the session summary in the requested output format.
+
+    Args:
+        session_id (str): Session identifier to read.
+        fmt (str): Output format - one of 'md' (Markdown file content),
+                   'json' (structured dict), or 'text' (one-liner string).
+                   Defaults to 'md'.
+
+    Returns:
+        str, dict, or None: Content in the requested format, or None when no
+                            summary is available for the session.
+    """
     if fmt == 'text':
         json_path = summary_json_path(session_id)
         if json_path.exists():
@@ -1676,6 +1696,17 @@ def read_summary(session_id, fmt='md'):
 # =============================================================================
 
 def main():
+    """CLI entry point for session-summary-manager.py.
+
+    Dispatches to one of the following sub-commands:
+      accumulate - Add a per-request entry to the session summary (called by
+                   3-level-flow.py after every user message).
+      finalize   - Generate comprehensive session-summary.md + JSON on session
+                   close (called by clear-session-handler.py on /clear).
+      read       - Print the session summary in md, json, or text format.
+
+    Exits 0 on success or 1 on any error.
+    """
     parser = argparse.ArgumentParser(description='Session Summary Manager v2.1.0')
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
 

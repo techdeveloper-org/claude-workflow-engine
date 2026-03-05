@@ -33,10 +33,14 @@ try:
     _METRICS_AVAILABLE = True
 except Exception:
     # Define no-ops so call sites never need guards
-    def emit_hook_execution(*a, **kw): pass
-    def emit_policy_step(*a, **kw): pass
-    def emit_flag_lifecycle(*a, **kw): pass
-    def emit_enforcement_event(*a, **kw): pass
+    def emit_hook_execution(*a, **kw):
+        """No-op fallback when metrics_emitter is unavailable."""
+    def emit_policy_step(*a, **kw):
+        """No-op fallback when metrics_emitter is unavailable."""
+    def emit_flag_lifecycle(*a, **kw):
+        """No-op fallback when metrics_emitter is unavailable."""
+    def emit_enforcement_event(*a, **kw):
+        """No-op fallback when metrics_emitter is unavailable."""
     _METRICS_AVAILABLE = False
 
 

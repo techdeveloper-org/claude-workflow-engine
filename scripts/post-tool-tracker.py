@@ -70,9 +70,12 @@ try:
                                   emit_flag_lifecycle)
     _METRICS_AVAILABLE = True
 except Exception:
-    def emit_hook_execution(*a, **kw): pass
-    def emit_context_sample(*a, **kw): pass
-    def emit_flag_lifecycle(*a, **kw): pass
+    def emit_hook_execution(*a, **kw):
+        """No-op fallback when metrics_emitter is unavailable."""
+    def emit_context_sample(*a, **kw):
+        """No-op fallback when metrics_emitter is unavailable."""
+    def emit_flag_lifecycle(*a, **kw):
+        """No-op fallback when metrics_emitter is unavailable."""
     _METRICS_AVAILABLE = False
 
 # Track hook start time for duration measurement
