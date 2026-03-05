@@ -60,6 +60,32 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+# File locking for shared JSON state (Loophole #19)
+try:
+    import msvcrt
+    HAS_MSVCRT = True
+except ImportError:
+    HAS_MSVCRT = False
+
+
+def _lock_file(f):
+    """Lock file for exclusive access (Windows msvcrt, no-op on other OS)."""
+    if HAS_MSVCRT:
+        try:
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        except (IOError, OSError):
+            pass  # lock failed - proceed without lock (better than crash)
+
+
+def _unlock_file(f):
+    """Unlock file (Windows msvcrt, no-op on other OS)."""
+    if HAS_MSVCRT:
+        try:
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        except (IOError, OSError):
+            pass
+
 MEMORY_BASE = Path.home() / '.claude' / 'memory'
 SESSIONS_DIR = MEMORY_BASE / 'sessions'
 LOGS_DIR = MEMORY_BASE / 'logs'

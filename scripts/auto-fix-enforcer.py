@@ -218,8 +218,34 @@ class AutoFixEnforcer:
             })
             return False
 
+    def _get_current_session_id(self):
+        """
+        Read the active session ID from .current-session.json.
+        Returns the session ID string or None if not found.
+        Used for session isolation in state checks.
+        """
+        current_session_file = self.memory_path / '.current-session.json'
+        if not current_session_file.exists():
+            return None
+        try:
+            with open(current_session_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data.get('current_session_id')
+        except Exception:
+            return None
+
     def _check_session_state(self):
-        """Check session state"""
+        """
+        Check session state with session isolation (Loophole #11 fix).
+
+        Session isolation: validate that .blocking-state.json belongs to the
+        CURRENT session by comparing the session_id field.  Without this check,
+        a stale state file from a previous session (different session_id) would
+        pass as valid, letting work proceed under the wrong session context.
+
+        Contract: session_id in .blocking-state.json MUST match the active
+        session_id from .current-session.json.
+        """
         print("\n[SEARCH] [4/7] Checking session state...")
 
         state_file = self.memory_path / '.blocking-state.json'
@@ -228,10 +254,36 @@ class AutoFixEnforcer:
             return False
 
         try:
-            with open(state_file, 'r') as f:
+            with open(state_file, 'r', encoding='utf-8') as f:
                 state = json.load(f)
 
-            # Check required states
+            # ----------------------------------------------------------------
+            # SESSION ISOLATION: verify state belongs to the current session.
+            # If the state file was written by a previous session, it is stale
+            # and should be treated as invalid (non-blocking warning only).
+            # ----------------------------------------------------------------
+            current_session_id = self._get_current_session_id()
+            state_session_id = state.get('session_id', '')
+
+            if current_session_id and state_session_id:
+                if current_session_id != state_session_id:
+                    print(
+                        f"   [WARNING]  Session state belongs to a different session "
+                        f"(state: {state_session_id[:20]}... | current: {current_session_id[:20]}...)"
+                    )
+                    print("   [INFO]  Stale state detected - not blocking (new session will re-initialize)")
+                    # Not critical: 3-level-flow will create a fresh session state.
+                    return True
+                else:
+                    print(f"   [CHECK] Session state matches current session: {current_session_id[:20]}...")
+            elif not current_session_id:
+                # No active session yet - state file may be from startup, allow it
+                print("   [INFO]  No active session yet - state isolation skipped")
+            else:
+                # state_session_id is empty - old state file without session_id field
+                print("   [INFO]  State file has no session_id field (pre-isolation version) - allowing")
+
+            # Check required state keys
             required_checks = {
                 'session_started': 'Session started',
                 'context_checked': 'Context checked'
@@ -418,6 +470,9 @@ class AutoFixEnforcer:
             state_file = self.memory_path / '.blocking-state.json'
             state_file.parent.mkdir(parents=True, exist_ok=True)
 
+            # Include session_id so _check_session_state isolation can validate it
+            current_session_id = self._get_current_session_id() or ''
+
             initial_state = {
                 'session_started': True,
                 'context_checked': False,
@@ -429,7 +484,8 @@ class AutoFixEnforcer:
                 'skills_agents_checked': False,
                 'violations': [],
                 'last_violation': None,
-                'session_start_time': datetime.now().isoformat()
+                'session_start_time': datetime.now().isoformat(),
+                'session_id': current_session_id
             }
 
             with open(state_file, 'w') as f:

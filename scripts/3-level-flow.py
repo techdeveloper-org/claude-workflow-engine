@@ -16,6 +16,48 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 
+# File locking for shared JSON state (Loophole #19)
+try:
+    import msvcrt
+    HAS_MSVCRT = True
+except ImportError:
+    HAS_MSVCRT = False
+
+# Metrics emitter (fire-and-forget, never blocks)
+try:
+    _metrics_dir = Path(__file__).parent
+    if str(_metrics_dir) not in sys.path:
+        sys.path.insert(0, str(_metrics_dir))
+    from metrics_emitter import (emit_hook_execution, emit_policy_step,
+                                  emit_flag_lifecycle, emit_enforcement_event)
+    _METRICS_AVAILABLE = True
+except Exception:
+    # Define no-ops so call sites never need guards
+    def emit_hook_execution(*a, **kw): pass
+    def emit_policy_step(*a, **kw): pass
+    def emit_flag_lifecycle(*a, **kw): pass
+    def emit_enforcement_event(*a, **kw): pass
+    _METRICS_AVAILABLE = False
+
+
+def _lock_file(f):
+    """Lock file for exclusive access (Windows msvcrt, no-op on other OS)."""
+    if HAS_MSVCRT:
+        try:
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        except (IOError, OSError):
+            pass  # lock failed - proceed without lock (better than crash)
+
+
+def _unlock_file(f):
+    """Unlock file (Windows msvcrt, no-op on other OS)."""
+    if HAS_MSVCRT:
+        try:
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        except (IOError, OSError):
+            pass
+
 # Windows-safe encoding
 if sys.platform == 'win32':
     import io
@@ -174,7 +216,7 @@ def is_non_coding_message(msg):
 
 def get_session_progress(session_id):
     """
-    Read session-progress.json to check what tools have already been called.
+    Read session-progress.json with file locking (Loophole #19).
     Used to detect mid-session continuations where TaskCreate/Skill were already done.
     Returns dict with tool_counts, tasks_completed, etc.
     """
@@ -182,7 +224,9 @@ def get_session_progress(session_id):
     try:
         if progress_file.exists():
             with open(progress_file, 'r', encoding='utf-8') as f:
+                _lock_file(f)
                 data = json.load(f)
+                _unlock_file(f)
             # Only return data if it belongs to the current session
             if data.get('session_id', '') == session_id:
                 return data
@@ -192,10 +236,19 @@ def get_session_progress(session_id):
 
 
 def is_mid_session_continuation(session_id):
-    """
-    Detect if this is a follow-up message in an active session where
-    checkpoint approval, TaskCreate, and Skill invocation already happened.
-    Returns True if enforcement flags should NOT be re-created.
+    """Detect if this is a follow-up message in an already-started session.
+
+    Reads session-progress.json and checks whether TaskCreate and a Skill or
+    Task delegation tool were both called earlier in the same session.  When
+    both have occurred the session is mid-flight and enforcement flags must NOT
+    be re-created, which would block legitimate continuation work.
+
+    Args:
+        session_id: Active session identifier used to locate the progress file.
+
+    Returns:
+        bool: True if TaskCreate and Skill/Task have already been called,
+              indicating enforcement flags should be skipped for this message.
     """
     progress = get_session_progress(session_id)
     if not progress:
@@ -213,23 +266,145 @@ def is_mid_session_continuation(session_id):
 
 
 def clear_all_enforcement_flags(reason=''):
-    """Delete ALL enforcement flags (checkpoint + task-breakdown + skill-selection) on approval."""
+    """Delete ALL enforcement flags on user approval.
+
+    Removes checkpoint, task-breakdown, and skill-selection flag files from
+    FLAG_DIR.  Called when the user sends an approval message such as 'ok',
+    'proceed', or 'haan' so that pre-tool-enforcer unblocks code-modification
+    tools for subsequent tool calls.
+
+    Args:
+        reason: Human-readable label logged alongside the count of cleared flags.
+    """
     try:
         import glob as _glob
         cleared = 0
-        for pattern in ['.checkpoint-pending-*.json', '.task-breakdown-pending-*.json', '.skill-selection-pending-*.json']:
+        cleared_types = []
+        for pattern, flag_type in [
+            ('.checkpoint-pending-*.json', 'checkpoint'),
+            ('.task-breakdown-pending-*.json', 'task_breakdown'),
+            ('.skill-selection-pending-*.json', 'skill_selection'),
+        ]:
             for flag_file in _glob.glob(str(FLAG_DIR / pattern)):
                 Path(flag_file).unlink()
                 cleared += 1
+                if flag_type not in cleared_types:
+                    cleared_types.append(flag_type)
         if cleared > 0:
             print(f'[ENFORCEMENT] {cleared} flag(s) cleared - {reason}')
         else:
             print(f'[ENFORCEMENT] No flags to clear - {reason}')
+        # Emit metrics for each flag type cleared
+        try:
+            for ft in cleared_types:
+                emit_flag_lifecycle(ft, 'clear', reason=reason)
+        except Exception:
+            pass
     except Exception:
         pass
 
 
-def clear_checkpoint_flag(reason=''):
+def clear_current_session_flags(session_id, reason=''):
+    """
+    Delete enforcement flags for the CURRENT session + PID only (Loophole #11 fix).
+
+    Unlike clear_all_enforcement_flags() which wipes every window's flags,
+    this function only removes flags belonging to THIS session and THIS process.
+    This is the correct behavior for approval messages so that other open
+    Claude Code windows keep their own pending enforcement flags intact.
+
+    Flag naming contract (MUST match task/skill flag writers in this file):
+      .checkpoint-pending-{SESSION_ID}-{PID}.json
+      .task-breakdown-pending-{SESSION_ID}-{PID}.json
+      .skill-selection-pending-{SESSION_ID}-{PID}.json
+
+    Also clears legacy (non-PID) patterns for backward compatibility.
+
+    Args:
+        session_id: Current session identifier (e.g. SESSION-20260305-123456-ABCD).
+        reason:     Human-readable label logged alongside cleared flag count.
+    """
+    if not session_id or session_id == "UNKNOWN":
+        _clear_flags_for_pid(reason)
+        return
+
+    try:
+        import glob as _glob
+        pid = os.getpid()
+        cleared = 0
+        cleared_types = []
+
+        # Primary: session+PID specific flags (isolated naming pattern)
+        for fname, flag_type in [
+            (f".checkpoint-pending-{session_id}-{pid}.json", "checkpoint"),
+            (f".task-breakdown-pending-{session_id}-{pid}.json", "task_breakdown"),
+            (f".skill-selection-pending-{session_id}-{pid}.json", "skill_selection"),
+        ]:
+            flag_path = FLAG_DIR / fname
+            if flag_path.exists():
+                flag_path.unlink()
+                cleared += 1
+                if flag_type not in cleared_types:
+                    cleared_types.append(flag_type)
+
+        # Backward compat: legacy session-only flags (no PID suffix)
+        for fname, flag_type in [
+            (f".checkpoint-pending-{session_id}.json", "checkpoint"),
+            (f".task-breakdown-pending-{session_id}.json", "task_breakdown"),
+            (f".skill-selection-pending-{session_id}.json", "skill_selection"),
+        ]:
+            flag_path = FLAG_DIR / fname
+            if flag_path.exists():
+                flag_path.unlink()
+                cleared += 1
+                if flag_type not in cleared_types:
+                    cleared_types.append(flag_type)
+
+        if cleared > 0:
+            print(
+                f"[ENFORCEMENT] {cleared} flag(s) cleared "
+                f"(session: {session_id[:16]}..., PID: {pid}) - {reason}"
+            )
+        else:
+            print(f"[ENFORCEMENT] No flags to clear for current session/PID - {reason}")
+
+        try:
+            for ft in cleared_types:
+                emit_flag_lifecycle(ft, "clear", reason=reason)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _clear_flags_for_pid(reason=""):
+    """
+    Fallback: clear flags matching THIS process PID only (session ID not yet known).
+
+    Used when session_id is UNKNOWN on the very first message before session
+    management has run.
+    """
+    try:
+        import glob as _glob
+        pid = os.getpid()
+        cleared = 0
+        for pattern in [
+            f".checkpoint-pending-*-{pid}.json",
+            f".task-breakdown-pending-*-{pid}.json",
+            f".skill-selection-pending-*-{pid}.json",
+        ]:
+            for flag_file in _glob.glob(str(FLAG_DIR / pattern)):
+                Path(flag_file).unlink()
+                cleared += 1
+        if cleared > 0:
+            print(f"[ENFORCEMENT] {cleared} flag(s) cleared (PID: {pid}) - {reason}")
+        else:
+            print(f"[ENFORCEMENT] No flags to clear (PID: {pid}) - {reason}")
+    except Exception:
+        pass
+
+
+def clear_checkpoint_flag(reason=""):
     """Alias - clears ALL enforcement flags (backward compat)."""
     clear_all_enforcement_flags(reason)
 
@@ -240,12 +415,14 @@ def write_checkpoint_flag(session_id, prompt_preview):
         flag_path = checkpoint_flag_path(session_id)
         flag_path.parent.mkdir(parents=True, exist_ok=True)
         with open(flag_path, 'w', encoding='utf-8') as f:
+            _lock_file(f)
             json.dump({
                 'session_id': session_id,
                 'created_at': datetime.now().isoformat(),
                 'prompt_preview': prompt_preview[:100],
                 'reason': 'awaiting_user_ok'
             }, f)
+            _unlock_file(f)
     except Exception:
         pass
 
@@ -260,6 +437,7 @@ def write_task_breakdown_flag(session_id, prompt_preview):
         flag_path = task_breakdown_flag_path(session_id)
         flag_path.parent.mkdir(parents=True, exist_ok=True)
         with open(flag_path, 'w', encoding='utf-8') as f:
+            _lock_file(f)
             json.dump({
                 'session_id': session_id,
                 'created_at': datetime.now().isoformat(),
@@ -267,6 +445,12 @@ def write_task_breakdown_flag(session_id, prompt_preview):
                 'reason': 'step_3_1_task_breakdown_required',
                 'policy': 'TaskCreate MUST be called before any Write/Edit/Bash'
             }, f)
+            _unlock_file(f)
+        try:
+            emit_flag_lifecycle('task_breakdown', 'write', session_id=session_id,
+                                reason='step_3_1_task_breakdown_required')
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -282,6 +466,7 @@ def write_skill_selection_flag(session_id, required_skill, required_type):
         flag_path = skill_selection_flag_path(session_id)
         flag_path.parent.mkdir(parents=True, exist_ok=True)
         with open(flag_path, 'w', encoding='utf-8') as f:
+            _lock_file(f)
             json.dump({
                 'session_id': session_id,
                 'created_at': datetime.now().isoformat(),
@@ -290,6 +475,14 @@ def write_skill_selection_flag(session_id, required_skill, required_type):
                 'reason': 'step_3_5_skill_selection_required',
                 'policy': 'Skill/Task tool MUST be invoked before any Write/Edit/Bash'
             }, f)
+            _unlock_file(f)
+        try:
+            emit_flag_lifecycle('skill_selection', 'write', session_id=session_id,
+                                reason='step_3_5_skill_selection_required',
+                                extra={'required_skill': required_skill,
+                                       'required_type': required_type})
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -331,12 +524,26 @@ MAX_RETRIES = 3  # Retry failed policy scripts up to 3 times
 
 
 def run_script_with_retry(script_path, args=None, timeout=10, step_name='unknown'):
-    """
-    Run a policy script with retry logic.
-    - Retries up to MAX_RETRIES times on failure.
-    - On 3rd failure: writes failure to summary, hard-breaks session.
-    - Timeouts are short (10s default) for fast execution.
-    Returns (stdout, stderr, returncode, total_duration_ms)
+    """Run a policy script with automatic retry and hard-break on exhaustion.
+
+    Retries the target script up to MAX_RETRIES (3) times.  On each success
+    the accumulated stdout, stderr, returncode, and total elapsed milliseconds
+    are returned immediately.  If every attempt fails, _policy_hard_break() is
+    called, which logs the failure and terminates the process with exit code 1.
+
+    Timeouts are kept short (10 s default) so that a hanging script does not
+    block the entire hook execution chain.
+
+    Args:
+        script_path: Path object pointing to the Python script to execute.
+        args: Optional list of CLI arguments forwarded to the script, or None.
+        timeout: Per-attempt timeout in seconds.  Defaults to 10.
+        step_name: Label used in retry and hard-break log messages.
+
+    Returns:
+        tuple: (stdout, stderr, returncode, total_duration_ms) from the
+               successful attempt.  Never returns on the 3rd failure
+               because _policy_hard_break() exits the process.
     """
     last_stdout, last_stderr, last_rc, total_dur = '', '', 1, 0
 
@@ -431,20 +638,25 @@ def safe_json(text):
 
 
 def write_json(path, data):
-    """Write JSON file, never crash main flow"""
+    """Write JSON file with file locking (Loophole #19), never crash main flow"""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
+            _lock_file(f)
             json.dump(data, f, indent=2, ensure_ascii=False)
+            _unlock_file(f)
     except Exception:
         pass
 
 
 def read_json(path):
-    """Read JSON file safely"""
+    """Read JSON file safely with file locking (Loophole #19)"""
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            _lock_file(f)
+            data = json.load(f)
+            _unlock_file(f)
+        return data
     except Exception:
         return {}
 
@@ -754,12 +966,21 @@ KEYWORD_MIN_SCORE = 2  # At least 2 keyword matches to select an agent
 
 
 def select_by_prompt_keywords(user_message):
-    """
-    Scan the raw user message for agent/skill keywords.
-    Returns (agent_name, agent_type, score) or (None, None, 0) if no clear winner.
+    """Scan the raw user message for agent and skill keyword matches.
 
-    This is the dynamic layer - works on natural language prompts
-    without requiring pre-classification or API calls.
+    This is the Layer 2 dynamic selection mechanism.  It counts how many
+    keywords from each agent's AGENT_KEYWORD_SCORES list appear in the
+    lowercased user message.  The agent with the highest count wins,
+    provided the count meets KEYWORD_MIN_SCORE (2).  No API calls or
+    pre-classified task types are required.
+
+    Args:
+        user_message: The raw user prompt string (any language).
+
+    Returns:
+        tuple: (agent_name, agent_type, score) where agent_type is 'skill'
+               or 'agent'.  Returns (None, None, 0) if no agent scores at
+               least KEYWORD_MIN_SCORE matches.
     """
     # Skills that use Skill tool (not Task tool with agent)
     SKILL_NAMES = {'adaptive-skill-intelligence', 'rdbms-core', 'nosql-core',
@@ -830,19 +1051,30 @@ SKILLS_REGISTRY = {
 
 
 def get_agent_and_skills(tech_stack, task_type='General', user_message=''):
-    """
-    4-layer selection (MOST reliable to least reliable):
+    """Select the primary skill/agent and supplementary skills for the request.
 
-    Layer 1: TASK TYPE registry    - exact match on classified task type
-    Layer 2: PROMPT KEYWORD score  - keyword analysis of raw user message (DYNAMIC)
-    Layer 3: TECH STACK registry   - project file detection
-    Layer 4: adaptive-skill-intel  - creates a new skill if truly nothing matches
+    Uses a 4-layer waterfall from most-reliable to least-reliable:
 
-    The "dynamic" layer (2) means this function can recognize new tasks
-    from natural language without needing pre-classified task types or
-    project files on disk.
+    Layer 1 - Task type registry: exact match on the classified task_type
+    Layer 2 - Prompt keyword scoring: keyword analysis of the raw message
+    Layer 3 - Tech stack registry: file-based project technology detection
+    Layer 4 - adaptive-skill-intelligence: fallback when nothing else matches
 
-    Returns (primary_name, primary_type, supplementary_skills, reason)
+    The keyword layer (2) makes selection dynamic: it works on plain natural
+    language without pre-classified types or project files on disk.
+
+    Args:
+        tech_stack: List of technology strings from detect_tech_stack(),
+                    e.g. ['flask', 'docker'] or ['unknown'].
+        task_type: Classified task type string from prompt-generator.py,
+                   e.g. 'Backend', 'Testing', or 'General'.
+        user_message: Raw user prompt forwarded for Layer 2 keyword scoring.
+
+    Returns:
+        tuple: (primary_name, primary_type, supplementary_skills, reason)
+               where primary_type is 'skill' or 'agent', supplementary_skills
+               is a list of additional skill names, and reason is a string
+               explaining which layer made the selection.
     """
     supplementary_skills = []
 
@@ -986,6 +1218,18 @@ def _ensure_architecture_modules_synced():
 
 
 def main():
+    """Entry point for the 3-level architecture flow hook.
+
+    Parses CLI arguments and/or Claude Code hook stdin (JSON), then runs
+    the complete pipeline: Level -1 auto-fix enforcement, Level 1 sync
+    system (context + session + preferences), Level 2 standards loading,
+    and Level 3 execution system (12 sub-steps from prompt generation
+    through skill/agent selection and task breakdown).
+
+    Writes a JSON flow-trace to the session log directory on every run.
+    Exits with code 1 if any blocking level fails; exits with code 0 on
+    successful completion.
+    """
     mode = 'standard'
     user_message = ''
     message_parts = []
@@ -1193,8 +1437,21 @@ def main():
         trace["status"] = "BLOCKED"
         trace["work_started"] = False
         _save_trace(trace, None, flow_start)
+        try:
+            emit_policy_step('LEVEL_MINUS_1_AUTO_FIX', level=-1, passed=False,
+                             duration_ms=dur, session_id='',
+                             details={'exit_code': rc,
+                                      'checks': lvl_minus1_output.get('checks', {})})
+        except Exception:
+            pass
         sys.exit(1)
 
+    try:
+        emit_policy_step('LEVEL_MINUS_1_AUTO_FIX', level=-1, passed=True,
+                         duration_ms=dur, session_id='',
+                         details={'checks': lvl_minus1_output.get('checks', {})})
+    except Exception:
+        pass
     print("   [OK] All systems operational")
     print("[OK] LEVEL -1 COMPLETE")
     print()
@@ -1320,7 +1577,9 @@ def main():
             }
             session_progress_file.parent.mkdir(parents=True, exist_ok=True)
             with open(session_progress_file, 'w', encoding='utf-8') as spf:
+                _lock_file(spf)
                 json.dump(fresh_progress, spf, indent=2)
+                _unlock_file(spf)
         except Exception:
             pass
 
@@ -1355,7 +1614,9 @@ def main():
     if _sess_json_path.exists():
         try:
             with open(_sess_json_path, 'r', encoding='utf-8') as _sf:
+                _lock_file(_sf)
                 _sdata = json.load(_sf)
+                _unlock_file(_sf)
             _sess_flow_runs = _sdata.get('flow_runs', 0)
             _parent = _sdata.get('parent_session', '')
             if _parent:
@@ -1594,7 +1855,9 @@ def main():
     if patterns_file.exists():
         try:
             with open(patterns_file, 'r', encoding='utf-8') as pf:
+                _lock_file(pf)
                 pdata = json.load(pf)
+                _unlock_file(pf)
             cross_patterns = pdata.get('patterns', [])
             patterns_detected = len(cross_patterns)
         except Exception:
@@ -2020,6 +2283,13 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     })
     print(f"   [3.0] Task Breakdown: {task_count} tasks analyzed")
     prev_output = {"task_count": task_count, "complexity": complexity, "task_type": task_type}
+    try:
+        emit_policy_step('LEVEL_3_STEP_3_0_TASK_BREAKDOWN', level=3, passed=True,
+                         duration_ms=0, session_id=session_id or '',
+                         details={'task_count': task_count, 'complexity': complexity,
+                                  'task_type': task_type})
+    except Exception:
+        pass
 
     # ------------------------------------------------------------------
     # STEP 3.2: PLAN MODE SUGGESTION
@@ -2145,6 +2415,12 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         }
     })
     print(f"   [3.2] Context Check: {context_pct2}%")
+    try:
+        emit_policy_step('LEVEL_3_STEP_3_2_CONTEXT_CHECK', level=3, passed=ctx2_ok,
+                         duration_ms=0, session_id=session_id or '',
+                         details={'context_pct': context_pct2, 'safe_to_proceed': ctx2_ok})
+    except Exception:
+        pass
 
     # ------------------------------------------------------------------
     # STEP 3.4: MODEL SELECTION
@@ -2219,6 +2495,14 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     })
     print(f"   [3.3] Model Selection: {selected_model}")
     prev_output = {"model": selected_model}
+    try:
+        emit_policy_step('LEVEL_3_STEP_3_3_MODEL_SELECTION', level=3, passed=True,
+                         duration_ms=0, session_id=session_id or '',
+                         details={'model': selected_model, 'reason': model_reason,
+                                  'complexity': adj_complexity,
+                                  'overrides': model_overrides})
+    except Exception:
+        pass
 
     # ------------------------------------------------------------------
     # STEP 3.5: SKILL/AGENT SELECTION
@@ -2932,14 +3216,55 @@ Work to complete: Execute phase {i} of the identified work breakdown.
                 required_type=agent_type
             )
 
+    # =========================================================================
+    # METRICS: emit hook_execution summary for 3-level-flow
+    # =========================================================================
+    try:
+        _flow_total_ms = int((datetime.now() - flow_start).total_seconds() * 1000)
+        emit_hook_execution(
+            hook_name='3-level-flow.py',
+            duration_ms=_flow_total_ms,
+            session_id=session_id or '',
+            exit_code=0,
+            extra={
+                'model': selected_model if 'selected_model' in dir() else '',
+                'task_type': task_type if 'task_type' in dir() else '',
+                'complexity': adj_complexity if 'adj_complexity' in dir() else 0,
+                'context_pct': context_pct2 if 'context_pct2' in dir() else 0,
+                'skill': skill_agent_name if 'skill_agent_name' in dir() else '',
+            }
+        )
+        # Final summary policy step
+        emit_policy_step(
+            'FULL_FLOW_COMPLETE', level=3, passed=True,
+            duration_ms=_flow_total_ms,
+            session_id=session_id or '',
+            details={
+                'model': selected_model if 'selected_model' in dir() else '',
+                'task_type': task_type if 'task_type' in dir() else '',
+                'complexity': adj_complexity if 'adj_complexity' in dir() else 0,
+                'skill': skill_agent_name if 'skill_agent_name' in dir() else '',
+                'plan_mode': plan_required if 'plan_required' in dir() else False,
+            }
+        )
+    except Exception:
+        pass
+
     sys.exit(0)
 
 
 def _build_script_inventory():
-    """
-    Build complete inventory of ALL 82 scripts (66 architecture + 16 root).
-    Each entry has: name, path, category, status, hook, description.
-    This gives full visibility into which scripts exist, which ran, which were skipped.
+    """Build a complete inventory of all scripts in the 3-level architecture.
+
+    Constructs a structured dict categorising every known script by lifecycle
+    role: hook scripts, active subprocess scripts, on-demand CLI utilities,
+    daemon scripts, Phase-4 stubs, and superseded scripts.  Each entry
+    records name, path, hook trigger, execution status, and a brief
+    description so the flow-trace.json has full A-to-Z visibility.
+
+    Returns:
+        dict: Inventory containing categorised script lists and a 'summary'
+              sub-dict with aggregate counts for each category.
     """
     inventory = {
         "total_scripts": 82,
@@ -3114,7 +3439,20 @@ def _build_script_inventory():
 
 
 def _save_trace(trace, session_log_dir, flow_start):
-    """Save the complete JSON trace file"""
+    """Save the complete flow-trace JSON to the session log directory.
+
+    Writes the trace dict as flow-trace.json inside session_log_dir and also
+    keeps a latest-flow-trace.json copy at the top-level logs directory for
+    fast access by other hooks.  If session_log_dir is None (session ID was
+    never resolved), falls back to a timestamped file in memory/logs/ so that
+    no trace data is silently lost.
+
+    Args:
+        trace: The fully-populated trace dict accumulated during the pipeline.
+        session_log_dir: Path to the session-specific log directory, or None.
+        flow_start: datetime of when the pipeline began (used for fallback
+                    filename generation only).
+    """
     try:
         if session_log_dir is None:
             # Fallback: save to memory/logs/

@@ -71,6 +71,32 @@ except ImportError:
     STOP_LOG = MEMORY_BASE / 'logs' / 'stop-notifier.log'
     API_KEY_FILE = Path.home() / '.claude' / 'config' / 'openrouter-api-key'
 
+# =============================================================================
+# PID ISOLATION FOR VOICE FLAGS (Loophole #11 fix)
+#
+# Multi-window problem: When multiple Claude Code windows are open, all
+# instances share the same flag files (.session-start-voice, etc.).  This
+# causes the wrong Stop hook instance to pick up and consume a flag written
+# by a DIFFERENT window, resulting in duplicate/missed voice notifications.
+#
+# Fix: PID-isolated flag names - {prefix}-{PID}
+# Each Claude Code process writes/reads its own flags using its PID.
+# The stop-notifier in window A only reads flags written by window A.
+#
+# Contract (MUST match clear-session-handler.py and 3-level-flow.py):
+#   .session-start-voice-{PID}
+#   .task-complete-voice-{PID}
+#   .session-work-done-{PID}
+#
+# Backward compatibility: if no PID-specific flag found, fall back to the
+# legacy shared flag (written by older versions of the scripts).
+# =============================================================================
+_PID = os.getpid()
+
+SESSION_START_FLAG_PID = FLAG_DIR / f'.session-start-voice-{_PID}'
+TASK_COMPLETE_FLAG_PID = FLAG_DIR / f'.task-complete-voice-{_PID}'
+WORK_DONE_FLAG_PID = FLAG_DIR / f'.session-work-done-{_PID}'
+
 VOICE_SCRIPT = CURRENT_DIR / 'voice-notifier.py'
 
 # OpenRouter config
@@ -610,19 +636,43 @@ def main():
 
     spoke_something = False
 
+    # =========================================================================
+    # PID-ISOLATED FLAG RESOLUTION (Loophole #11 fix)
+    #
+    # Resolution order for each flag type:
+    #   1. PID-specific flag  (.session-start-voice-{PID}) - preferred
+    #   2. Legacy shared flag (.session-start-voice)        - backward compat
+    #
+    # By checking PID-specific first, each window only processes its own flags.
+    # The legacy shared flag path is checked as a fallback for compatibility
+    # with scripts that have not yet been updated to write PID-specific flags.
+    # =========================================================================
+
+    def _resolve_flag(pid_flag, legacy_flag):
+        """Return the first existing flag path (PID-specific preferred over legacy)."""
+        if pid_flag.exists():
+            log_s(f"[flag-resolve] Using PID-isolated flag: {pid_flag.name}")
+            return pid_flag
+        if legacy_flag.exists():
+            log_s(f"[flag-resolve] Using legacy shared flag (backward compat): {legacy_flag.name}")
+            return legacy_flag
+        return None
+
     # PRIORITY 1: Session start voice
-    if SESSION_START_FLAG.exists():
+    _start_flag = _resolve_flag(SESSION_START_FLAG_PID, SESSION_START_FLAG)
+    if _start_flag is not None:
         spoke_something = handle_voice_flag(
-            SESSION_START_FLAG,
+            _start_flag,
             'session_start',
             get_session_start_default,
         )
 
     # PRIORITY 2: Task complete voice (with session summary context)
-    if TASK_COMPLETE_FLAG.exists():
+    _task_flag = _resolve_flag(TASK_COMPLETE_FLAG_PID, TASK_COMPLETE_FLAG)
+    if _task_flag is not None:
         summary_context = get_session_summary_for_voice()
         spoke_something = handle_voice_flag(
-            TASK_COMPLETE_FLAG,
+            _task_flag,
             'task_complete',
             get_task_complete_default,
             extra_context=summary_context,
@@ -630,7 +680,8 @@ def main():
 
     # PRIORITY 3: All work done - trigger PR workflow first, then voice
     pr_triggered = False
-    if WORK_DONE_FLAG.exists():
+    _work_done_flag = _resolve_flag(WORK_DONE_FLAG_PID, WORK_DONE_FLAG)
+    if _work_done_flag is not None:
         # GitHub PR Workflow: commit, push, PR, review, merge (non-blocking)
         pr_merged = False
         try:
@@ -646,7 +697,7 @@ def main():
         # Voice notification (after PR workflow)
         summary_context = get_session_summary_for_voice()
         spoke_something = handle_voice_flag(
-            WORK_DONE_FLAG,
+            _work_done_flag,
             'work_done',
             get_work_done_default,
             extra_context=summary_context,

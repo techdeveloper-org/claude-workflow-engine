@@ -49,6 +49,32 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+# File locking for shared JSON state (Loophole #19)
+try:
+    import msvcrt
+    HAS_MSVCRT = True
+except ImportError:
+    HAS_MSVCRT = False
+
+
+def _lock_file(f):
+    """Lock file for exclusive access (Windows msvcrt, no-op on other OS)."""
+    if HAS_MSVCRT:
+        try:
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        except (IOError, OSError):
+            pass  # lock failed - proceed without lock (better than crash)
+
+
+def _unlock_file(f):
+    """Unlock file (Windows msvcrt, no-op on other OS)."""
+    if HAS_MSVCRT:
+        try:
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        except (IOError, OSError):
+            pass
+
 MEMORY_BASE = Path.home() / '.claude' / 'memory'
 SESSIONS_DIR = MEMORY_BASE / 'sessions'
 CHAIN_INDEX_FILE = MEMORY_BASE / 'sessions' / 'chain-index.json'
@@ -62,7 +88,7 @@ LOGS_SESSION_DIR = MEMORY_BASE / 'logs' / 'sessions'
 
 def _read_session_summary_text(session_id):
     """
-    Read one-liner summary from session-summary.json.
+    Read one-liner summary from session-summary.json with file locking (Loophole #19).
     Returns the summary_text string or None.
     """
     summary_file = LOGS_SESSION_DIR / session_id / 'session-summary.json'
@@ -70,7 +96,9 @@ def _read_session_summary_text(session_id):
         return None
     try:
         with open(summary_file, 'r', encoding='utf-8') as f:
+            _lock_file(f)
             data = json.load(f)
+            _unlock_file(f)
         return data.get("summary_text")
     except Exception:
         return None
@@ -120,7 +148,7 @@ def log_event(msg):
 # =============================================================================
 
 def read_chain_index():
-    """Read the chain index file"""
+    """Read the chain index file with file locking (Loophole #19)"""
     if not CHAIN_INDEX_FILE.exists():
         return {
             "version": "1.0.0",
@@ -130,7 +158,9 @@ def read_chain_index():
         }
     try:
         with open(CHAIN_INDEX_FILE, 'r', encoding='utf-8') as f:
+            _lock_file(f)
             data = json.load(f)
+            _unlock_file(f)
         # Ensure required keys
         data.setdefault("version", "1.0.0")
         data.setdefault("sessions", {})
@@ -142,12 +172,14 @@ def read_chain_index():
 
 
 def write_chain_index(data):
-    """Write the chain index file"""
+    """Write the chain index file with file locking (Loophole #19)"""
     data["last_updated"] = datetime.now().isoformat()
     CHAIN_INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(CHAIN_INDEX_FILE, 'w', encoding='utf-8') as f:
+            _lock_file(f)
             json.dump(data, f, indent=2)
+            _unlock_file(f)
         log_event("[OK] Chain index saved")
     except Exception as e:
         log_event(f"[ERROR] Failed to write chain index: {e}")
