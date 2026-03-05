@@ -895,7 +895,151 @@ def evaluate_plan_mode_decision(
 
 ---
 
-**VERSION:** 1.0.0
+## 🗂️ PLAN ARCHIVAL TO SESSION FOLDER (NEW - v2.0)
+
+### **Overview**
+
+When user enters plan mode and creates a plan, the plan is automatically archived to the session folder for permanent storage and continuity.
+
+**Current Flow:**
+```
+EnterPlanMode called
+    ↓
+Plan created: ~/.claude/plans/{random-name}.md
+    ↓
+[Session ends]
+    ↓
+plan-session-archiver.py detects plan
+    ↓
+Plan copied to: ~/.claude/memory/logs/sessions/{SESSION_ID}/plan.md
+    ↓
+session-summary.json updated with plan metadata
+    ↓
+Plan permanently linked to session! ✅
+```
+
+### **Why This Matters**
+
+1. **Context Continuity** - Plan stays with session data
+2. **Future Reference** - Can recall plan when session resumes
+3. **Smart Review** - PR review can use plan context
+4. **Archive** - Plans move from temporary to permanent storage
+5. **Searchability** - Query "Find all sessions with plans"
+
+### **Session Folder Structure After Plan Creation**
+
+```
+~/.claude/memory/logs/sessions/SESSION-20260305-113248-W5K4/
+├── session-summary.json          (existing - now includes plan_info)
+├── session-summary.md            (existing)
+├── flow-trace.json               (from Step 3.5)
+├── plan.md                       ✅ NEW - archived plan
+└── plan-archival-metadata.json   ✅ NEW - archival details
+```
+
+### **Plan Metadata Stored in session-summary.json**
+
+```json
+{
+  "plan_info": {
+    "plan_created": true,
+    "plan_mode_required": true,
+    "plan_filename": "quirky-noodling-falcon.md",
+    "plan_archived_at": "2026-03-05T11:32:48.123456",
+    "plan_location": "~/.claude/memory/logs/sessions/SESSION-20260305-113248-W5K4/plan.md",
+    "plan_size_bytes": 8192,
+    "plan_status": "archived"
+  }
+}
+```
+
+### **Archival Script**
+
+**File:** `scripts/architecture/03-execution-system/02-plan-mode/plan-session-archiver.py`
+
+**Responsibility:**
+- Detect when plan mode has created a plan file
+- Copy from ~/.claude/plans/ to session folder
+- Create metadata record
+- Update session-summary.json
+- Graceful error handling
+
+**Function Signature:**
+```python
+def archive_plan_to_session(session_id: str) -> dict:
+    """
+    Archive the most recent plan from ~/.claude/plans/ to session folder.
+
+    Args:
+        session_id (str): Current session ID (e.g., SESSION-20260305-113248-W5K4)
+
+    Returns:
+        dict: {
+            'success': bool,
+            'plan_file': str (original path),
+            'archived_to': str (session path),
+            'plan_name': str (original random name),
+            'size_bytes': int,
+            'timestamp': str (ISO format),
+            'error': str (if failed)
+        }
+    """
+```
+
+### **Integration Points**
+
+1. **stop-notifier.py** (session end hook)
+   - Calls archiver before session cleanup
+   - Updates session-summary.json
+   - Logs archival result
+
+2. **session-summary-manager.py** (session tracking)
+   - Adds plan metadata to JSON
+   - Updates plan_info block
+   - Records archival timestamp
+
+### **Benefits for Smart Review (Step 4.5)**
+
+When PR review runs, it can access the plan:
+
+```python
+# In github_pr_workflow.py _smart_code_review():
+plan_path = f"~/.claude/memory/logs/sessions/{session_id}/plan.md"
+if Path(plan_path).exists():
+    with open(plan_path, 'r') as f:
+        plan_content = f.read()
+        # Use plan context in review:
+        # - Check if code matches plan design
+        # - Verify all plan steps implemented
+        # - Ensure architectural decisions followed
+```
+
+### **Error Handling**
+
+| Scenario | Handling |
+|----------|----------|
+| No plan file found | Log info (plan not created), continue |
+| Multiple plans created | Archive newest one |
+| Permission denied | Log error, graceful failure |
+| Session ID unknown | Use UNKNOWN, log error |
+| Disk space full | Log error, don't fail session |
+| File already exists | Overwrite with log note |
+
+### **Success Criteria**
+
+- ✅ Plan archived to session folder
+- ✅ Plan metadata in session-summary.json
+- ✅ Original plan in ~/.claude/plans/ preserved
+- ✅ No data loss
+- ✅ Can find plan by session ID
+- ✅ Smart review can use plan context
+
+---
+
+**VERSION:** 2.0.0 (Plan Archival Added)
 **CREATED:** 2026-02-16
-**LOCATION:** `~/.claude/memory/auto-plan-mode-suggestion-policy.md`
-**SCRIPT:** `~/.claude/memory/auto-plan-mode-suggester.py`
+**UPDATED:** 2026-03-05
+**LOCATION:** `policies/03-execution-system/02-plan-mode/auto-plan-mode-suggestion-policy.md`
+**SCRIPTS:**
+- `auto-plan-mode-suggester.py` (plan mode decision)
+- `plan-session-archiver.py` (plan archival - NEW v2.0)
