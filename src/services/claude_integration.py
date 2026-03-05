@@ -404,22 +404,50 @@ class AutoSessionTracker:
 
 
 class AnthropicLoginHelper:
-    """Helper for Anthropic login flow"""
+    """Provide Anthropic console login URLs and onboarding setup instructions.
+
+    Used by the credentials page to guide users through obtaining and
+    configuring their Anthropic API key.
+
+    Attributes:
+        anthropic_console_url (str): Root Anthropic console URL.
+        api_keys_url (str): Direct URL to the API keys settings page.
+    """
 
     def __init__(self):
+        """Initialize AnthropicLoginHelper with Anthropic console URLs."""
         self.anthropic_console_url = 'https://console.anthropic.com'
         self.api_keys_url = f'{self.anthropic_console_url}/settings/keys'
 
     def get_login_url(self):
-        """Get Anthropic console login URL"""
+        """Return the Anthropic console login URL.
+
+        Returns:
+            str: URL string for https://console.anthropic.com.
+        """
         return self.anthropic_console_url
 
     def get_api_keys_url(self):
-        """Get API keys page URL"""
+        """Return the Anthropic API keys settings page URL.
+
+        Returns:
+            str: URL string for the API keys settings page.
+        """
         return self.api_keys_url
 
     def get_setup_instructions(self):
-        """Get step-by-step setup instructions"""
+        """Return a structured step-by-step API key setup guide.
+
+        Returns:
+            dict: Setup guide with keys:
+                steps (list[dict]): Ordered setup steps, each with:
+                    step (int): Step number.
+                    title (str): Short step title.
+                    description (str): Detailed instruction text.
+                    url (str, optional): Relevant URL for the step.
+                    important (bool, optional): Flag for critical steps.
+                notes (list[str]): Additional guidance notes.
+        """
         return {
             'steps': [
                 {

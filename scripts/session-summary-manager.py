@@ -97,7 +97,14 @@ SUMMARY_LOG = LOGS_DIR / 'session-summary.log'
 # =============================================================================
 
 def log_event(msg):
-    """Log to session-summary.log (ASCII only)"""
+    """Append a timestamped message to the session-summary.log file.
+
+    Creates parent directories automatically.  Content must be ASCII-safe for
+    Windows cp1252 compatibility.  Errors are silently swallowed.
+
+    Args:
+        msg (str): ASCII-safe message to append.
+    """
     SUMMARY_LOG.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     try:
@@ -112,17 +119,38 @@ def log_event(msg):
 # =============================================================================
 
 def session_log_dir(session_id):
-    """Get session log directory"""
+    """Return the per-session log directory path.
+
+    Args:
+        session_id (str): Session identifier.
+
+    Returns:
+        Path: LOGS_DIR/sessions/{session_id}
+    """
     return LOGS_DIR / 'sessions' / session_id
 
 
 def summary_json_path(session_id):
-    """Path to accumulated structured summary"""
+    """Return the path to the session's accumulated JSON summary file.
+
+    Args:
+        session_id (str): Session identifier.
+
+    Returns:
+        Path: session_log_dir(session_id)/session-summary.json
+    """
     return session_log_dir(session_id) / 'session-summary.json'
 
 
 def summary_md_path(session_id):
-    """Path to human-readable summary"""
+    """Return the path to the session's human-readable Markdown summary file.
+
+    Args:
+        session_id (str): Session identifier.
+
+    Returns:
+        Path: session_log_dir(session_id)/session-summary.md
+    """
     return session_log_dir(session_id) / 'session-summary.md'
 
 

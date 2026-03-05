@@ -493,7 +493,20 @@ def get_chain_context(session_id, max_ancestors=5, max_related=5):
 
 
 def get_full_chain(session_id):
-    """Get complete ancestor chain + all descendants"""
+    """Get the complete ancestor and descendant chain for a session.
+
+    Walks up the parent chain (all ancestors) and walks down the children
+    tree via BFS (all descendants).  Visited set prevents infinite loops in
+    malformed indexes.
+
+    Args:
+        session_id (str): Target session identifier.
+
+    Returns:
+        dict or None: Dict with 'ancestors' (oldest first), 'current', and
+                      'descendants' (BFS order).  Returns None when session_id
+                      is not in the chain index.
+    """
     index = read_chain_index()
     if session_id not in index["sessions"]:
         return None
@@ -521,7 +534,16 @@ def get_full_chain(session_id):
 
 
 def search_by_tag(tag):
-    """Search sessions by tag"""
+    """Search for sessions that have the given tag in the chain index.
+
+    Args:
+        tag (str): Tag to search for (normalised to lowercase automatically).
+
+    Returns:
+        list: List of dicts each containing 'session_id', 'summary', 'tags',
+              'project', 'task_type', and 'created_at' for matched sessions.
+              Empty list when no sessions have the tag.
+    """
     index = read_chain_index()
     tag = tag.strip().lower()
     session_ids = index["tag_index"].get(tag, [])
@@ -541,9 +563,18 @@ def search_by_tag(tag):
 
 
 def format_chain_context(ctx):
-    """
-    Format chain context for display in hook output.
-    Used by 3-level-flow.py to print session chain info.
+    """Format a chain context dict into a human-readable multi-line string.
+
+    Produces a '[SESSION CHAIN]' section showing parent, ancestors (with
+    project, tags, and summary), directly related sessions, tag-related
+    sessions, current tags, and project.
+
+    Args:
+        ctx (dict or None): Chain context from get_chain_context(), or None.
+
+    Returns:
+        str: Formatted multi-line string ready to print to hook stdout.
+             Returns a 'No chain data available' message when ctx is falsy.
     """
     if not ctx:
         return "[CHAIN] No chain data available"
@@ -604,9 +635,22 @@ def format_chain_context(ctx):
 # =============================================================================
 
 def extract_tags_from_prompt(prompt, task_type='', skill='', project_cwd=''):
-    """
-    Auto-extract tags from prompt, task type, skill, and project directory.
-    Returns list of tag strings.
+    """Auto-extract relevant tags from a user prompt and session context.
+
+    Derives tags from four sources:
+      1. task_type  -> normalised to lowercase kebab-case.
+      2. skill      -> added as-is unless it is 'adaptive-skill-intelligence'.
+      3. project_cwd -> extracts the project directory name from the path.
+      4. prompt keywords -> scans for known tech topics (spring boot, docker, etc.).
+
+    Args:
+        prompt (str): Raw user message for keyword extraction.
+        task_type (str): Classified task type (e.g. 'Backend').
+        skill (str): Primary skill or agent selected for the session.
+        project_cwd (str): Working directory path to extract the project name from.
+
+    Returns:
+        list: Deduplicated list of lowercase tag strings.
     """
     tags = []
 
@@ -734,6 +778,18 @@ def auto_relate_by_tags(session_id, min_shared_tags=2):
 # =============================================================================
 
 def main():
+    """CLI entry point for session-chain-manager.py.
+
+    Dispatches to one of the following sub-commands:
+      link    - Link a child session to its parent (called on /clear).
+      tag     - Add tags and metadata to a session.
+      relate  - Mark two sessions as related (bidirectional).
+      context - Print the chain context for a session.
+      chain   - Print the complete ancestor + descendant chain.
+      search  - Search sessions by tag.
+
+    Exits 0 on success or 1 on any error.
+    """
     parser = argparse.ArgumentParser(description='Session Chain Manager v1.0.0')
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
 

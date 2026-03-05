@@ -60,7 +60,23 @@ TASK_LOG_DIR = MEMORY_DIR / "logs" / "tasks"
 # ============================================================================
 
 class TaskAutoAnalyzer:
-    """Automatically analyzes user messages and breaks them into tasks"""
+    """Analyzes user messages and automatically breaks them into structured tasks.
+
+    Extracts entities, estimates file count, detects phase requirements, and
+    generates a typed task list with dependency relationships.
+
+    Attributes:
+        memory_path (Path): Base ~/.claude/memory directory.
+        logs_path (Path): Logs subdirectory.
+        task_log (Path): JSONL log file for breakdown events.
+
+    Key Methods:
+        auto_analyze(user_message): Main entry; returns full analysis dict.
+        extract_entities(message): Find service/feature names from message.
+        estimate_complexity(message, entities): Score complexity from 5-30.
+        detect_phases(complexity, file_count): Decide if phases are needed.
+        generate_tasks(message, entities, phases): Build typed task list.
+    """
 
     def __init__(self):
         self.memory_path = MEMORY_DIR
@@ -68,7 +84,14 @@ class TaskAutoAnalyzer:
         self.task_log = self.logs_path / "task-breakdown.log"
 
     def extract_entities(self, message: str) -> List[str]:
-        """Extract entities (services, features, etc.) from message"""
+        """Extract service and feature entity names from a task description.
+
+        Args:
+            message (str): Raw task description text.
+
+        Returns:
+            list[str]: Deduplicated list of entity names (lowercased).
+        """
         entities = []
 
         # Service patterns

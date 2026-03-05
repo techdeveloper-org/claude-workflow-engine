@@ -132,7 +132,15 @@ class PromptGenerator:
         }
 
     def gather_information(self, thinking: Dict) -> Dict:
-        """PHASE 2: INFORMATION GATHERING - Find relevant context"""
+        """Phase 2: Gather relevant context for the request.
+
+        Args:
+            thinking (dict): Output from think_about_request().
+
+        Returns:
+            dict: Contains 'similar_files', 'patterns', 'project_structure',
+                  'examples', and 'status'.
+        """
         return {
             "similar_files": [],
             "patterns": [],
@@ -142,7 +150,15 @@ class PromptGenerator:
         }
 
     def verify_information(self, gathered_info: Dict) -> Dict:
-        """PHASE 3: VERIFICATION - Verify all information"""
+        """Phase 3: Verify gathered information and flag any assumptions.
+
+        Args:
+            gathered_info (dict): Output from gather_information().
+
+        Returns:
+            dict: Contains 'examples_verified', 'paths_verified',
+                  'patterns_validated', and 'assumptions' list.
+        """
         verification = {
             "examples_verified": True,
             "paths_verified": True,
@@ -159,7 +175,15 @@ class PromptGenerator:
         return verification
 
     def analyze_request(self, user_message: str) -> Dict:
-        """Analyze natural language request"""
+        """Perform full NLP analysis of a user request.
+
+        Args:
+            user_message (str): Raw user message.
+
+        Returns:
+            dict: Contains 'task_type', 'entities', 'operations',
+                  'keywords', and 'complexity' (int 1-10).
+        """
         message_lower = user_message.lower()
 
         analysis = {
@@ -172,7 +196,14 @@ class PromptGenerator:
         return analysis
 
     def detect_task_type(self, message: str) -> str:
-        """Intelligent task type detection with multi-phase analysis"""
+        """Classify a message into a task type using keyword matching.
+
+        Args:
+            message (str): Lowercased user message.
+
+        Returns:
+            str: Task type label (e.g., 'API Creation', 'Bug Fix', 'General Task').
+        """
         message_lower = message.lower()
 
         # System/Meta tasks - highest priority
@@ -218,7 +249,14 @@ class PromptGenerator:
         return "General Task"
 
     def extract_entities(self, message: str) -> List[str]:
-        """Extract entity names from message"""
+        """Extract domain entity names from a message string.
+
+        Args:
+            message (str): Lowercased user message.
+
+        Returns:
+            list[str]: Deduplicated list of entity names found.
+        """
         common_entities = [
             "user", "product", "order", "category", "role", "permission",
             "customer", "payment", "invoice", "auth", "token"
@@ -231,7 +269,15 @@ class PromptGenerator:
         return list(set(found + capitalized))
 
     def extract_operations(self, message: str) -> List[str]:
-        """Extract operations from message"""
+        """Extract CRUD operation types from a message string.
+
+        Args:
+            message (str): Lowercased user message.
+
+        Returns:
+            list[str]: Deduplicated list of detected operations
+                       (e.g., ['create', 'read', 'delete']).
+        """
         operations = []
 
         operation_keywords = {
@@ -251,7 +297,14 @@ class PromptGenerator:
         return list(set(operations))
 
     def extract_keywords(self, message: str) -> List[str]:
-        """Intelligent keyword extraction with synonym mapping"""
+        """Extract technology and domain keywords using synonym expansion.
+
+        Args:
+            message (str): Lowercased user message.
+
+        Returns:
+            list[str]: Deduplicated list of detected technology keywords.
+        """
         message_lower = message.lower()
         extracted_keywords = []
 
@@ -284,7 +337,14 @@ class PromptGenerator:
         return list(set(extracted_keywords))
 
     def estimate_complexity(self, message: str) -> int:
-        """Estimate task complexity from 1-10"""
+        """Estimate task complexity on a 1-10 scale from message content.
+
+        Args:
+            message (str): Raw user message (case-insensitive).
+
+        Returns:
+            int: Complexity score from 1 (trivial) to 10 (very complex).
+        """
         complexity = 1
 
         # Multi-part indicators
@@ -306,7 +366,18 @@ class PromptGenerator:
         return min(10, complexity)
 
     def build_rewritten_prompt(self, user_message, task_type, entities, operations, complexity):
-        """Build enhanced prompt with context and structured information"""
+        """Build an enhanced prompt string with structured analysis context.
+
+        Args:
+            user_message (str): Original user message.
+            task_type (str): Detected task type label.
+            entities (list[str]): Extracted entities.
+            operations (list[str]): Detected CRUD operations.
+            complexity (int): Complexity score 1-10.
+
+        Returns:
+            str: Enhanced prompt with analysis section appended.
+        """
         prompt = f"Task: {user_message}\n\n"
         prompt += f"[ANALYSIS]\n"
         prompt += f"- Task Type: {task_type}\n"
@@ -320,7 +391,14 @@ class PromptGenerator:
         return prompt
 
     def generate_enhanced_prompt(self, analysis: Dict) -> str:
-        """PHASE 3: ENHANCEMENT - Create enhanced prompt with context"""
+        """Create an enhanced prompt string by appending standard policy context.
+
+        Args:
+            analysis (dict): Output from think_about_request() or analyze_request().
+
+        Returns:
+            str: Original message with project context appended.
+        """
         enhanced = analysis.get("user_message", "")
         enhanced += "\n\n[CONTEXT ADDED BY PROMPT GENERATION POLICY]\n"
         enhanced += "- Project: Claude Insight\n"
@@ -329,7 +407,15 @@ class PromptGenerator:
         return enhanced
 
     def generate_structured_prompt(self, user_input: str) -> Dict:
-        """Main entry point for prompt generation"""
+        """Run all phases and produce a complete structured prompt dict.
+
+        Args:
+            user_input (str): Raw user message.
+
+        Returns:
+            dict: Contains 'original', 'enhanced', 'analysis', 'thinking',
+                  'information', 'verification', and 'timestamp'.
+        """
         thinking = self.think_about_request(user_input)
         information = self.gather_information(thinking)
         verification = self.verify_information(information)
@@ -347,7 +433,14 @@ class PromptGenerator:
         }
 
     def generate(self, user_message: str) -> Dict:
-        """Generate comprehensive structured prompt"""
+        """Generate a comprehensive structured prompt (alias for generate_structured_prompt).
+
+        Args:
+            user_message (str): Raw user message.
+
+        Returns:
+            dict: Full structured prompt as returned by generate_structured_prompt().
+        """
         return self.generate_structured_prompt(user_message)
 
 
@@ -356,7 +449,22 @@ class PromptGenerator:
 # ============================================================================
 
 class PromptAutoGenerator:
-    """Automatically wraps user messages with structured prompt generation"""
+    """Automatically decides whether to wrap user messages with full prompt generation.
+
+    Skips trivial greetings and status questions; triggers full generation for
+    actionable requests (messages with action verbs or > 10 words).
+
+    Attributes:
+        memory_path (Path): Base memory directory.
+        logs_path (Path): Logs subdirectory.
+        prompt_log (Path): Log file for prompt generation events.
+        generator (PromptGenerator): Underlying prompt generator instance.
+
+    Key Methods:
+        auto_generate(user_message): Main entry point; returns generation result dict.
+        generate_prompt(user_message, auto_mode): Generate or skip based on heuristics.
+        should_generate_prompt(user_message): Decide if generation is needed.
+    """
 
     def __init__(self):
         self.memory_path = MEMORY_DIR
@@ -365,7 +473,15 @@ class PromptAutoGenerator:
         self.generator = PromptGenerator()
 
     def should_generate_prompt(self, user_message):
-        """Determine if user message needs prompt generation"""
+        """Decide whether a message warrants full prompt generation.
+
+        Args:
+            user_message (str): Raw user message.
+
+        Returns:
+            bool: True if the message needs prompt generation; False for
+                  simple greetings, status queries, or very short messages.
+        """
         # Skip greetings
         greetings = ['hi', 'hello', 'hey', 'thanks', 'thank you']
         if user_message.lower().strip() in greetings:
@@ -385,7 +501,14 @@ class PromptAutoGenerator:
         return any(word in user_message.lower() for word in action_words) or len(user_message.split()) > 10
 
     def extract_intent(self, user_message):
-        """Extract user intent from message"""
+        """Classify the primary intent of a user message.
+
+        Args:
+            user_message (str): Raw user message.
+
+        Returns:
+            str: Intent label (e.g., 'create', 'fix', 'analyze', 'general').
+        """
         intents = {
             'create': ['create', 'add', 'implement', 'generate'],
             'fix': ['fix', 'debug', 'solve', 'resolve'],
@@ -403,7 +526,17 @@ class PromptAutoGenerator:
         return 'general'
 
     def generate_prompt(self, user_message, auto_mode=True) -> Dict:
-        """Generate structured prompt from user message"""
+        """Generate a structured prompt or skip if message is too simple.
+
+        Args:
+            user_message (str): Raw user message to process.
+            auto_mode (bool): Reserved for future use. Defaults to True.
+
+        Returns:
+            dict: On generation: contains 'skip' (False), 'intent',
+                  'original_message', 'structured_prompt', 'success'.
+                  On skip: contains 'skip' (True) and 'reason'.
+        """
         # Check if we should generate prompt
         if not self.should_generate_prompt(user_message):
             return {
@@ -434,7 +567,11 @@ class PromptAutoGenerator:
             }
 
     def log_prompt_generation(self, result):
-        """Log prompt generation result"""
+        """Append a JSONL entry summarizing a prompt generation result.
+
+        Args:
+            result (dict): Generation result from generate_prompt().
+        """
         self.logs_path.mkdir(parents=True, exist_ok=True)
 
         log_entry = {
@@ -452,13 +589,24 @@ class PromptAutoGenerator:
             pass
 
     def auto_generate(self, user_message):
-        """Main entry point for automatic prompt generation"""
+        """Generate and log a structured prompt for a user message.
+
+        Args:
+            user_message (str): Raw user message.
+
+        Returns:
+            dict: Generation result as returned by generate_prompt().
+        """
         result = self.generate_prompt(user_message)
         self.log_prompt_generation(result)
         return result
 
     def print_result(self, result):
-        """Print formatted result"""
+        """Print a formatted summary of a generation result to stdout.
+
+        Args:
+            result (dict): Generation result from generate_prompt().
+        """
         print(f"\n{'='*70}")
         print(f"[PROMPT GENERATION POLICY] Auto-Prompt Generation")
         print(f"{'='*70}\n")
@@ -486,7 +634,12 @@ class PromptAutoGenerator:
 # ============================================================================
 
 def log_policy_hit(action, context=""):
-    """Log policy execution"""
+    """Append a timestamped entry to the policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
+        context (str): Optional human-readable context or detail string.
+    """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"[{timestamp}] prompt-generation-policy | {action} | {context}\n"
 
@@ -503,7 +656,11 @@ def log_policy_hit(action, context=""):
 # ============================================================================
 
 def validate():
-    """Validate policy compliance"""
+    """Check that the prompt generation policy preconditions are met.
+
+    Returns:
+        bool: True if validation succeeds, False on any exception.
+    """
     try:
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
         log_policy_hit("VALIDATE", "prompt-generation-ready")
@@ -514,7 +671,12 @@ def validate():
 
 
 def report():
-    """Generate compliance report"""
+    """Generate a compliance report for the prompt generation policy.
+
+    Returns:
+        dict: Contains 'status', 'policy', 'features', and 'timestamp'.
+              Returns {'status': 'error', ...} on failure.
+    """
     try:
         report_data = {
             "status": "success",
@@ -540,14 +702,17 @@ def report():
 
 
 def enforce():
-    """
-    Main policy enforcement function.
+    """Activate the prompt generation policy.
 
     Consolidates logic from 2 old scripts:
     - prompt-generator.py (1055 lines): Prompt generation and analysis
     - prompt-auto-wrapper.py (320 lines): Automatic prompt wrapping
 
-    Returns: dict with status and results
+    Initializes both PromptGenerator and PromptAutoGenerator instances.
+
+    Returns:
+        dict: Contains 'status' ('success' or 'error'), 'system',
+              and 'features' list. On error, contains 'message'.
     """
     try:
         log_policy_hit("ENFORCE_START", "prompt-generation-enforcement")

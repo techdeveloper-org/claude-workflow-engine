@@ -1,5 +1,20 @@
 """
-History Tracker - Track daily metrics for historical analysis
+History Tracker for Claude Insight Dashboard.
+
+Records and retrieves daily metric snapshots for trend analysis and historical
+charting. Each day's data is stored as a single entry (upserted by date) in
+a JSON file, keeping at most 90 days of history.
+
+The tracker stores these daily metrics per entry:
+  - health_score: System health percentage (0-100)
+  - errors_24h: Error count in the last 24 hours
+  - policy_hits: Total policy execution count
+  - context_usage: Context window usage percentage
+  - tokens_used: Estimated token usage
+  - daemons_running / daemons_total: Hook script counts
+
+Classes:
+    HistoryTracker: Records and queries daily metric history.
 """
 import os
 import json
@@ -13,15 +28,29 @@ from utils.path_resolver import get_data_dir
 
 
 class HistoryTracker:
-    """Track and store historical metrics for the dashboard"""
+    """Record and retrieve daily metric snapshots for dashboard trend charts.
+
+    Persists metrics to ``~/.claude/memory/dashboard_history.json`` (or the
+    local data directory in portable mode). Automatically deduplicates by
+    date (one entry per calendar day) and caps history at 90 days.
+
+    Attributes:
+        memory_dir (Path): Root data directory resolved by PathResolver.
+        history_file (Path): Path to the dashboard_history.json file.
+    """
 
     def __init__(self):
+        """Initialize HistoryTracker and ensure the history file exists."""
         self.memory_dir = get_data_dir()
         self.history_file = self.memory_dir / 'dashboard_history.json'
         self.ensure_history_file()
 
     def ensure_history_file(self):
-        """Ensure history file exists"""
+        """Create the history JSON file with an empty structure if it does not exist.
+
+        Returns:
+            None
+        """
         if not self.history_file.exists():
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
             self.history_file.write_text(json.dumps({
@@ -30,7 +59,14 @@ class HistoryTracker:
             }))
 
     def load_history(self):
-        """Load historical data from file"""
+        """Load the full history dictionary from the JSON file.
+
+        Returns:
+            dict: History data with keys:
+                daily_metrics (list[dict]): List of daily metric entries.
+                last_updated (str or None): ISO timestamp of last write.
+            Returns an empty structure on read errors.
+        """
         try:
             if self.history_file.exists():
                 return json.loads(self.history_file.read_text())
@@ -40,14 +76,36 @@ class HistoryTracker:
             return {'daily_metrics': [], 'last_updated': None}
 
     def save_history(self, data):
-        """Save historical data to file"""
+        """Write the history dictionary to the JSON file.
+
+        Args:
+            data (dict): History data to persist. Should follow the structure
+                returned by load_history().
+
+        Returns:
+            None
+        """
         try:
             self.history_file.write_text(json.dumps(data, indent=2))
         except Exception as e:
             print(f"Error saving history: {e}")
 
     def add_daily_metric(self, metrics):
-        """Add a daily metric snapshot"""
+        """Upsert a daily metric snapshot for the current calendar day.
+
+        If an entry for today already exists it is replaced. The history is
+        then trimmed to the last 90 days (sorted descending by date).
+
+        Args:
+            metrics (dict): Metric values for today. Recognised keys:
+                health_score (int/float), errors_24h (int), policy_hits (int),
+                context_usage (float), tokens_used (int), daemons_running (int),
+                daemons_total (int). Missing keys default to 0 (or 8 for
+                daemons_total).
+
+        Returns:
+            None
+        """
         history = self.load_history()
         today = datetime.now().strftime('%Y-%m-%d')
 
@@ -88,7 +146,17 @@ class HistoryTracker:
         self.save_history(history)
 
     def get_last_n_days(self, days=7):
-        """Get metrics for the last N days"""
+        """Return the most recent N daily metric entries in chronological order.
+
+        Sorts all stored entries by date descending, takes the first N, then
+        reverses to return oldest-first (suitable for time-series charts).
+
+        Args:
+            days (int): Number of days to return. Defaults to 7.
+
+        Returns:
+            list[dict]: Up to ``days`` metric entries, oldest first.
+        """
         history = self.load_history()
         metrics = history.get('daily_metrics', [])
 
@@ -102,7 +170,24 @@ class HistoryTracker:
         return list(reversed(last_n))
 
     def get_chart_data(self, days=7):
-        """Get data formatted for Chart.js"""
+        """Return metric arrays formatted for Chart.js time-series charts.
+
+        Retrieves the last N days of metrics and restructures them into
+        parallel arrays keyed by metric name, suitable for direct use as
+        Chart.js dataset ``data`` values.
+
+        Args:
+            days (int): Number of days to include. Defaults to 7.
+
+        Returns:
+            dict: Chart data with keys:
+                dates (list[str]): ISO date strings ('YYYY-MM-DD'), oldest first.
+                health_scores (list[int]): Health score values (0-100).
+                errors (list[int]): Error counts (clamped >= 0).
+                policy_hits (list[int]): Policy hit counts (clamped >= 0).
+                context_usage (list[float]): Context usage % (clamped 0-100).
+                tokens_used (list[int]): Token usage counts (clamped >= 0).
+        """
         metrics = self.get_last_n_days(days)
 
         if not metrics:
@@ -129,7 +214,22 @@ class HistoryTracker:
         }
 
     def get_summary_stats(self, days=7):
-        """Get summary statistics for the last N days"""
+        """Compute aggregate summary statistics over the last N days.
+
+        Args:
+            days (int): Lookback window in days. Defaults to 7.
+
+        Returns:
+            dict: Summary statistics with keys:
+                avg_health_score (float): Mean health score over the period.
+                total_errors (int): Cumulative error count.
+                total_policy_hits (int): Cumulative policy hit count.
+                avg_context_usage (float): Mean context usage percentage.
+                total_tokens (int): Cumulative token usage.
+                min_health_score (int): Lowest recorded health score.
+                max_health_score (int): Highest recorded health score.
+            Returns zero-filled dict when no history is available.
+        """
         metrics = self.get_last_n_days(days)
 
         if not metrics:
