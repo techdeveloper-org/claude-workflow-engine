@@ -33,7 +33,12 @@ THRESHOLDS = {
 }
 
 def log_policy_hit(action, context):
-    """Log policy execution"""
+    """Log a context tracker policy event to the policy hits log file.
+
+    Args:
+        action (str): The action label (e.g., 'updated').
+        context (str): Additional context string describing the action.
+    """
     log_file = os.path.expanduser("~/.claude/memory/logs/policy-hits.log")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] context-tracker | {action} | {context}\n"
@@ -46,7 +51,18 @@ def log_policy_hit(action, context):
         print(f"Warning: Could not write log: {e}", file=sys.stderr)
 
 def get_recommended_action(context_percent):
-    """Get recommended cleanup action"""
+    """Return the recommended cleanup action for the given context percentage.
+
+    Args:
+        context_percent (float): Current context usage percentage.
+
+    Returns:
+        dict: Recommendation dictionary with keys:
+            - level (str): Urgency level ('none', 'light', 'moderate', 'aggressive').
+            - action (str): Action identifier string.
+            - message (str): Human-readable status message.
+            - urgency (str): Urgency string ('low', 'medium', 'high', 'critical').
+    """
     if context_percent >= THRESHOLDS["aggressive_cleanup"]:
         return {
             "level": "aggressive",
@@ -77,7 +93,19 @@ def get_recommended_action(context_percent):
         }
 
 def update_context_usage(tokens_used, tokens_total):
-    """Update context usage tracking file"""
+    """Save actual token counts to the context usage tracking file.
+
+    Calculates the context percentage, derives a cleanup recommendation,
+    writes all data to ~/.claude/memory/.context-usage as JSON, and prints
+    a formatted status summary to stdout.
+
+    Args:
+        tokens_used (int): Number of tokens currently consumed.
+        tokens_total (int): Total token limit (e.g., 200000).
+
+    Returns:
+        bool: True if the tracking file was written successfully, False otherwise.
+    """
 
     # Calculate percentage
     context_percent = round((tokens_used / tokens_total) * 100, 1)

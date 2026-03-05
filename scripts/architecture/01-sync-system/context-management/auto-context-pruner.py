@@ -56,7 +56,13 @@ except Exception as e:
     DIRECT_IMPORT_AVAILABLE = False
 
 def log_prune_event(event_type, context_percent, details=""):
-    """Log pruning event"""
+    """Log a pruning event to the pruning log file.
+
+    Args:
+        event_type (str): Type of pruning event (e.g., 'CHECK', 'WARNING', 'CRITICAL').
+        context_percent (float): Current context usage percentage.
+        details (str): Optional additional details about the event.
+    """
     try:
         os.makedirs(os.path.dirname(PRUNE_LOG), exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -68,7 +74,14 @@ def log_prune_event(event_type, context_percent, details=""):
         print(f"Warning: Could not log pruning: {e}", file=sys.stderr)
 
 def get_context_status():
-    """Get current context status"""
+    """Retrieve the current context usage status from the context monitor.
+
+    Uses direct module import when available, falls back to subprocess call.
+
+    Returns:
+        dict or None: Status dictionary with 'percentage' and 'level' keys,
+            or None if the status could not be retrieved.
+    """
     try:
         if DIRECT_IMPORT_AVAILABLE:
             # Direct class instantiation
@@ -92,7 +105,16 @@ def get_context_status():
         return None
 
 def save_session(project_name):
-    """Save session before pruning"""
+    """Save the current session summary before pruning context.
+
+    Uses direct module import when available, falls back to subprocess call.
+
+    Args:
+        project_name (str): Name of the current project to save session for.
+
+    Returns:
+        bool: True if the session was saved successfully, False otherwise.
+    """
     try:
         if DIRECT_IMPORT_AVAILABLE:
             # Direct function call
@@ -114,7 +136,25 @@ def save_session(project_name):
         return False
 
 def check_and_prune():
-    """Check context and prune if needed"""
+    """Check context usage and trigger pruning actions if thresholds are exceeded.
+
+    Evaluates context percentage against four zones:
+    - Green (<70%): No pruning needed.
+    - Yellow (70-84%): Warning, monitor closely.
+    - Orange (85-89%): Alert, pruning recommended, auto-saves session.
+    - Red (>=90%): Critical, immediate pruning required, auto-saves session.
+
+    Returns:
+        dict: Result dictionary containing:
+            - checked (bool): Whether the check was performed.
+            - prune_needed (bool): Whether pruning is required.
+            - percentage (float): Current context usage percentage.
+            - level (str): Current status level ('green', 'yellow', 'orange', 'red').
+            - message (str): Human-readable status message.
+            - session_saved (bool): Whether session was auto-saved (orange/red zones).
+            - action (str): Recommended action string (orange/red zones).
+            - suggestion (str): Optimization suggestion (yellow zone).
+    """
     status = get_context_status()
 
     if not status:
@@ -182,6 +222,15 @@ def check_and_prune():
         }
 
 def main():
+    """Entry point for the auto-context-pruner CLI.
+
+    Parses command-line arguments and runs context check or prune operation.
+    Outputs the result as JSON to stdout.
+
+    Command-line arguments:
+        --check: Check context and prune if needed.
+        --prune: Force prune (save session regardless of context level).
+    """
     import argparse
     parser = argparse.ArgumentParser(description='Auto Context Pruner')
     parser.add_argument('--check', action='store_true', help='Check and prune if needed')

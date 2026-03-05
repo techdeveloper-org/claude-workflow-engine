@@ -214,9 +214,21 @@ def _clear_session_flags(pattern_prefix, session_id):
 
 
 def get_response_content_length(tool_response):
-    """
-    Extract approximate character count from tool response.
-    This measures actual content size instead of using flat per-tool estimates.
+    """Extract the approximate character count from a tool response payload.
+
+    Measures actual content size so context-usage estimates are based on real
+    data rather than flat per-tool heuristics.  Handles three payload shapes:
+      - dict with 'content' string
+      - dict with 'content' as a list of text items
+      - bare string
+
+    Args:
+        tool_response: Raw tool response from Claude Code hook stdin.  May be
+                       a dict, a list, or a plain string.
+
+    Returns:
+        int: Total character count of the textual content, or 0 if the
+             response is empty or has an unrecognised structure.
     """
     if not tool_response:
         return 0
@@ -238,12 +250,16 @@ def get_response_content_length(tool_response):
 
 
 def estimate_context_pct(tool_counts, content_chars=0):
-    """
-    Estimate context window usage % based on actual content size.
+    """Estimate context-window usage as a percentage of the 200k-token limit.
 
-    v2.0.0: Accurate estimation using transcript file + fixed overhead.
+    v2.0.0 accuracy model (from /context analysis):
+      Fixed overhead (system prompt + tools + agents + memory + autocompact):
+        ~44.5% of the context window is always consumed.
+      Dynamic content (messages + tool responses) is estimated from
+        tracked content_chars using a 3.5x multiplier, because hooks only
+        see ~28% of all conversation content (tool responses only).
 
-    Context window breakdown (from /context analysis):
+    Context window breakdown:
       - System prompt:    ~1.5%
       - Tools:            ~8.8%
       - Memory files:     ~16.8%  (CLAUDE.md, skills, etc.)
@@ -251,15 +267,17 @@ def estimate_context_pct(tool_counts, content_chars=0):
       - Skills:           ~0.4%
       - Autocompact buf:  ~16.5%
       FIXED OVERHEAD:     ~44.5%
-
       - Messages:         ~49.9%  (user + Claude responses + tool results)
       DYNAMIC CONTENT:    varies per session
 
-    Hooks only see tool responses (~28% of all content).
-    Messages (user prompts, Claude responses) are invisible to hooks.
-    So we use a 3.5x multiplier on tracked content, or transcript file size.
+    Args:
+        tool_counts (dict): Per-tool call counts from session-progress.json,
+                            used as a fallback when content_chars is 0.
+        content_chars (int): Total character count of all tracked tool
+                             responses accumulated this session.
 
-    Caps at 95% (never report 100%).
+    Returns:
+        int: Estimated context usage percentage capped at 95 (never 100).
     """
     CONTEXT_WINDOW = 200000  # Pro plan token limit
     FIXED_OVERHEAD_PCT = 44.5  # system prompt + tools + agents + memory + skills + autocompact
@@ -308,7 +326,17 @@ def _unlock_file(f):
 
 
 def load_session_progress():
-    """Load current session progress (with file locking for parallel safety)."""
+    """Load the current session progress dict from SESSION_STATE_FILE.
+
+    Uses _lock_file/_unlock_file so parallel PostToolUse hook invocations do
+    not observe a partially written state file.  Returns a fresh default
+    progress structure when the file is missing or unreadable.
+
+    Returns:
+        dict: Progress state containing at minimum 'total_progress',
+              'tool_counts', 'started_at', 'tasks_completed', and
+              'errors_seen'.
+    """
     try:
         if SESSION_STATE_FILE.exists():
             with open(SESSION_STATE_FILE, 'r', encoding='utf-8') as f:
@@ -328,7 +356,15 @@ def load_session_progress():
 
 
 def save_session_progress(state):
-    """Save current session progress (with file locking for parallel safety)."""
+    """Persist the session progress dict to SESSION_STATE_FILE with file locking.
+
+    Creates parent directories if they do not exist.  Uses _lock_file/_unlock_file
+    to prevent data corruption from concurrent PostToolUse hook invocations.
+    Errors are silently swallowed so this function never disrupts the hook flow.
+
+    Args:
+        state (dict): Progress state to persist (must be JSON-serialisable).
+    """
     try:
         SESSION_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(SESSION_STATE_FILE, 'w', encoding='utf-8') as f:
@@ -340,7 +376,13 @@ def save_session_progress(state):
 
 
 def log_tool_entry(entry):
-    """Append tool usage entry to tracker log."""
+    """Append a tool usage entry as a JSONL line to TRACKER_LOG.
+
+    Creates parent directories automatically.  Errors are silently swallowed.
+
+    Args:
+        entry (dict): Tool tracking record to serialise and append.
+    """
     try:
         TRACKER_LOG.parent.mkdir(parents=True, exist_ok=True)
         with open(TRACKER_LOG, 'a', encoding='utf-8') as f:
@@ -350,7 +392,17 @@ def log_tool_entry(entry):
 
 
 def is_error_response(tool_response):
-    """Check if the tool call resulted in an error."""
+    """Determine whether a tool call returned an error response.
+
+    Checks the 'is_error' flag in the response dict and, as a fallback,
+    inspects whether the content string starts with 'error:' or 'failed:'.
+
+    Args:
+        tool_response: Raw tool response from Claude Code hook stdin.
+
+    Returns:
+        bool: True if the response signals an error, False otherwise.
+    """
     if isinstance(tool_response, dict):
         # Check for is_error flag
         if tool_response.get('is_error', False):

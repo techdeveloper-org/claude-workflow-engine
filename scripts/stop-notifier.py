@@ -137,6 +137,14 @@ VOICE_SYSTEM_PROMPT = (
 # =============================================================================
 
 def log_s(msg):
+    """Append a timestamped message to the stop-notifier log file.
+
+    Creates parent directories automatically.  Errors are silently swallowed
+    so logging never crashes the hook.
+
+    Args:
+        msg (str): ASCII-safe message to append.
+    """
     STOP_LOG.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     try:
@@ -151,7 +159,14 @@ def log_s(msg):
 # =============================================================================
 
 def read_hook_stdin():
-    """Read JSON data from Claude Code Stop hook stdin"""
+    """Read JSON data piped by the Claude Code Stop hook via stdin.
+
+    The Stop hook sends a small JSON object.  This function is safe when stdin
+    is a TTY (returns {} instead of blocking).
+
+    Returns:
+        dict: Parsed hook payload, or {} on any read or parse error.
+    """
     try:
         if not sys.stdin.isatty():
             raw = sys.stdin.read()
@@ -205,7 +220,12 @@ def delete_flag(flag_path):
 # =============================================================================
 
 def get_current_session_id():
-    """Get current session ID from .current-session.json"""
+    """Read the active session ID from .current-session.json.
+
+    Returns:
+        str or None: Session ID string (e.g. 'SESSION-20260305-123456-ABCD'),
+                     or None when the file is missing or unreadable.
+    """
     current_session_file = MEMORY_BASE / '.current-session.json'
     if not current_session_file.exists():
         return None
@@ -218,7 +238,15 @@ def get_current_session_id():
 
 
 def _get_session_issues_file():
-    """Get the github-issues.json file for the current session (if it exists)."""
+    """Resolve the path to github-issues.json for the active session.
+
+    Tries to read the session ID from .current-session.json first; falls back
+    to reading session-progress.json when that file is unavailable.
+
+    Returns:
+        Path or None: Path to the github-issues.json file if the session ID
+                      can be determined, or None otherwise.
+    """
     try:
         session_id = get_current_session_id()
         if not session_id:
@@ -532,6 +560,23 @@ def handle_voice_flag(flag_path, event_type, get_default_fn, extra_context=''):
 # =============================================================================
 
 def main():
+    """Stop hook entry point - run session maintenance then trigger voice notifications.
+
+    Executed by Claude Code after every AI response (Stop event).  The function:
+      1. Loads and runs auto-commit-enforcer.py with up to 3 retries.
+      2. Runs auto-save-session.py, archive-old-sessions.py, and
+         failure-detector.py for end-of-response session maintenance.
+      3. Resolves PID-isolated voice flag files in priority order:
+           a. .session-start-voice-{PID}  -> new session greeting
+           b. .task-complete-voice-{PID}  -> task completion notification
+           c. .session-work-done-{PID}    -> all work done wrap-up
+      4. Falls back to legacy shared flag paths for backward compatibility.
+      5. Generates voice messages via OpenRouter LLM or static defaults.
+      6. Launches voice-notifier.py as a detached background process.
+
+    Always exits 0.  Errors in any phase are caught and logged to
+    stop-notifier.log without disrupting subsequent phases.
+    """
     # INTEGRATION: Load git commit policies from scripts/architecture/
     # Retry up to 3 times per policy script. Warn on failure (Stop hook
     # should not hard-break; it runs AFTER the response is sent).

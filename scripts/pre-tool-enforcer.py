@@ -592,9 +592,24 @@ def check_write_edit(tool_name, tool_input):
 
 
 def check_grep(tool_input):
-    """Level 3.6: Grep optimization - warn about missing head_limit. Task-aware.
-    Policy: policies/03-execution-system/06-tool-optimization/tool-usage-optimization-policy.md
-    KB: scripts/architecture/03-execution-system/failure-prevention/failure-kb.json (grep_no_head_limit)"""
+    """Level 3.6: Warn when Grep is called without a head_limit parameter.
+
+    Reads the current flow-trace context to scale the recommended limit: high
+    complexity tasks (>= 10) receive a tighter suggestion (50) because they
+    are more likely to produce large result sets.
+
+    Policy: policies/03-execution-system/06-tool-optimization/
+            tool-usage-optimization-policy.md
+    KB source: scripts/architecture/03-execution-system/failure-prevention/
+               failure-kb.json (pattern: grep_no_head_limit)
+
+    Args:
+        tool_input (dict): Tool parameters from the Grep call.
+
+    Returns:
+        tuple: (hints, blocks) where hints contains warning strings and blocks
+               is always an empty list (this check never blocks).
+    """
     hints = []
     head_limit = tool_input.get('head_limit', 0)
 
@@ -617,7 +632,22 @@ def check_grep(tool_input):
 
 
 def check_read(tool_input):
-    """Level 3.6: Read optimization - hint about offset+limit for large files. Task-aware."""
+    """Level 3.6: Warn when Read is called without offset or limit parameters.
+
+    Scales the advisory message based on task complexity from the cached
+    flow-trace: high complexity tasks (>= 10) get a stronger hint since
+    unbounded reads waste more of the limited context window.
+
+    Policy: policies/03-execution-system/06-tool-optimization/
+            tool-usage-optimization-policy.md
+
+    Args:
+        tool_input (dict): Tool parameters from the Read call.
+
+    Returns:
+        tuple: (hints, blocks) where hints contains advisory strings and blocks
+               is always an empty list (this check never blocks).
+    """
     hints = []
     limit = tool_input.get('limit')
     offset = tool_input.get('offset')

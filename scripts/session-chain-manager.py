@@ -87,9 +87,19 @@ LOGS_SESSION_DIR = MEMORY_BASE / 'logs' / 'sessions'
 # =============================================================================
 
 def _read_session_summary_text(session_id):
-    """
-    Read one-liner summary from session-summary.json with file locking (Loophole #19).
-    Returns the summary_text string or None.
+    """Read the one-liner summary text from session-summary.json.
+
+    Uses _lock_file/_unlock_file (Windows msvcrt file locking) to prevent
+    reading a partially written file when the summary manager is finalising
+    concurrently.
+
+    Args:
+        session_id (str): Session identifier used to locate the summary file
+                          under LOGS_SESSION_DIR/{session_id}/session-summary.json.
+
+    Returns:
+        str or None: The 'summary_text' field from the JSON, or None when the
+                     file is missing or the field is absent.
     """
     summary_file = LOGS_SESSION_DIR / session_id / 'session-summary.json'
     if not summary_file.exists():
@@ -109,7 +119,14 @@ def _read_session_summary_text(session_id):
 # =============================================================================
 
 def log_event(msg):
-    """Log to session-chain.log (ASCII only)"""
+    """Append a timestamped message to the session-chain.log file.
+
+    Creates parent directories automatically.  Content must be ASCII-safe
+    for Windows cp1252 compatibility.  Errors are silently swallowed.
+
+    Args:
+        msg (str): ASCII-safe message to append.
+    """
     CHAIN_LOG.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     try:
@@ -148,7 +165,16 @@ def log_event(msg):
 # =============================================================================
 
 def read_chain_index():
-    """Read the chain index file with file locking (Loophole #19)"""
+    """Read the chain index JSON file with Windows file locking.
+
+    Creates and returns a default empty index structure when the file does not
+    exist yet.  Required keys ('version', 'sessions', 'tag_index') are
+    back-filled if they are missing from an older index file.
+
+    Returns:
+        dict: Chain index with 'version', 'sessions', 'tag_index', and
+              'last_updated' keys.  Returns a safe empty structure on errors.
+    """
     if not CHAIN_INDEX_FILE.exists():
         return {
             "version": "1.0.0",
@@ -172,7 +198,14 @@ def read_chain_index():
 
 
 def write_chain_index(data):
-    """Write the chain index file with file locking (Loophole #19)"""
+    """Write the chain index dict to CHAIN_INDEX_FILE with Windows file locking.
+
+    Stamps 'last_updated' with the current ISO timestamp before writing.
+    Creates parent directories if needed.
+
+    Args:
+        data (dict): Complete chain index to persist (must be JSON-serialisable).
+    """
     data["last_updated"] = datetime.now().isoformat()
     CHAIN_INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -186,7 +219,18 @@ def write_chain_index(data):
 
 
 def ensure_session_entry(index, session_id):
-    """Ensure a session has an entry in the index"""
+    """Ensure the chain index has an entry for session_id, creating one if absent.
+
+    The default entry has None for parent/project/skill/task_type/summary/
+    last_prompt, and empty lists for children/related/tags.
+
+    Args:
+        index (dict): Chain index dict from read_chain_index().
+        session_id (str): Session identifier to ensure exists.
+
+    Returns:
+        dict: The same index dict, guaranteed to contain session_id.
+    """
     if session_id not in index["sessions"]:
         index["sessions"][session_id] = {
             "parent": None,
@@ -208,10 +252,19 @@ def ensure_session_entry(index, session_id):
 # =============================================================================
 
 def link_sessions(child_id, parent_id):
-    """
-    Link a child session to its parent (called on /clear).
-    Parent = the session that was active before /clear.
-    Child = the new session created after /clear.
+    """Link a new child session to its parent session in the chain index.
+
+    Called by clear-session-handler.py immediately after /clear creates a new
+    session.  Sets 'parent' on the child entry and appends child_id to the
+    parent's 'children' list.  Also copies last_prompt, skill, and task_type
+    from the parent's session JSON file when those fields are not yet set.
+
+    Args:
+        child_id (str): New session identifier (created after /clear).
+        parent_id (str): Previous session identifier (active before /clear).
+
+    Returns:
+        bool: True on success; False when either ID is empty or they are equal.
     """
     if not child_id or not parent_id:
         log_event(f"[WARN] link_sessions called with empty IDs: child={child_id}, parent={parent_id}")
@@ -254,9 +307,23 @@ def link_sessions(child_id, parent_id):
 
 def tag_session(session_id, tags, project=None, skill=None, task_type=None,
                 summary=None, last_prompt=None):
-    """
-    Add tags and metadata to a session.
-    Called by 3-level-flow.py after determining task context.
+    """Add tags and optional metadata to a session's chain index entry.
+
+    Called by 3-level-flow.py after the task context (task_type, skill,
+    project) is determined so that sessions can be searched and related by
+    topic.  Duplicate tags are silently ignored.
+
+    Args:
+        session_id (str): Target session identifier.
+        tags (list): List of tag strings to add (lower-cased automatically).
+        project (str, optional): Project name extracted from the cwd.
+        skill (str, optional): Primary skill or agent selected for the session.
+        task_type (str, optional): Classified task type (e.g. 'Backend').
+        summary (str, optional): Human-readable one-liner for the session.
+        last_prompt (str, optional): Most recent user prompt (for context).
+
+    Returns:
+        bool: True on success; False when session_id is falsy.
     """
     if not session_id:
         return False
@@ -296,7 +363,18 @@ def tag_session(session_id, tags, project=None, skill=None, task_type=None,
 
 
 def relate_sessions(session_a, session_b):
-    """Mark two sessions as related (bidirectional)"""
+    """Mark two sessions as related to each other in the chain index.
+
+    Adds each session ID to the other's 'related' list (bidirectional).
+    Duplicate entries are silently ignored.
+
+    Args:
+        session_a (str): First session identifier.
+        session_b (str): Second session identifier.
+
+    Returns:
+        bool: True on success; False when either ID is falsy or both are equal.
+    """
     if not session_a or not session_b or session_a == session_b:
         return False
 
@@ -319,10 +397,26 @@ def relate_sessions(session_a, session_b):
 # =============================================================================
 
 def get_chain_context(session_id, max_ancestors=5, max_related=5):
-    """
-    Get chain context for a session.
-    Returns a summary of parent chain + related sessions.
-    Used by 3-level-flow.py to load context on new session start.
+    """Build a chain context summary for a session.
+
+    Walks up the parent chain (up to max_ancestors ancestors), collects
+    directly related sessions (up to max_related), and finds sessions that
+    share tags with the current session.  Also enriches ancestor entries with
+    rich summary text from session-summary.json when available.
+
+    Used by 3-level-flow.py to provide context continuity at session start.
+
+    Args:
+        session_id (str): Target session identifier.
+        max_ancestors (int): Maximum number of ancestor sessions to walk.
+                             Defaults to 5.
+        max_related (int): Maximum number of related sessions to include.
+                           Defaults to 5.
+
+    Returns:
+        dict or None: Context dict with 'ancestor_chain', 'related_sessions',
+                      'tag_related', and session metadata fields.  Returns None
+                      when session_id is not found in the chain index.
     """
     index = read_chain_index()
 

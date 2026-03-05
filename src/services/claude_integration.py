@@ -1,6 +1,15 @@
 """
-Claude/Anthropic API Integration
-Automatically use user's Claude credentials for session tracking
+Claude/Anthropic API Integration Service.
+
+Provides credential management, API connectivity testing, and automatic
+session tracking for the Claude Insight dashboard. Credentials are
+encrypted at rest using Fernet symmetric encryption.
+
+Classes:
+    ClaudeCredentialsManager: Securely stores and retrieves Anthropic API keys.
+    ClaudeAPIClient: HTTP client for the Anthropic Messages API.
+    AutoSessionTracker: Manages automatic session tracking configuration.
+    LoginHelper: Provides Anthropic login URL and setup instructions.
 """
 
 import os
@@ -17,9 +26,26 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.path_resolver import get_config_dir, get_sessions_dir
 
 class ClaudeCredentialsManager:
-    """Manage Claude/Anthropic API credentials securely"""
+    """Manage Anthropic API credentials securely with Fernet encryption.
+
+    Stores the API key in an encrypted file (claude_credentials.enc) in the
+    application config directory. The symmetric encryption key is stored in a
+    separate file (.encryption_key) with restrictive file permissions (0o600).
+
+    Attributes:
+        config_dir (Path): Config directory resolved by PathResolver.
+        credentials_file (Path): Encrypted credentials file path.
+        key_file (Path): Fernet encryption key file path.
+        cipher (Fernet): Initialized Fernet cipher instance for encrypt/decrypt.
+    """
 
     def __init__(self):
+        """Initialize ClaudeCredentialsManager and set up Fernet encryption.
+
+        Creates the config directory if needed, generates a new encryption key
+        on first run (stored at .encryption_key with 0o600 permissions), and
+        loads the cipher for subsequent operations.
+        """
         self.config_dir = get_config_dir()
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -30,7 +56,15 @@ class ClaudeCredentialsManager:
         self._init_encryption()
 
     def _init_encryption(self):
-        """Initialize encryption key"""
+        """Initialize the Fernet encryption cipher.
+
+        Generates a new key if .encryption_key does not exist (first run) with
+        file permissions set to 0o600 (owner read/write only). Loads the key
+        and creates the Fernet cipher instance.
+
+        Returns:
+            None
+        """
         if not self.key_file.exists():
             # Generate new key
             key = Fernet.generate_key()
@@ -43,7 +77,19 @@ class ClaudeCredentialsManager:
             self.cipher = Fernet(f.read())
 
     def save_api_key(self, api_key, user_email=None):
-        """Save Anthropic API key securely"""
+        """Encrypt and persist the Anthropic API key to disk.
+
+        Stores the key along with optional user email, a timestamp, and
+        status='active' in a JSON blob that is Fernet-encrypted before
+        being written. File permissions are set to 0o600.
+
+        Args:
+            api_key (str): Anthropic API key (should start with 'sk-ant-').
+            user_email (str or None): Associated user email address. Optional.
+
+        Returns:
+            bool: True on success.
+        """
         credentials = {
             'api_key': api_key,
             'user_email': user_email,
@@ -63,7 +109,12 @@ class ClaudeCredentialsManager:
         return True
 
     def get_api_key(self):
-        """Get stored API key"""
+        """Decrypt and return the stored API key.
+
+        Returns:
+            str or None: The decrypted Anthropic API key string, or None if
+                the credentials file does not exist or cannot be decrypted.
+        """
         if not self.credentials_file.exists():
             return None
 
@@ -79,7 +130,12 @@ class ClaudeCredentialsManager:
             return None
 
     def get_credentials(self):
-        """Get full credentials"""
+        """Decrypt and return the full credentials dictionary.
+
+        Returns:
+            dict or None: Credentials dict with keys api_key, user_email,
+                saved_at, status; or None on failure.
+        """
         if not self.credentials_file.exists():
             return None
 
@@ -93,20 +149,44 @@ class ClaudeCredentialsManager:
             return None
 
     def delete_credentials(self):
-        """Delete stored credentials"""
+        """Delete the encrypted credentials file from disk.
+
+        Returns:
+            bool: True always (whether the file existed or not).
+        """
         if self.credentials_file.exists():
             self.credentials_file.unlink()
         return True
 
     def has_credentials(self):
-        """Check if credentials are stored"""
+        """Check whether encrypted credentials are stored on disk.
+
+        Returns:
+            bool: True if the credentials file exists, False otherwise.
+        """
         return self.credentials_file.exists()
 
 
 class ClaudeAPIClient:
-    """Client for Anthropic Claude API"""
+    """HTTP client for the Anthropic Messages API.
+
+    Provides connectivity testing and masked API key display. Automatically
+    loads the stored API key via ClaudeCredentialsManager if no key is
+    provided at construction time.
+
+    Attributes:
+        api_key (str or None): Anthropic API key in use.
+        base_url (str): Anthropic API base URL.
+        headers (dict): Default HTTP request headers including x-api-key.
+    """
 
     def __init__(self, api_key=None):
+        """Initialize ClaudeAPIClient.
+
+        Args:
+            api_key (str or None): Explicit API key. If None, the key is
+                loaded from ClaudeCredentialsManager.
+        """
         self.api_key = api_key or self._get_stored_api_key()
         self.base_url = 'https://api.anthropic.com/v1'
         self.headers = {
@@ -116,12 +196,27 @@ class ClaudeAPIClient:
         }
 
     def _get_stored_api_key(self):
-        """Get API key from storage"""
+        """Load the API key from ClaudeCredentialsManager.
+
+        Returns:
+            str or None: The stored API key, or None if no credentials exist.
+        """
         manager = ClaudeCredentialsManager()
         return manager.get_api_key()
 
     def test_connection(self):
-        """Test API connection"""
+        """Test connectivity to the Anthropic Messages API.
+
+        Sends a minimal 10-token request to claude-3-haiku-20240307 to verify
+        that the API key is valid and the service is reachable.
+
+        Returns:
+            dict: Result with keys:
+                success (bool): True if HTTP 200 was received.
+                message (str): Human-readable status message.
+                model (str): Model name used for the test (on success).
+                error (str): Raw error body or exception message (on failure).
+        """
         try:
             # Test with a simple message
             response = requests.post(
@@ -157,7 +252,17 @@ class ClaudeAPIClient:
             }
 
     def get_account_info(self):
-        """Get account information (if available via API)"""
+        """Return account information including API key validity and masked key.
+
+        Note: The Anthropic API does not yet provide an account info endpoint.
+        This is a placeholder that tests connectivity and masks the key for safe
+        display.
+
+        Returns:
+            dict: With keys:
+                api_key_valid (bool): True if test_connection() succeeds.
+                api_key_masked (str or None): Partially masked key for display.
+        """
         # Note: Anthropic API doesn't have account info endpoint yet
         # This is a placeholder for future implementation
         return {
@@ -166,23 +271,54 @@ class ClaudeAPIClient:
         }
 
     def _mask_api_key(self, api_key):
-        """Mask API key for display"""
+        """Return a masked version of the API key safe for display.
+
+        Shows the first 8 and last 4 characters with '...' in between.
+
+        Args:
+            api_key (str): The full API key string.
+
+        Returns:
+            str: Masked key (e.g. 'sk-ant-a...1234'), or '***' if the key
+                is too short or None.
+        """
         if not api_key or len(api_key) < 10:
             return '***'
         return f"{api_key[:8]}...{api_key[-4:]}"
 
 
 class AutoSessionTracker:
-    """Automatically track Claude sessions"""
+    """Manage automatic Claude session tracking configuration.
+
+    Reads and writes an auto_tracking.json config file to toggle session
+    syncing and record last sync timestamps. Actual session syncing from the
+    Anthropic API is a placeholder pending API endpoint availability.
+
+    Attributes:
+        sessions_dir (Path): Sessions directory resolved by PathResolver.
+        auto_tracking_config (Path): Path to auto_tracking.json config file.
+    """
 
     def __init__(self):
+        """Initialize AutoSessionTracker with resolved directory paths."""
         self.sessions_dir = get_sessions_dir()
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
         self.auto_tracking_config = get_config_dir() / 'auto_tracking.json'
 
     def enable_auto_tracking(self, interval_minutes=5):
-        """Enable automatic session tracking"""
+        """Enable automatic session tracking and persist the configuration.
+
+        Args:
+            interval_minutes (int): Polling interval in minutes. Defaults to 5.
+
+        Returns:
+            dict: The written config dict with keys:
+                enabled (bool): True.
+                interval_minutes (int): The configured interval.
+                last_sync (None): Reset to None on enable.
+                enabled_at (str): ISO timestamp when enabled.
+        """
         config = {
             'enabled': True,
             'interval_minutes': interval_minutes,
@@ -196,7 +332,13 @@ class AutoSessionTracker:
         return config
 
     def disable_auto_tracking(self):
-        """Disable automatic session tracking"""
+        """Disable automatic session tracking and persist the configuration.
+
+        Returns:
+            dict: The written config dict with keys:
+                enabled (bool): False.
+                disabled_at (str): ISO timestamp when disabled.
+        """
         config = {
             'enabled': False,
             'disabled_at': datetime.now().isoformat()
@@ -208,7 +350,13 @@ class AutoSessionTracker:
         return config
 
     def get_tracking_status(self):
-        """Get auto-tracking status"""
+        """Read and return the current auto-tracking configuration.
+
+        Returns:
+            dict: Config dict with at minimum an 'enabled' (bool) key.
+                Returns ``{'enabled': False}`` if the config file does not
+                exist or cannot be parsed.
+        """
         if not self.auto_tracking_config.exists():
             return {'enabled': False}
 
@@ -219,10 +367,17 @@ class AutoSessionTracker:
             return {'enabled': False}
 
     def sync_sessions(self):
-        """
-        Sync sessions from Claude API
-        Note: This is a placeholder - actual implementation depends on
-        Claude API providing session history endpoint
+        """Trigger a manual session sync from the Anthropic API.
+
+        Note: This is a placeholder implementation. The Anthropic API does not
+        yet provide a session history endpoint. When called, updates the
+        last_sync timestamp in the tracking config to simulate a sync.
+
+        Returns:
+            dict: With keys:
+                success (bool): True if an API key is configured.
+                message (str): Human-readable status.
+                synced_at (str): ISO timestamp of the sync (on success).
         """
         # Check if API key is available
         manager = ClaudeCredentialsManager()

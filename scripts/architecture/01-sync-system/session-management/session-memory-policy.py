@@ -70,7 +70,18 @@ PROTECTED_PATHS = {
 # ============================================================================
 
 class SessionLoader:
-    """Load and manage sessions from disk"""
+    """Load and list saved sessions from the session index on disk.
+
+    Attributes:
+        memory_dir (Path): Base ~/.claude/memory directory.
+        sessions_dir (Path): Directory containing session JSON files.
+        index_file (Path): JSON index file tracking all session metadata.
+
+    Key Methods:
+        load_session(session_id): Load full session content by ID.
+        list_recent(limit): Display the N most recent sessions.
+        session_info(session_id): Display metadata without full content.
+    """
 
     def __init__(self):
         self.memory_dir = MEMORY_DIR
@@ -78,7 +89,15 @@ class SessionLoader:
         self.index_file = self.sessions_dir / "session-index.json"
 
     def load_session(self, session_id: str) -> dict:
-        """Load session by ID"""
+        """Load and print the full content of a session by ID.
+
+        Args:
+            session_id (str): The unique session identifier to load.
+
+        Returns:
+            dict: Contains 'metadata' and 'content' keys on success,
+                  or None if the session is not found.
+        """
         print(f"\n{'='*70}")
         print(f"[SEARCH] LOADING SESSION: {session_id}")
         print(f"{'='*70}\n")
@@ -129,7 +148,11 @@ class SessionLoader:
         return {'metadata': session, 'content': content}
 
     def list_recent(self, limit: int = 10):
-        """List recent sessions"""
+        """Print a summary of the N most recent sessions.
+
+        Args:
+            limit (int): Number of most recent sessions to display. Defaults to 10.
+        """
         if not self.index_file.exists():
             print("[CROSS] No sessions found")
             return
@@ -156,7 +179,11 @@ class SessionLoader:
             print()
 
     def session_info(self, session_id: str):
-        """Show session info without full content"""
+        """Print metadata for a session without loading its full content.
+
+        Args:
+            session_id (str): The unique session identifier to look up.
+        """
         if not self.index_file.exists():
             print("[CROSS] Session index not found")
             return
@@ -189,7 +216,24 @@ class SessionLoader:
 # ============================================================================
 
 class SessionState:
-    """Manage session state outside Claude's context"""
+    """Persist and retrieve structured session state for a given project.
+
+    Stores the current task, completed tasks, modified files, key decisions,
+    and pending work in a per-project JSON file under the state directory.
+
+    Attributes:
+        project_name (str): Name of the active project (defaults to cwd name).
+        state_file (Path): JSON file path for this project's state.
+        state (dict): In-memory copy of the current state.
+
+    Key Methods:
+        set_current_task(description): Record the active task.
+        complete_current_task(result): Move current task to completed.
+        add_file_modified(file_path, change_type): Track a modified file.
+        add_decision(type, description, choice): Record a key decision.
+        add_pending_work(description, priority): Queue pending work.
+        get_summary(): Return a compact summary dict for Claude.
+    """
 
     def __init__(self, project_name=None):
         STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -203,7 +247,11 @@ class SessionState:
         self.state = self._load_state()
 
     def _load_state(self):
-        """Load state from file"""
+        """Load state from the project state file, or return a fresh empty state.
+
+        Returns:
+            dict: Existing state from disk, or a new empty state dict.
+        """
         if self.state_file.exists():
             try:
                 return json.loads(self.state_file.read_text(encoding='utf-8'))
@@ -224,7 +272,11 @@ class SessionState:
         }
 
     def _save_state(self):
-        """Save state to file"""
+        """Persist the current in-memory state dict to the project state file.
+
+        Returns:
+            bool: True if saved successfully, False on any IO error.
+        """
         self.state['last_updated'] = datetime.now().isoformat()
 
         try:
@@ -235,7 +287,14 @@ class SessionState:
             return False
 
     def set_current_task(self, task_description):
-        """Set current task"""
+        """Record a task description as the currently active task.
+
+        Args:
+            task_description (str): Human-readable description of the active task.
+
+        Returns:
+            bool: True if state was saved successfully.
+        """
         self.state['current_task'] = {
             'description': task_description,
             'started_at': datetime.now().isoformat()
@@ -243,7 +302,14 @@ class SessionState:
         return self._save_state()
 
     def complete_current_task(self, result=None):
-        """Mark current task as complete"""
+        """Move the current task to completed_tasks and clear the active task slot.
+
+        Args:
+            result (str, optional): Summary of the task outcome.
+
+        Returns:
+            bool: True if the task was moved successfully; False if no task was active.
+        """
         if self.state['current_task']:
             completed = {
                 **self.state['current_task'],
@@ -256,7 +322,16 @@ class SessionState:
         return False
 
     def add_file_modified(self, file_path, change_type='modified'):
-        """Add modified file to state"""
+        """Track a file modification in the session state.
+
+        Args:
+            file_path (str or Path): Path of the file that was changed.
+            change_type (str): Type of change (e.g., 'modified', 'created',
+                               'deleted'). Defaults to 'modified'.
+
+        Returns:
+            bool: True if state was saved successfully.
+        """
         file_entry = {
             'path': str(file_path),
             'change_type': change_type,
@@ -272,7 +347,16 @@ class SessionState:
         return self._save_state()
 
     def add_decision(self, decision_type, description, choice):
-        """Add key decision to state"""
+        """Record a key architectural or implementation decision.
+
+        Args:
+            decision_type (str): Category label (e.g., 'architecture', 'library').
+            description (str): What the decision was about.
+            choice (str): The option that was selected.
+
+        Returns:
+            bool: True if state was saved successfully.
+        """
         decision = {
             'type': decision_type,
             'description': description,
@@ -283,7 +367,16 @@ class SessionState:
         return self._save_state()
 
     def add_pending_work(self, description, priority='medium'):
-        """Add pending work item"""
+        """Add a pending work item to the session state.
+
+        Args:
+            description (str): Human-readable description of the work item.
+            priority (str): Priority level ('high', 'medium', 'low').
+                            Defaults to 'medium'.
+
+        Returns:
+            bool: True if state was saved successfully.
+        """
         work_item = {
             'description': description,
             'priority': priority,
@@ -293,7 +386,14 @@ class SessionState:
         return self._save_state()
 
     def complete_pending_work(self, description):
-        """Remove pending work item"""
+        """Remove a pending work item by description match.
+
+        Args:
+            description (str): Description of the work item to remove.
+
+        Returns:
+            bool: True if state was saved successfully.
+        """
         self.state['pending_work'] = [
             w for w in self.state['pending_work']
             if w['description'] != description
@@ -301,21 +401,51 @@ class SessionState:
         return self._save_state()
 
     def set_context(self, key, value):
-        """Set context value"""
+        """Store an arbitrary key-value pair in the session context dict.
+
+        Args:
+            key (str): Context key name.
+            value: Any JSON-serializable value.
+
+        Returns:
+            bool: True if state was saved successfully.
+        """
         self.state['context'][key] = value
         return self._save_state()
 
     def get_context(self, key, default=None):
-        """Get context value"""
+        """Retrieve a value from the session context dict.
+
+        Args:
+            key (str): Context key name.
+            default: Value to return if key is not present.
+
+        Returns:
+            The stored value for key, or default if not found.
+        """
         return self.state['context'].get(key, default)
 
     def set_metadata(self, key, value):
-        """Set metadata value"""
+        """Store an arbitrary key-value pair in the session metadata dict.
+
+        Args:
+            key (str): Metadata key name.
+            value: Any JSON-serializable value.
+
+        Returns:
+            bool: True if state was saved successfully.
+        """
         self.state['metadata'][key] = value
         return self._save_state()
 
     def get_summary(self):
-        """Get session summary for Claude"""
+        """Build a compact summary dict suitable for injection into Claude's context.
+
+        Returns:
+            dict: Contains 'project', 'current_task', 'progress' counts,
+                  and optionally 'recent_completed', 'recent_files',
+                  and 'pending_work' lists.
+        """
         current_task = self.state['current_task']
         completed_count = len(self.state['completed_tasks'])
         files_count = len(self.state['files_modified'])
@@ -351,11 +481,19 @@ class SessionState:
         return summary
 
     def get_full_state(self):
-        """Get full state"""
+        """Return the complete raw state dictionary.
+
+        Returns:
+            dict: Full state with all fields.
+        """
         return self.state
 
     def clear_state(self):
-        """Clear all state"""
+        """Reset all session state fields to their empty defaults.
+
+        Returns:
+            bool: True if the cleared state was saved successfully.
+        """
         self.state = {
             'project_name': self.project_name,
             'created_at': datetime.now().isoformat(),
@@ -376,7 +514,14 @@ class SessionState:
 # ============================================================================
 
 def get_protected_files():
-    """Get list of all protected files"""
+    """Build a categorized dict of all files under memory protection.
+
+    Scans sessions, policies, logs, and global docs directories.
+
+    Returns:
+        dict: Maps category name (str) to a list of absolute file paths (str).
+              Categories are 'sessions', 'policies', 'logs', 'global_docs'.
+    """
     protected = {}
 
     # Sessions
@@ -418,7 +563,11 @@ def get_protected_files():
 
 
 def verify_protection():
-    """Verify that all protected paths exist and are accessible"""
+    """Print a formatted verification report of all protected file categories.
+
+    Counts total protected files, total protected size (KB), and lists the
+    status of each category (sessions, policies, logs, global_docs).
+    """
     print("\n" + "=" * 70)
     print("[SHIELD] SESSION MEMORY PROTECTION VERIFICATION")
     print("=" * 70)
@@ -465,7 +614,12 @@ def verify_protection():
 
 
 def list_protected_files(verbose=False):
-    """List all protected files"""
+    """Print the list of all protected files, optionally showing file sizes.
+
+    Args:
+        verbose (bool): If True, include file sizes (KB) next to each path.
+                        Defaults to False.
+    """
     print("\n" + "=" * 70)
     print("[CLIPBOARD] PROTECTED FILES LIST")
     print("=" * 70)
@@ -502,7 +656,12 @@ def list_protected_files(verbose=False):
 # ============================================================================
 
 def log_policy_hit(action, context=""):
-    """Log policy execution"""
+    """Append a timestamped entry to the policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
+        context (str): Optional human-readable context or detail string.
+    """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"[{timestamp}] session-memory-policy | {action} | {context}\n"
 
@@ -516,7 +675,13 @@ def log_policy_hit(action, context=""):
 # ============================================================================
 
 def validate():
-    """Validate policy compliance"""
+    """Check that the session memory policy preconditions are met.
+
+    Ensures the sessions directory exists and counts available sessions.
+
+    Returns:
+        bool: True if validation succeeds, False on any exception.
+    """
     try:
         SESSION_DIR.mkdir(parents=True, exist_ok=True)
         session_count = len(list(SESSION_DIR.glob("session-*.json")))
@@ -528,7 +693,13 @@ def validate():
 
 
 def report():
-    """Generate compliance report"""
+    """Generate a compliance report for the session memory policy.
+
+    Returns:
+        dict: Contains 'status', 'policy', 'total_sessions',
+              'total_protected_files', and 'timestamp'.
+              Returns {'status': 'error', ...} on failure.
+    """
     try:
         SESSION_DIR.mkdir(parents=True, exist_ok=True)
         sessions = list(SESSION_DIR.glob("session-*.json"))
@@ -550,15 +721,20 @@ def report():
 
 
 def enforce():
-    """
-    Main policy enforcement function.
+    """Activate the session memory policy and protect all session data.
 
-    Consolidates session loading, state management, and memory protection from 3 old scripts:
+    Consolidates session loading, state management, and memory protection
+    from 3 old scripts:
     - session-loader.py: Load sessions
     - session-state.py: Manage state
     - protect-session-memory.py: Protect memory
 
-    Returns: dict with status and results
+    Sets restrictive permissions on session directories on Unix systems
+    and logs the protected file count.
+
+    Returns:
+        dict: Contains 'status' ('success' or 'error'), 'sessions' count,
+              and 'protected_files' count. On error, contains 'message'.
     """
     try:
         log_policy_hit("ENFORCE_START", "session-memory-enforcement")

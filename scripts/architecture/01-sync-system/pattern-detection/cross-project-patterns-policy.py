@@ -113,7 +113,13 @@ PATTERN_KEYWORDS = {
 # ============================================================================
 
 def load_patterns():
-    """Load existing patterns from file."""
+    """Load the cross-project patterns data from disk.
+
+    Returns:
+        dict: Contains 'patterns' list and 'metadata' dict.
+              Returns a default empty structure if the file does not exist
+              or cannot be parsed.
+    """
     if not PATTERNS_FILE.exists():
         return {"patterns": [], "metadata": {
             "last_analysis": None,
@@ -131,7 +137,11 @@ def load_patterns():
 
 
 def save_patterns(patterns_data):
-    """Save patterns to file."""
+    """Persist the patterns data dict to disk, updating last_analysis timestamp.
+
+    Args:
+        patterns_data (dict): Patterns data with 'patterns' list and 'metadata' dict.
+    """
     patterns_data['metadata']['last_analysis'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     PATTERNS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -140,7 +150,15 @@ def save_patterns(patterns_data):
 
 
 def get_project_sessions(project_dir):
-    """Get all session content for a project."""
+    """Read and concatenate all session text for a single project directory.
+
+    Args:
+        project_dir (Path): Directory containing the project's session files.
+
+    Returns:
+        str: Lowercased combined text from project-summary.md and all
+             session-*.md files. Empty string if no readable content.
+    """
     content = []
 
     summary_file = project_dir / 'project-summary.md'
@@ -162,7 +180,16 @@ def get_project_sessions(project_dir):
 
 
 def detect_keywords_in_content(content, keywords_dict):
-    """Detect which keywords appear in content."""
+    """Count how many times each keyword subcategory appears in content.
+
+    Args:
+        content (str): Text to search (should be lowercased).
+        keywords_dict (dict): Mapping of category to keyword list or
+                              subcategory -> keyword list.
+
+    Returns:
+        dict: Mapping of detected item name to occurrence count.
+    """
     detected = {}
 
     for category, keywords in keywords_dict.items():
@@ -303,7 +330,18 @@ def show_patterns():
 # ============================================================================
 
 def find_relevant_patterns(topic):
-    """Find patterns relevant to a topic."""
+    """Search the stored patterns for entries relevant to a given topic.
+
+    Scores each pattern by exact match, substring match, and category
+    keyword heuristics, then returns them sorted by relevance.
+
+    Args:
+        topic (str): Topic keyword to match against pattern names and types.
+
+    Returns:
+        list[dict]: Patterns sorted by descending relevance score, or None
+                    if no patterns data is available.
+    """
     patterns_data = load_patterns()
 
     if not patterns_data or not patterns_data.get('patterns'):
@@ -342,7 +380,11 @@ def find_relevant_patterns(topic):
 
 
 def apply_patterns(topic):
-    """Apply relevant patterns and show suggestions."""
+    """Print pattern suggestions most relevant to a topic.
+
+    Args:
+        topic (str): The topic or technology to search for patterns about.
+    """
     patterns = find_relevant_patterns(topic)
 
     if not patterns:
@@ -386,7 +428,11 @@ def apply_patterns(topic):
 
 
 def suggest_patterns(topic):
-    """Suggest patterns related to a topic."""
+    """Print all stored patterns whose name or type contains the given topic.
+
+    Args:
+        topic (str): The topic keyword to filter patterns by.
+    """
     patterns_data = load_patterns()
 
     if not patterns_data or not patterns_data.get('patterns'):
@@ -425,7 +471,12 @@ def suggest_patterns(topic):
 # ============================================================================
 
 def log_policy_hit(action, context=""):
-    """Log policy execution"""
+    """Append a timestamped entry to the policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
+        context (str): Optional human-readable context or detail string.
+    """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"[{timestamp}] cross-project-patterns-policy | {action} | {context}\n"
 
@@ -439,7 +490,11 @@ def log_policy_hit(action, context=""):
 # ============================================================================
 
 def validate():
-    """Validate policy compliance"""
+    """Check that the cross-project patterns policy preconditions are met.
+
+    Returns:
+        bool: True if validation succeeds, False on any exception.
+    """
     try:
         patterns_data = load_patterns()
         log_policy_hit("VALIDATE", f"patterns={len(patterns_data.get('patterns', []))}")
@@ -450,7 +505,13 @@ def validate():
 
 
 def report():
-    """Generate compliance report"""
+    """Generate a compliance report for the cross-project patterns policy.
+
+    Returns:
+        dict: Contains 'status', 'policy', 'total_patterns',
+              'projects_analyzed', 'last_analysis', and 'timestamp'.
+              Returns {'status': 'error', ...} on failure.
+    """
     try:
         patterns_data = load_patterns()
 
@@ -470,14 +531,17 @@ def report():
 
 
 def enforce():
-    """
-    Main policy enforcement function.
+    """Activate the cross-project patterns policy.
 
     Consolidates pattern detection and application from 2 old scripts:
     - detect-patterns.py: Analyze and detect patterns
     - apply-patterns.py: Apply/suggest patterns
 
-    Returns: dict with status and results
+    Loads the existing patterns and logs the active pattern count.
+
+    Returns:
+        dict: Contains 'status' ('success' or 'error') and 'patterns' count.
+              On error, contains 'message'.
     """
     try:
         log_policy_hit("ENFORCE_START", "cross-project-patterns-enforcement")

@@ -1,6 +1,21 @@
 """
-Claude Credentials Routes
-Manage Anthropic API credentials and auto-session tracking
+Claude Credentials Routes for Claude Insight Dashboard.
+
+Provides Flask Blueprint routes for managing Anthropic API credentials and
+controlling automatic session tracking. All credential data is stored and
+retrieved via ClaudeCredentialsManager which encrypts the API key at rest.
+
+Routes:
+    GET  /claude-credentials                    - Credentials management UI
+    POST /api/claude/credentials/save           - Save/update API key
+    POST /api/claude/credentials/test           - Test API connectivity
+    POST /api/claude/credentials/delete         - Remove stored credentials
+    GET  /api/claude/credentials/status         - Current credential status
+    POST /api/claude/auto-tracking/enable       - Enable auto session tracking
+    POST /api/claude/auto-tracking/disable      - Disable auto session tracking
+    GET  /api/claude/auto-tracking/status       - Auto-tracking status
+    POST /api/claude/sessions/sync              - Manually trigger session sync
+    GET  /api/claude/login-info                 - Anthropic login helper URLs
 """
 
 from flask import Blueprint, request, jsonify, render_template, session
@@ -13,9 +28,20 @@ from services.claude_integration import (
 
 claude_creds_bp = Blueprint('claude_credentials', __name__)
 
+
 @claude_creds_bp.route('/claude-credentials')
 def credentials_page():
-    """Claude credentials management page"""
+    """Render the Claude credentials management page.
+
+    HTTP Method: GET
+    Route: /claude-credentials
+
+    Retrieves the current credential status and auto-tracking state, then
+    renders the credentials template with that context.
+
+    Returns:
+        str: Rendered HTML for the claude_credentials.html template.
+    """
     has_creds = credentials_manager.has_credentials()
     credentials = credentials_manager.get_credentials() if has_creds else None
     tracking_status = auto_tracker.get_tracking_status()

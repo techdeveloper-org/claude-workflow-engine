@@ -33,7 +33,12 @@ LOG_FILE = MEMORY_DIR / "logs" / "policy-hits.log"
 
 
 def log_policy_hit(action, context=""):
-    """Log policy execution"""
+    """Append a timestamped entry to the policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
+        context (str): Optional human-readable context or detail string.
+    """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     try:
         LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -44,7 +49,14 @@ def log_policy_hit(action, context=""):
 
 
 def validate():
-    """Validate policy compliance"""
+    """Check that the anti-hallucination policy preconditions are met.
+
+    Ensures the base memory directory exists and the policy infrastructure
+    is ready for hallucination prevention enforcement.
+
+    Returns:
+        bool: True if validation succeeds, False on any exception.
+    """
     try:
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
         log_policy_hit("VALIDATE", "anti-hallucination-enforcement-ready")
@@ -55,7 +67,16 @@ def validate():
 
 
 def report():
-    """Generate compliance report"""
+    """Generate a compliance report for the anti-hallucination enforcement policy.
+
+    Returns a structured dictionary describing the three mandatory phases and
+    key features of the hallucination prevention system.
+
+    Returns:
+        dict: Report containing 'status', 'policy', 'description', 'phases',
+              'features', and 'timestamp'. Returns {'status': 'error', 'message': ...}
+              on failure.
+    """
     try:
         report_data = {
             "status": "success",
@@ -82,7 +103,16 @@ def report():
 
 
 def enforce():
-    """Main policy enforcement function"""
+    """Activate the anti-hallucination enforcement policy.
+
+    Initializes the policy, ensures the memory directory is ready, and logs
+    the enforcement event. Called by 3-level-flow.py to ensure the mandatory
+    Think -> Search -> Verify process is active before responses are generated.
+
+    Returns:
+        dict: Result with 'status' ('success' or 'error') and 'policy' name.
+              On error, 'message' key contains the exception string.
+    """
     try:
         log_policy_hit("ENFORCE_START", "anti-hallucination-enforcement")
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)

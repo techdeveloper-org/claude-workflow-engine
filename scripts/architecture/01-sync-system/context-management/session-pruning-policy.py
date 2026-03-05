@@ -57,7 +57,25 @@ PRUNE_LOG = MEMORY_DIR / "logs" / "context-pruning.log"
 # ============================================================================
 
 class ContextMonitor:
-    """Enhanced context monitoring with actionable recommendations"""
+    """Monitors current context window usage and produces actionable recommendations.
+
+    Reads context percentage from persisted files, classifies usage into
+    green/yellow/orange/red levels, and returns structured recommendations
+    for compaction or cleanup.
+
+    Attributes:
+        memory_dir (Path): Base directory for all memory and state files.
+        context_file (Path): JSON file storing the latest context percentage.
+        estimate_file (Path): Plain-text fallback estimate file.
+        thresholds (dict): Mapping of level names to percentage cutoffs.
+
+    Key Methods:
+        get_context_percentage(): Read the current percentage from disk.
+        get_status_level(percentage): Classify a percentage into a named level.
+        get_recommendations(percentage): Return actionable bullet points.
+        get_current_status(): Return a full status dict with all info.
+        update_percentage(percentage): Write a new percentage to disk.
+    """
 
     def __init__(self):
         self.memory_dir = MEMORY_DIR
@@ -73,7 +91,14 @@ class ContextMonitor:
         }
 
     def get_context_percentage(self):
-        """Get current context usage percentage"""
+        """Read the current context usage percentage from disk.
+
+        Tries the JSON context file first; falls back to the plain-text
+        estimate file. Returns 0 if neither is readable.
+
+        Returns:
+            float: Context usage as a percentage (0-100).
+        """
         if self.context_file.exists():
             try:
                 data = json.loads(self.context_file.read_text())
@@ -91,7 +116,14 @@ class ContextMonitor:
         return 0
 
     def get_status_level(self, percentage):
-        """Get status level based on percentage"""
+        """Classify a context percentage into a named urgency level.
+
+        Args:
+            percentage (float): Context usage percentage (0-100).
+
+        Returns:
+            str: One of 'green', 'yellow', 'orange', or 'red'.
+        """
         if percentage < self.thresholds['green']:
             return 'green'
         elif percentage < self.thresholds['yellow']:
@@ -102,7 +134,14 @@ class ContextMonitor:
             return 'red'
 
     def get_recommendations(self, percentage):
-        """Get actionable recommendations based on usage"""
+        """Return a list of actionable recommendation strings for the given usage.
+
+        Args:
+            percentage (float): Context usage percentage (0-100).
+
+        Returns:
+            list[str]: Human-readable recommendation strings, one per bullet.
+        """
         level = self.get_status_level(percentage)
         recommendations = []
 
@@ -130,7 +169,16 @@ class ContextMonitor:
         return recommendations
 
     def get_current_status(self):
-        """Get complete current status"""
+        """Build and return the complete current context status dict.
+
+        Reads the current percentage, derives level and recommendations,
+        and optionally adds cache entry count and active session count.
+
+        Returns:
+            dict: Contains 'percentage', 'level', 'thresholds',
+                  'recommendations', 'timestamp', and optionally
+                  'cache_entries' and 'active_sessions'.
+        """
         percentage = self.get_context_percentage()
         level = self.get_status_level(percentage)
         recommendations = self.get_recommendations(percentage)
@@ -164,7 +212,14 @@ class ContextMonitor:
         return status
 
     def update_percentage(self, percentage):
-        """Update context percentage"""
+        """Write a new context percentage value to the context usage file.
+
+        Args:
+            percentage (float): New context usage percentage to persist.
+
+        Returns:
+            bool: True if written successfully, False on any IO error.
+        """
         data = {
             'percentage': percentage,
             'level': self.get_status_level(percentage),
@@ -184,7 +239,12 @@ class ContextMonitor:
 # ============================================================================
 
 def log_policy_hit(action, context=""):
-    """Log policy execution"""
+    """Append a timestamped entry to the policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
+        context (str): Optional human-readable context or detail string.
+    """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] session-pruning-policy | {action} | {context}\n"
 
@@ -197,7 +257,14 @@ def log_policy_hit(action, context=""):
 
 
 def log_prune_event(event_type, context_percent, details=""):
-    """Log pruning event"""
+    """Append a pruning event entry to the context-pruning log.
+
+    Args:
+        event_type (str): Event classification (e.g., 'CHECK', 'WARNING',
+                          'ALERT', 'CRITICAL').
+        context_percent (float): Current context usage percentage.
+        details (str): Optional additional detail string.
+    """
     try:
         PRUNE_LOG.parent.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -214,7 +281,16 @@ def log_prune_event(event_type, context_percent, details=""):
 # ============================================================================
 
 def get_cleanup_strategy(level="moderate"):
-    """Get cleanup strategy based on level"""
+    """Return the cleanup strategy configuration for the given urgency level.
+
+    Args:
+        level (str): Cleanup level - one of 'light', 'moderate', or 'aggressive'.
+                     Defaults to 'moderate'.
+
+    Returns:
+        dict: Strategy dict with 'description', 'what_to_keep',
+              'what_to_remove', and 'compaction' keys.
+    """
     strategies = {
         "light": {
             "description": "Light Cleanup (70-84% context)",
@@ -282,7 +358,17 @@ def get_cleanup_strategy(level="moderate"):
 # ============================================================================
 
 def check_and_prune():
-    """Check context and prune if needed"""
+    """Check current context usage and recommend pruning if thresholds are exceeded.
+
+    Uses ContextMonitor to determine the current percentage, then classifies the
+    result into one of four zones (green/yellow/orange/red) with appropriate
+    messages and action recommendations.
+
+    Returns:
+        dict: Contains 'checked' (bool), 'prune_needed' (bool), 'percentage',
+              'level', 'message', and optionally 'suggestion', 'action',
+              or 'strategy' keys. On error, 'checked' is False.
+    """
     monitor = ContextMonitor()
     status = monitor.get_current_status()
 
@@ -346,7 +432,14 @@ def check_and_prune():
 # ============================================================================
 
 def update_context_stats(percentage):
-    """Update context statistics"""
+    """Persist the latest context usage percentage to the context stats file.
+
+    Args:
+        percentage (float): Current context usage percentage to record.
+
+    Returns:
+        bool: True if saved successfully, False on any IO error.
+    """
     try:
         CONTEXT_STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
@@ -365,7 +458,11 @@ def update_context_stats(percentage):
 
 
 def get_session_count():
-    """Get total session count"""
+    """Count the number of saved session JSON files in the sessions directory.
+
+    Returns:
+        int: Number of session-*.json files found, or 0 on error.
+    """
     try:
         SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         sessions = list(SESSIONS_DIR.glob("session-*.json"))
@@ -379,7 +476,14 @@ def get_session_count():
 # ============================================================================
 
 def validate():
-    """Validate policy compliance"""
+    """Check that the session pruning policy preconditions are met.
+
+    Ensures the sessions directory, memory directory, and log directory all
+    exist and are accessible.
+
+    Returns:
+        bool: True if validation succeeds, False on any exception.
+    """
     try:
         log_policy_hit("VALIDATE", "session-pruning-ready")
 
@@ -395,7 +499,15 @@ def validate():
 
 
 def report():
-    """Generate compliance report"""
+    """Generate a compliance report for the session pruning policy.
+
+    Reads current context status and session count to build the report.
+
+    Returns:
+        dict: Contains 'status', 'policy', 'total_sessions',
+              'context_percentage', 'context_level', 'context_stats',
+              and 'timestamp'. Returns {'status': 'error', ...} on failure.
+    """
     try:
         monitor = ContextMonitor()
         status = monitor.get_current_status()
@@ -426,8 +538,7 @@ def report():
 
 
 def enforce():
-    """
-    Main policy enforcement function.
+    """Activate the session pruning policy and run context monitoring.
 
     Consolidates logic from 5 old scripts:
     - auto-context-pruner.py: Auto-prune context
@@ -436,7 +547,13 @@ def enforce():
     - monitor-and-cleanup-context.py: Combined monitoring
     - update-context-usage.py: Update statistics
 
-    Returns: dict with status and results
+    Called by 3-level-flow.py on every prompt to monitor context usage,
+    determine if pruning is needed, and update persistent context stats.
+
+    Returns:
+        dict: Contains 'status' ('success' or 'error'), 'session_count',
+              'context_percentage', 'context_level', 'prune_needed',
+              and 'prune_message'. On error, contains 'message'.
     """
     try:
         log_policy_hit("ENFORCE_START", "session-pruning-enforcement")

@@ -91,7 +91,12 @@ PREFERENCE_PATTERNS = {
 
 
 def log_policy_hit(action, context=""):
-    """Log policy execution"""
+    """Append a timestamped entry to the policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
+        context (str): Optional human-readable context or detail string.
+    """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] user-preferences-policy | {action} | {context}\n"
 
@@ -104,7 +109,12 @@ def log_policy_hit(action, context=""):
 
 
 def log_daemon(action, message):
-    """Log daemon activity"""
+    """Log a preference-tracker daemon activity to both daemon log and policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'AUTO-TRACK').
+        message (str): Descriptive message for the log entry.
+    """
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         log_entry = f"[{timestamp}] PREF-TRACKER-DAEMON | {action} | {message}\n"
@@ -119,7 +129,12 @@ def log_daemon(action, message):
 
 
 def load_preferences():
-    """Load current preferences from file."""
+    """Load the current preferences JSON from disk.
+
+    Returns:
+        dict: Parsed preferences data, or None if the file does not exist
+              or cannot be parsed.
+    """
     if not PREFS_FILE.exists():
         return None
 
@@ -131,7 +146,12 @@ def load_preferences():
 
 
 def save_preferences(prefs):
-    """Save preferences back to file."""
+    """Write preferences dict to the preferences file, updating last_updated timestamp.
+
+    Args:
+        prefs (dict): Preferences dict with metadata sub-dict containing
+                      a 'last_updated' field.
+    """
     prefs['metadata']['last_updated'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(PREFS_FILE, 'w', encoding='utf-8') as f:
@@ -139,7 +159,15 @@ def save_preferences(prefs):
 
 
 def get_preference(category):
-    """Get a specific preference value."""
+    """Retrieve the learned value for a specific preference category.
+
+    Args:
+        category (str): The preference key to look up (e.g., 'testing',
+                        'api_style', 'commit_frequency').
+
+    Returns:
+        The stored preference value, or None if not learned yet.
+    """
     prefs = load_preferences()
     if not prefs:
         return None
@@ -152,7 +180,14 @@ def get_preference(category):
 
 
 def has_preference(category):
-    """Check if a preference has been learned."""
+    """Check whether a preference has been learned for the given category.
+
+    Args:
+        category (str): The preference key to check.
+
+    Returns:
+        bool: True if a value has been learned for category, False otherwise.
+    """
     value = get_preference(category)
     return value is not None
 
@@ -210,7 +245,14 @@ def show_all_preferences():
 
 
 def analyze_logs_for_preferences():
-    """Analyze policy logs to detect user preferences"""
+    """Scan the last 500 policy-hits log entries to detect user preference signals.
+
+    Matches log lines against PREFERENCE_PATTERNS keyword lists.
+
+    Returns:
+        dict: Maps category name to a sub-dict of {value: count} pairs.
+              Empty dict if the log file does not exist or cannot be read.
+    """
     policy_log_file = Path.home() / ".claude" / "memory" / "logs" / "policy-hits.log"
 
     if not policy_log_file.exists():
@@ -246,7 +288,15 @@ def analyze_logs_for_preferences():
 
 
 def get_strongest_preference(category_prefs):
-    """Get the strongest preference from detected patterns"""
+    """Return the most frequently detected preference value for a category.
+
+    Args:
+        category_prefs (dict): Mapping of value -> count for one category.
+
+    Returns:
+        tuple: (strongest_value, count) where strongest_value is the key
+               with the highest count. Returns (None, 0) for empty input.
+    """
     if not category_prefs:
         return None, 0
 
@@ -274,12 +324,34 @@ def load_existing_preferences():
 
 
 def should_track_preference(category, value, count):
-    """Determine if preference should be tracked/learned"""
+    """Determine whether a detected preference signal meets the tracking threshold.
+
+    Args:
+        category (str): The preference category name.
+        value (str): The detected preference value.
+        count (int): Number of times the signal was observed.
+
+    Returns:
+        bool: True if count >= 2 (minimum observation threshold).
+    """
     return count >= 2
 
 
 def track_preference(category, value):
-    """Track a user preference choice. After threshold occurrences, save as global preference."""
+    """Record a preference choice and promote it to global if threshold is reached.
+
+    Appends the choice to learning_data. Once the same value is observed
+    >= learning_threshold times, it is saved as the global preference for
+    the category.
+
+    Args:
+        category (str): The preference category to track.
+        value (str): The observed preference value.
+
+    Returns:
+        bool: True if tracking succeeded, False if category is unknown or
+              preferences file is missing.
+    """
     prefs = load_preferences()
     if not prefs:
         print("Error: Preferences file not initialized", file=sys.stderr)
@@ -345,7 +417,15 @@ def track_preference(category, value):
 
 
 def process_detected_preferences(detection_result):
-    """Process detected preferences and track them"""
+    """Process the output of analyze_logs_for_preferences and track strong signals.
+
+    Args:
+        detection_result (dict): Output from the detection step with 'detected'
+                                 and 'existing' sub-dicts.
+
+    Returns:
+        int: Number of new preferences successfully tracked.
+    """
     if not detection_result:
         return 0
 
@@ -385,7 +465,13 @@ def process_detected_preferences(detection_result):
 
 
 def validate():
-    """Validate policy compliance"""
+    """Check that the user preferences policy preconditions are met.
+
+    Ensures the preferences file directory exists and is writable.
+
+    Returns:
+        bool: True if validation succeeds, False on any exception.
+    """
     try:
         log_policy_hit("VALIDATE", "user-preferences-ready")
         PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -397,7 +483,13 @@ def validate():
 
 
 def report():
-    """Generate compliance report"""
+    """Generate a compliance report for the user preferences policy.
+
+    Returns:
+        dict: Contains 'status', 'policy', 'total_preferences',
+              'categories', and 'timestamp'.
+              Returns {'status': 'error', ...} on failure.
+    """
     try:
         prefs = load_preferences()
         pref_count = 0
@@ -423,8 +515,7 @@ def report():
 
 
 def enforce():
-    """
-    Main policy enforcement function.
+    """Activate the user preferences policy.
 
     Consolidates preference loading, detection, and tracking from 4 old scripts:
     - load-preferences.py: Load preferences
@@ -432,7 +523,12 @@ def enforce():
     - track-preference.py: Track and learn
     - preference-auto-tracker.py: Auto-track daemon
 
-    Returns: dict with status and results
+    Creates the preferences file with empty defaults if it does not exist,
+    then loads and counts all currently learned preferences.
+
+    Returns:
+        dict: Contains 'status' ('success' or 'error') and
+              'preferences_count'. On error, contains 'message'.
     """
     try:
         log_policy_hit("ENFORCE_START", "user-preferences-enforcement")

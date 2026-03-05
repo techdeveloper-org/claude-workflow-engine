@@ -58,7 +58,23 @@ LOG_FILE = MEMORY_DIR / "logs" / "policy-hits.log"
 # ============================================================================
 
 class PromptGenerator:
-    """Generates and structures prompts with comprehensive multi-phase analysis"""
+    """Generates and structures prompts using a three-phase analysis pipeline.
+
+    Implements the THINKING -> INFORMATION GATHERING -> VERIFICATION flow
+    to produce enhanced prompts with task type, entities, operations, and
+    context analysis injected into the output.
+
+    Attributes:
+        memory_dir (Path): Base ~/.claude/memory directory.
+        workspace (Path): Root workspace directory for project context.
+        generation_log (list): Log of generation events for this instance.
+
+    Key Methods:
+        generate(user_message): Main entry point; returns full structured prompt dict.
+        generate_structured_prompt(user_input): Run all phases and return combined result.
+        analyze_request(user_message): Break message into task_type, entities, etc.
+        estimate_complexity(message): Score complexity from 1-10.
+    """
 
     def __init__(self):
         self.memory_dir = MEMORY_DIR
@@ -67,7 +83,15 @@ class PromptGenerator:
         self.generation_log = []
 
     def think_about_request(self, user_message: str) -> Dict:
-        """PHASE 1: THINKING - Understand what's needed"""
+        """Phase 1: Understand the request intent and plan the information search.
+
+        Args:
+            user_message (str): Raw user message to analyze.
+
+        Returns:
+            dict: Contains 'intent', 'sub_questions', 'information_needed',
+                  and 'user_message'.
+        """
         message_lower = user_message.lower()
 
         # Determine intent from message

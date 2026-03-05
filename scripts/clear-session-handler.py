@@ -202,7 +202,14 @@ def _init_window_isolation():
 # =============================================================================
 
 def log_event(msg):
-    """Log to clear-events.log (ASCII only)"""
+    """Append a timestamped event message to the clear-events.log file.
+
+    Creates parent directories automatically.  All content must be ASCII-safe
+    (cp1252 compatible on Windows).  Errors are silently swallowed.
+
+    Args:
+        msg (str): ASCII-safe message to append.
+    """
     CLEAR_LOG.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     try:
@@ -217,7 +224,13 @@ def log_event(msg):
 # =============================================================================
 
 def read_hook_stdin():
-    """Read JSON data from Claude Code hook stdin"""
+    """Read JSON data piped by the Claude Code UserPromptSubmit hook via stdin.
+
+    Safe to call when stdin is a TTY (returns {} instead of blocking).
+
+    Returns:
+        dict: Parsed hook payload, or {} on any read or parse error.
+    """
     try:
         if not sys.stdin.isatty():
             raw = sys.stdin.read()
@@ -233,12 +246,21 @@ def read_hook_stdin():
 # =============================================================================
 
 def count_transcript_messages(transcript_path):
-    """
-    Count user+assistant messages in transcript file.
+    """Count user and assistant messages in the Claude Code transcript file.
+
+    Handles both JSONL format (one JSON object per line, the Claude Code
+    default) and single-JSON-array format.  Returns special values for
+    unreadable or empty files.
+
+    Args:
+        transcript_path (str or Path): Path to the transcript file.  May be
+                                       None or empty for a fresh session.
+
     Returns:
-      -1  = cannot read / unknown state
-       0  = file empty or doesn't exist (fresh conversation)
-      N>0 = N messages found
+        int:  -1 if the file cannot be read or state is unknown.
+               0 if the file is empty or does not exist (fresh conversation).
+              N (> 0) for N user/assistant messages found.
+             99 if the file has content but cannot be parsed (assume messages).
     """
     if not transcript_path:
         return -1
@@ -299,7 +321,16 @@ def count_transcript_messages(transcript_path):
 # =============================================================================
 
 def read_state():
-    """Read the hook state file with file locking (Loophole #19)"""
+    """Read the PID-isolated hook state file with Windows file locking.
+
+    HOOK_STATE_FILE is set by _init_window_isolation() to a window-specific
+    path so multiple Claude Code windows do not interfere with each other.
+
+    Returns:
+        dict: Persisted state containing 'last_transcript_path',
+              'last_msg_count', and 'updated_at', or {} when the file is
+              missing or unreadable.
+    """
     if not HOOK_STATE_FILE.exists():
         return {}
     try:
@@ -313,7 +344,15 @@ def read_state():
 
 
 def write_state(transcript_path, msg_count):
-    """Update hook state with current values and file locking (Loophole #19)"""
+    """Persist the current transcript state to the PID-isolated hook state file.
+
+    Creates parent directories if needed.  Uses _lock_file/_unlock_file to
+    prevent data corruption from concurrent hook invocations.
+
+    Args:
+        transcript_path (str or Path): Current transcript file path.
+        msg_count (int): Current message count in the transcript.
+    """
     state = {
         'last_transcript_path': str(transcript_path) if transcript_path else '',
         'last_msg_count': msg_count,
@@ -330,9 +369,21 @@ def write_state(transcript_path, msg_count):
 
 
 def detect_clear(current_transcript_path, current_msg_count):
-    """
-    Compare current state vs last state to detect /clear.
-    Returns (is_fresh, reason_string)
+    """Compare current transcript state with the last persisted state to detect /clear.
+
+    Four detection cases are checked in order:
+      1. No previous state + msg count <= 1  -> first ever conversation.
+      2. Transcript file path changed        -> new conversation or window.
+      3. Message count dropped               -> /clear was used.
+      4. Same path, was non-empty, now empty -> transcript emptied.
+
+    Args:
+        current_transcript_path (str or Path): Path to the active transcript.
+        current_msg_count (int): Number of messages found in the transcript.
+
+    Returns:
+        tuple: (is_fresh, reason_string) where is_fresh is True when a session
+               boundary is detected and reason_string describes the cause.
     """
     state = read_state()
     last_transcript = state.get('last_transcript_path', '')
@@ -370,7 +421,12 @@ def detect_clear(current_transcript_path, current_msg_count):
 # =============================================================================
 
 def get_current_session_id():
-    """Get active session ID from .current-session.json"""
+    """Read the active session ID from CURRENT_SESSION_FILE.
+
+    Returns:
+        str or None: Session ID string, or None when the file is missing or
+                     the 'current_session_id' key is absent.
+    """
     if not CURRENT_SESSION_FILE.exists():
         return None
     try:
@@ -382,7 +438,18 @@ def get_current_session_id():
 
 
 def close_current_session(session_id):
-    """Mark session as COMPLETED and remove the current session marker"""
+    """Mark an active session as COMPLETED and delete the current-session marker.
+
+    Updates the session's JSON file with end_time and status='COMPLETED', then
+    deletes CURRENT_SESSION_FILE so 3-level-flow.py creates a fresh session on
+    the next user message.  All file operations use _lock_file/_unlock_file.
+
+    Args:
+        session_id (str): Session identifier to close.
+
+    Returns:
+        bool: True after attempting to close; False when session_id is falsy.
+    """
     if not session_id:
         return False
 
@@ -420,9 +487,14 @@ def close_current_session(session_id):
 
 
 def write_voice_flag(message):
-    """
-    Write .session-start-voice flag for stop-notifier.py to pick up.
-    Single voice pipeline: flag -> stop-notifier -> voice-notifier -> audio.
+    """Write the session-start voice flag for stop-notifier.py to consume.
+
+    Uses the single voice pipeline: flag -> stop-notifier -> voice-notifier ->
+    audio.  This function writes the PID-isolated flag path so only the Stop
+    hook of THIS window picks it up.
+
+    Args:
+        message (str): ASCII-safe human-readable text for the voice greeting.
     """
     try:
         SESSION_START_VOICE_FLAG.write_text(message, encoding='utf-8')
@@ -512,7 +584,21 @@ def get_previous_session_context(session_id):
 
 
 def create_new_session(reason=''):
-    """Create a brand new session via session-id-generator.py"""
+    """Create a new session by calling session-id-generator.py.
+
+    Invokes the generator with a timestamped description that includes the
+    reason for the new session.  Also resets session-progress.json so the
+    context-usage estimate starts fresh.
+
+    Args:
+        reason (str): Short label describing why the session was created
+                      (e.g. 'msg_count_dropped_from_5_to_1').
+
+    Returns:
+        str or None: New session ID (e.g. 'SESSION-20260305-123456-ABCD'),
+                     or None when the generator script fails or returns no
+                     recognisable session ID.
+    """
     sess_script = CURRENT_DIR / 'session-id-generator.py'
     if not sess_script.exists():
         log_event(f"ERROR: session-id-generator.py not found at {sess_script}")
@@ -639,6 +725,27 @@ def _link_session_chain(child_session, parent_session):
 # =============================================================================
 
 def main():
+    """UserPromptSubmit hook entry point - detect /clear and manage sessions.
+
+    Execution flow:
+      1. Initialise PID-based window isolation (HOOK_STATE_FILE).
+      2. Clean up expired enforcement flags (Loophole #10).
+      3. Load session-management policies from architecture scripts (3 retries).
+      4. Read hook stdin (transcript_path + prompt).
+      5. Count messages in the current transcript file.
+      6. detect_clear() to see if a session boundary occurred.
+      7. On fresh session:
+           - Load previous session context from flow-trace.json.
+           - Finalise the old session summary.
+           - Close the old session (set COMPLETED + delete marker).
+           - Print context so Claude sees it on first message.
+           - Clear ALL enforcement flags.
+           - Create a new session via session-id-generator.py.
+           - Chain-link new session to old via session-chain-manager.py.
+           - Write a voice flag for stop-notifier.py.
+      8. Update hook state file for next invocation.
+      9. Always exits 0.
+    """
     # Initialize window isolation (PID-based state files)
     _init_window_isolation()
 

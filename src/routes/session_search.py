@@ -1,6 +1,15 @@
 """
-Session ID Search Routes
-Search and view sessions by ID with complete details
+Session ID Search Routes for Claude Insight Dashboard.
+
+Provides Flask Blueprint routes to search for Claude Code sessions by ID,
+list recent sessions, and filter sessions by date. Backed by
+SessionSearchService which reads session JSON files and the sessions log.
+
+Routes:
+    GET /session-search          - Session search UI page
+    GET /api/session/search      - Search by session ID (query: session_id)
+    GET /api/session/list        - List recent sessions (query: limit)
+    GET /api/session/search-by-date  - Filter by date (query: date YYYYMMDD)
 """
 
 from flask import Blueprint, request, jsonify, render_template
@@ -15,15 +24,43 @@ from utils.path_resolver import get_sessions_dir, get_logs_dir
 
 session_search_bp = Blueprint('session_search', __name__)
 
+
 class SessionSearchService:
-    """Service for searching and retrieving session data"""
+    """Service for searching and retrieving Claude Code session data.
+
+    Reads session JSON files from the sessions directory and the sessions
+    log file to support ID-based lookup, recent session listing, and
+    date-based filtering.
+
+    Attributes:
+        sessions_dir (Path): Directory containing SESSION-*.json files.
+        sessions_log (Path): Path to the sessions.log event log file.
+    """
 
     def __init__(self):
+        """Initialize SessionSearchService with resolved directory paths."""
         self.sessions_dir = get_sessions_dir()
         self.sessions_log = get_logs_dir() / 'sessions.log'
 
     def search_session(self, session_id):
-        """Search for a session by ID"""
+        """Search for a session by its unique identifier.
+
+        Loads the session JSON file matching session_id, retrieves associated
+        log events, and calculates session statistics (duration, work items).
+
+        Args:
+            session_id (str): The session identifier string
+                (e.g. 'SESSION-20260305-143022-abcd').
+
+        Returns:
+            dict or None: On success, a dict with keys:
+                session_data (dict): Parsed session JSON content.
+                events (list[dict]): Log events for this session.
+                stats (dict): Calculated statistics (duration, completion rate).
+                found (bool): True.
+            Returns ``{'error': ..., 'found': False}`` if the file cannot be
+            read. Returns None if the session file does not exist.
+        """
         session_file = self.sessions_dir / f'{session_id}.json'
 
         if not session_file.exists():
@@ -52,7 +89,20 @@ class SessionSearchService:
             }
 
     def list_recent_sessions(self, limit=50):
-        """List recent sessions"""
+        """List the most recently modified session files.
+
+        Scans the sessions directory for SESSION-*.json files, sorts them by
+        modification time (newest first), and returns summary records.
+
+        Args:
+            limit (int): Maximum number of sessions to return. Defaults to 50.
+
+        Returns:
+            list[dict]: Session summary records with keys:
+                session_id (str), start_time (str), status (str),
+                description (str), work_items_count (int).
+            Files that cannot be parsed are silently skipped.
+        """
         if not self.sessions_dir.exists():
             return []
 
@@ -80,7 +130,19 @@ class SessionSearchService:
         return sessions
 
     def search_by_date(self, date_str):
-        """Search sessions by date (YYYYMMDD)"""
+        """Search for sessions created on a specific date.
+
+        Filters session files using a glob pattern that matches the date prefix
+        in the filename (SESSION-YYYYMMDD-*.json).
+
+        Args:
+            date_str (str): Date string in YYYYMMDD format (e.g. '20260305').
+
+        Returns:
+            list[dict]: Parsed session data dicts for all matching files,
+                sorted by modification time (newest first). Files that cannot
+                be parsed are silently skipped.
+        """
         if not self.sessions_dir.exists():
             return []
 
@@ -103,7 +165,20 @@ class SessionSearchService:
         return sessions
 
     def _get_session_events(self, session_id):
-        """Get all events for a session from log"""
+        """Retrieve all log events for a specific session from the sessions log.
+
+        Reads sessions.log line by line and filters entries that contain the
+        given session_id. Parses pipe-delimited lines into structured dicts.
+
+        Args:
+            session_id (str): Session identifier to filter log entries by.
+
+        Returns:
+            list[dict]: Event records with keys:
+                timestamp (str), session_id (str), event_type (str),
+                details (str). Returns an empty list if the log does not
+                exist or cannot be read.
+        """
         if not self.sessions_log.exists():
             return []
 
@@ -126,7 +201,26 @@ class SessionSearchService:
         return events
 
     def _calculate_stats(self, session_data):
-        """Calculate session statistics"""
+        """Calculate derived statistics from a session data dictionary.
+
+        Computes session duration, work item totals, and completion rate
+        from the parsed session JSON.
+
+        Args:
+            session_data (dict): Parsed session JSON containing at minimum:
+                start_time (str): ISO 8601 start timestamp.
+                end_time (str or None): ISO 8601 end timestamp (optional).
+                work_items (list[dict]): Work item records with 'status' keys.
+
+        Returns:
+            dict: Statistics with keys:
+                duration_seconds (float): Total session duration in seconds.
+                duration_formatted (str): Human-readable duration ('H:MM:SS').
+                total_work_items (int): Total number of work items.
+                completed_work_items (int): Count of COMPLETED items.
+                in_progress_work_items (int): Count of IN_PROGRESS items.
+                completion_rate (float): Percentage of completed items (0-100).
+        """
         start_time = datetime.fromisoformat(session_data['start_time'])
         end_time = datetime.fromisoformat(session_data['end_time']) if session_data.get('end_time') else datetime.now()
 

@@ -2,22 +2,38 @@
 """
 Common Standards Policy Enforcement (v1.0)
 
-CONSOLIDATED SCRIPT - Maps to: policies/02-standards-system/common-standards-policy.md
+Maps to: policies/02-standards-system/common-standards-policy.md
+
+This module enforces the common coding standards applicable to all projects in
+the Claude Memory System. It initializes and loads a JSON standards file with
+the canonical set of architectural and design standards that Claude must follow
+across all sessions.
 
 Extracted from: standards-loader.py (common standards portion)
 
-Loads and enforces common coding standards:
-- Java Project Structure
-- Config Server Rules
-- Secret Management
-- Response Format
-- API Design Standards
-- Database Standards
-- Error Handling
+Standards enforced:
+  - java_structure:    Standard Java project folder structure
+  - config_server:     Config server rules for Spring applications
+  - secret_management: Secret and credential management
+  - response_format:   Standard API response format
+  - api_design:        RESTful API design standards
+  - database:          Database design and query standards
+  - error_handling:    Standard error handling patterns
 
-Usage:
+Key Functions:
+  enforce(): Load and initialize the common standards file.
+  validate(): Check that the standards file exists and is valid.
+  report(): Generate a summary report of loaded standards.
+
+CLI Usage:
   python common-standards-policy.py --enforce           # Run policy enforcement
   python common-standards-policy.py --validate          # Validate policy compliance
+  python common-standards-policy.py --report            # Generate standards report
+
+Example:
+  >>> from common_standards_policy import enforce
+  >>> result = enforce()
+  >>> print(result['standards_count'])  # 7
 """
 
 import sys
@@ -39,7 +55,12 @@ STANDARDS_FILE = Path.home() / ".claude" / "memory" / "standards" / "common-stan
 
 
 def log_action(action, context=""):
-    """Log policy enforcement action."""
+    """Append a timestamped entry to the policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
+        context (str): Optional human-readable context or detail string.
+    """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"[{timestamp}] common-standards-policy | {action} | {context}\n"
 
@@ -49,7 +70,14 @@ def log_action(action, context=""):
 
 
 def validate():
-    """Validate policy compliance."""
+    """Check that the common standards file exists and is parseable.
+
+    Reads the standards JSON file and verifies it contains at least one
+    standard definition. Logs the result to the policy-hits log.
+
+    Returns:
+        bool: True if the file exists and loads successfully, False otherwise.
+    """
     try:
         if STANDARDS_FILE.exists():
             with open(STANDARDS_FILE, 'r', encoding='utf-8') as f:
@@ -65,7 +93,15 @@ def validate():
 
 
 def report():
-    """Generate compliance report."""
+    """Generate a compliance report listing all loaded common standards.
+
+    Reads the standards file and returns a structured dictionary suitable for
+    JSON output, including the total count and list of standard names.
+
+    Returns:
+        dict: Report containing 'status', 'total_standards', 'standards' (list),
+              and 'timestamp'. Returns {'status': 'error', 'message': ...} on failure.
+    """
     try:
         if not STANDARDS_FILE.exists():
             return {"status": "error", "message": "standards-file-not-found"}
@@ -88,11 +124,15 @@ def report():
 
 
 def enforce():
-    """
-    Main policy enforcement function.
+    """Load and initialize the common coding standards.
 
-    Loads and enforces common coding standards.
-    This is called by 3-level-flow.py during Level 2.
+    Creates the standards directory and file if they do not exist, then reads
+    the standards data and reports the count. Called by 3-level-flow.py during
+    Level 2 standards enforcement.
+
+    Returns:
+        dict: Result with 'status' ('success' or 'error') and 'standards_count' int.
+              On error, 'message' key contains the exception string.
     """
     try:
         log_action("ENFORCE_START", "common-standards-loading")

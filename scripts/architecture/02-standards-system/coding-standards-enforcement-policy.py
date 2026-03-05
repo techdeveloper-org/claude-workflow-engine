@@ -2,22 +2,38 @@
 """
 Coding Standards Enforcement Policy (v1.0)
 
-CONSOLIDATED SCRIPT - Maps to: policies/02-standards-system/coding-standards-enforcement-policy.md
+Maps to: policies/02-standards-system/coding-standards-enforcement-policy.md
+
+This module enforces microservice-specific coding standards by initializing and
+loading a JSON standards file that defines the implementation patterns Claude
+must follow when writing code. These are development-level conventions that
+complement the common architectural standards.
 
 Extracted from: standards-loader.py (coding standards portion)
 
-Loads and enforces coding standards:
-- Service Layer Pattern
-- Entity Pattern
-- Controller Pattern
-- Constants Organization
-- Documentation Standards
-- Network Policies
-- Infrastructure Rules
+Standards enforced:
+  - service_pattern:   Service layer pattern for microservices
+  - entity_pattern:    Entity/model design pattern
+  - controller_pattern: Controller/endpoint pattern
+  - constants:         Constants organization and naming
+  - documentation:     Code documentation requirements
+  - network_policies:  Network and communication policies
+  - infrastructure:    Infrastructure and deployment rules
 
-Usage:
-  python coding-standards-enforcement-policy.py --enforce           # Run policy enforcement
-  python coding-standards-enforcement-policy.py --validate          # Validate policy compliance
+Key Functions:
+  enforce(): Load and initialize the coding standards file.
+  validate(): Check that the coding standards file exists and is valid.
+  report(): Generate a summary report of loaded coding standards.
+
+CLI Usage:
+  python coding-standards-enforcement-policy.py --enforce   # Run policy enforcement
+  python coding-standards-enforcement-policy.py --validate  # Validate policy compliance
+  python coding-standards-enforcement-policy.py --report    # Generate standards report
+
+Example:
+  >>> from coding_standards_enforcement_policy import enforce
+  >>> result = enforce()
+  >>> print(result['standards_count'])  # 7
 """
 
 import sys
@@ -39,7 +55,12 @@ STANDARDS_FILE = Path.home() / ".claude" / "memory" / "standards" / "coding-stan
 
 
 def log_action(action, context=""):
-    """Log policy enforcement action."""
+    """Append a timestamped entry to the policy-hits log.
+
+    Args:
+        action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
+        context (str): Optional human-readable context or detail string.
+    """
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_entry = f"[{timestamp}] coding-standards-enforcement-policy | {action} | {context}\n"
 
@@ -49,7 +70,14 @@ def log_action(action, context=""):
 
 
 def validate():
-    """Validate policy compliance."""
+    """Check that the coding standards file exists and is parseable.
+
+    Reads the coding standards JSON file and verifies it contains at least one
+    standard definition. Logs the result to the policy-hits log.
+
+    Returns:
+        bool: True if the file exists and loads successfully, False otherwise.
+    """
     try:
         if STANDARDS_FILE.exists():
             with open(STANDARDS_FILE, 'r', encoding='utf-8') as f:
@@ -65,7 +93,15 @@ def validate():
 
 
 def report():
-    """Generate compliance report."""
+    """Generate a compliance report listing all loaded coding standards.
+
+    Reads the coding standards file and returns a structured dictionary
+    suitable for JSON output, including the total count and standard names.
+
+    Returns:
+        dict: Report containing 'status', 'total_standards', 'standards' (list),
+              and 'timestamp'. Returns {'status': 'error', 'message': ...} on failure.
+    """
     try:
         if not STANDARDS_FILE.exists():
             return {"status": "error", "message": "standards-file-not-found"}
@@ -88,11 +124,15 @@ def report():
 
 
 def enforce():
-    """
-    Main policy enforcement function.
+    """Load and initialize the microservice coding standards.
 
-    Loads and enforces coding standards for microservices.
-    This is called by 3-level-flow.py during Level 2.
+    Creates the standards directory and file if they do not exist, then reads
+    the standards data and reports the count. Called by 3-level-flow.py during
+    Level 2 standards enforcement.
+
+    Returns:
+        dict: Result with 'status' ('success' or 'error') and 'standards_count' int.
+              On error, 'message' key contains the exception string.
     """
     try:
         log_action("ENFORCE_START", "coding-standards-enforcement")

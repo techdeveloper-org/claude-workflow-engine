@@ -49,7 +49,12 @@ THRESHOLDS = {
 }
 
 def log_policy_hit(action, context):
-    """Log policy execution"""
+    """Log a policy execution event to the policy hits log file.
+
+    Args:
+        action (str): The action being logged (e.g., 'estimated').
+        context (str): Additional context about the action.
+    """
     log_file = os.path.expanduser("~/.claude/memory/logs/policy-hits.log")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] context-estimator | {action} | {context}\n"
@@ -61,8 +66,21 @@ def log_policy_hit(action, context):
         print(f"Warning: Could not write to log: {e}", file=sys.stderr)
 
 def get_session_metrics():
-    """
-    Collect observable session metrics
+    """Collect observable session metrics from log files.
+
+    Parses the policy hits log to count recent activity within the last 2 hours,
+    including messages, file reads, tool calls, and MCP responses. Session
+    start time is detected from the earliest log entry in this window.
+
+    Returns:
+        dict: Session metrics dictionary with keys:
+            - message_count (int): Number of messages in current session.
+            - file_reads (int): Number of file read operations.
+            - large_file_reads (int): Number of large file read operations.
+            - tool_calls (int): Number of tool call operations.
+            - mcp_responses (int): Number of MCP response entries.
+            - session_start (datetime or None): Session start timestamp.
+            - session_duration_minutes (float): Session duration in minutes.
     """
     metrics = {
         "message_count": 0,
@@ -127,14 +145,22 @@ def get_session_metrics():
     return metrics
 
 def estimate_context_percentage(metrics):
-    """
-    Estimate context usage percentage based on metrics
+    """Estimate context window usage percentage based on observable session metrics.
 
-    Formula:
-    context% = (messages * 1.5) + (file_reads * 3) + (large_files * 8) +
-               (tool_calls * 1) + (mcp * 2) + (session_age * 0.1)
+    Uses a weighted formula to estimate context consumption:
+    context% = (messages * 1.5) + (file_reads * 3.0) + (large_files * 8.0)
+               + (tool_calls * 1.0) + (mcp_responses * 2.0)
+               + (session_age_minutes * 0.1)
 
-    Capped at 100%
+    The result is capped at 100%. Very fresh sessions (under 5 minutes) get a
+    50% reduction with a minimum floor of 10%.
+
+    Args:
+        metrics (dict): Session metrics as returned by get_session_metrics().
+
+    Returns:
+        float: Estimated context usage percentage, rounded to 1 decimal place,
+            in the range [10.0, 100.0].
     """
 
     estimated = (
@@ -156,8 +182,23 @@ def estimate_context_percentage(metrics):
     return round(estimated, 1)
 
 def get_recommended_action(context_percent):
-    """
-    Get recommended action based on context percentage
+    """Return recommended cleanup action based on the estimated context percentage.
+
+    Thresholds:
+    - >= aggressive_cleanup (90%): Critical urgency, red level.
+    - >= moderate_cleanup (85%): High urgency, yellow level.
+    - >= light_cleanup (70%): Medium urgency, yellow level.
+    - < light_cleanup: No action needed, green level.
+
+    Args:
+        context_percent (float): Estimated context usage percentage.
+
+    Returns:
+        dict: Recommendation dictionary with keys:
+            - level (str): Urgency level ('none', 'light', 'moderate', 'aggressive').
+            - action (str): Human-readable action description.
+            - urgency (str): Urgency string ('low', 'medium', 'high', 'critical').
+            - color (str): Display color ('green', 'yellow', 'red').
     """
     if context_percent >= THRESHOLDS["aggressive_cleanup"]:
         return {
@@ -189,8 +230,13 @@ def get_recommended_action(context_percent):
         }
 
 def save_estimate(context_percent, metrics):
-    """
-    Save current estimate to file for daemon to read
+    """Save the current context estimate to the estimate file.
+
+    The estimate file is read by other monitoring scripts and daemons.
+
+    Args:
+        context_percent (float): Estimated context usage percentage.
+        metrics (dict): Session metrics used to produce the estimate.
     """
     estimate_file = os.path.expanduser("~/.claude/memory/.context-estimate")
 
@@ -208,8 +254,14 @@ def save_estimate(context_percent, metrics):
         print(f"Warning: Could not save estimate: {e}", file=sys.stderr)
 
 def load_previous_estimate():
-    """
-    Load previous estimate if available
+    """Load the previously saved context estimate from file.
+
+    Handles both the current JSON format and the legacy plain float format.
+
+    Returns:
+        dict or None: Previously saved estimate dictionary with 'context_percent',
+            'timestamp', 'metrics', and 'recommendation' keys, or None if no
+            previous estimate exists or the file cannot be read.
     """
     estimate_file = os.path.expanduser("~/.claude/memory/.context-estimate")
 

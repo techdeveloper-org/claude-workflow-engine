@@ -170,7 +170,22 @@ def _check_flag_age(flag_path, max_age_minutes=FLAG_EXPIRY_MINUTES):
 
 
 def load_policy_rules() -> dict:
-    """Load all policy documentation from ~/.claude/policies/ directories."""
+    """Load all policy documentation from ~/.claude/policies/ directories.
+
+    Recursively scans the three policy level directories under POLICIES_DIR and
+    reads up to 500 characters from each .md file.  Files that cannot be read
+    are silently skipped so a single corrupt policy never blocks the flow.
+
+    Returns:
+        dict: Nested dict with keys 'level-1', 'level-2', 'level-3', each
+              mapping {policy_stem: content_snippet (str, max 500 chars)}.
+              Returns an empty structure if POLICIES_DIR does not exist.
+
+    Example:
+        >>> rules = load_policy_rules()
+        >>> len(rules['level-2'])  # number of loaded Level 2 policy files
+        3
+    """
     policies = {
         'level-1': {},
         'level-2': {},
@@ -219,23 +234,56 @@ def load_policy_rules() -> dict:
 
 
 def checkpoint_flag_path(session_id):
-    """Session-specific + PID-isolated checkpoint flag path.
+    """Build the session-specific, PID-isolated checkpoint flag file path.
+
     Pattern: .checkpoint-pending-{SESSION_ID}-{PID}.json
-    Must match pre-tool-enforcer.py find_session_flag() and post-tool-tracker _clear_session_flags()."""
+
+    This naming contract MUST stay in sync with:
+      - pre-tool-enforcer.py: find_session_flag()
+      - post-tool-tracker.py: _clear_session_flags()
+
+    Args:
+        session_id (str): Active session identifier.
+
+    Returns:
+        Path: Absolute path to the checkpoint flag file in FLAG_DIR.
+    """
     return FLAG_DIR / f'.checkpoint-pending-{session_id}-{os.getpid()}.json'
 
 
 def task_breakdown_flag_path(session_id):
-    """Session-specific + PID-isolated task breakdown flag path.
+    """Build the session-specific, PID-isolated task-breakdown flag file path.
+
     Pattern: .task-breakdown-pending-{SESSION_ID}-{PID}.json
-    Must match pre-tool-enforcer.py find_session_flag() and post-tool-tracker _clear_session_flags()."""
+
+    This naming contract MUST stay in sync with:
+      - pre-tool-enforcer.py: find_session_flag()
+      - post-tool-tracker.py: _clear_session_flags()
+
+    Args:
+        session_id (str): Active session identifier.
+
+    Returns:
+        Path: Absolute path to the task-breakdown flag file in FLAG_DIR.
+    """
     return FLAG_DIR / f'.task-breakdown-pending-{session_id}-{os.getpid()}.json'
 
 
 def skill_selection_flag_path(session_id):
-    """Session-specific + PID-isolated skill selection flag path.
+    """Build the session-specific, PID-isolated skill-selection flag file path.
+
     Pattern: .skill-selection-pending-{SESSION_ID}-{PID}.json
-    Must match pre-tool-enforcer.py find_session_flag() and post-tool-tracker _clear_session_flags()."""
+
+    This naming contract MUST stay in sync with:
+      - pre-tool-enforcer.py: find_session_flag()
+      - post-tool-tracker.py: _clear_session_flags()
+
+    Args:
+        session_id (str): Active session identifier.
+
+    Returns:
+        Path: Absolute path to the skill-selection flag file in FLAG_DIR.
+    """
     return FLAG_DIR / f'.skill-selection-pending-{session_id}-{os.getpid()}.json'
 
 # Short approval words that clear the checkpoint flag
@@ -497,7 +545,16 @@ def clear_checkpoint_flag(reason=""):
 
 
 def write_checkpoint_flag(session_id, prompt_preview):
-    """Write session-specific checkpoint flag so pre-tool-enforcer can block code tools."""
+    """Write the session-specific checkpoint flag so pre-tool-enforcer blocks code tools.
+
+    Creates .checkpoint-pending-{SESSION_ID}-{PID}.json in FLAG_DIR.  The
+    pre-tool-enforcer reads this flag and blocks Write/Edit/NotebookEdit until
+    the user sends an approval message ('ok', 'proceed', etc.).
+
+    Args:
+        session_id (str): Active session identifier written into the flag data.
+        prompt_preview (str): First 100 chars of the user prompt for context.
+    """
     try:
         flag_path = checkpoint_flag_path(session_id)
         flag_path.parent.mkdir(parents=True, exist_ok=True)
@@ -515,10 +572,15 @@ def write_checkpoint_flag(session_id, prompt_preview):
 
 
 def write_task_breakdown_flag(session_id, prompt_preview):
-    """
-    Step 3.1 enforcement flag (session-specific).
-    Cleared by post-tool-tracker.py when TaskCreate is detected.
-    pre-tool-enforcer.py blocks Write/Edit/Bash until this flag is gone.
+    """Write the Step 3.1 task-breakdown enforcement flag.
+
+    Creates .task-breakdown-pending-{SESSION_ID}-{PID}.json in FLAG_DIR.
+    pre-tool-enforcer.py blocks Write/Edit/NotebookEdit until TaskCreate is
+    called, at which point post-tool-tracker.py deletes this flag.
+
+    Args:
+        session_id (str): Active session identifier written into the flag data.
+        prompt_preview (str): First 100 chars of the user prompt for context.
     """
     try:
         flag_path = task_breakdown_flag_path(session_id)
@@ -543,11 +605,19 @@ def write_task_breakdown_flag(session_id, prompt_preview):
 
 
 def write_skill_selection_flag(session_id, required_skill, required_type):
-    """
-    Step 3.5 enforcement flag (session-specific).
-    Only written for non-adaptive skills (adaptive needs no tool invocation).
-    Cleared by post-tool-tracker.py when Skill or Task tool is detected.
-    pre-tool-enforcer.py blocks Write/Edit/Bash until this flag is gone.
+    """Write the Step 3.5 skill-selection enforcement flag.
+
+    Creates .skill-selection-pending-{SESSION_ID}-{PID}.json in FLAG_DIR.
+    Only written for non-adaptive skills (adaptive-skill-intelligence needs no
+    tool invocation).  pre-tool-enforcer.py blocks Write/Edit/NotebookEdit until
+    the Skill or Task tool is invoked, after which post-tool-tracker.py removes
+    this flag.
+
+    Args:
+        session_id (str): Active session identifier written into the flag data.
+        required_skill (str): Name of the skill or agent that must be invoked.
+        required_type (str): Either 'skill' (invoke via Skill tool) or 'agent'
+                             (invoke via Task tool with subagent_type).
     """
     try:
         flag_path = skill_selection_flag_path(session_id)
@@ -579,12 +649,37 @@ def write_skill_selection_flag(session_id, required_skill, required_type):
 # =============================================================================
 
 def ts():
-    """Current ISO timestamp"""
+    """Return the current local time as an ISO 8601 string.
+
+    Returns:
+        str: Timestamp in 'YYYY-MM-DDTHH:MM:SS.ffffff' format.
+
+    Example:
+        >>> stamp = ts()
+        >>> stamp.startswith('202')
+        True
+    """
     return datetime.now().isoformat()
 
 
 def run_script(script_path, args=None, timeout=30):
-    """Run a Python script, return (stdout, stderr, returncode, duration_ms)"""
+    """Run a Python script subprocess and return its full output.
+
+    Executes the given script using the same Python binary as the caller,
+    with PYTHONIOENCODING=utf-8 and PYTHONUTF8=1 set so Windows consoles
+    handle Unicode correctly.
+
+    Args:
+        script_path (Path): Absolute path to the Python script to execute.
+        args (list or str, optional): Additional CLI arguments forwarded to
+            the script.  A bare string is wrapped in a list automatically.
+        timeout (int): Maximum execution time in seconds.  Defaults to 30.
+
+    Returns:
+        tuple: (stdout, stderr, returncode, duration_ms) where duration_ms
+               is the wall-clock time in milliseconds.  On TimeoutExpired
+               returncode is 1 and stderr is 'TIMEOUT'.
+    """
     cmd = [PYTHON, str(script_path)]
     if args:
         cmd.extend(args if isinstance(args, list) else [args])
@@ -658,9 +753,21 @@ def run_script_with_retry(script_path, args=None, timeout=10, step_name='unknown
 
 
 def _policy_hard_break(step_name, script_name, error_detail, attempts):
-    """
-    Hard-break the session when a policy fails after all retries.
-    Writes failure to session summary file and exits with code 1.
+    """Hard-break the session when a policy script fails after all retries.
+
+    Writes a structured failure record to policy-failure-summary.json and
+    appends it to session-progress.json so the dashboard can surface the
+    error.  Then prints a formatted banner to stdout and exits with code 1,
+    which causes Claude Code to surface the failure to the user.
+
+    Args:
+        step_name (str): Human-readable step label (e.g. 'Level 1 Sync').
+        script_name (str): Filename of the failing script for the log entry.
+        error_detail (str): Excerpt of stderr/stdout from the last attempt.
+        attempts (int): Number of retries that were exhausted before giving up.
+
+    Raises:
+        SystemExit: Always exits with code 1 after logging the failure.
     """
     # Write failure to session summary
     try:
@@ -717,7 +824,14 @@ def _policy_hard_break(step_name, script_name, error_detail, attempts):
 
 
 def safe_json(text):
-    """Parse JSON safely, return dict or {}"""
+    """Parse a JSON string without raising an exception on malformed input.
+
+    Args:
+        text (str): Raw JSON string to parse.
+
+    Returns:
+        dict: Parsed object, or an empty dict on any parse error.
+    """
     try:
         return json.loads(text.strip())
     except Exception:
@@ -725,7 +839,18 @@ def safe_json(text):
 
 
 def write_json(path, data):
-    """Write JSON file with file locking (Loophole #19), never crash main flow"""
+    """Write a dict as a pretty-printed JSON file with Windows file locking.
+
+    Uses _lock_file/_unlock_file (msvcrt on Windows, no-op elsewhere) so that
+    parallel PostToolUse hook invocations do not corrupt the file.  Parent
+    directories are created automatically.  Any exception is silently swallowed
+    so this function never crashes the main flow.
+
+    Args:
+        path (Path): Destination file path.  Parent directories are created if
+                     they do not exist.
+        data (dict): Serialisable Python dict to write.
+    """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w', encoding='utf-8') as f:
@@ -737,7 +862,18 @@ def write_json(path, data):
 
 
 def read_json(path):
-    """Read JSON file safely with file locking (Loophole #19)"""
+    """Read a JSON file safely with Windows file locking.
+
+    Uses _lock_file/_unlock_file to prevent reading a partially written file.
+    Returns an empty dict on any error (file missing, parse failure, etc.) so
+    callers never need to guard against exceptions.
+
+    Args:
+        path (Path): Path to the JSON file to read.
+
+    Returns:
+        dict: Parsed content, or {} on any error.
+    """
     try:
         with open(path, 'r', encoding='utf-8') as f:
             _lock_file(f)
@@ -749,7 +885,7 @@ def read_json(path):
 
 
 def show_help():
-    """Print usage information for the script."""
+    """Print brief usage information for the script to stdout."""
     print(f"{SCRIPT_NAME} v{VERSION}")
     print("3-Level Architecture Flow with Full JSON Trace")
     print()
@@ -764,10 +900,17 @@ def show_help():
 # =============================================================================
 
 def read_hook_stdin():
-    """
-    Read user prompt + cwd from Claude hook stdin (JSON format).
-    Claude Code hook sends: {"prompt": "...", "session_id": "...", "cwd": "...", ...}
-    Returns (prompt, cwd)
+    """Read user prompt and working directory from Claude Code hook stdin.
+
+    Claude Code UserPromptSubmit hook pipes a JSON object with at least:
+      {"prompt": "...", "session_id": "...", "cwd": "...", ...}
+
+    The function is safe to call when stdin is a TTY (interactive mode);
+    it returns empty strings instead of blocking.
+
+    Returns:
+        tuple: (prompt, cwd) both as strings.  Returns ('', '') on any
+               read or parse error.
     """
     try:
         if not sys.stdin.isatty():
@@ -783,15 +926,31 @@ def read_hook_stdin():
 
 
 def detect_tech_stack(cwd=None):
-    """
-    Detect actual tech stack from project files.
-    Returns list of detected technologies.
-    Priority: read actual files, not just check existence.
+    """Detect the technology stack in use by scanning actual project files.
 
-    IMPORTANT: Skip home directory and system directories.
-    Scanning home dir causes false-positive tech detection (e.g., a stray
-    requirements.txt with flask maps to ui-ux-designer for ALL queries).
-    Only scan directories that look like actual project directories.
+    Reads requirements.txt, pom.xml, package.json, Dockerfile, etc. to
+    determine whether the project uses Flask, Spring Boot, Angular, Docker,
+    Kubernetes, and similar technologies.  The hook CWD is checked first; the
+    process CWD is used as a fallback if it differs.
+
+    Home and system directories (~/.claude, ~/.claude/memory) are excluded
+    from the scan to prevent false-positive detections caused by stray
+    configuration files in those locations.
+
+    Args:
+        cwd (str, optional): Working directory reported by the Claude hook
+                             (from stdin).  If None or pointing to a system
+                             directory, the process CWD is used.
+
+    Returns:
+        list: One or more technology name strings such as ['spring-boot',
+              'docker'], or ['unknown'] when no recognizable project files are
+              found.  Detection stops at the first non-empty result.
+
+    Example:
+        >>> stack = detect_tech_stack('/home/user/myapp')
+        >>> 'spring-boot' in stack
+        True
     """
     home = Path.home()
     # Directories that are NOT project directories - skip them

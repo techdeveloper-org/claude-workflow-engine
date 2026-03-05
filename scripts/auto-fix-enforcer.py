@@ -150,7 +150,28 @@ def _check_flag_age(flag_path, max_age_minutes=FLAG_EXPIRY_MINUTES):
 
 
 class AutoFixEnforcer:
-    """Detects and auto-fixes all system failures"""
+    """Detect, report, and auto-fix system health failures.
+
+    Runs 7 sequential checks on every UserPromptSubmit hook invocation:
+      1. Python binary availability
+      2. Critical script files presence
+      3. Blocking-enforcer state initialisation
+      4. Session state flags
+      5. Daemon PID status (informational)
+      6. Git repository cleanliness (informational)
+      7. Windows Python Unicode characters
+
+    Failures are accumulated in self.failures.  Auto-fixable failures are
+    attempted automatically; non-fixable failures print fix instructions and
+    the run() method returns a non-zero exit code to block further work.
+
+    Attributes:
+        scripts_path (Path): Location of hook scripts (e.g. ~/.claude/scripts/).
+        memory_path (Path): Root of the Claude memory directory.
+        failures (list): Collected failure dicts from _check_*() methods.
+        auto_fixed (list): Component names that were successfully auto-fixed.
+        manual_fixes_needed (list): Failures requiring manual intervention.
+    """
 
     def __init__(self):
         """Initialise paths and empty failure/fix tracking lists.
@@ -653,7 +674,16 @@ class AutoFixEnforcer:
             return True
 
     def _auto_fix_blocking_enforcer(self):
-        """Try to auto-fix blocking enforcer state"""
+        """Attempt to initialise the blocking-enforcer state file automatically.
+
+        Writes a default .blocking-state.json to self.memory_path with
+        session_started=True and the current session ID (if available) so that
+        _check_session_state() can validate session isolation correctly.
+
+        Returns:
+            bool: True if the state file was created successfully, False on any
+                  write error.
+        """
         try:
             state_file = self.memory_path / '.blocking-state.json'
             state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -686,7 +716,15 @@ class AutoFixEnforcer:
             return False
 
     def auto_fix_failures(self):
-        """Attempt to auto-fix all fixable failures"""
+        """Attempt to auto-fix every failure marked as auto_fixable.
+
+        Iterates over self.failures and dispatches component-specific fix
+        routines (currently only the blocking-enforcer state file).  Successful
+        fixes are recorded in self.auto_fixed.
+
+        Returns:
+            int: Number of failures that were successfully auto-fixed.
+        """
         if not self.failures:
             return True
 
@@ -715,7 +753,15 @@ class AutoFixEnforcer:
         return fixed_count
 
     def report_failures(self):
-        """Report all failures and required fixes"""
+        """Print a formatted summary of all collected failures to stdout.
+
+        Groups failures by severity (CRITICAL, HIGH, MEDIUM) and prints fix
+        instructions for each.  When no failures exist, prints an all-clear
+        banner.
+
+        Returns:
+            bool: True when there are no failures; False when failures exist.
+        """
         if not self.failures:
             print("\n" + "="*80)
             print("[CHECK] ALL SYSTEMS OPERATIONAL - NO FAILURES DETECTED")
@@ -760,7 +806,22 @@ class AutoFixEnforcer:
         return False
 
     def run(self, auto_fix=True):
-        """Main enforcement run"""
+        """Run all system checks, optionally auto-fix, and report the result.
+
+        Execution flow:
+          1. check_all_systems() - collect failures.
+          2. If all_ok: report_failures() (all-clear) and return 0.
+          3. If auto_fix: auto_fix_failures() then re-run check_all_systems().
+          4. report_failures() with final state.
+          5. Return 0 on success; number of CRITICAL failures (min 1) otherwise.
+
+        Args:
+            auto_fix (bool): When True, attempt auto-fixes before reporting.
+                             Defaults to True.
+
+        Returns:
+            int: 0 if all checks pass; number of CRITICAL failures on error.
+        """
         # Check all systems
         all_ok = self.check_all_systems()
 
@@ -789,7 +850,15 @@ class AutoFixEnforcer:
 
 
 def main():
-    """Main function"""
+    """Entry point for auto-fix-enforcer.py.
+
+    Parses --no-auto-fix flag, runs expired-flag cleanup (Loophole #10),
+    then instantiates AutoFixEnforcer and calls run().  The exit code mirrors
+    the enforcer result so Claude Code can surface failures.
+
+    Returns:
+        Exits with 0 on all-clear or the number of CRITICAL failures otherwise.
+    """
     import argparse
 
     # Flag auto-expiry cleanup at Level -1 startup (Loophole #10)
