@@ -823,6 +823,34 @@ def _load_session_json(session_id):
         return {}
 
 
+def _load_tool_optimization_stats(session_id):
+    """
+    Load tool optimization statistics from session-progress.json.
+
+    Reads the tool_optimization_stats block that contains failure detection
+    counts and per-tool optimization statistics from the post-tool-tracker.py
+    hook enhancements (Level 3.7 middleware).
+
+    Args:
+        session_id (str): Session identifier.
+
+    Returns:
+        dict: Tool optimization stats with 'total_failures_detected_in_results'
+              and 'per_tool_failure_counts', or {} when unavailable.
+    """
+    try:
+        progress_file = LOGS_DIR / 'session-progress.json'
+        if not progress_file.exists():
+            return {}
+        with open(progress_file, 'r', encoding='utf-8') as f:
+            _lock_file(f)
+            data = json.load(f)
+            _unlock_file(f)
+        return data.get('tool_optimization_stats', {})
+    except Exception:
+        return {}
+
+
 def _calculate_duration(created_at, last_updated):
     """Calculate the elapsed time between two ISO 8601 timestamps.
 
@@ -977,6 +1005,14 @@ def finalize(session_id):
             data["decisions_timeline"] = policy_exec_data.get("decisions_timeline", [])
     except Exception as e:
         log_event(f"[WARN] Policy execution data loading failed (non-blocking): {e}")
+
+    # 3d. Tool Optimization Stats (3.6 + 3.7 Middleware) - NEW v3.2.0
+    try:
+        tool_opt_stats = _load_tool_optimization_stats(session_id)
+        if tool_opt_stats:
+            data["tool_optimization_stats"] = tool_opt_stats
+    except Exception as e:
+        log_event(f"[WARN] Tool optimization stats loading failed (non-blocking): {e}")
 
     # 4. Session metadata (duration, status)
     session_json = _load_session_json(session_id)
@@ -1353,6 +1389,28 @@ def _generate_markdown(data):
             bar = '#' * bar_len
             lines.append(f"| {tool_name} | {count} | {pct}% {bar} |")
         lines.append(f"| **TOTAL** | **{total_tool_calls}** | **100%** |")
+        lines.append("")
+
+    # ===================== TOOL OPTIMIZATION SUMMARY (3.6 + 3.7 Middleware) =====================
+    # NEW v3.2.0: Display results of Level 3.6 and 3.7 policy enforcement
+    tool_opt_stats = data.get("tool_optimization_stats", {})
+    if tool_opt_stats.get("total_failures_detected_in_results", 0) > 0:
+        lines.append("## Tool Optimization Summary")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| Total Tool Calls | {total_tool_calls} |")
+
+        total_failures = tool_opt_stats.get("total_failures_detected_in_results", 0)
+        lines.append(f"| Failures Detected (3.7) | {total_failures} |")
+
+        per_tool_counts = tool_opt_stats.get("per_tool_failure_counts", {})
+        if per_tool_counts:
+            most_common_tools = sorted(per_tool_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+            if most_common_tools:
+                most_common_str = ", ".join([f"{t}: {c}" for t, c in most_common_tools])
+                lines.append(f"| Most Problematic Tools | {most_common_str} |")
+
         lines.append("")
 
     # ===================== FILES MODIFIED =====================

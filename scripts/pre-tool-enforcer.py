@@ -90,6 +90,30 @@ try:
 except ImportError:
     HAS_TRACKING = False
 
+# ===================================================================
+# NEW: TOOL OPTIMIZATION INTEGRATION (3.6 Middleware)
+# ===================================================================
+_optimizer = None
+try:
+    _arch_path = Path(__file__).parent / 'architecture' / '03-execution-system'
+    sys.path.insert(0, str(_arch_path / '06-tool-optimization'))
+    from tool_usage_optimization_policy import ToolUsageOptimizer
+    _optimizer = ToolUsageOptimizer()
+except Exception:
+    pass  # Non-blocking: Optimizer unavailable
+
+# ===================================================================
+# NEW: FAILURE PREVENTION INTEGRATION (3.7 Pre-Execution Middleware)
+# ===================================================================
+_pre_checker = None
+try:
+    _arch_path = Path(__file__).parent / 'architecture' / '03-execution-system'
+    sys.path.insert(0, str(_arch_path / 'failure-prevention'))
+    from common_failures_prevention import PreExecutionChecker
+    _pre_checker = PreExecutionChecker()
+except Exception:
+    pass  # Non-blocking: PreExecutionChecker unavailable
+
 # Track hook start time for total duration
 _HOOK_START = datetime.now()
 
@@ -110,6 +134,9 @@ _flow_trace_cache = None
 
 # Cached failure knowledge base (loaded once per hook invocation)
 _failure_kb_cache = None
+
+# Cached per-session optimization event log (for aggregation)
+_optimization_events_log = None
 
 
 def _load_flow_trace_context():
@@ -968,6 +995,60 @@ def check_dynamic_skill_context(tool_name, tool_input):
     return hints
 
 
+def _run_policy_optimization(tool_name, tool_input, flow_ctx):
+    """
+    Level 3.6 + 3.7 Middleware: Apply tool optimization and pre-execution failure checking.
+    Prints hints to stdout (non-blocking). Never raises exceptions.
+
+    Args:
+        tool_name: Name of the tool about to be called.
+        tool_input: Input parameters dict for the tool.
+        flow_ctx: Flow trace context dict with task type, complexity, skill, etc.
+
+    Returns:
+        list: All hints (optimization + failure prevention combined).
+    """
+    hints = []
+
+    # Level 3.6: Tool Usage Optimization
+    if _optimizer:
+        try:
+            optimized = _optimizer.optimize(tool_name, tool_input, flow_ctx)
+            # Check if any changes were made by the optimizer
+            changes = {}
+            for key in optimized:
+                if key in tool_input and optimized[key] != tool_input[key]:
+                    changes[key] = optimized[key]
+                elif key not in tool_input:
+                    changes[key] = optimized[key]
+
+            if changes:
+                for key, val in changes.items():
+                    hint = '[3.6-OPTIMIZE] {} -> {} set to {}'.format(
+                        tool_name, key, str(val)[:100]
+                    )
+                    hints.append(hint)
+        except Exception:
+            pass  # Non-blocking
+
+    # Level 3.7: Pre-Execution Failure Prevention Check
+    if _pre_checker:
+        try:
+            check_result = _pre_checker.check_tool_call(tool_name, tool_input)
+            issues = check_result.get('issues', [])
+            for issue in issues:
+                issue_type = issue.get('type', 'unknown')
+                suggestion = issue.get('suggestion', '')
+                hint = '[3.7-PREVENTION] {}: {} - {}'.format(
+                    tool_name, issue_type, suggestion[:100]
+                )
+                hints.append(hint)
+        except Exception:
+            pass  # Non-blocking
+
+    return hints
+
+
 def main():
     """PreToolUse hook entry point.
 
@@ -1125,6 +1206,12 @@ def main():
     if tool_name in ('Read', 'Write', 'Edit', 'NotebookEdit', 'Grep', 'Glob'):
         skill_hints = check_dynamic_skill_context(tool_name, tool_input)
         all_hints.extend(skill_hints)
+
+    # NEW (v3.3.0): POLICY OPTIMIZATION MIDDLEWARE (3.6 + 3.7)
+    # Level 3.6: Tool Usage Optimization + Level 3.7: Pre-Execution Failure Prevention
+    # Both integrated as non-blocking hints that guide Claude's tool invocation
+    opt_hints = _run_policy_optimization(tool_name, tool_input, flow_ctx)
+    all_hints.extend(opt_hints)
 
     # FAILURE-KB INTEGRATION (v3.2.0): Consult failure-kb.json for known patterns
     # Policy: policies/03-execution-system/failure-prevention/common-failures-prevention.md

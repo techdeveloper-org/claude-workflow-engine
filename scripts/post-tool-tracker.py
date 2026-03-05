@@ -88,6 +88,18 @@ try:
 except ImportError:
     HAS_TRACKING = False
 
+# ===================================================================
+# NEW: FAILURE DETECTION INTEGRATION (3.7 Middleware)
+# ===================================================================
+_failure_detector = None
+try:
+    _fp_path = Path(__file__).parent / 'architecture' / '03-execution-system' / 'failure-prevention'
+    sys.path.insert(0, str(_fp_path))
+    from common_failures_prevention import FailureDetector
+    _failure_detector = FailureDetector()
+except Exception:
+    pass  # Non-blocking: FailureDetector unavailable
+
 # Track hook start time for duration measurement
 _HOOK_START = datetime.now()
 
@@ -429,6 +441,26 @@ def is_error_response(tool_response):
     return False
 
 
+def _detect_result_failure(tool_response):
+    """
+    Level 3.7: Detect failure patterns in tool result using FailureDetector.
+    Returns dict with failure details or None. Never raises exceptions.
+
+    Args:
+        tool_response: Raw tool response from PostToolUse hook.
+
+    Returns:
+        dict: Failure detection result with 'failure_type' and 'severity', or None.
+    """
+    if not _failure_detector or not tool_response:
+        return None
+    try:
+        result_str = str(tool_response)[:2000]  # limit for performance
+        return _failure_detector.detect_failure_in_message(result_str)
+    except Exception:
+        return None
+
+
 def main():
     """PostToolUse hook entry point.
 
@@ -505,6 +537,9 @@ def main():
 
         # CONTEXT CHAIN: Load flow-trace context from 3-level-flow
         flow_ctx = _load_flow_trace_context()
+
+        # NEW (v3.2.0): Level 3.7 - Detect failures in tool result
+        failure_info = _detect_result_failure(tool_response)
 
         # Calculate progress delta (v3.1.0: complexity-aware weighting)
         # Policy: task-phase-enforcement-policy.md - higher complexity = more work = smaller increments
@@ -591,6 +626,14 @@ def main():
         elif tool_name in ('WebSearch', 'WebFetch'):
             entry['query'] = inp.get('query', inp.get('url', ''))[:150]
 
+        # NEW (v3.2.0): Enrich entry with failure detection results (3.7 middleware)
+        if failure_info:
+            entry['failure_detected'] = True
+            entry['failure_type'] = failure_info.get('type', 'unknown')
+            entry['failure_severity'] = failure_info.get('severity', 'medium')
+        else:
+            entry['failure_detected'] = False
+
         # Log the entry
         log_tool_entry(entry)
 
@@ -625,6 +668,21 @@ def main():
         # Compute and store dynamic context estimate so context-monitor-v2.py reads it
         ctx_est = estimate_context_pct(state['tool_counts'], state.get('content_chars', 0))
         state['context_estimate_pct'] = ctx_est
+
+        # NEW (v3.2.0): Track tool optimization statistics (3.7 middleware)
+        # Initialize tool_optimization_stats block if missing
+        if 'tool_optimization_stats' not in state:
+            state['tool_optimization_stats'] = {
+                'total_failures_detected_in_results': 0,
+                'per_tool_failure_counts': {}
+            }
+
+        # Increment failure detection counters if failure was detected
+        if failure_info:
+            state['tool_optimization_stats']['total_failures_detected_in_results'] += 1
+            per_tool = state['tool_optimization_stats'].get('per_tool_failure_counts', {})
+            per_tool[tool_name] = per_tool.get(tool_name, 0) + 1
+            state['tool_optimization_stats']['per_tool_failure_counts'] = per_tool
 
         save_session_progress(state)
         try:
