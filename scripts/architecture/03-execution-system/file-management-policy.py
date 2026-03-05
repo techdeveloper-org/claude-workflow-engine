@@ -36,6 +36,8 @@ Example:
 
 import sys
 import json
+import os
+import tempfile
 from pathlib import Path
 from datetime import datetime
 
@@ -58,6 +60,16 @@ if sys.platform == 'win32':
 
 MEMORY_DIR = Path.home() / ".claude" / "memory"
 LOG_FILE = MEMORY_DIR / "logs" / "policy-hits.log"
+
+# ===================================================================
+# TEMPORARY FILE DIRECTORY - Uses OS system temp directories
+# ===================================================================
+if sys.platform == 'win32':
+    # Windows: Use %TEMP% environment variable
+    TEMP_DIR = Path(os.environ.get('TEMP', tempfile.gettempdir()))
+else:
+    # Linux/Mac: Use /tmp or $TMPDIR
+    TEMP_DIR = Path(os.environ.get('TMPDIR', tempfile.gettempdir()))
 
 
 def log_policy_hit(action, context=""):
@@ -102,7 +114,7 @@ def report():
 
     Returns:
         dict: Report containing 'status', 'policy', 'description', 'rules',
-              and 'timestamp'. Returns {'status': 'error', 'message': ...} on failure.
+              'temp_directory', and 'timestamp'. Returns {'status': 'error', 'message': ...} on failure.
     """
     try:
         report_data = {
@@ -115,11 +127,14 @@ def report():
                 "Always read a file before editing it",
                 "Use absolute paths in all file operations",
                 "Maintain established directory structure",
-                "Never create README files proactively"
+                "Never create README files proactively",
+                "Use OS system temp directories for temporary files"
             ],
+            "temporary_file_directory": str(TEMP_DIR),
+            "platform": sys.platform,
             "timestamp": datetime.now().isoformat()
         }
-        log_policy_hit("REPORT", "file-management-report-generated")
+        log_policy_hit("REPORT", f"file-management-report-generated | temp_dir:{TEMP_DIR}")
         return report_data
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -142,6 +157,7 @@ def enforce():
     try:
         log_policy_hit("ENFORCE_START", "file-management-enforcement")
 
+        # Sub-op 1: Initialize memory directory
         _op_start = datetime.now()
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
         try:
@@ -152,8 +168,22 @@ def enforce():
         except Exception:
             pass
 
-        log_policy_hit("ENFORCE_COMPLETE", "file-management-ready")
-        print("[file-management-policy] Policy enforced - File management standards active")
+        # Sub-op 2: Verify temp directory configuration
+        _op_start = datetime.now()
+        temp_dir_exists = TEMP_DIR.exists()
+        temp_config = f"{TEMP_DIR}"
+        try:
+            _sub_operations.append(record_sub_operation(
+                "verify_temp_directory", "success",
+                int((datetime.now() - _op_start).total_seconds() * 1000),
+                {"temp_dir": temp_config, "exists": temp_dir_exists}
+            ))
+        except Exception:
+            pass
+
+        log_policy_hit("ENFORCE_COMPLETE", f"file-management-ready | temp_dir:{TEMP_DIR}")
+        print(f"[file-management-policy] Policy enforced - File management standards active")
+        print(f"[file-management-policy] Temp directory: {TEMP_DIR}")
 
         result = {"status": "success", "policy": "file-management"}
         try:
