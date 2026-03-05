@@ -95,10 +95,22 @@ class OptimizationTracker:
         return traces
 
     def get_tool_optimization_metrics(self):
-        """
-        Track 15 optimization strategies.
-        Derives counts from flow-trace session data - each session applies
-        the tool optimization policy (LEVEL_3_STEP_3_6).
+        """Track application of 15 token optimization strategies across sessions.
+
+        Reads flow-trace.json files and infers which optimization strategies were
+        applied based on context usage, complexity, execution mode, and whether the
+        LEVEL_3_STEP_3_6 pipeline step ran. Estimates token savings per strategy.
+
+        Returns:
+            dict: Optimization metrics with keys:
+                strategies (dict): Map of strategy name to
+                    {count, tokens_saved, description}.
+                total_optimizations (int): Sum of all strategy application counts.
+                total_tokens_saved (int): Estimated total tokens saved.
+                estimated_savings_percentage (float): Overall savings percentage (0-80).
+                top_strategies (list[dict]): Top 5 strategies by tokens saved.
+                sessions_analyzed (int): Number of session traces processed.
+            On error: returns strategies dict with zeroed counts and error key.
         """
         # Define 15 optimization strategies with base application rates
         # These reflect strategies always applied by the enforcement system

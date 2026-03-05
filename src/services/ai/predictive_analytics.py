@@ -1,6 +1,23 @@
 """
-Predictive Analytics and Forecasting Engine
-Uses statistical methods and machine learning for time series forecasting
+Predictive Analytics and Forecasting Engine for Claude Insight.
+
+Uses statistical methods for time-series forecasting of system health metrics
+such as health score, error count, context usage, response time, API cost,
+and API call counts.
+
+Forecasting algorithms provided:
+    linear_regression_forecast       -- OLS linear trend projection.
+    exponential_smoothing_forecast   -- Single exponential smoothing with trend.
+    moving_average_forecast          -- Moving average projection with trend.
+    seasonal_forecast                -- Deseasonalized + reseasonalized forecast.
+
+Data is persisted to JSON files under data/forecasts/:
+    forecasts.json    -- Generated forecast records.
+    predictions.json  -- Per-metric prediction state.
+    models.json       -- Stored model parameters.
+
+Classes:
+    PredictiveAnalytics: Forecasting engine for system metrics using statistical methods.
 """
 import json
 import numpy as np
@@ -15,9 +32,23 @@ from collections import deque
 
 
 class PredictiveAnalytics:
-    """Predictive analytics and forecasting for system metrics"""
+    """Forecast system metrics using statistical time-series algorithms.
+
+    Maintains per-metric in-memory ring buffers and persists forecasts,
+    predictions, and model parameters to JSON files under data/forecasts/.
+
+    Attributes:
+        data_dir (Path): Directory for forecast data files (data/forecasts/).
+        forecasts_file (Path): Path to forecasts.json.
+        predictions_file (Path): Path to predictions.json.
+        models_file (Path): Path to models.json.
+        metric_buffers (dict): Map of metric name to deque(maxlen=1000) for
+            'health_score', 'error_count', 'context_usage', 'response_time',
+            'cost', and 'api_calls'.
+    """
 
     def __init__(self):
+        """Initialize PredictiveAnalytics, create data directory, and ensure data files exist."""
         self.data_dir = get_data_dir() / 'forecasts'
         self.forecasts_file = self.data_dir / 'forecasts.json'
         self.predictions_file = self.data_dir / 'predictions.json'
@@ -36,7 +67,7 @@ class PredictiveAnalytics:
         self.ensure_data_files()
 
     def ensure_data_files(self):
-        """Ensure forecast data files exist"""
+        """Create data_dir and initialize forecast JSON files with empty structures if absent."""
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -59,7 +90,12 @@ class PredictiveAnalytics:
             }))
 
     def load_forecasts(self):
-        """Load forecasts data"""
+        """Load the forecasts dictionary from forecasts.json.
+
+        Returns:
+            dict: Data with keys forecasts (list) and last_updated (str or None).
+                Returns empty structure on read errors.
+        """
         try:
             return json.loads(self.forecasts_file.read_text())
         except Exception as e:
@@ -67,7 +103,11 @@ class PredictiveAnalytics:
             return {'forecasts': [], 'last_updated': None}
 
     def save_forecasts(self, data):
-        """Save forecasts data"""
+        """Write the forecasts dictionary to forecasts.json and update last_updated.
+
+        Args:
+            data (dict): Forecasts data to persist.
+        """
         try:
             data['last_updated'] = datetime.now().isoformat()
             self.forecasts_file.write_text(json.dumps(data, indent=2))
@@ -83,7 +123,11 @@ class PredictiveAnalytics:
             return {'predictions': {}, 'last_updated': None}
 
     def save_predictions(self, data):
-        """Save predictions data"""
+        """Write the predictions dictionary to predictions.json and update last_updated.
+
+        Args:
+            data (dict): Predictions data to persist.
+        """
         try:
             data['last_updated'] = datetime.now().isoformat()
             self.predictions_file.write_text(json.dumps(data, indent=2))
@@ -91,7 +135,14 @@ class PredictiveAnalytics:
             print(f"Error saving predictions: {e}")
 
     def add_metric_point(self, metric_name, value, timestamp=None):
-        """Add a metric data point for forecasting"""
+        """Append a metric data point to the in-memory buffer for the given metric.
+
+        Args:
+            metric_name (str): Metric key - one of 'health_score', 'error_count',
+                'context_usage', 'response_time', 'cost', or 'api_calls'.
+            value (float): The metric value to record.
+            timestamp (str or None): ISO timestamp string. Defaults to current time.
+        """
         if timestamp is None:
             timestamp = datetime.now().isoformat()
 
@@ -102,9 +153,18 @@ class PredictiveAnalytics:
             })
 
     def linear_regression_forecast(self, values, periods=10):
-        """
-        Forecast using linear regression
-        Returns predicted values for next n periods
+        """Forecast future values using OLS linear regression.
+
+        Fits a linear trend line to the input values and extrapolates
+        it ``periods`` steps into the future. Also computes R-squared.
+
+        Args:
+            values (list[float]): Historical time-series values (at least 3 required).
+            periods (int): Number of future periods to forecast. Defaults to 10.
+
+        Returns:
+            tuple[list[float], float, float]: (forecasted_values, slope, r_squared).
+                Returns ([], 0, 0) when fewer than 3 values are provided.
         """
         if len(values) < 3:
             return [], 0, 0
@@ -139,8 +199,18 @@ class PredictiveAnalytics:
         return forecasts.tolist(), slope, r_squared
 
     def exponential_smoothing_forecast(self, values, periods=10, alpha=0.3):
-        """
-        Forecast using exponential smoothing
+        """Forecast future values using single exponential smoothing with trend.
+
+        Applies exponential smoothing to the history and extrapolates using
+        the trend (last_smoothed - second_last_smoothed) * step.
+
+        Args:
+            values (list[float]): Historical time-series values (at least 2 required).
+            periods (int): Number of future periods to forecast. Defaults to 10.
+            alpha (float): Smoothing factor (0 < alpha <= 1). Defaults to 0.3.
+
+        Returns:
+            list[float]: Forecasted values for the next ``periods`` steps.
         """
         if len(values) < 2:
             return [values[-1] if values else 0] * periods
@@ -165,8 +235,18 @@ class PredictiveAnalytics:
         return forecasts
 
     def moving_average_forecast(self, values, periods=10, window=5):
-        """
-        Forecast using moving average
+        """Forecast future values using a moving average with trend projection.
+
+        Computes a convolution-based moving average and extrapolates using
+        the last MA trend step.
+
+        Args:
+            values (list[float]): Historical time-series values.
+            periods (int): Number of future periods to forecast. Defaults to 10.
+            window (int): Rolling window size for the moving average. Defaults to 5.
+
+        Returns:
+            list[float]: Forecasted values for the next ``periods`` steps.
         """
         if len(values) < window:
             avg = np.mean(values) if values else 0
@@ -190,8 +270,20 @@ class PredictiveAnalytics:
         return forecasts
 
     def seasonal_forecast(self, values, periods=10, season_length=24):
-        """
-        Forecast considering seasonal patterns (e.g., hourly, daily)
+        """Forecast future values accounting for seasonal patterns.
+
+        Deseasonalizes the input using multiplicative seasonal indices,
+        applies exponential smoothing to the deseasonalized trend, then
+        reseasonalizes the forecast. Falls back to exponential smoothing
+        when insufficient data for seasonal analysis (< 2 full seasons).
+
+        Args:
+            values (list[float]): Historical time-series values.
+            periods (int): Number of future periods to forecast. Defaults to 10.
+            season_length (int): Length of one seasonal cycle. Defaults to 24 (hourly).
+
+        Returns:
+            list[float]: Reseasonalized forecasted values for the next ``periods`` steps.
         """
         if len(values) < season_length * 2:
             # Not enough data for seasonal analysis

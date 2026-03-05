@@ -307,9 +307,21 @@ class MemorySystemMonitor:
         return stats
 
     def get_model_selection_distribution(self):
-        """
-        Get model selection distribution stats.
-        Reads from flow-trace.json final_decision.model_selected.
+        """Return model selection distribution across recent sessions.
+
+        Reads up to 200 most-recent flow-trace.json files and counts how often
+        each model class (haiku, sonnet, opus) was selected via
+        final_decision.model_selected.
+
+        Returns:
+            dict: Model distribution with keys:
+                total_requests (int): Sessions with a model_selected value.
+                haiku (int): Count of haiku selections.
+                sonnet (int): Count of sonnet selections.
+                opus (int): Count of opus selections.
+                haiku_percent (float): Percentage of haiku selections.
+                sonnet_percent (float): Percentage of sonnet selections.
+                opus_percent (float): Percentage of opus selections.
         """
         stats = {
             'total_requests': 0,
@@ -470,12 +482,24 @@ class MemorySystemMonitor:
         return stats
 
     def get_system_health_score(self):
-        """
-        Calculate overall memory system health score.
-        Hooks-based scoring (daemons removed in v3.3.0):
-        - 60pts: Hook scripts present in current/ directory
-        - 20pts: Core policy scripts present
-        - 20pts: Session logs exist (system is active)
+        """Calculate the overall memory system health score (0-100).
+
+        Hooks-based scoring formula (daemons removed in v3.3.0):
+            - 60 points: Three hook scripts present in scripts_dir (20 pts each).
+            - 20 points: Three core policy scripts present (prorated).
+            - 20 points: Session log traces exist:
+                * 20 pts if any trace modified within last 24 hours.
+                * 10 pts if traces exist but none are recent.
+
+        Returns:
+            dict: Health score breakdown with keys:
+                overall_score (float): Total score 0-100.
+                hooks_health (float): Hook script component score.
+                policy_health (float): Policy script component score.
+                session_activity (float): Session activity component score.
+                hooks_present (int): Number of hook scripts found.
+                hooks_total (int): Total expected hook scripts (3).
+                status (str): 'healthy' (>=80), 'degraded' (>=60), or 'critical' (<60).
         """
         scripts_dir = get_scripts_dir()
 

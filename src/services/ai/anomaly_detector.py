@@ -1,6 +1,24 @@
 """
-AI-Powered Anomaly Detection
-Uses statistical methods and machine learning to detect anomalies in system metrics
+AI-Powered Anomaly Detection for Claude Insight.
+
+Uses statistical methods to detect anomalies in system health metrics such as
+health score, error count, context usage, and response time.
+
+Detection algorithms provided:
+    z_score_detection          -- Flags values more than N standard deviations from mean.
+    iqr_detection              -- Flags outliers outside the interquartile fence.
+    moving_average_detection   -- Flags deviations > threshold from a rolling window average.
+    exponential_smoothing_detection -- Flags deviations from exponentially smoothed value.
+    detect_trend_anomaly       -- Flags sudden trend direction changes.
+    detect_spike               -- Flags sudden ratio spikes relative to recent average.
+
+Data is persisted to JSON files under data/anomalies/:
+    anomalies.json   -- Detected anomaly records.
+    models.json      -- Stored model state (thresholds, baseline stats).
+    history.json     -- Per-metric time-series data points.
+
+Classes:
+    AnomalyDetector: Detects anomalies in system metrics using statistical algorithms.
 """
 import json
 import numpy as np
@@ -15,9 +33,25 @@ from collections import deque
 
 
 class AnomalyDetector:
-    """Detect anomalies in system metrics using AI/ML algorithms"""
+    """Detect anomalies in system metrics using statistical AI/ML algorithms.
+
+    Maintains per-metric in-memory ring buffers for real-time detection and
+    persists anomaly records, model baselines, and metric history to JSON files
+    under the data/anomalies/ directory.
+
+    Attributes:
+        data_dir (Path): Directory for anomaly data files (data/anomalies/).
+        anomalies_file (Path): Path to anomalies.json.
+        models_file (Path): Path to models.json.
+        history_file (Path): Path to history.json.
+        health_score_buffer (deque): Rolling buffer of last 100 health score values.
+        error_count_buffer (deque): Rolling buffer of last 100 error count values.
+        context_usage_buffer (deque): Rolling buffer of last 100 context usage values.
+        response_time_buffer (deque): Rolling buffer of last 100 response time values.
+    """
 
     def __init__(self):
+        """Initialize AnomalyDetector, create data directory, and ensure data files exist."""
         self.data_dir = get_data_dir() / 'anomalies'
         self.anomalies_file = self.data_dir / 'anomalies.json'
         self.models_file = self.data_dir / 'models.json'
@@ -32,7 +66,7 @@ class AnomalyDetector:
         self.ensure_data_files()
 
     def ensure_data_files(self):
-        """Ensure anomaly data files exist"""
+        """Create data_dir and initialize anomaly JSON files with empty structures if absent."""
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -55,7 +89,12 @@ class AnomalyDetector:
             }))
 
     def load_anomalies(self):
-        """Load detected anomalies"""
+        """Load the anomalies dictionary from anomalies.json.
+
+        Returns:
+            dict: Data with keys anomalies (list) and last_updated (str or None).
+                Returns empty structure on read errors.
+        """
         try:
             return json.loads(self.anomalies_file.read_text())
         except Exception as e:
@@ -63,7 +102,11 @@ class AnomalyDetector:
             return {'anomalies': [], 'last_updated': None}
 
     def save_anomalies(self, data):
-        """Save detected anomalies"""
+        """Write the anomalies dictionary to anomalies.json and update last_updated.
+
+        Args:
+            data (dict): Anomalies data to persist.
+        """
         try:
             data['last_updated'] = datetime.now().isoformat()
             self.anomalies_file.write_text(json.dumps(data, indent=2))
@@ -71,7 +114,12 @@ class AnomalyDetector:
             print(f"Error saving anomalies: {e}")
 
     def load_models(self):
-        """Load trained models"""
+        """Load baseline model data from models.json.
+
+        Returns:
+            dict: Data with keys models (dict) and last_trained (str or None).
+                Returns empty structure on read errors.
+        """
         try:
             return json.loads(self.models_file.read_text())
         except Exception as e:
@@ -79,7 +127,11 @@ class AnomalyDetector:
             return {'models': {}, 'last_trained': None}
 
     def save_models(self, data):
-        """Save trained models"""
+        """Write model baseline data to models.json and update last_trained timestamp.
+
+        Args:
+            data (dict): Model data to persist.
+        """
         try:
             data['last_trained'] = datetime.now().isoformat()
             self.models_file.write_text(json.dumps(data, indent=2))
@@ -87,7 +139,12 @@ class AnomalyDetector:
             print(f"Error saving models: {e}")
 
     def load_history(self):
-        """Load metrics history"""
+        """Load the metrics history dictionary from history.json.
+
+        Returns:
+            dict: Data with keys metrics_history (list) and last_updated (str or None).
+                Returns empty structure on read errors.
+        """
         try:
             return json.loads(self.history_file.read_text())
         except Exception as e:
@@ -95,7 +152,11 @@ class AnomalyDetector:
             return {'metrics_history': [], 'last_updated': None}
 
     def save_history(self, data):
-        """Save metrics history"""
+        """Write the metrics history dictionary to history.json and update last_updated.
+
+        Args:
+            data (dict): History data to persist.
+        """
         try:
             data['last_updated'] = datetime.now().isoformat()
             self.history_file.write_text(json.dumps(data, indent=2))
@@ -103,7 +164,17 @@ class AnomalyDetector:
             print(f"Error saving history: {e}")
 
     def add_metric_data(self, metric_name, value, timestamp=None):
-        """Add metric data point for anomaly detection"""
+        """Append a metric data point to history and update in-memory buffers.
+
+        Stores the data point in history.json (capped at 10,000 entries) and
+        updates the corresponding in-memory deque buffer.
+
+        Args:
+            metric_name (str): Metric identifier ('health_score', 'error_count',
+                'context_usage', or 'response_time').
+            value (float): The metric value to record.
+            timestamp (str or None): ISO timestamp string. Defaults to current time.
+        """
         if timestamp is None:
             timestamp = datetime.now().isoformat()
 
@@ -129,7 +200,20 @@ class AnomalyDetector:
             self.response_time_buffer.append(value)
 
     def z_score_detection(self, values, current_value, threshold=3):
-        """Detect anomaly using Z-score method"""
+        """Detect an anomaly using the Z-score statistical method.
+
+        Computes the Z-score of current_value relative to the population of values.
+        Flags it as an anomaly when abs(z_score) > threshold.
+
+        Args:
+            values (list[float]): Historical baseline values (at least 3 required).
+            current_value (float): The new metric value to test.
+            threshold (float): Z-score threshold for flagging anomalies. Defaults to 3.
+
+        Returns:
+            tuple[bool, float, float]: (is_anomaly, mean, z_score).
+                Returns (False, 0, 0) when fewer than 3 baseline values are provided.
+        """
         if len(values) < 3:
             return False, 0, 0
 
@@ -146,7 +230,20 @@ class AnomalyDetector:
         return is_anomaly, mean, z_score
 
     def iqr_detection(self, values, current_value, multiplier=1.5):
-        """Detect anomaly using Interquartile Range (IQR) method"""
+        """Detect an anomaly using the Interquartile Range (IQR) method.
+
+        Calculates Q1, Q3, and the IQR fence and flags current_value as
+        an anomaly when it falls outside [Q1 - multiplier*IQR, Q3 + multiplier*IQR].
+
+        Args:
+            values (list[float]): Historical baseline values (at least 4 required).
+            current_value (float): The new metric value to test.
+            multiplier (float): IQR multiplier for the fence. Defaults to 1.5.
+
+        Returns:
+            tuple[bool, float, float, float]: (is_anomaly, lower_bound, upper_bound, iqr).
+                Returns (False, 0, 0, 0) when fewer than 4 baseline values are provided.
+        """
         if len(values) < 4:
             return False, 0, 0, 0
 
@@ -163,7 +260,22 @@ class AnomalyDetector:
         return is_anomaly, lower_bound, upper_bound, iqr
 
     def moving_average_detection(self, values, current_value, window=10, threshold_percent=0.3):
-        """Detect anomaly using Moving Average method"""
+        """Detect an anomaly by comparing to a rolling moving average.
+
+        Computes the fractional deviation of current_value from the average of
+        the last ``window`` values and flags it when deviation > threshold_percent.
+
+        Args:
+            values (list[float]): Historical baseline values.
+            current_value (float): The new metric value to test.
+            window (int): Rolling window size. Defaults to 10.
+            threshold_percent (float): Fractional deviation threshold (e.g. 0.3 = 30%).
+                Defaults to 0.3.
+
+        Returns:
+            tuple[bool, float, float]: (is_anomaly, moving_avg, deviation).
+                Returns (False, 0, 0) when fewer than ``window`` values are available.
+        """
         if len(values) < window:
             return False, 0, 0
 
@@ -176,7 +288,21 @@ class AnomalyDetector:
         return is_anomaly, moving_avg, deviation
 
     def exponential_smoothing_detection(self, values, current_value, alpha=0.3, threshold=0.3):
-        """Detect anomaly using Exponential Smoothing"""
+        """Detect an anomaly by comparing to an exponentially smoothed baseline.
+
+        Applies exponential smoothing to the history, then flags current_value
+        when its fractional deviation from the smoothed value exceeds threshold.
+
+        Args:
+            values (list[float]): Historical baseline values (at least 2 required).
+            current_value (float): The new metric value to test.
+            alpha (float): Smoothing factor (0 < alpha < 1). Defaults to 0.3.
+            threshold (float): Fractional deviation threshold. Defaults to 0.3.
+
+        Returns:
+            tuple[bool, float, float]: (is_anomaly, smoothed_value, deviation).
+                Returns (False, current_value, 0) when fewer than 2 values are available.
+        """
         if len(values) < 2:
             return False, current_value, 0
 
@@ -192,7 +318,20 @@ class AnomalyDetector:
         return is_anomaly, smoothed, deviation
 
     def detect_trend_anomaly(self, values, window=20):
-        """Detect sudden trend changes"""
+        """Detect sudden trend direction changes in a time series.
+
+        Compares the average derivative of the first half vs. second half of
+        the last 2*window values and flags a trend change when the difference > 2.
+
+        Args:
+            values (list[float]): Time-ordered metric values (at least 2*window required).
+            window (int): Half-window size for trend comparison. Defaults to 20.
+
+        Returns:
+            tuple[bool, str, float]: (is_anomaly, direction, trend_change_magnitude).
+                direction is 'sudden_increase', 'sudden_decrease', or 'stable'.
+                Returns (False, 'stable', 0) when fewer than 2*window values are available.
+        """
         if len(values) < window * 2:
             return False, 'stable', 0
 
@@ -214,7 +353,21 @@ class AnomalyDetector:
         return False, 'stable', trend_change
 
     def detect_spike(self, values, current_value, spike_threshold=2):
-        """Detect sudden spikes in metrics"""
+        """Detect a sudden spike or drop relative to the recent average.
+
+        Computes the ratio of current_value to the average of the last 5 values
+        and flags it as a spike when the ratio > spike_threshold or < 1/spike_threshold.
+
+        Args:
+            values (list[float]): Time-ordered metric values (at least 5 required).
+            current_value (float): The new metric value to test.
+            spike_threshold (float): Multiplier threshold for spike detection.
+                Defaults to 2.
+
+        Returns:
+            tuple[bool, float]: (is_spike, spike_ratio).
+                Returns (False, 0) when fewer than 5 values are available.
+        """
         if len(values) < 5:
             return False, 0
 

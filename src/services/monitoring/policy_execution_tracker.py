@@ -29,9 +29,21 @@ from utils.path_resolver import get_data_dir
 
 
 class PolicyExecutionTracker:
-    """Track policy executions and provide metrics"""
+    """Track real-time policy executions and provide metrics for the dashboard.
+
+    Reads policy-hits.log and flow-trace.json session data to measure
+    execution counts, success rates, and current blocking-enforcer state for
+    the six main execution steps (0, 1, 2, 4, 5, 6).
+
+    Attributes:
+        memory_dir (Path): Root data directory resolved by PathResolver.
+        policy_log (Path): Path to policy-hits.log.
+        enforcer_state (Path): Path to .blocking-state.json (legacy state file).
+        tracker_cache (Path): Path to policy_execution_cache.json.
+    """
 
     def __init__(self):
+        """Initialize PolicyExecutionTracker with paths from PathResolver."""
         self.memory_dir = get_data_dir()
         self.policy_log = self.memory_dir / 'logs' / 'policy-hits.log'
         self.enforcer_state = self.memory_dir / '.blocking-state.json'

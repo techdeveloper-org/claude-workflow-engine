@@ -83,10 +83,34 @@ class AutomationTracker:
         return stats
 
     def get_session_start_recommendations(self):
-        """
-        Get latest session-start recommendations.
-        Primary: most recent flow-trace.json final_decision.
-        Fallback: .last-automation-check.json (legacy).
+        """Return the latest session-start recommendations for the dashboard.
+
+        Primary source: reads the most recent flow-trace.json file in the sessions
+        log directory and extracts model, skill/agent, context status, and standards
+        from final_decision.
+
+        Fallback: reads .last-automation-check.json (legacy format) when no session
+        traces exist.
+
+        Returns:
+            dict: Recommendation data with keys:
+                available (bool): True when recommendations could be loaded.
+                timestamp (str): ISO flow start time.
+                session_id (str): Session identifier from the last run.
+                model_recommendation (str): Recommended model (e.g. 'SONNET').
+                model_reason (str): Reason for the model recommendation.
+                skills_recommended (list[str]): Recommended skill names.
+                agents_recommended (list[str]): Recommended agent names.
+                context_status (str): 'GREEN', 'YELLOW', 'ORANGE', or 'RED'.
+                context_percentage (float): Context window usage percentage.
+                standards_active (int): Active standards count.
+                rules_active (int): Active rules count.
+                task_type (str): Detected task type.
+                complexity (int): Complexity score.
+                tech_stack (list[str]): Detected technologies.
+                optimizations_needed (list[str]): Recommended optimizations.
+                source (str): 'flow-trace' or 'check-file'.
+            On failure returns dict with available=False and error/message keys.
         """
         sessions_dir = self.logs_dir / 'sessions'
 
@@ -211,9 +235,21 @@ class AutomationTracker:
                 return False
 
     def get_task_breakdown_stats(self):
-        """
-        Track task breakdown enforcement across sessions.
-        Reads from flow-trace.json final_decision.task_count and complexity.
+        """Track task breakdown enforcement statistics across sessions.
+
+        Reads up to 200 most-recent flow-trace.json files and aggregates task
+        count and complexity data from final_decision.
+
+        Returns:
+            dict: Task breakdown stats with keys:
+                total_analyses (int): Sessions with final_decision data.
+                tasks_required (int): Sessions where task_count >= 3.
+                phases_required (int): Sessions where task_count >= 5 or complexity >= 10.
+                complexity_distribution (dict): Map of complexity bucket label to count.
+                recent_breakdowns (list[dict]): Last 10 breakdowns with timestamp,
+                    task_count, complexity, task_type, model, plan_mode, session_id.
+                avg_tasks_per_session (float): Average task_count.
+                avg_complexity (float): Average complexity score.
         """
         stats = {
             'total_analyses': 0,
