@@ -2,6 +2,32 @@
 
 {% block title %}Analytics - Claude Insight{% endblock %}
 
+{% from "macros.html" import metric_box, chart_container, time_filter %}
+
+{% block extra_css %}
+<style>
+.card {
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.progress {
+    border-radius: 10px;
+}
+
+.progress-bar {
+    border-radius: 10px;
+}
+
+.bg-opacity-10 {
+    --bs-bg-opacity: 0.1;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
@@ -38,112 +64,58 @@
 <!-- Key Metrics Cards -->
 <div class="row mb-4">
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1 small">Avg Health Score</p>
-                        <h3 class="mb-0 text-success">{{ summary_stats.avg_health_score }}%</h3>
-                        <small class="text-{{ 'success' if analytics_data.health_trend.direction == 'up' else ('danger' if analytics_data.health_trend.direction == 'down' else 'muted') }}">
-                            <i class="fas fa-arrow-{{ 'up' if analytics_data.health_trend.direction == 'up' else ('down' if analytics_data.health_trend.direction == 'down' else 'right') }} me-1"></i>
-                            {{ analytics_data.health_trend.percentage }}% vs previous period
-                        </small>
-                    </div>
-                    <div class="text-success">
-                        <i class="fas fa-heartbeat fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {{ metric_box(
+            summary_stats.avg_health_score ~ '%',
+            'Avg Health Score',
+            'heartbeat',
+            'success',
+            analytics_data.health_trend.direction,
+            analytics_data.health_trend.percentage
+        ) }}
     </div>
 
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1 small">Total Errors</p>
-                        <h3 class="mb-0 text-danger">{{ summary_stats.total_errors }}</h3>
-                        <small class="text-{{ 'danger' if analytics_data.error_trend.direction == 'up' else ('success' if analytics_data.error_trend.direction == 'down' else 'muted') }}">
-                            <i class="fas fa-arrow-{{ 'up' if analytics_data.error_trend.direction == 'up' else ('down' if analytics_data.error_trend.direction == 'down' else 'right') }} me-1"></i>
-                            {{ analytics_data.error_trend.percentage }}% vs previous period
-                        </small>
-                    </div>
-                    <div class="text-danger">
-                        <i class="fas fa-exclamation-triangle fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {{ metric_box(
+            summary_stats.total_errors,
+            'Total Errors',
+            'exclamation-triangle',
+            'danger',
+            analytics_data.error_trend.direction,
+            analytics_data.error_trend.percentage
+        ) }}
     </div>
 
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1 small">Hooks Active</p>
-                        <h3 class="mb-0 text-info">2</h3>
-                        <small class="text-muted">
-                            <i class="fas fa-server me-1"></i>
-                            All systems operational
-                        </small>
-                    </div>
-                    <div class="text-info">
-                        <i class="fas fa-server fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {{ metric_box(
+            '2',
+            'Hooks Active',
+            'server',
+            'info',
+            'right',
+            '0'
+        ) }}
     </div>
 
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="text-muted mb-1 small">Policy Effectiveness</p>
-                        <h3 class="mb-0 text-primary">{{ analytics_data.policy_effectiveness.effectiveness }}%</h3>
-                        <small class="text-muted">
-                            <i class="fas fa-shield-alt me-1"></i>
-                            {{ analytics_data.policy_effectiveness.total_interventions }} interventions
-                        </small>
-                    </div>
-                    <div class="text-primary">
-                        <i class="fas fa-shield-alt fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {{ metric_box(
+            analytics_data.policy_effectiveness.effectiveness ~ '%',
+            'Policy Effectiveness',
+            'shield-alt',
+            'primary',
+            'right',
+            '0'
+        ) }}
     </div>
 </div>
 
 <!-- Trend Analysis Charts -->
 <div class="row mb-4">
     <div class="col-md-6">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-0 pt-4 pb-3">
-                <h5 class="mb-0">
-                    <i class="fas fa-chart-area me-2"></i>Health Score Trend
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="healthTrendChart" height="250"></canvas>
-            </div>
-        </div>
+        {{ chart_container('healthTrendChart', '300px', 'Health Score Trend') }}
     </div>
 
     <div class="col-md-6">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-0 pt-4 pb-3">
-                <h5 class="mb-0">
-                    <i class="fas fa-chart-bar me-2"></i>Error Distribution
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="errorDistributionChart" height="250"></canvas>
-            </div>
-        </div>
+        {{ chart_container('errorDistributionChart', '300px', 'Error Distribution') }}
     </div>
 </div>
 
@@ -185,7 +157,7 @@
                     </div>
                 </div>
 
-                <canvas id="costComparisonChart" height="200"></canvas>
+                {{ chart_container('costComparisonChart', '250px', '') }}
             </div>
         </div>
     </div>
@@ -227,7 +199,7 @@
                     </div>
                 </div>
 
-                <canvas id="policyImpactChart" height="200"></canvas>
+                {{ chart_container('policyImpactChart', '250px', '') }}
             </div>
         </div>
     </div>
@@ -390,26 +362,4 @@ new Chart(policyCtx, {
     }
 });
 </script>
-
-<style>
-.card {
-    transition: transform 0.2s;
-}
-
-.card:hover {
-    transform: translateY(-5px);
-}
-
-.progress {
-    border-radius: 10px;
-}
-
-.progress-bar {
-    border-radius: 10px;
-}
-
-.bg-opacity-10 {
-    --bs-bg-opacity: 0.1;
-}
-</style>
 {% endblock %}
