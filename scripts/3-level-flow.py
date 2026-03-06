@@ -1849,6 +1849,7 @@ def main():
         "level": 1,
         "order": 1,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": ctx_dur,
         "input": {
@@ -2022,6 +2023,7 @@ def main():
         "level": 1,
         "order": 2,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": sess_dur,
         "input": {
@@ -2083,6 +2085,7 @@ def main():
         "level": 1,
         "order": 2.5,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": prefs_dur,
         "input": {
@@ -2141,6 +2144,7 @@ def main():
         "level": 1,
         "order": 2.7,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": state_dur,
         "input": {
@@ -2229,6 +2233,7 @@ def main():
         "level": 1,
         "order": 2.9,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": patterns_dur,
         "input": {
@@ -2307,6 +2312,7 @@ def main():
         "level": 1.6,
         "order": 3.0,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": dep_dur,
         "input": {
@@ -2417,6 +2423,7 @@ def main():
         "level": 2.1,
         "order": 3,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start_2_1.isoformat(),
         "duration_ms": common_dur,
         "input": {
@@ -2505,6 +2512,7 @@ def main():
             "level": 2.2,
             "order": 4,
             "is_blocking": False,
+            "status": "PASSED",
             "timestamp": step_start_2_2.isoformat(),
             "duration_ms": micro_dur,
             "input": {
@@ -2545,8 +2553,9 @@ def main():
             "level": 2.2,
             "order": 4,
             "is_blocking": False,
+            "status": "PASSED",
             "timestamp": datetime.now().isoformat(),
-            "duration_ms": 0,
+            "duration_ms": dur,
             "input": {
                 "tech_stack": tech_stack,
                 "is_spring_boot": False
@@ -2660,6 +2669,7 @@ def main():
         "level": 3,
         "order": 0,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": cr_dur,
         "input": {
@@ -2808,6 +2818,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 4,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": tk_dur,
         "input": {
@@ -2889,6 +2900,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 5,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": pl_dur,
         "input": {
@@ -2946,6 +2958,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 6,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": ctx2_dur,
         "input": {
@@ -3019,8 +3032,9 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 7,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
-        "duration_ms": 0,
+        "duration_ms": dur,
         "input": {
             "from_previous": "LEVEL_3_STEP_3_2",
             "adjusted_complexity": adj_complexity,
@@ -3096,8 +3110,9 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 8,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
-        "duration_ms": 0,
+        "duration_ms": dur,
         "input": {
             "from_previous": "LEVEL_3_STEP_3_3",
             "model": selected_model,
@@ -3191,6 +3206,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 9,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": pr_dur_3_5,
         "input": {
@@ -3244,8 +3260,9 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 10,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": datetime.now().isoformat(),
-        "duration_ms": 0,
+        "duration_ms": dur,
         "input": {
             "from_previous": "LEVEL_3_STEP_3_5",
             "skill_agent": skill_agent_name,
@@ -3297,6 +3314,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 11,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": step_start.isoformat(),
         "duration_ms": fp_dur,
         "input": {
@@ -3329,8 +3347,9 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "level": 3,
         "order": 12,
         "is_blocking": False,
+        "status": "PASSED",
         "timestamp": datetime.now().isoformat(),
-        "duration_ms": 0,
+        "duration_ms": dur,
         "input": {
             "from_previous": "LEVEL_3_STEP_3_7",
             "task_count": task_count,
@@ -3379,8 +3398,9 @@ Work to complete: Execute phase {i} of the identified work breakdown.
             "level": 3,
             "order": order,
             "is_blocking": False,
+            "status": "PASSED",
             "timestamp": datetime.now().isoformat(),
-            "duration_ms": 0,
+            "duration_ms": dur,
             "input": {"from_previous": f"LEVEL_3_STEP_3_{int(float(step_num))-1 if float(step_num) > 9 else '8'}"},
             "policy": {"rules_applied": [step_name.lower().replace(' ', '_')]},
             "policy_output": {"status": "ACTIVE", "policies_loaded": policy_count},
