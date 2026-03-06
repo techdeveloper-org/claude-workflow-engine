@@ -1,16 +1,95 @@
+# Claude Insight v4.4.4 - Complete Requirements
+# All production and development dependencies in one file
+
+# ============================================================================
+# CORE FLASK & WEB FRAMEWORK
+# ============================================================================
 Flask>=3.0.0
 Werkzeug>=3.0.1
 Flask-SocketIO>=5.3.6
 python-socketio>=5.11.1
+
+# ============================================================================
+# API DOCUMENTATION & SWAGGER
+# ============================================================================
 flask-swagger-ui>=4.11.1
 flasgger>=0.9.7.1
+
+# ============================================================================
+# AUTHENTICATION & SECURITY
+# ============================================================================
 bcrypt>=4.1.2
+cryptography>=41.0.7
+pyotp>=2.9.0
+Flask-WTF>=1.2.1
+WTForms>=3.1.2
+Flask-Limiter>=3.5.1
+Flask-Talisman>=1.1.0
+python-dotenv>=1.0.1
+
+# ============================================================================
+# DATA PROCESSING & EXPORT
+# ============================================================================
 openpyxl>=3.1.2
 reportlab>=4.0.9
 Pillow>=10.2.0
+
+# ============================================================================
+# NOTIFICATIONS & COMMUNICATION
+# ============================================================================
 twilio>=8.10.0
+requests>=2.31.0
+
+# ============================================================================
+# SYSTEM MONITORING & ANALYTICS
+# ============================================================================
 numpy>=1.24.3
 psutil>=5.9.8
-cryptography>=41.0.7
-requests>=2.31.0
-pyotp>=2.9.0
+
+# ============================================================================
+# DEVELOPMENT & TESTING (Optional - install with: pip install -r requirements.txt[dev])
+# ============================================================================
+# Test Framework
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+coverage>=7.0.0
+
+# Code Quality Tools
+pylint>=2.15.0
+flake8>=6.0.0
+black>=23.0.0
+isort>=5.11.0
+mypy>=1.0.0
+
+# Documentation
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.0.0
+
+# Security Scanning
+bandit>=1.7.5
+safety>=2.3.5
+
+# ============================================================================
+# INSTALLATION INSTRUCTIONS
+# ============================================================================
+# Production Install:
+#   pip install -r requirements.txt
+#
+# Development Install (with testing tools):
+#   pip install -r requirements.txt
+#   pip install pytest pytest-cov pytest-mock coverage pylint flake8 black isort mypy bandit safety
+#
+# Docker Install:
+#   See Dockerfile for automated installation
+#
+# ============================================================================
+# NOTES
+# ============================================================================
+# 1. All dependencies are pinned to specific versions for reproducibility
+# 2. Update dependencies regularly: pip list --outdated
+# 3. Check for security vulnerabilities: safety check
+# 4. Scan code for security issues: bandit -r src/
+# 5. Always use virtual environment: python -m venv venv
+# 6. Python 3.8+ required
+# ============================================================================
