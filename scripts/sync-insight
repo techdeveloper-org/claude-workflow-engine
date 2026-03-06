@@ -3,7 +3,7 @@
 # Downloads and syncs only claude-insight components
 #
 # PURPOSE: Quick sync for claude-insight updates
-# This is a convenience wrapper around hook-downloader.py sync-claude-insight
+# This bash wrapper delegates to the Python wrapper (sync-insight.py)
 #
 # USAGE:
 #   bash sync-insight
@@ -14,18 +14,18 @@
 #   - All policies from claude-insight
 #   - Dashboard app (src, templates, static)
 #
-# Version: 1.0.0
+# Version: 2.0.0 (uses Python wrapper)
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOOK_DOWNLOADER="$SCRIPT_DIR/hook-downloader.py"
+PYTHON_WRAPPER="$SCRIPT_DIR/sync-insight.py"
 
-if [ ! -f "$HOOK_DOWNLOADER" ]; then
-    echo "[ERROR] hook-downloader.py not found"
+if [ ! -f "$PYTHON_WRAPPER" ]; then
+    echo "[ERROR] sync-insight.py not found"
     exit 1
 fi
 
-# Call hook-downloader with selective sync parameter
-python "$HOOK_DOWNLOADER" sync-claude-insight
+# Delegate to Python wrapper (handles cross-platform execution)
+python "$PYTHON_WRAPPER"
 exit $?

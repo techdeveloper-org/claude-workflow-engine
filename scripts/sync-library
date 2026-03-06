@@ -3,7 +3,7 @@
 # Downloads and syncs only skills and agents
 #
 # PURPOSE: Quick sync for claude-global-library updates
-# This is a convenience wrapper around hook-downloader.py sync-claude-global-library
+# This bash wrapper delegates to the Python wrapper (sync-library.py)
 #
 # USAGE:
 #   bash sync-library
@@ -13,18 +13,18 @@
 #   - All skills from claude-global-library
 #   - All agents from claude-global-library
 #
-# Version: 1.0.0
+# Version: 2.0.0 (uses Python wrapper)
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOOK_DOWNLOADER="$SCRIPT_DIR/hook-downloader.py"
+PYTHON_WRAPPER="$SCRIPT_DIR/sync-library.py"
 
-if [ ! -f "$HOOK_DOWNLOADER" ]; then
-    echo "[ERROR] hook-downloader.py not found"
+if [ ! -f "$PYTHON_WRAPPER" ]; then
+    echo "[ERROR] sync-library.py not found"
     exit 1
 fi
 
-# Call hook-downloader with selective sync parameter
-python "$HOOK_DOWNLOADER" sync-claude-global-library
+# Delegate to Python wrapper (handles cross-platform execution)
+python "$PYTHON_WRAPPER"
 exit $?

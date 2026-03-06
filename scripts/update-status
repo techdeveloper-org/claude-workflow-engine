@@ -2,15 +2,28 @@
 # Update Status Reporter - Clarifies successful updates vs actual failures
 #
 # PURPOSE: Show clear, user-friendly update completion messages
-# Distinguishes between:
-#   - Successful updates with optional warnings (still works!)
-#   - Actual failures (system broken)
+# This bash wrapper delegates to the Python wrapper (update-status.py)
 #
 # USAGE:
 #   bash update-status success
 #   bash update-status warning "optional warning message"
 #   bash update-status failed "error message"
+#
+# Version: 2.0.0 (uses Python wrapper)
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_WRAPPER="$SCRIPT_DIR/update-status.py"
+
+if [ ! -f "$PYTHON_WRAPPER" ]; then
+    echo "[ERROR] update-status.py not found"
+    exit 1
+fi
+
+# Delegate to Python wrapper (handles cross-platform execution)
+python "$PYTHON_WRAPPER" "$@"
+exit $?
+
+# Original bash implementation below (kept for reference, but not executed)
 STATUS=$1
 MESSAGE=${2:-""}
 
