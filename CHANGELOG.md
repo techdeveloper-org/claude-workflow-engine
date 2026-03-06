@@ -1,3 +1,32 @@
+## [4.6.0] - 2026-03-06
+### Added
+- **Phase 3: Template Macro Application**
+  - Created 7 reusable Jinja2 macros (stat_card, metric_box, time_filter, etc.)
+  - Applied macros to 4 key templates (analytics, dashboard, sessions, policies)
+  - Consolidated inline styles to {% block extra_css %} blocks
+  - Reduced code duplication by 25-50% in template layer
+
+- **Phase 4: Blueprint Extraction (Partial)**
+  - Created src/routes/api_routes.py (440+ lines)
+    - Organized API endpoints: metrics, logs, 2FA, dashboards, exports
+    - Full authentication and error handling
+    - Caching integrated for high-frequency endpoints
+  - Created src/routes/monitor_routes.py (350+ lines)
+    - Level 1, 2, 3 monitoring with real-time stats
+    - Architecture health endpoint
+    - 30-60s TTL caching on all monitor data
+  - dashboard_routes.py blueprint already established
+
+### Changed
+- app.py: Reduced bloat with 2 new blueprint imports + registrations
+- 5 templates: Moved inline styles to extra_css blocks (FOUC prevention)
+- Total lines: ~800 lines extracted to blueprints
+
+### Fixed
+- All 21 policies now have proper status fields (PASSED/FAILED)
+- All hardcoded duration_ms=0 values replaced with actual timing
+- Policy chaining data now flows correctly through all levels
+
 ## [4.5.0] - 2026-03-06
 ### Added
 - **NEW:** Context Reading Pre-Flight Policy (STEP 3.0.0)

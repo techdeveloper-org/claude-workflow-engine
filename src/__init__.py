@@ -20,4 +20,4 @@ Usage::
     app.run()
 """
 
-__version__ = "1.0.0"
+__version__ = "4.6.0"
