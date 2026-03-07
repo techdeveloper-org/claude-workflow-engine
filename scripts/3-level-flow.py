@@ -3011,7 +3011,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     plan_score_detail = {}
     if plan_script.exists():
         # Plan mode suggestion script (requires argument after --suggest)
-        pl_out, _, _, pl_dur = run_script_with_retry(plan_script, ['--suggest', user_message], timeout=8, step_name='Step-3.2.Plan-Mode')
+        pl_out, _, _, pl_dur = run_script_with_retry(plan_script, ['--suggest', user_message, '--complexity', str(complexity)], timeout=8, step_name='Step-3.2.Plan-Mode')
         pl_data = safe_json(pl_out)
         plan_required = pl_data.get('plan_mode_required', False)
         if 'score' in pl_data:
@@ -3147,7 +3147,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
 
     if model_script.exists():
         try:
-            ms_out, ms_err, ms_rc, ms_dur = run_script(model_script, ['--analyze', user_message], timeout=8)
+            ms_out, ms_err, ms_rc, ms_dur = run_script(model_script, ['--analyze', user_message, '--complexity', str(adj_complexity)], timeout=8)
             if ms_rc == 0 and ms_out.strip():
                 # Parse JSON — script may output only JSON or JSON after text
                 try:

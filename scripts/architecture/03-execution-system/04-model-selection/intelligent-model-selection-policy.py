@@ -1963,6 +1963,10 @@ Examples:
         help='Analyze a request message and recommend a model'
     )
     parser.add_argument(
+        '--complexity', type=int, default=0,
+        help='Combined complexity score (keyword+graph) from 3-level-flow.py'
+    )
+    parser.add_argument(
         '--auto-select', metavar='TASK_JSON',
         help='Auto-select model using auto-selector logic (JSON string)'
     )
@@ -2102,6 +2106,31 @@ def main() -> int:
     if args.analyze:
         enforcer = ModelSelectionEnforcer()
         result = enforcer.analyze_request(args.analyze)
+        # If --complexity is provided (from 3-level-flow.py combined score),
+        # override the keyword-only model with complexity-threshold model.
+        # Complexity thresholds: <5=HAIKU, 5-9=HAIKU/SONNET, 10-19=SONNET, >=20=OPUS
+        if args.complexity > 0:
+            c = args.complexity
+            if c < 5:
+                complexity_model = 'haiku'
+                complexity_reason = 'Simple task (<5) - Haiku fastest'
+            elif c < 10:
+                # Use keyword result as tiebreaker for moderate range
+                kw_model = result.get('recommended_model', 'sonnet').lower()
+                complexity_model = kw_model if kw_model in ('haiku', 'sonnet') else 'sonnet'
+                complexity_reason = f'Moderate task ({c}) - keyword tiebreaker: {kw_model}'
+            elif c < 20:
+                complexity_model = 'sonnet'
+                complexity_reason = f'Complex task ({c}) - Sonnet required'
+            else:
+                complexity_model = 'opus'
+                complexity_reason = f'Very complex task ({c}) - Opus required'
+            result['keyword_model'] = result['recommended_model']
+            result['keyword_reasoning'] = result['reasoning']
+            result['recommended_model'] = complexity_model
+            result['reasoning'] = complexity_reason
+            result['complexity_used'] = c
+            result['confidence'] = max(result.get('confidence', 0), 0.8)
         print(json.dumps(result, indent=2))
         return 0
 

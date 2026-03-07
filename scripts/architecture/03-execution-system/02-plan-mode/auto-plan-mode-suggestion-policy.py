@@ -516,10 +516,32 @@ if __name__ == "__main__":
             sys.exit(0 if result.get("status") == "success" else 1)
         elif sys.argv[1] == "--suggest" and len(sys.argv) >= 3:
             task_desc = ' '.join(sys.argv[2:])
+            # Accept --complexity N from 3-level-flow.py (combined keyword+graph score)
+            input_complexity = 5  # Default fallback
+            for i, arg in enumerate(sys.argv):
+                if arg == '--complexity' and i + 1 < len(sys.argv):
+                    try:
+                        input_complexity = int(sys.argv[i + 1])
+                    except ValueError:
+                        pass
+                    break
             suggester = AutoPlanModeSuggester()
-            complexity = {"score": 15, "level": "MEDIUM", "file_count": 3}
+            complexity = {"score": input_complexity, "level": "MEDIUM", "file_count": 3}
             result = suggester.should_use_plan_mode(complexity)
-            print(json.dumps(result, indent=2))
+            # Output format expected by 3-level-flow.py:
+            # - plan_mode_required (bool)
+            # - score (int) - adjusted complexity (risk-adjusted, not replacing input)
+            output = {
+                'plan_mode_required': result.get('suggestion', {}).get('recommend_plan_mode', False),
+                'score': result.get('adjusted_score', input_complexity),
+                'base_score': input_complexity,
+                'adjusted_score': result.get('adjusted_score', input_complexity),
+                'complexity_level': result.get('complexity_level', 'LOW'),
+                'risk_factors': result.get('risk_factors', []),
+                'reasoning': result.get('suggestion', {}).get('reasoning', ''),
+                'confidence': result.get('suggestion', {}).get('confidence', 0),
+            }
+            print(json.dumps(output, indent=2))
             sys.exit(0)
         else:
             print("Usage: python auto-plan-mode-suggestion-policy.py [--enforce|--validate|--report|--suggest]")
