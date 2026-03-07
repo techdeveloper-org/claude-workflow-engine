@@ -1,4 +1,4 @@
-# Claude Insight v4.10.0
+# Claude Insight v4.13.1
 
 **Real-time Monitoring Dashboard for the Claude Memory System (3-Level Architecture + Policy Enforcement)**
 
@@ -6,11 +6,11 @@
 [![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.0-green?logo=flask)](https://flask.palletsprojects.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.10.0-brightgreen)](VERSION)
+[![Version](https://img.shields.io/badge/Version-4.13.1-brightgreen)](VERSION)
 
 Claude Insight is a Python Flask dashboard that monitors how Claude Code follows the **3-Level Architecture enforcement policies** in real-time. It tracks policy execution, session analytics, skill/agent usage, context optimization, and provides complete audit trails of all decisions.
 
-**Latest Version (v4.10.0):**
+**Latest Version (v4.13.1):**
 - **FIXED:** Critical PID mismatch - flag files now use session ID only (no PID), fixing cross-hook enforcement
 - **FIXED:** post-tool-tracker session ID resolution - now reads `.current-session.json` first
 - **FIXED:** stop-notifier referencing deleted scripts (auto-commit-enforcer, failure-detector)

@@ -1,3 +1,9 @@
+## [4.13.1] - 2026-03-07
+### Changed
+- Version bump to 4.13.1
+- Updated SYSTEM_REQUIREMENTS_SPECIFICATION.md
+- Auto-updated via version-release-policy.py
+
 ## [4.13.0] - 2026-03-07
 ### Changed
 - **Step 3.6 (Tool Optimization): Now calls `tool-usage-optimization-policy.py --enforce`**

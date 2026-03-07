@@ -10,7 +10,7 @@ It ensures that version numbers are bumped according to semantic versioning
 across all relevant locations, and that release commits follow the required
 format.
 
-NEW in v2.0: Auto-updates VERSION, CHANGELOG.md, and SYSTEM_REQUIREMENTS_SPECIFICATION.md!
+NEW in v3.0: Auto-updates VERSION, CHANGELOG.md, SYSTEM_REQUIREMENTS_SPECIFICATION.md, and README.md!
 
 Policy rules enforced:
   - Version numbers follow SemVer: MAJOR.MINOR.PATCH
@@ -19,6 +19,7 @@ Policy rules enforced:
   - Release commit message format: 'bump: vX.Y.Z -> vX.Y.Z+1'
   - CHANGELOG.md must be updated with each version bump
   - SYSTEM_REQUIREMENTS_SPECIFICATION.md must be updated (Document Version + Last Updated)
+  - README.md must be updated (title, version badge, Latest Version header)
 
 Key Functions:
   enforce(): Activate version release policy and perform version bump.
@@ -27,6 +28,7 @@ Key Functions:
   bump_version(): Increment version and update all documentation files.
   update_changelog(): Add entry to CHANGELOG.md (create if not exists).
   update_srs(): Update SYSTEM_REQUIREMENTS_SPECIFICATION.md metadata.
+  update_readme(): Update README.md version references (title, badge, header).
   log_action(): Append enforcement events to the policy-hits log.
 
 CLI Usage:
@@ -279,10 +281,59 @@ See README.md for comprehensive system documentation.
         return False
 
 
+def update_readme(new_version):
+    """Update README.md with new version references.
+
+    Replaces version strings in the title line, badge URLs, and
+    'Latest Version' header so README always reflects the current release.
+
+    Args:
+        new_version (str): The new version string, e.g. '4.14.0'.
+
+    Returns:
+        bool: True if README was updated (or does not exist), False on error.
+    """
+    try:
+        readme_file = get_project_root() / "README.md"
+        if not readme_file.exists():
+            log_action("README_SKIP", "README.md not found")
+            return True
+
+        content = readme_file.read_text(encoding='utf-8')
+
+        # Update title line: # Claude Insight v4.x.x
+        content = re.sub(
+            r'(#\s+Claude Insight\s+v)\d+\.\d+\.\d+',
+            rf'\g<1>{new_version}',
+            content
+        )
+
+        # Update version badge: Version-4.x.x-brightgreen
+        content = re.sub(
+            r'(Version-)\d+\.\d+\.\d+(-brightgreen)',
+            rf'\g<1>{new_version}\g<2>',
+            content
+        )
+
+        # Update Latest Version header: **Latest Version (v4.x.x):**
+        content = re.sub(
+            r'(\*\*Latest Version\s*\(v)\d+\.\d+\.\d+(\))',
+            rf'\g<1>{new_version}\g<2>',
+            content
+        )
+
+        readme_file.write_text(content, encoding='utf-8')
+        log_action("README_UPDATED", f"Updated for v{new_version}")
+        return True
+    except Exception as e:
+        log_action("README_UPDATE_ERROR", str(e))
+        return False
+
+
 def bump_version():
     """Perform complete version bump operation.
 
-    Updates VERSION, CHANGELOG.md, and SYSTEM_REQUIREMENTS_SPECIFICATION.md
+    Updates VERSION, CHANGELOG.md, SYSTEM_REQUIREMENTS_SPECIFICATION.md, and README.md.
 
     Returns:
         dict: Result with status and details
@@ -305,15 +356,20 @@ def bump_version():
         if not update_srs(new_version):
             return {"status": "error", "message": "Failed to update SRS"}
 
-        print(f"[version-release-policy] ✅ Version bumped: {new_version}")
-        print(f"[version-release-policy] ✅ CHANGELOG.md updated")
-        print(f"[version-release-policy] ✅ SYSTEM_REQUIREMENTS_SPECIFICATION.md updated")
+        # Step 4: Update README.md
+        if not update_readme(new_version):
+            return {"status": "error", "message": "Failed to update README.md"}
+
+        print(f"[version-release-policy] Version bumped: {new_version}")
+        print(f"[version-release-policy] CHANGELOG.md updated")
+        print(f"[version-release-policy] SYSTEM_REQUIREMENTS_SPECIFICATION.md updated")
+        print(f"[version-release-policy] README.md updated")
 
         return {
             "status": "success",
             "old_version": current_version,
             "new_version": new_version,
-            "files_updated": ["VERSION", "CHANGELOG.md", "SYSTEM_REQUIREMENTS_SPECIFICATION.md"]
+            "files_updated": ["VERSION", "CHANGELOG.md", "SYSTEM_REQUIREMENTS_SPECIFICATION.md", "README.md"]
         }
     except Exception as e:
         log_action("BUMP_ERROR", str(e))
