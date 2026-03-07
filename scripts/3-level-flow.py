@@ -2911,6 +2911,7 @@ def main():
         },
         "policy_output": step_3_0_1_output,
         "decision": step_3_0_1_decision,
+        "status": "PASSED",
         "passed_to_next": {
             "graph_complexity_score": graph_complexity_score,
             "graph_metrics_summary": graph_metrics_summary,
@@ -2977,16 +2978,24 @@ def main():
     # ------------------------------------------------------------------
     keyword_complexity = complexity  # Save original keyword-based score
     if graph_complexity_score > 0:
-        # Graph analysis available - combine both scores
+        # Graph analysis available - combine both scores: keyword(30%) + graph(70%)
         combined = round((keyword_complexity * 0.3) + (graph_complexity_score * 0.7))
         complexity = max(1, min(combined, 25))
+        complexity_combining_formula = (
+            f"(keyword={keyword_complexity} * 0.3) + (graph={graph_complexity_score} * 0.7) "
+            f"= {round(keyword_complexity * 0.3, 1)} + {round(graph_complexity_score * 0.7, 1)} "
+            f"= {complexity}/25"
+        )
         print(f"   [3.0+] Combined Complexity: {complexity}/25 (keyword={keyword_complexity}, graph={graph_complexity_score})")
+        print(f"   [3.0+] Formula: {complexity_combining_formula}")
     else:
+        complexity_combining_formula = f"keyword_only={complexity}/25 (graph not available)"
         print(f"   [3.0+] Keyword Complexity: {complexity}/25 (graph not available)")
 
     step_3_0_output["keyword_complexity"] = keyword_complexity
     step_3_0_output["graph_complexity"] = graph_complexity_score
     step_3_0_output["combined_complexity"] = complexity
+    step_3_0_output["complexity_combining_formula"] = complexity_combining_formula
     step_3_0_output["estimated_complexity"] = complexity  # Override with combined
 
     step_3_0_decision = f"Complexity={complexity}/25 (kw={keyword_complexity}+graph={graph_complexity_score}), Type={task_type}"
@@ -3952,6 +3961,18 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     flow_end = datetime.now()
     duration_sec = (flow_end - flow_start).total_seconds()
 
+    # Enrich model_reason with full decision chain for transparency (Fix #3)
+    _kw = keyword_complexity if 'keyword_complexity' in dir() else adj_complexity
+    _gr = graph_complexity_score if 'graph_complexity_score' in dir() else 0
+    _formula = complexity_combining_formula if 'complexity_combining_formula' in dir() else f"keyword_only={adj_complexity}/25"
+    if _gr > 0:
+        _chain_prefix = (
+            f"graph={_gr}, keyword={_kw}, combined={adj_complexity} [{_formula}] -> "
+        )
+    else:
+        _chain_prefix = f"keyword={_kw}/25 (graph unavailable) -> "
+    model_reason = _chain_prefix + model_reason
+
     # Risk level based on complexity
     _risk_level = "LOW"
     if adj_complexity >= 15:
@@ -3967,6 +3988,9 @@ Work to complete: Execute phase {i} of the identified work breakdown.
         "plan_mode": plan_required,
         "model_selected": selected_model,
         "model_reason": model_reason,
+        "complexity_combining_formula": _formula,
+        "keyword_complexity": _kw,
+        "graph_complexity": _gr,
         "task_count": task_count,
         "execution_mode": "parallel" if parallel_possible else "sequential",
         "skill_or_agent": skill_agent_name,
