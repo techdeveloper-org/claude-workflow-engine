@@ -62,7 +62,15 @@ try:
 except ImportError:
     # Fallback for standalone mode (no IDE_INSTALL_DIR set)
     FLAG_DIR = Path.home() / '.claude'
-    CURRENT_SESSION_FILE = Path.home() / '.claude' / 'memory' / '.current-session.json'
+    # Per-project session file for multi-window isolation
+    try:
+        _pe_dir = os.path.dirname(os.path.abspath(__file__))
+        if _pe_dir not in sys.path:
+            sys.path.insert(0, _pe_dir)
+        from project_session import get_project_session_file
+        CURRENT_SESSION_FILE = get_project_session_file()
+    except ImportError:
+        CURRENT_SESSION_FILE = Path.home() / '.claude' / 'memory' / '.current-session.json'
 
 # Metrics emitter (fire-and-forget, never blocks)
 try:

@@ -422,10 +422,17 @@ class AutoFixEnforcer:
 
     def _get_current_session_id(self):
         """
-        Read the active session ID from .current-session.json.
+        Read the active session ID from per-project or legacy session file.
         Returns the session ID string or None if not found.
         Used for session isolation in state checks.
         """
+        try:
+            from project_session import read_session_id
+            sid = read_session_id()
+            return sid if sid else None
+        except ImportError:
+            pass
+        # Legacy fallback
         current_session_file = self.memory_path / '.current-session.json'
         if not current_session_file.exists():
             return None

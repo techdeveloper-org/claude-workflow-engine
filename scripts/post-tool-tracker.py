@@ -199,25 +199,38 @@ def _get_session_id_from_progress():
     """Get the current session ID with multiple fallback sources.
 
     Checks in order:
-    1. .current-session.json (most reliable - written by session-id-generator)
-    2. session-progress.json (may be stale or have session_broken=true)
+    1. Per-project session file (multi-window isolation)
+    2. Legacy global .current-session.json (backward compat)
+    3. session-progress.json (may be stale or have session_broken=true)
 
     Returns:
         str: Active session ID (e.g. "SESSION-20260307-115241-GQQQ"), or
              empty string when no valid session ID can be found.
     """
-    # Primary: .current-session.json (most reliable source)
+    # Primary: use project_session helper (per-project + legacy fallback)
     try:
-        current_sess_file = Path.home() / '.claude' / 'memory' / '.current-session.json'
-        if current_sess_file.exists():
-            with open(current_sess_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            sid = data.get('current_session_id', '')
-            if sid and sid.startswith('SESSION-'):
-                return sid
+        _pt_dir = os.path.dirname(os.path.abspath(__file__))
+        if _pt_dir not in sys.path:
+            sys.path.insert(0, _pt_dir)
+        from project_session import read_session_id
+        sid = read_session_id()
+        if sid:
+            return sid
+    except ImportError:
+        # Fallback if project_session not available: read legacy global file
+        try:
+            legacy = Path.home() / '.claude' / 'memory' / '.current-session.json'
+            if legacy.exists():
+                with open(legacy, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                sid = data.get('current_session_id', '')
+                if sid and sid.startswith('SESSION-'):
+                    return sid
+        except Exception:
+            pass
     except Exception:
         pass
-    # Fallback: session-progress.json
+    # Final fallback: session-progress.json
     try:
         if SESSION_STATE_FILE.exists():
             with open(SESSION_STATE_FILE, 'r', encoding='utf-8') as f:

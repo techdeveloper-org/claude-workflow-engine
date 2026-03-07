@@ -89,7 +89,12 @@ class SessionIDGenerator:
         """Initialise paths and create required directories if absent."""
         self.memory_path = Path.home() / '.claude' / 'memory'
         self.sessions_dir = self.memory_path / 'sessions'
-        self.current_session_file = self.memory_path / '.current-session.json'
+        # Per-project session file for multi-window isolation
+        try:
+            from project_session import get_project_session_file
+            self.current_session_file = get_project_session_file()
+        except ImportError:
+            self.current_session_file = self.memory_path / '.current-session.json'
         self.sessions_log = self.memory_path / 'logs' / 'sessions.log'
 
         # Ensure directories exist

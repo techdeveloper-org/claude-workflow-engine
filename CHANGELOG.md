@@ -1,3 +1,26 @@
+## [4.11.0] - 2026-03-07
+### Added
+- **Per-project session isolation for multi-window support**
+  - New `project_session.py` utility: CWD hash-based session file resolution
+  - Session file: `.current-session-{cwd_hash}.json` (was global `.current-session.json`)
+  - Each project window gets its own session file, flags, and enforcement state
+  - Backward compatible: falls back to legacy global file if `project_session.py` not available
+
+### Changed
+- `session-id-generator.py`: Writes to per-project session file
+- `pre-tool-enforcer.py`: Reads from per-project session file
+- `post-tool-tracker.py`: Reads from per-project session file
+- `stop-notifier.py`: Reads from per-project session file
+- `clear-session-handler.py`: Deletes per-project session file
+- `auto-fix-enforcer.py`: Reads from per-project session file
+- `ide_paths.py`: CURRENT_SESSION_FILE uses per-project path
+- `prompt-generation-policy.py`: Reads from per-project session file
+
+### Multi-Window Isolation
+- Window A (project A, hash=abc123) -> `.current-session-abc123.json` -> SESSION-A flags
+- Window B (project B, hash=def456) -> `.current-session-def456.json` -> SESSION-B flags
+- No cross-contamination: each window only sees its own session and flags
+
 ## [4.10.0] - 2026-03-07
 ### Fixed
 - **CRITICAL: PID mismatch across all hook scripts (3-level-flow, pre-tool-enforcer, post-tool-tracker)**

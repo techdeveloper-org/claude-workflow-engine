@@ -499,14 +499,21 @@ class PromptAutoGenerator:
                   Empty dict if file not found or cannot be parsed.
         """
         try:
-            # Try to find current session
-            current_session_file = MEMORY_DIR / '.current-session.json'
-            if not current_session_file.exists():
-                return {}
-
-            with open(current_session_file, encoding='utf-8') as f:
-                session_info = json.load(f)
-                session_id = session_info.get('current_session_id')
+            # Try to find current session (per-project then legacy)
+            session_id = None
+            try:
+                _pg_dir = os.path.dirname(os.path.abspath(__file__))
+                _scripts_dir = str(Path(_pg_dir).parent.parent.parent)
+                if _scripts_dir not in sys.path:
+                    sys.path.insert(0, _scripts_dir)
+                from project_session import read_session_id
+                session_id = read_session_id() or None
+            except ImportError:
+                current_session_file = MEMORY_DIR / '.current-session.json'
+                if current_session_file.exists():
+                    with open(current_session_file, encoding='utf-8') as f:
+                        session_info = json.load(f)
+                        session_id = session_info.get('current_session_id')
 
             if not session_id:
                 return {}

@@ -100,7 +100,15 @@ except ImportError:
     SCRIPTS_DIR = Path.home() / '.claude' / 'scripts'
     CURRENT_DIR = SCRIPTS_DIR if SCRIPTS_DIR.exists() else (MEMORY_BASE / 'current')
     SESSIONS_DIR = MEMORY_BASE / 'sessions'
-    CURRENT_SESSION_FILE = MEMORY_BASE / '.current-session.json'
+    # Per-project session file for multi-window isolation
+    try:
+        _csh_dir = os.path.dirname(os.path.abspath(__file__))
+        if _csh_dir not in sys.path:
+            sys.path.insert(0, _csh_dir)
+        from project_session import get_project_session_file
+        CURRENT_SESSION_FILE = get_project_session_file()
+    except ImportError:
+        CURRENT_SESSION_FILE = MEMORY_BASE / '.current-session.json'
     CLEAR_LOG = MEMORY_BASE / 'logs' / 'clear-events.log'
     SESSION_START_VOICE_FLAG = Path.home() / '.claude' / '.session-start-voice'
     FLAG_DIR = Path.home() / '.claude'

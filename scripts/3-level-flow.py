@@ -1622,12 +1622,17 @@ def main():
         # do precise session-scoped clearing.  Falls back to PID-only if not found.
         _early_session_id = 'UNKNOWN'
         try:
-            _csf = MEMORY_BASE / '.current-session.json'
-            if _csf.exists():
-                import json as _json_early
-                _early_session_id = _json_early.loads(_csf.read_text(encoding='utf-8')).get(
-                    'current_session_id', 'UNKNOWN'
-                ) or 'UNKNOWN'
+            # Per-project session file for multi-window isolation
+            try:
+                from project_session import read_session_id as _read_sid
+                _early_session_id = _read_sid() or 'UNKNOWN'
+            except ImportError:
+                _csf = MEMORY_BASE / '.current-session.json'
+                if _csf.exists():
+                    import json as _json_early
+                    _early_session_id = _json_early.loads(_csf.read_text(encoding='utf-8')).get(
+                        'current_session_id', 'UNKNOWN'
+                    ) or 'UNKNOWN'
         except Exception:
             pass
         clear_current_session_flags(

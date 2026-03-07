@@ -221,12 +221,19 @@ def delete_flag(flag_path):
 # =============================================================================
 
 def get_current_session_id():
-    """Read the active session ID from .current-session.json.
+    """Read the active session ID from per-project or legacy session file.
 
     Returns:
         str or None: Session ID string (e.g. 'SESSION-20260305-123456-ABCD'),
-                     or None when the file is missing or unreadable.
+                     or None when no session file is found or unreadable.
     """
+    try:
+        from project_session import read_session_id
+        sid = read_session_id()
+        return sid if sid else None
+    except ImportError:
+        pass
+    # Legacy fallback
     current_session_file = MEMORY_BASE / '.current-session.json'
     if not current_session_file.exists():
         return None

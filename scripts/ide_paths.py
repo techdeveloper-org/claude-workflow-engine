@@ -50,7 +50,12 @@ FLAG_DIR = _DATA_BASE
 CONFIG_DIR = _DATA_BASE / 'config'
 
 # Common file paths (for session management and flags)
-CURRENT_SESSION_FILE = MEMORY_BASE / '.current-session.json'
+# Per-project session file for multi-window isolation
+try:
+    from project_session import get_project_session_file
+    CURRENT_SESSION_FILE = get_project_session_file()
+except ImportError:
+    CURRENT_SESSION_FILE = MEMORY_BASE / '.current-session.json'
 SESSION_STATE_FILE = MEMORY_BASE / 'logs' / 'session-progress.json'
 TRACKER_LOG = MEMORY_BASE / 'logs' / 'tool-tracker.jsonl'
 
