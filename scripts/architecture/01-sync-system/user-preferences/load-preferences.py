@@ -36,8 +36,6 @@ import io
 from pathlib import Path
 
 # Fix Windows console encoding for emojis
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 PREFS_FILE = Path.home() / ".claude" / "memory" / "user-preferences.json"
 

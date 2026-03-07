@@ -36,8 +36,6 @@ from datetime import datetime
 from pathlib import Path
 
 # Fix Windows console encoding for emojis
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 PREFS_FILE = Path.home() / ".claude" / "memory" / "user-preferences.json"
 LOG_FILE = Path.home() / ".claude" / "memory" / "logs" / "policy-hits.log"

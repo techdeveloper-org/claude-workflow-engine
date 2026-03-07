@@ -36,8 +36,6 @@ from pathlib import Path
 import re
 
 # Fix Windows console encoding
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 SESSIONS_DIR = Path.home() / ".claude" / "memory" / "sessions"
 

@@ -48,8 +48,6 @@ from pathlib import Path
 from collections import defaultdict
 
 # Fix Windows console encoding
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 SESSIONS_DIR = Path.home() / ".claude" / "memory" / "sessions"
 LOG_FILE = Path.home() / ".claude" / "memory" / "logs" / "policy-hits.log"

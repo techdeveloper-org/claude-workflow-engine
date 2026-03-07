@@ -71,7 +71,6 @@ else:
             sys.stdout.reconfigure(encoding='utf-8')
         except AttributeError:
             import io
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     if sys.stderr.encoding != 'utf-8':
         try:
             sys.stderr.reconfigure(encoding='utf-8')

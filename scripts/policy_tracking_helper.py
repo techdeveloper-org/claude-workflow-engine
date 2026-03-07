@@ -22,8 +22,21 @@ from typing import Dict, Any, Optional, List
 # Windows-safe encoding
 if sys.platform == 'win32':
     import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    try:
+        if getattr(sys.stdout, 'encoding', 'utf-8') != 'utf-8':
+            try:
+                sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+            except (AttributeError, io.UnsupportedOperation):
+                if hasattr(sys.stdout, 'buffer'):
+                    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        if getattr(sys.stderr, 'encoding', 'utf-8') != 'utf-8':
+            try:
+                sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+            except (AttributeError, io.UnsupportedOperation):
+                if hasattr(sys.stderr, 'buffer'):
+                    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except Exception:
+        pass  # Never crash on encoding setup
 
 
 

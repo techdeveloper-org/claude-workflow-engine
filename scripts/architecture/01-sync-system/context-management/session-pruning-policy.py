@@ -54,9 +54,6 @@ while _scripts_root != _scripts_root.parent:
     _scripts_root = _scripts_root.parent
 from policy_tracking_helper import record_policy_execution, record_sub_operation, get_session_id
 
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
 # Configuration
 MEMORY_DIR = Path.home() / ".claude" / "memory"
 LOG_FILE = MEMORY_DIR / "logs" / "policy-hits.log"

@@ -51,13 +51,6 @@ if sys.stderr.encoding != 'utf-8':
     except AttributeError:
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-if sys.platform == 'win32':
-    try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-    except:
-        pass
-
 MEMORY_DIR = Path.home() / ".claude" / "memory"
 SESSIONS_DIR = MEMORY_DIR / "sessions"
 LOG_FILE = MEMORY_DIR / "logs" / "policy-hits.log"

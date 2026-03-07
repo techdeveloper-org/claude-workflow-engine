@@ -35,8 +35,6 @@ from pathlib import Path
 from datetime import datetime
 
 # Fix Windows console encoding
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 PATTERNS_FILE = Path.home() / ".claude" / "memory" / "cross-project-patterns.json"
 LOG_FILE = Path.home() / ".claude" / "memory" / "logs" / "policy-hits.log"

@@ -44,13 +44,6 @@ if sys.stderr.encoding != 'utf-8':
     except AttributeError:
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-if sys.platform == 'win32':
-    try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-    except:
-        pass
-
 PREFS_FILE = Path.home() / ".claude" / "memory" / "user-preferences.json"
 LOG_FILE = Path.home() / ".claude" / "memory" / "logs" / "policy-hits.log"
 DAEMON_LOG_FILE = Path.home() / ".claude" / "memory" / "logs" / "preference-tracker-daemon.log"
