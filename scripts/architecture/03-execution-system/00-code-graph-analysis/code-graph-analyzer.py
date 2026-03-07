@@ -25,6 +25,7 @@ import os
 import ast
 import re
 import json
+import subprocess
 from pathlib import Path
 from datetime import datetime
 
@@ -55,11 +56,14 @@ except ImportError:
 MAX_FILES = 500
 MAX_FILE_SIZE = 100 * 1024  # 100KB
 
+GRAPH_CACHE_DIR = '.claude-graph'
+GRAPH_CACHE_FILE = 'graph-analysis.json'
+
 SKIP_DIRS = {
     '.git', 'node_modules', '__pycache__', '.venv', 'venv', 'env',
     'dist', 'build', '.tox', '.eggs', '.mypy_cache', '.pytest_cache',
     '.idea', '.vscode', '.settings', 'target', 'bin', 'obj',
-    '.gradle', '.mvn', 'vendor', 'bower_components',
+    '.gradle', '.mvn', 'vendor', 'bower_components', GRAPH_CACHE_DIR,
 }
 
 LANGUAGE_EXTENSIONS = {
@@ -79,6 +83,53 @@ for exts in LANGUAGE_EXTENSIONS.values():
     ALL_SOURCE_EXTENSIONS.update(exts)
 
 MEMORY_BASE = Path.home() / '.claude' / 'memory'
+
+# =============================================================================
+# REPO-LEVEL CACHE
+# =============================================================================
+
+def get_cache_path(project_dir):
+    """Get the path to the repo-level graph cache file."""
+    return Path(project_dir) / GRAPH_CACHE_DIR / GRAPH_CACHE_FILE
+
+
+def load_cached_graph(project_dir):
+    """Load cached graph analysis from the repo.
+
+    Cache at {project}/.claude-graph/graph-analysis.json.
+    Returns cached data if file exists and is valid, None otherwise.
+    """
+    cache_file = get_cache_path(project_dir)
+    if not cache_file.exists():
+        return None
+
+    try:
+        data = json.loads(cache_file.read_text(encoding='utf-8'))
+        if 'graph_complexity_score' in data and 'graph_metrics' in data:
+            return data
+    except (json.JSONDecodeError, OSError, KeyError):
+        pass
+    return None
+
+
+def save_graph_to_repo(project_dir, result_data):
+    """Save graph analysis to {project}/.claude-graph/graph-analysis.json.
+
+    Included in commits so it persists across sessions.
+    """
+    try:
+        cache_dir = Path(project_dir) / GRAPH_CACHE_DIR
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        cache_file = cache_dir / GRAPH_CACHE_FILE
+        cache_file.write_text(
+            json.dumps(result_data, indent=2, default=str),
+            encoding='utf-8'
+        )
+        return True
+    except Exception as e:
+        print(f"[WARN] Could not save graph to repo: {e}")
+        return False
 
 
 # =============================================================================
@@ -615,14 +666,40 @@ class CodeGraphAnalyzer:
         self.metrics = _empty_metrics()
         self.cyclomatic = {'avg_cyclomatic': 0, 'max_cyclomatic': 0, 'total_functions': 0}
         self.graph_complexity_score = 1
+        self._from_cache = False
 
-    def run(self):
-        """Execute the full analysis pipeline.
+    def run(self, force_regenerate=False):
+        """Execute the analysis pipeline.
+
+        If cached graph exists in repo and force_regenerate is False,
+        reads from cache (instant). Otherwise builds fresh graph.
+
+        Args:
+            force_regenerate: If True, skip cache and rebuild from scratch.
 
         Returns:
             int: graph_complexity_score (1-25).
         """
-        print("[GRAPH] Analyzing codebase dependency graph...")
+        # Check repo-level cache first (unless forced regenerate)
+        if not force_regenerate:
+            cached = load_cached_graph(self.project_dir)
+            if cached:
+                self.graph_complexity_score = cached.get('graph_complexity_score', 1)
+                self.metrics = cached.get('graph_metrics', _empty_metrics())
+                self.cyclomatic = cached.get('cyclomatic_metrics', {
+                    'avg_cyclomatic': 0, 'max_cyclomatic': 0, 'total_functions': 0
+                })
+                self.files = [None] * cached.get('files_analyzed', 0)
+                self._from_cache = True
+                print(f"[GRAPH] Cache HIT: score={self.graph_complexity_score}/25, "
+                      f"{cached.get('files_analyzed', 0)} files "
+                      f"(built {cached.get('analyzed_at', 'unknown')[:19]})")
+                return self.graph_complexity_score
+
+        if force_regenerate:
+            print("[GRAPH] Force REGENERATE - rebuilding dependency graph...")
+        else:
+            print("[GRAPH] Cache MISS - building dependency graph...")
 
         if not HAS_NETWORKX:
             print("[GRAPH] networkx not installed - skipping graph analysis")
@@ -656,33 +733,33 @@ class CodeGraphAnalyzer:
 
         return self.graph_complexity_score
 
-    def save_to_session(self):
-        """Cache analysis results in the session directory."""
-        try:
-            session_dir = MEMORY_BASE / 'logs' / 'sessions' / self.session_id
-            session_dir.mkdir(parents=True, exist_ok=True)
+    def save(self):
+        """Save analysis results to the repo-level cache.
 
-            duration = (datetime.now() - self.start_time).total_seconds() * 1000
-
-            result = {
-                'version': '1.0.0',
-                'session_id': self.session_id,
-                'analyzed_at': self.start_time.isoformat(),
-                'duration_ms': int(duration),
-                'project_dir': str(self.project_dir),
-                'tech_stack': self.tech_stack,
-                'files_analyzed': len(self.files),
-                'graph_metrics': self.metrics,
-                'cyclomatic_metrics': self.cyclomatic,
-                'graph_complexity_score': self.graph_complexity_score,
-            }
-
-            out_file = session_dir / 'graph-analysis.json'
-            out_file.write_text(json.dumps(result, indent=2, default=str), encoding='utf-8')
+        Saves to {project}/.claude-graph/graph-analysis.json.
+        Skips saving if results were loaded from cache (nothing new).
+        """
+        if self._from_cache:
             return True
-        except Exception as e:
-            print(f"[WARN] Could not save graph analysis: {e}")
-            return False
+
+        duration = (datetime.now() - self.start_time).total_seconds() * 1000
+
+        result = {
+            'version': '1.1.0',
+            'analyzed_at': self.start_time.isoformat(),
+            'duration_ms': int(duration),
+            'project_dir': str(self.project_dir),
+            'tech_stack': self.tech_stack,
+            'files_analyzed': len(self.files),
+            'graph_metrics': self.metrics,
+            'cyclomatic_metrics': self.cyclomatic,
+            'graph_complexity_score': self.graph_complexity_score,
+        }
+
+        saved = save_graph_to_repo(self.project_dir, result)
+        if saved:
+            print(f"[GRAPH] Saved to {self.project_dir / GRAPH_CACHE_DIR / GRAPH_CACHE_FILE}")
+        return saved
 
     def build_trace_entry(self):
         """Build a flow-trace.json pipeline entry for Step 3.0.1."""
@@ -743,8 +820,9 @@ class CodeGraphAnalyzer:
         """Build a human-readable decision summary."""
         if not self.files:
             return "No source files found. Graph complexity = 1 (minimal)."
+        source = "CACHED" if self._from_cache else "ANALYZED"
         return (
-            f"Analyzed {len(self.files)} files -> "
+            f"{source}: {len(self.files)} files -> "
             f"{self.metrics['total_nodes']} nodes, {self.metrics['total_edges']} edges. "
             f"Graph complexity = {self.graph_complexity_score}/25. "
             f"Bottleneck: {self.metrics['top_bottleneck_files'][0] if self.metrics.get('top_bottleneck_files') else 'none'}."
@@ -756,18 +834,31 @@ class CodeGraphAnalyzer:
 # =============================================================================
 
 def main():
-    """Entry point. Called by 3-level-flow.py as Step 3.0.1."""
+    """Entry point. Called by 3-level-flow.py as Step 3.0.1.
+
+    Usage:
+        python code-graph-analyzer.py <project_dir> <session_id> <tech_stack_csv>
+        python code-graph-analyzer.py <project_dir> --regenerate [tech_stack_csv]
+    """
     project_dir = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-    session_id = sys.argv[2] if len(sys.argv) > 2 else 'unknown'
-    tech_stack_csv = sys.argv[3] if len(sys.argv) > 3 else ''
+
+    # Check for --regenerate flag (called by version-release-policy after doc updates)
+    force_regenerate = '--regenerate' in sys.argv
+
+    if force_regenerate:
+        session_id = 'regenerate'
+        tech_stack_csv = sys.argv[3] if len(sys.argv) > 3 else ''
+    else:
+        session_id = sys.argv[2] if len(sys.argv) > 2 else 'unknown'
+        tech_stack_csv = sys.argv[3] if len(sys.argv) > 3 else ''
 
     tech_stack = [t.strip() for t in tech_stack_csv.split(',') if t.strip()] if tech_stack_csv else []
 
     analyzer = CodeGraphAnalyzer(project_dir, tech_stack, session_id)
-    score = analyzer.run()
+    score = analyzer.run(force_regenerate=force_regenerate)
 
-    # Save to session
-    analyzer.save_to_session()
+    # Save to repo-level cache
+    analyzer.save()
 
     # Output trace entry as JSON (for 3-level-flow.py to parse)
     trace_entry = analyzer.build_trace_entry()

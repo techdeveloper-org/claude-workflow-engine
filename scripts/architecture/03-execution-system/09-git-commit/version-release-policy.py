@@ -1218,6 +1218,22 @@ def bump_version():
         print(f"[version-release-policy] Version bumped: {new_version} ({mode})")
         print(f"[version-release-policy] All docs updated [OK]")
 
+        # Regenerate code graph analysis (Step 3.0.1 cache)
+        # Graph must be rebuilt after code/doc changes so next session gets fresh data
+        try:
+            graph_script = Path(__file__).parent.parent / '00-code-graph-analysis' / 'code-graph-analyzer.py'
+            if graph_script.exists():
+                import subprocess as _sp
+                _sp.run(
+                    [sys.executable, str(graph_script), str(get_project_root()), '--regenerate'],
+                    capture_output=True, timeout=15
+                )
+                print(f"[version-release-policy] Graph analysis regenerated [OK]")
+            else:
+                print(f"[version-release-policy] Graph analyzer not found - skipping")
+        except Exception as _ge:
+            print(f"[version-release-policy] Graph regeneration failed: {str(_ge)[:60]}")
+
         return {
             "status": "success",
             "old_version": current_version,
