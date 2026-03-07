@@ -30,8 +30,8 @@ Branch naming format::
     Semantic labels: fix, feature, refactor, docs, enhancement, test
     Example: fix/42, feature/123, docs/55
 
-Version: 3.0.0
-Last Modified: 2026-02-28
+Version: 3.1.0
+Last Modified: 2026-03-07
 Author: Claude Memory System
 """
 
@@ -663,6 +663,20 @@ def create_github_issue(task_id, subject, description):
             }
             mapping['ops_count'] = mapping.get('ops_count', 0) + 1
             _save_issues_mapping(mapping)
+
+            # ATOMIC: Create branch immediately after issue creation.
+            # This ensures the chain Issue -> Branch -> Work -> PR -> Merge
+            # never breaks. Branch is created in the same call as the issue.
+            if issue_number:
+                existing_branch = get_session_branch()
+                if not existing_branch:
+                    branch = create_issue_branch(issue_number, subject, issue_type)
+                    if branch:
+                        try:
+                            sys.stdout.write('[GH] Branch: ' + branch + ' (auto-created with issue #' + str(issue_number) + ')\n')
+                            sys.stdout.flush()
+                        except Exception:
+                            pass
 
             return issue_number
 
