@@ -762,12 +762,14 @@ def create_github_issue(task_id, subject, description):
             # never breaks. Branch is created in the same call as the issue.
             _debug_log_gh(f"[GH-CREATE] Branch creation block: issue_number={issue_number}")
             if issue_number:
-                _debug_log_gh(f"[GH-CREATE] ✓ issue_number exists, checking for existing branch...")
-                existing_branch = get_session_branch()
-                _debug_log_gh(f"[GH-CREATE] existing_branch={existing_branch}")
-                if not existing_branch:
-                    _debug_log_gh(f"[GH-CREATE] No existing branch, calling create_issue_branch({issue_number}, '{subject[:30]}', '{issue_type}')...")
-                    branch = create_issue_branch(issue_number, subject, issue_type)
+                _debug_log_gh(f"[GH-CREATE] ✓ issue_number exists, checking for THIS issue's branch...")
+                # Each issue gets its own branch: {issue_type}/{issue_number}
+                issue_specific_branch = f"{issue_type}/{issue_number}"
+                _debug_log_gh(f"[GH-CREATE] expected_branch_name={issue_specific_branch}")
+                # Note: We always create a new branch for each issue (don't check for existing)
+                # because each issue should have its own dedicated branch
+                _debug_log_gh(f"[GH-CREATE] Creating branch for this issue ({issue_specific_branch})...")
+                branch = create_issue_branch(issue_number, subject, issue_type)
                     _debug_log_gh(f"[GH-CREATE] create_issue_branch() returned: {branch}")
                     if branch:
                         _debug_log_gh(f"[GH-CREATE] ✓ Branch created successfully: {branch}")
