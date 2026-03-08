@@ -1932,8 +1932,9 @@ def main():
     ctx_stdout, _, ctx_rc, ctx_dur = run_script_with_retry(ctx_script, ['--enforce'], timeout=8, step_name='Level-1.1.Context')
     ctx_data = safe_json(ctx_stdout)
 
-    context_pct = ctx_data.get('percentage', 0)
-    context_level = ctx_data.get('level', 'unknown')
+    # session-pruning-policy.py returns 'context_percentage', not 'percentage'
+    context_pct = ctx_data.get('context_percentage', ctx_data.get('percentage', 0))
+    context_level = ctx_data.get('context_level', ctx_data.get('level', 'unknown'))
     ctx_recommendations = ctx_data.get('recommendations', [])
 
     # Determine action based on context %

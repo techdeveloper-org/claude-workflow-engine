@@ -705,6 +705,9 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         if sys.argv[1] == "--enforce":
             result = enforce()
+            # Output JSON to stdout so callers (3-level-flow.py) can parse it
+            if result and isinstance(result, dict):
+                print(json.dumps(result))
             sys.exit(0 if result.get("status") == "success" else 1)
         elif sys.argv[1] == "--validate":
             is_valid = validate()
