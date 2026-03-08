@@ -1638,6 +1638,61 @@ def _ensure_architecture_modules_synced():
 
 
 # =============================================================================
+
+def _find_previous_session(current_session_id, project_path):
+    """Find the most recent session for the same project to chain to.
+
+    Scans session JSON files in ~/.claude/memory/sessions/ and returns the
+    most recently updated session that matches the project path (via cwd or
+    metadata).  Skips the current session.
+
+    Args:
+        current_session_id: The just-created session ID to exclude.
+        project_path: The project working directory to match against.
+
+    Returns:
+        str or None: The parent session ID, or None if no match found.
+    """
+    sessions_dir = MEMORY_BASE / 'sessions'
+    if not sessions_dir.exists():
+        return None
+
+    best_match = None
+    best_time = ''
+    project_name = Path(project_path).name if project_path else ''
+
+    try:
+        for sf in sessions_dir.glob('SESSION-*.json'):
+            sid = sf.stem
+            if sid == current_session_id:
+                continue
+            try:
+                data = json.loads(sf.read_text(encoding='utf-8'))
+                # Match by project path or cwd in metadata
+                sess_cwd = data.get('metadata', {}).get('cwd', '')
+                sess_project = data.get('metadata', {}).get('project', '')
+                last_updated = data.get('last_updated', data.get('start_time', ''))
+
+                # Check if same project
+                is_match = False
+                if project_path and sess_cwd and Path(sess_cwd).name == project_name:
+                    is_match = True
+                elif project_path and sess_project and Path(sess_project).name == project_name:
+                    is_match = True
+                elif not sess_cwd and not sess_project:
+                    # No project info stored - still chain by time proximity
+                    is_match = True
+
+                if is_match and last_updated > best_time:
+                    best_time = last_updated
+                    best_match = sid
+            except Exception:
+                continue
+    except Exception:
+        return None
+
+    return best_match
+
 # SESSION CHANGE DETECTION (replaces clear-session-handler.py)
 # Reads Claude Code's history.jsonl to detect /clear or new conversation.
 # =============================================================================
@@ -2166,6 +2221,21 @@ def main():
         if line.startswith('SESSION-'):
             session_id = line
             break
+
+    # SESSION CHAINING: Find most recent session for same project and link
+    # This gives Claude context about what was done before in related sessions
+    _prev_session_id = _find_previous_session(session_id, hook_cwd or str(Path.cwd()))
+    if _prev_session_id and session_id != 'UNKNOWN':
+        try:
+            chain_script = CURRENT_DIR / 'session-chain-manager.py'
+            if chain_script.exists():
+                subprocess.run(
+                    [PYTHON, str(chain_script), 'link',
+                     '--child', session_id, '--parent', _prev_session_id],
+                    timeout=5, capture_output=True
+                )
+        except Exception:
+            pass
 
     # Set up session log directory NOW that we have session_id
     session_log_dir = MEMORY_BASE / 'logs' / 'sessions' / session_id
