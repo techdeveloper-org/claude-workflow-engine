@@ -328,48 +328,21 @@ def load_api_key():
 # SYSTEM PROMPT - The brain of the decision engine
 # =============================================================================
 
-SYSTEM_PROMPT = """You are the Intelligent Decision Engine for a Claude Code assistant system.
-Your job is to analyze a user's coding request and make THREE decisions:
+SYSTEM_PROMPT = """You are a JSON classifier. You classify coding requests.
 
-1. TASK TYPE - Classify what the user wants to do
-2. MODEL - Which Claude model should handle this (HAIKU, SONNET, or OPUS)
-3. SKILL/AGENT - Which specialized skill or agent should be used
+RESPOND WITH ONLY THIS EXACT JSON FORMAT - NO OTHER TEXT:
+{"task_type":"string","complexity":number,"model":"HAIKU|SONNET|OPUS","model_reasoning":"string","agent_name":"string","agent_type":"agent|skill","agent_reasoning":"string","supplementary_skills":[],"confidence":number}
 
-IMPORTANT RULES:
-- You MUST return valid JSON only. No markdown, no explanation, no extra text.
-- agent_name MUST be from the provided registry. Never invent new names.
-- skill_names MUST be from the provided registry. Can be empty list [].
-- model MUST be exactly one of: HAIKU, SONNET, OPUS
-- The user may write in English, Hinglish (Hindi+English mix), or informal language. Understand the INTENT, not just keywords.
-
-MODEL SELECTION GUIDE:
-- HAIKU: Simple tasks like file reading, status checks, small fixes, documentation, config changes. Complexity < 5.
-- SONNET: Most coding tasks - API creation, feature implementation, UI work, moderate bugs, testing. Complexity 5-19.
-- OPUS: Architecture design, complex refactoring, plan mode tasks, security-critical work, multi-service coordination. Complexity >= 20.
-
-AGENT SELECTION GUIDE:
-- Read each agent/skill description carefully. Pick the one whose CORE PURPOSE matches the user's intent.
-- The tech stack alone does NOT determine the agent. Match the NATURE of the task (design vs implementation vs testing etc.) to the agent's specialty.
-- If the task is about HOW THINGS LOOK (colors, themes, layout, visual effects), pick a design-focused agent.
-- If the task is about HOW THINGS WORK (logic, routing, API calls, state), pick an implementation agent.
-
-TASK TYPE VALUES (pick the most accurate one):
-API Creation, Authentication, Authorization, Security, Database, Dashboard, Frontend, UI/UX,
-Configuration, Bug Fix, Refactoring, Testing, Documentation, DevOps, Deployment,
-System/Script, Sync/Update, Architecture Design, Migration, General Task
-
-You MUST respond with ONLY this JSON structure:
-{
-  "task_type": "string",
-  "complexity": integer (1-25),
-  "model": "HAIKU|SONNET|OPUS",
-  "model_reasoning": "1 sentence why this model",
-  "agent_name": "agent-name-from-registry",
-  "agent_type": "agent|skill",
-  "agent_reasoning": "1 sentence why this agent/skill",
-  "supplementary_skills": ["skill-1", "skill-2"],
-  "confidence": float (0.0-1.0)
-}"""
+RULES:
+- task_type: one of API Creation, Authentication, Security, Database, Dashboard, Frontend, UI/UX, Configuration, Bug Fix, Refactoring, Testing, Documentation, DevOps, Deployment, System/Script, Architecture Design, General Task
+- model: HAIKU (simple, complexity<5), SONNET (moderate, 5-19), OPUS (complex, >=20)
+- agent_name: MUST be from the AVAILABLE AGENTS list below. Match by what the user WANTS TO DO:
+  * Visual/design work (theme, colors, layout, shadows) -> pick the designer agent
+  * Building/coding features (routes, APIs, logic, forms) -> pick the engineer agent
+  * The tech stack (Angular/React/etc) does NOT decide the agent
+- supplementary_skills: from AVAILABLE SKILLS list or empty []
+- confidence: 0.0 to 1.0
+- complexity: 1 to 25"""
 
 
 # =============================================================================
@@ -380,7 +353,17 @@ def build_user_prompt(context):
     """Build the user prompt from master context dict."""
     parts = []
 
-    parts.append(f"USER MESSAGE: {context.get('user_message', '')}")
+    user_msg = context.get('user_message', '')
+    parts.append(f"USER MESSAGE: {user_msg}")
+
+    # Detect design vs implementation intent from keywords
+    design_words = ['redesign', 'theme', 'color', 'shadow', 'hover', 'gradient',
+                    'typography', 'layout', 'visual', 'dark mode', 'light mode',
+                    'style', 'css', 'scss', 'look and feel', 'aesthetic']
+    msg_lower = user_msg.lower()
+    design_count = sum(1 for w in design_words if w in msg_lower)
+    if design_count >= 2:
+        parts.append(f"\nINTENT: DESIGN/VISUAL task (matched {design_count} design keywords). Pick a DESIGNER agent, not an engineer.")
 
     # Current detections (from keyword-based system - for reference)
     kw_task = context.get('keyword_task_type', 'unknown')
@@ -430,6 +413,8 @@ def build_user_prompt(context):
     parts.append(f"\nMODEL OPTIONS:")
     for name, desc in MODELS_INFO.items():
         parts.append(f"  - {name}: {desc}")
+
+    parts.append("\nCLASSIFY the user message above. Return ONLY the JSON object.")
 
     return "\n".join(parts)
 
