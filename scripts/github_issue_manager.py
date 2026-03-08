@@ -126,7 +126,13 @@ def _load_issues_mapping():
                 return json.load(f)
     except Exception:
         pass
-    return {'task_to_issue': {}, 'ops_count': 0, 'session_id': _get_session_id()}
+    # Initialize with per-session ops_count support (not global)
+    return {
+        'task_to_issue': {},
+        'ops_count': 0,  # Keep for backwards compatibility (deprecated)
+        'session_id': _get_session_id(),
+        'session_ops_count': {}  # New: per-session ops tracking
+    }
 
 
 def _save_issues_mapping(mapping):
@@ -148,20 +154,44 @@ def _save_issues_mapping(mapping):
 
 
 def _get_ops_count():
-    """Return the number of GitHub operations already performed this session.
+    """Return the number of GitHub operations already performed in CURRENT SESSION.
+
+    Tracks ops_count per-session (not global) so each session gets its own limit.
 
     Returns:
-        int: Value of ``ops_count`` from the persisted mapping, or 0 if not set.
+        int: Value of ops_count for current session, or 0 if not set.
     """
-    mapping = _load_issues_mapping()
-    return mapping.get('ops_count', 0)
+    try:
+        current_session_id = _get_current_session_id()
+        mapping = _load_issues_mapping()
+
+        # Use per-session ops count (not global)
+        session_ops = mapping.get('session_ops_count', {})
+        return session_ops.get(current_session_id, 0)
+    except Exception:
+        return 0
 
 
 def _increment_ops_count():
-    """Increment the session GitHub operations counter and persist it to disk."""
-    mapping = _load_issues_mapping()
-    mapping['ops_count'] = mapping.get('ops_count', 0) + 1
-    _save_issues_mapping(mapping)
+    """Increment the CURRENT SESSION's GitHub operations counter and persist to disk.
+
+    Each session gets its own ops_count limit, so moving to a new session resets the counter.
+    """
+    try:
+        current_session_id = _get_current_session_id()
+        mapping = _load_issues_mapping()
+
+        # Initialize session_ops_count if missing
+        if 'session_ops_count' not in mapping:
+            mapping['session_ops_count'] = {}
+
+        # Increment current session's ops_count
+        mapping['session_ops_count'][current_session_id] = mapping['session_ops_count'].get(current_session_id, 0) + 1
+
+        _save_issues_mapping(mapping)
+    except Exception:
+        # If anything fails, silently continue (never block)
+        pass
 
 
 def is_gh_available():
@@ -716,7 +746,8 @@ def create_github_issue(task_id, subject, description):
                 'created_at': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
                 'status': 'open'
             }
-            mapping['ops_count'] = mapping.get('ops_count', 0) + 1
+            # Increment per-session ops_count (not global)
+            _increment_ops_count()
             _save_issues_mapping(mapping)
 
             # ATOMIC: Create branch immediately after issue creation.
@@ -1065,7 +1096,8 @@ def close_github_issue(task_id):
             issue_data['status'] = 'closed'
             issue_data['closed_at'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             mapping['task_to_issue'][task_key] = issue_data
-            mapping['ops_count'] = mapping.get('ops_count', 0) + 1
+            # Increment per-session ops_count (not global)
+            _increment_ops_count()
             _save_issues_mapping(mapping)
             return True
 
