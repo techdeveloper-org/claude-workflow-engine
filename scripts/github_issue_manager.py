@@ -459,29 +459,58 @@ def create_github_issue(task_id, subject, description):
     Returns:
         Issue number (int) on success, None on failure.
     """
+    def _debug_log_gh(msg):
+        """Log to github-issue-debug.log with [GH-CREATE] prefix"""
+        try:
+            log_path = Path.home() / '.claude' / 'memory' / 'logs' / 'github-issue-debug.log'
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(f"[{datetime.now().isoformat()}] {msg}\n")
+        except Exception:
+            pass
+
     try:
+        _debug_log_gh(f"[GH-CREATE] START: task_id={task_id}, subject='{subject[:50]}'")
+
+        _debug_log_gh(f"[GH-CREATE] Checking if gh is available...")
         if not is_gh_available():
+            _debug_log_gh(f"[GH-CREATE] ✗ gh not available, returning None")
+            return None
+        _debug_log_gh(f"[GH-CREATE] ✓ gh is available")
+
+        _debug_log_gh(f"[GH-CREATE] Checking ops count (MAX={MAX_OPS_PER_SESSION})...")
+        ops_count = _get_ops_count()
+        _debug_log_gh(f"[GH-CREATE] ops_count={ops_count}")
+        if ops_count >= MAX_OPS_PER_SESSION:
+            _debug_log_gh(f"[GH-CREATE] ✗ ops_count >= MAX, returning None")
             return None
 
-        if _get_ops_count() >= MAX_OPS_PER_SESSION:
-            return None
-
+        _debug_log_gh(f"[GH-CREATE] Getting repo root...")
         repo_root = _get_repo_root()
+        _debug_log_gh(f"[GH-CREATE] repo_root={repo_root}")
         if not repo_root:
+            _debug_log_gh(f"[GH-CREATE] ✗ no repo_root, returning None")
             return None
 
         # Build issue title and body
         # CHANGED v3.0: Use semantic title format (no [TASK-X] prefix)
         # Format: {type}: {subject}
         # Example: bugfix: Model selection defaulting to HAIKU
+        _debug_log_gh(f"[GH-CREATE] Detecting issue type...")
         issue_type_label = _detect_issue_type(subject, description)
+        _debug_log_gh(f"[GH-CREATE] issue_type_label={issue_type_label}")
         title = issue_type_label + ': ' + subject
         # Truncate title to 256 chars (GitHub limit is higher but keep it readable)
         title = title[:256]
+        _debug_log_gh(f"[GH-CREATE] title='{title[:60]}'")
 
+        _debug_log_gh(f"[GH-CREATE] Getting session context...")
         session_id = _get_session_id()
+        _debug_log_gh(f"[GH-CREATE] session_id={session_id}")
         flow_ctx = _get_flow_trace_context()
+        _debug_log_gh(f"[GH-CREATE] flow_ctx keys={list(flow_ctx.keys())}")
         progress_ctx = _get_session_progress_context()
+        _debug_log_gh(f"[GH-CREATE] progress_ctx keys={list(progress_ctx.keys())}")
 
         # --- Build comprehensive issue body with story format ---
         body_lines = []
@@ -626,28 +655,47 @@ def create_github_issue(task_id, subject, description):
         _ensure_labels_exist(labels, repo_root)
 
         # Create issue via gh CLI with labels
+        _debug_log_gh(f"[GH-CREATE] Building gh CLI command...")
         cmd = [
             'gh', 'issue', 'create',
             '--title', title,
             '--body', body,
         ]
+        _debug_log_gh(f"[GH-CREATE] Base command: {cmd}")
         cmd_with_labels = cmd + ['--label', ','.join(labels)]
+        _debug_log_gh(f"[GH-CREATE] Command with labels: gh issue create --title ... --body ... --label {','.join(labels)}")
 
-        result = subprocess.run(
-            cmd_with_labels,
-            capture_output=True, text=True, timeout=GH_TIMEOUT,
-            cwd=repo_root
-        )
+        _debug_log_gh(f"[GH-CREATE] Running gh command (timeout={GH_TIMEOUT}s)...")
+        try:
+            result = subprocess.run(
+                cmd_with_labels,
+                capture_output=True, text=True, timeout=GH_TIMEOUT,
+                cwd=repo_root
+            )
+            _debug_log_gh(f"[GH-CREATE] gh returned: returncode={result.returncode}")
+            if result.stdout:
+                _debug_log_gh(f"[GH-CREATE] stdout: {result.stdout[:200]}")
+            if result.stderr:
+                _debug_log_gh(f"[GH-CREATE] stderr: {result.stderr[:200]}")
+        except subprocess.TimeoutExpired:
+            _debug_log_gh(f"[GH-CREATE] ✗ gh command TIMEOUT after {GH_TIMEOUT}s")
+            raise
+        except Exception as e:
+            _debug_log_gh(f"[GH-CREATE] ✗ gh command EXCEPTION: {type(e).__name__}: {str(e)[:150]}")
+            raise
 
         # If label creation still failed, retry without labels
         if result.returncode != 0 and 'label' in result.stderr.lower():
+            _debug_log_gh(f"[GH-CREATE] Label error detected, retrying without labels...")
             result = subprocess.run(
                 cmd,
                 capture_output=True, text=True, timeout=GH_TIMEOUT,
                 cwd=repo_root
             )
+            _debug_log_gh(f"[GH-CREATE] Retry returned: returncode={result.returncode}")
 
         if result.returncode == 0 and result.stdout.strip():
+            _debug_log_gh(f"[GH-CREATE] ✓ gh command succeeded")
             # stdout contains the issue URL, e.g. https://github.com/user/repo/issues/42
             issue_url = result.stdout.strip()
             issue_number = None
@@ -674,22 +722,43 @@ def create_github_issue(task_id, subject, description):
             # ATOMIC: Create branch immediately after issue creation.
             # This ensures the chain Issue -> Branch -> Work -> PR -> Merge
             # never breaks. Branch is created in the same call as the issue.
+            _debug_log_gh(f"[GH-CREATE] Branch creation block: issue_number={issue_number}")
             if issue_number:
+                _debug_log_gh(f"[GH-CREATE] ✓ issue_number exists, checking for existing branch...")
                 existing_branch = get_session_branch()
+                _debug_log_gh(f"[GH-CREATE] existing_branch={existing_branch}")
                 if not existing_branch:
+                    _debug_log_gh(f"[GH-CREATE] No existing branch, calling create_issue_branch({issue_number}, '{subject[:30]}', '{issue_type}')...")
                     branch = create_issue_branch(issue_number, subject, issue_type)
+                    _debug_log_gh(f"[GH-CREATE] create_issue_branch() returned: {branch}")
                     if branch:
+                        _debug_log_gh(f"[GH-CREATE] ✓ Branch created successfully: {branch}")
                         try:
                             sys.stdout.write('[GH] Branch: ' + branch + ' (auto-created with issue #' + str(issue_number) + ')\n')
                             sys.stdout.flush()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            _debug_log_gh(f"[GH-CREATE] Could not write stdout: {str(e)[:100]}")
+                    else:
+                        _debug_log_gh(f"[GH-CREATE] ✗ Branch creation returned None")
+                else:
+                    _debug_log_gh(f"[GH-CREATE] ⚠️ Branch already exists ({existing_branch}), skipping creation")
+            else:
+                _debug_log_gh(f"[GH-CREATE] ✗ issue_number is falsy, skipping branch creation")
 
+            _debug_log_gh(f"[GH-CREATE] ✓ RETURNING issue_number={issue_number}")
             return issue_number
+        else:
+            _debug_log_gh(f"[GH-CREATE] ✗ gh command failed: returncode={result.returncode}, stdout='{result.stdout[:100]}'")
+            return None
 
-    except Exception:
-        pass
-    return None
+    except subprocess.TimeoutExpired as e:
+        _debug_log_gh(f"[GH-CREATE] ✗ TIMEOUT EXCEPTION: {str(e)[:150]}")
+        return None
+    except Exception as e:
+        _debug_log_gh(f"[GH-CREATE] ✗ EXCEPTION: {type(e).__name__}: {str(e)[:200]}")
+        import traceback
+        _debug_log_gh(f"[GH-CREATE] Traceback: {traceback.format_exc()[:500]}")
+        return None
 
 
 def _build_close_comment(task_id, issue_data):

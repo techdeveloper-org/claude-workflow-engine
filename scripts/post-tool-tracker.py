@@ -412,20 +412,24 @@ def load_session_progress():
 
     Uses _lock_file/_unlock_file so parallel PostToolUse hook invocations do
     not observe a partially written state file.  Returns a fresh default
-    progress structure when the file is missing or unreadable.
+    progress structure when the file is missing, unreadable, or has an
+    incompatible schema.
 
     Returns:
         dict: Progress state containing at minimum 'total_progress',
               'tool_counts', 'started_at', 'tasks_completed', and
               'errors_seen'.
     """
+    REQUIRED_KEYS = {'total_progress', 'tool_counts', 'started_at', 'tasks_completed', 'errors_seen'}
     try:
         if SESSION_STATE_FILE.exists():
             with open(SESSION_STATE_FILE, 'r', encoding='utf-8') as f:
                 _lock_file(f)
                 data = json.load(f)
                 _unlock_file(f)
-            return data
+            # Validate that loaded data has all required keys (fix for schema mismatch)
+            if isinstance(data, dict) and REQUIRED_KEYS.issubset(data.keys()):
+                return data
     except Exception:
         pass
     return {
@@ -856,15 +860,23 @@ def main():
             'progress_delta': delta,
         }
         debug_log(f"  log entry built, now checking STEP 3.1")
-        # Add task context to every entry for full traceability
-        if flow_ctx.get('task_type'):
-            entry['task_type'] = flow_ctx['task_type']
-        if flow_ctx.get('complexity'):
-            entry['complexity'] = flow_ctx['complexity']
-        if flow_ctx.get('skill'):
-            entry['skill'] = flow_ctx['skill']
+
+        # GRANULAR DEBUG: Add task context
+        debug_log(f"  [GRANULAR] Step 3.1.1: Adding task context from flow_ctx")
+        try:
+            if flow_ctx.get('task_type'):
+                entry['task_type'] = flow_ctx['task_type']
+            if flow_ctx.get('complexity'):
+                entry['complexity'] = flow_ctx['complexity']
+            if flow_ctx.get('skill'):
+                entry['skill'] = flow_ctx['skill']
+            debug_log(f"  [GRANULAR] Step 3.1.1: ✓ Task context added")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.1: ✗ EXCEPTION in task context: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
         # v2.1.0: Rich activity data per tool type (for narrative session summaries)
+        debug_log(f"  [GRANULAR] Step 3.1.2: Processing rich activity data for tool_type")
         inp = tool_input or {}
 
         if tool_name in ('Read', 'Write', 'Edit', 'NotebookEdit'):
@@ -923,121 +935,193 @@ def main():
         elif tool_name in ('WebSearch', 'WebFetch'):
             entry['query'] = inp.get('query', inp.get('url', ''))[:150]
 
+        debug_log(f"  [GRANULAR] Step 3.1.2: ✓ Rich activity data processed for {tool_name}")
+
         # NEW (v3.2.0): Enrich entry with failure detection results (3.7 middleware)
-        if failure_info:
-            entry['failure_detected'] = True
-            entry['failure_type'] = failure_info.get('type', 'unknown')
-            entry['failure_severity'] = failure_info.get('severity', 'medium')
-        else:
-            entry['failure_detected'] = False
+        debug_log(f"  [GRANULAR] Step 3.1.3: Enriching with failure detection")
+        try:
+            if failure_info:
+                entry['failure_detected'] = True
+                entry['failure_type'] = failure_info.get('type', 'unknown')
+                entry['failure_severity'] = failure_info.get('severity', 'medium')
+            else:
+                entry['failure_detected'] = False
+            debug_log(f"  [GRANULAR] Step 3.1.3: ✓ Failure detection enriched")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.3: ✗ EXCEPTION in failure enrichment: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
         # Log the entry
-        log_tool_entry(entry)
+        debug_log(f"  [GRANULAR] Step 3.1.4: About to call log_tool_entry()")
+        try:
+            log_tool_entry(entry)
+            debug_log(f"  [GRANULAR] Step 3.1.4: ✓ log_tool_entry() completed")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.4: ✗ EXCEPTION in log_tool_entry: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
         # Update session progress
-        state = load_session_progress()
-        state['total_progress'] = min(100, state['total_progress'] + delta)
-        state['tool_counts'][tool_name] = state['tool_counts'].get(tool_name, 0) + 1
-        state['last_tool'] = tool_name
-        state['last_tool_at'] = entry['ts']
+        debug_log(f"  [GRANULAR] Step 3.1.5: Loading session progress")
+        try:
+            state = load_session_progress()
+            debug_log(f"  [GRANULAR] Step 3.1.5: ✓ Session progress loaded")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.5: ✗ EXCEPTION in load_session_progress: {type(e).__name__}: {str(e)[:200]}")
+            raise
+
+        debug_log(f"  [GRANULAR] Step 3.1.6: Updating progress counters")
+        try:
+            state['total_progress'] = min(100, state['total_progress'] + delta)
+            state['tool_counts'][tool_name] = state['tool_counts'].get(tool_name, 0) + 1
+            state['last_tool'] = tool_name
+            state['last_tool_at'] = entry['ts']
+            debug_log(f"  [GRANULAR] Step 3.1.6: ✓ Progress counters updated")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.6: ✗ EXCEPTION in counters: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
         # Track file modifications since last commit (for git reminder)
-        if tool_name in ('Write', 'Edit', 'NotebookEdit') and not is_error:
-            file_path = (tool_input or {}).get('file_path', '') or (tool_input or {}).get('notebook_path', '')
-            if file_path:
-                modified_files = state.get('modified_files_since_commit', [])
-                short_path = '/'.join(file_path.replace('\\', '/').split('/')[-3:])
-                if short_path not in modified_files:
-                    modified_files.append(short_path)
-                state['modified_files_since_commit'] = modified_files
+        debug_log(f"  [GRANULAR] Step 3.1.7: Tracking file modifications")
+        try:
+            if tool_name in ('Write', 'Edit', 'NotebookEdit') and not is_error:
+                file_path = (tool_input or {}).get('file_path', '') or (tool_input or {}).get('notebook_path', '')
+                if file_path:
+                    modified_files = state.get('modified_files_since_commit', [])
+                    short_path = '/'.join(file_path.replace('\\', '/').split('/')[-3:])
+                    if short_path not in modified_files:
+                        modified_files.append(short_path)
+                    state['modified_files_since_commit'] = modified_files
 
-        if is_error:
-            state['errors_seen'] = state.get('errors_seen', 0) + 1
+            if is_error:
+                state['errors_seen'] = state.get('errors_seen', 0) + 1
+            debug_log(f"  [GRANULAR] Step 3.1.7: ✓ File tracking done")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.7: ✗ EXCEPTION in file tracking: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
         # Loophole #17 fix: removed Write/Edit tasks_completed increment
         # Only TaskUpdate(status=completed) should increment (line ~320)
         # Previous code double-counted: Write/Edit + TaskUpdate both incremented
 
         # Track actual response content size for accurate context estimation
-        resp_chars = get_response_content_length(tool_response)
-        state['content_chars'] = state.get('content_chars', 0) + resp_chars
+        debug_log(f"  [GRANULAR] Step 3.1.8: Computing context estimates")
+        try:
+            resp_chars = get_response_content_length(tool_response)
+            state['content_chars'] = state.get('content_chars', 0) + resp_chars
 
-        # Compute and store dynamic context estimate so context-monitor-v2.py reads it
-        ctx_est = estimate_context_pct(state['tool_counts'], state.get('content_chars', 0))
-        state['context_estimate_pct'] = ctx_est
+            # Compute and store dynamic context estimate so context-monitor-v2.py reads it
+            ctx_est = estimate_context_pct(state['tool_counts'], state.get('content_chars', 0))
+            state['context_estimate_pct'] = ctx_est
+            debug_log(f"  [GRANULAR] Step 3.1.8: ✓ Context estimates computed")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.8: ✗ EXCEPTION in context estimation: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
         # NEW (v3.2.0): Track tool optimization statistics (3.7 middleware)
-        # Initialize tool_optimization_stats block if missing
-        if 'tool_optimization_stats' not in state:
-            state['tool_optimization_stats'] = {
-                'total_failures_detected_in_results': 0,
-                'per_tool_failure_counts': {}
-            }
+        debug_log(f"  [GRANULAR] Step 3.1.9: Tracking tool optimization stats")
+        try:
+            # Initialize tool_optimization_stats block if missing
+            if 'tool_optimization_stats' not in state:
+                state['tool_optimization_stats'] = {
+                    'total_failures_detected_in_results': 0,
+                    'per_tool_failure_counts': {}
+                }
 
-        # Increment failure detection counters if failure was detected
-        if failure_info:
-            state['tool_optimization_stats']['total_failures_detected_in_results'] += 1
-            per_tool = state['tool_optimization_stats'].get('per_tool_failure_counts', {})
-            per_tool[tool_name] = per_tool.get(tool_name, 0) + 1
-            state['tool_optimization_stats']['per_tool_failure_counts'] = per_tool
+            # Increment failure detection counters if failure was detected
+            if failure_info:
+                state['tool_optimization_stats']['total_failures_detected_in_results'] += 1
+                per_tool = state['tool_optimization_stats'].get('per_tool_failure_counts', {})
+                per_tool[tool_name] = per_tool.get(tool_name, 0) + 1
+                state['tool_optimization_stats']['per_tool_failure_counts'] = per_tool
+            debug_log(f"  [GRANULAR] Step 3.1.9: ✓ Tool optimization stats tracked")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.9: ✗ EXCEPTION in optimization stats: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
-        save_session_progress(state)
+        debug_log(f"  [GRANULAR] Step 3.1.10: Saving session progress")
+        try:
+            save_session_progress(state)
+            debug_log(f"  [GRANULAR] Step 3.1.10: ✓ Session progress saved")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.10: ✗ EXCEPTION in save_session_progress: {type(e).__name__}: {str(e)[:200]}")
+            raise
+        debug_log(f"  [GRANULAR] Step 3.1.11: Emitting context sample")
         try:
             _sid_ctx = _get_session_id_from_progress() or ''
             emit_context_sample(ctx_est, session_id=_sid_ctx,
                                 source='post-tool-tracker', tool_name=tool_name)
-        except Exception:
-            pass
+            debug_log(f"  [GRANULAR] Step 3.1.11: ✓ Context sample emitted")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.11: ⚠️ EXCEPTION in emit_context_sample (non-fatal): {type(e).__name__}: {str(e)[:200]}")
+            # Don't raise - this is non-fatal
 
         # -----------------------------------------------------------------------
         # POLICY ENFORCEMENT: Task Progress Update Frequency (v3.1.0)
         # Policy: policies/03-execution-system/08-progress-tracking/task-progress-tracking-policy.md
         # Rule: Warn if >5 tool calls without TaskUpdate. Recommend every 2-3 calls.
         # -----------------------------------------------------------------------
-        if tool_name in ('TaskUpdate', 'TaskCreate'):
-            state['tools_since_last_update'] = 0
-            save_session_progress(state)
-        else:
-            tools_since = state.get('tools_since_last_update', 0) + 1
-            state['tools_since_last_update'] = tools_since
-            save_session_progress(state)
+        debug_log(f"  [GRANULAR] Step 3.1.12: Enforcing task progress update frequency policy")
+        try:
+            if tool_name in ('TaskUpdate', 'TaskCreate'):
+                state['tools_since_last_update'] = 0
+                save_session_progress(state)
+                debug_log(f"  [GRANULAR] Step 3.1.12: ✓ Reset tools_since_last_update for TaskCreate/TaskUpdate")
+            else:
+                tools_since = state.get('tools_since_last_update', 0) + 1
+                state['tools_since_last_update'] = tools_since
+                save_session_progress(state)
+                debug_log(f"  [GRANULAR] Step 3.1.12: ✓ Incremented tools_since_last_update to {tools_since}")
 
-            # Only warn for file-modifying tools (not reads/searches)
-            if tools_since > 5 and tool_name in ('Write', 'Edit', 'Bash', 'NotebookEdit'):
-                complexity = flow_ctx.get('complexity', 0)
-                if complexity >= 3:
-                    sys.stdout.write(
-                        '[POLICY] task-progress-tracking: ' + str(tools_since)
-                        + ' tool calls since last TaskUpdate!\n'
-                        '  Policy says: Update every 2-3 tool calls (max 5).\n'
-                        '  ACTION: Call TaskUpdate with metadata to track progress.\n'
-                        '  Example: TaskUpdate(id, metadata={"progress": "step X/Y complete"})\n'
-                    )
-                    sys.stdout.flush()
+                # Only warn for file-modifying tools (not reads/searches)
+                if tools_since > 5 and tool_name in ('Write', 'Edit', 'Bash', 'NotebookEdit'):
+                    complexity = flow_ctx.get('complexity', 0)
+                    if complexity >= 3:
+                        sys.stdout.write(
+                            '[POLICY] task-progress-tracking: ' + str(tools_since)
+                            + ' tool calls since last TaskUpdate!\n'
+                            '  Policy says: Update every 2-3 tool calls (max 5).\n'
+                            '  ACTION: Call TaskUpdate with metadata to track progress.\n'
+                            '  Example: TaskUpdate(id, metadata={"progress": "step X/Y complete"})\n'
+                        )
+                        sys.stdout.flush()
+                        debug_log(f"  [GRANULAR] Step 3.1.12: ✓ Wrote task-progress-tracking policy warning")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.12: ✗ EXCEPTION in task-progress-tracking policy: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
         # -----------------------------------------------------------------------
         # POLICY ENFORCEMENT: Complexity-Aware Phase Reminder (v3.1.0)
         # Policy: policies/03-execution-system/08-progress-tracking/task-phase-enforcement-policy.md
         # Rule: Complexity >= 6 -> phased execution mandatory
         # -----------------------------------------------------------------------
-        complexity = flow_ctx.get('complexity', 0)
-        tasks_created = state.get('tasks_created', 0)
-        if complexity >= 6 and tasks_created == 0 and tool_name in ('Write', 'Edit', 'NotebookEdit'):
-            sys.stdout.write(
-                '[POLICY] task-phase-enforcement: Complexity=' + str(complexity)
-                + ' but 0 tasks created!\n'
-                '  Policy says: Complexity >= 6 REQUIRES phased execution.\n'
-                '  ACTION: Call TaskCreate to define tasks BEFORE writing code.\n'
-            )
-            sys.stdout.flush()
+        debug_log(f"  [GRANULAR] Step 3.1.13: Enforcing complexity-aware phase reminder")
+        try:
+            complexity = flow_ctx.get('complexity', 0)
+            tasks_created = state.get('tasks_created', 0)
+            if complexity >= 6 and tasks_created == 0 and tool_name in ('Write', 'Edit', 'NotebookEdit'):
+                sys.stdout.write(
+                    '[POLICY] task-phase-enforcement: Complexity=' + str(complexity)
+                    + ' but 0 tasks created!\n'
+                    '  Policy says: Complexity >= 6 REQUIRES phased execution.\n'
+                    '  ACTION: Call TaskCreate to define tasks BEFORE writing code.\n'
+                )
+                sys.stdout.flush()
+                debug_log(f"  [GRANULAR] Step 3.1.13: ✓ Wrote phase-enforcement policy warning")
+            else:
+                debug_log(f"  [GRANULAR] Step 3.1.13: ✓ No phase-enforcement warning needed (complexity={complexity}, tasks_created={tasks_created})")
+        except Exception as e:
+            debug_log(f"  [GRANULAR] Step 3.1.13: ✗ EXCEPTION in complexity-aware-phase-reminder: {type(e).__name__}: {str(e)[:200]}")
+            raise
 
         # -----------------------------------------------------------------------
         # STEP 3.1 ENFORCEMENT: Clear task-breakdown flag when TaskCreate is called
         # (Loophole #11: session-specific flag files)
         # -----------------------------------------------------------------------
+        debug_log(f"  [GRANULAR] Step 3.1.14: REACHED TaskCreate check block! tool_name={tool_name}, is_error={is_error}")
         debug_log(f"TaskCreate check: tool_name={tool_name}, is_error={is_error}")
         if tool_name == 'TaskCreate' and not is_error:
             debug_log(f"  ✓ TaskCreate detected and no error - proceeding with issue creation")
+            debug_log(f"  [GH-START] ========== BEGIN GITHUB WORKFLOW FOR TaskCreate ==========")
             try:
                 # Loophole #15 fix: validate TaskCreate has meaningful content
                 tc_subject = (tool_input or {}).get('subject', '')
@@ -1077,38 +1161,53 @@ def main():
                 debug_log(f"  github_issue_manager loaded: {gim is not None}")
                 if not gim:
                     # LOGGING: Why github_issue_manager failed to load
+                    debug_log(f"  [GH-GRANULAR] github_issue_manager is None, skipping")
                     sys.stdout.write('[GH-WORKFLOW] ⚠️ GitHub issue manager not available\n')
                     sys.stdout.flush()
                 else:
+                    debug_log(f"  [GH-GRANULAR] github_issue_manager loaded successfully, proceeding")
                     # Use task ID from response first, fallback to sequential count
+                    debug_log(f"  [GH-GRANULAR] Extracting task ID from response...")
                     task_id = gim.extract_task_id_from_response(tool_response)
+                    debug_log(f"  [GH-GRANULAR] extract_task_id_from_response() returned: {task_id}")
                     if not task_id:
                         # Fallback: use tasks_created count as ID (matches TaskUpdate taskId)
                         task_id = str(state.get('tasks_created', 1))
+                        debug_log(f"  [GH-GRANULAR] No task ID in response, using fallback: {task_id}")
                     tc_subject = (tool_input or {}).get('subject', '')
                     tc_desc = (tool_input or {}).get('description', '')
+                    debug_log(f"  [GH-GRANULAR] Task info: subject_len={len(tc_subject)}, desc_len={len(tc_desc)}")
 
                     if not tc_subject:
+                        debug_log(f"  [GH-GRANULAR] No subject, skipping issue creation")
                         sys.stdout.write('[GH-WORKFLOW] ⚠️ No task subject - skipping GitHub issue\n')
                         sys.stdout.flush()
                     elif len(tc_subject) < 5:
+                        debug_log(f"  [GH-GRANULAR] Subject too short ({len(tc_subject)} chars), skipping")
                         sys.stdout.write(f'[GH-WORKFLOW] ⚠️ Subject too short ({len(tc_subject)} chars, need 5+)\n')
                         sys.stdout.flush()
                     else:
                         # CREATE GITHUB ISSUE
+                        debug_log(f"  [GH-GRANULAR] About to call create_github_issue(task_id={task_id}, subject='{tc_subject[:30]}')")
                         sys.stdout.write(f'[GH-WORKFLOW] Creating GitHub issue for task "{tc_subject[:50]}"...\n')
                         sys.stdout.flush()
 
+                        debug_log(f"  [GH-GRANULAR] Calling gim.create_github_issue()...")
                         issue_num = gim.create_github_issue(task_id, tc_subject, tc_desc)
+                        debug_log(f"  [GH-GRANULAR] create_github_issue() returned: {issue_num}")
+
                         if issue_num:
                             sys.stdout.write(f'[GH-WORKFLOW] ✅ Issue #{issue_num} created (branch created automatically)\n')
                             sys.stdout.flush()
+                            debug_log(f"  [GH-GRANULAR] ✓ Issue #{issue_num} creation reported success")
                             # Branch is now created atomically inside create_github_issue()
                         else:
                             sys.stdout.write(f'[GH-WORKFLOW] ❌ Issue creation returned None - check logs\n')
                             sys.stdout.flush()
+                            debug_log(f"  [GH-GRANULAR] ✗ Issue creation returned None")
             except Exception as e:
                 # LOG THE ACTUAL ERROR instead of silent failure
+                debug_log(f"  [GH-GRANULAR] ❌ EXCEPTION in GitHub block: {type(e).__name__}: {str(e)[:150]}")
                 sys.stdout.write(f'[GH-WORKFLOW] ❌ EXCEPTION: {type(e).__name__}: {str(e)[:150]}\n')
                 sys.stdout.flush()
                 # Also log to file
@@ -1120,6 +1219,7 @@ def main():
                         f.write(f"  Subject: {tc_subject}\n")
                 except Exception:
                     pass
+            debug_log(f"  [GH-END] ========== END GITHUB WORKFLOW FOR TaskCreate ==========")
 
         # -----------------------------------------------------------------------
         # STEP 3.5 ENFORCEMENT: Clear skill-selection flag when Skill or Task is called
