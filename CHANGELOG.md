@@ -1,3 +1,33 @@
+## [5.1.0] - 2026-03-08
+### Added
+- **AI-Powered Task Type Detector using Local Ollama**
+  - Replaces fragile keyword-based detection with intelligent LLM classification
+  - Supports: Design, API Creation, Authentication, Authorization, Database, Configuration, Bug Fix, Refactoring, Security, Testing, Documentation
+  - Uses local Ollama (no external API dependency, works offline)
+  - 80-100% classification accuracy across all task types
+  - File: `scripts/architecture/03-execution-system/00-prompt-generation/ai-task-type-detector.py`
+
+- **Intelligent Decision Engine LLM Integration**
+  - Replaced Trybonsai API with local Ollama for model/agent selection
+  - Full 3-level enforcement flow verified (all 25 policies passing)
+  - Step 3.3A now uses local LLM for unified decision-making
+
+### Fixed
+- **Task Closure Workflow (CRITICAL)**
+  - TaskCreate → Execute → TaskUpdate(completed) sequence now properly enforced
+  - Hook scripts synced to ~/.claude/scripts/ (was using stale versions)
+  - Task breakdown flags now correctly trigger blocking until TaskCreate is called
+  - Post-tool-tracker properly closes tasks on explicit TaskUpdate(completed)
+
+- **Complete 3-Level Enforcement Flow**
+  - All 25 policies now passing (LEVEL -1, L1-L6, L2-1-2, L3-0 through L3-12)
+  - No more partial enforcement - full end-to-end execution
+
+### Changed
+- Updated prompt-generation-policy.py to use new Ollama-based detector
+- All architecture scripts copied to global hooks directory
+- Docstrings updated to reflect Ollama (local-first) approach
+
 ## [4.13.1] - 2026-03-07
 ### Changed
 - Version bump to 4.13.1

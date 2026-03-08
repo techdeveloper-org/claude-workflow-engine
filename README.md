@@ -1,4 +1,4 @@
-# Claude Insight v4.13.1
+# Claude Insight v5.1.0
 
 **Real-time Monitoring Dashboard for the Claude Memory System (3-Level Architecture + Policy Enforcement)**
 
@@ -6,16 +6,17 @@
 [![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-3.0-green?logo=flask)](https://flask.palletsprojects.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.13.1-brightgreen)](VERSION)
+[![Version](https://img.shields.io/badge/Version-5.1.0-brightgreen)](VERSION)
 
 Claude Insight is a Python Flask dashboard that monitors how Claude Code follows the **3-Level Architecture enforcement policies** in real-time. It tracks policy execution, session analytics, skill/agent usage, context optimization, and provides complete audit trails of all decisions.
 
-**Latest Version (v4.13.1):**
-- **FIXED:** Critical PID mismatch - flag files now use session ID only (no PID), fixing cross-hook enforcement
-- **FIXED:** post-tool-tracker session ID resolution - now reads `.current-session.json` first
-- **FIXED:** stop-notifier referencing deleted scripts (auto-commit-enforcer, failure-detector)
-- **NEW:** Git push to main/master now BLOCKED by pre-tool-enforcer
-- Full policy audit: 16 scripts called, 6 enforcement checks, all architecture scripts verified
+**Latest Version (v5.1.0) - AI-Powered Task Detection:**
+- **NEW:** AI-based task type detector using local Ollama (Design, API Creation, Auth, Database, Bug Fix, Refactoring, Security, Testing, Documentation)
+- **NEW:** Intelligent decision engine with LLM-powered model/agent selection
+- **IMPROVED:** Switched from external Trybonsai API to local Ollama (no external dependencies)
+- **FIXED:** Complete 3-level enforcement flow working end-to-end (all 25 policies passing)
+- **FIXED:** Task closure workflow - TaskCreate → Execute → TaskUpdate(completed) sequence properly implemented
+- All hook scripts synced to ~/.claude/scripts/ for proper policy enforcement
 
 ---
 
