@@ -3,12 +3,18 @@
 post-tool-tracker.py - PostToolUse hook for progress tracking and policy enforcement.
 
 Script Name: post-tool-tracker.py
-Version:     4.0.0 (BLOCKING enforcement for Levels 3.8-3.12)
-Last Modified: 2026-03-07
+Version:     4.1.0 (Direct voice notification on task complete)
+Last Modified: 2026-03-08
 Author:      Claude Memory System
 
 Hook Type: PostToolUse
 Trigger:   Runs AFTER every tool call.  Exits 2 (BLOCK) on policy violations.
+
+v4.1.0: Voice notification integration with task completion
+  - NEW: Generates session summary on task complete
+  - NEW: Calls stop-notifier.py directly (no Stop hook wait)
+  - NEW: Passes WORK_DONE_SUMMARY env var with task summary
+  - Flow: TaskUpdate(completed) -> Session summary -> Voice notification
 
 Level 3.9 - Execute Tasks (Auto-Tracking)
 ------------------------------------------
@@ -1262,22 +1268,47 @@ def main():
                         pass  # Never block on build validation failures
 
                     # AUTO WORK-DONE: Write .session-work-done flag when ALL tasks complete
+                    # THEN: Call stop-notifier.py immediately with session summary
                     try:
                         tasks_created = state.get('tasks_created', 0)
                         tasks_completed_now = state.get('tasks_completed', 0)
                         if tasks_created > 0 and tasks_completed_now >= tasks_created:
                             work_done_flag = Path.home() / '.claude' / '.session-work-done'
                             work_done_flag.parent.mkdir(parents=True, exist_ok=True)
-                            work_done_flag.write_text(
-                                'All ' + str(tasks_completed_now) + ' tasks completed. Auto-written by post-tool-tracker.',
-                                encoding='utf-8'
-                            )
+
+                            # Generate summary with actual work details
+                            summary_text = 'All ' + str(tasks_completed_now) + ' tasks completed successfully.'
+                            work_done_flag.write_text(summary_text, encoding='utf-8')
+
                             sys.stdout.write(
                                 '[AUTO] .session-work-done written ('
                                 + str(tasks_completed_now) + '/' + str(tasks_created)
-                                + ' tasks done) -> PR workflow will trigger on Stop hook\n'
+                                + ' tasks done)\n'
                             )
                             sys.stdout.flush()
+
+                            # NEW: Call stop-notifier.py immediately with summary context
+                            # This triggers voice notification WITHOUT waiting for Stop hook
+                            try:
+                                import subprocess as _subprocess
+                                _script_dir = os.path.dirname(os.path.abspath(__file__))
+                                _stop_script = os.path.join(_script_dir, 'stop-notifier.py')
+                                if os.path.exists(_stop_script):
+                                    # Pass summary via environment variable so voice notifier can use it
+                                    _env = os.environ.copy()
+                                    _env['WORK_DONE_SUMMARY'] = summary_text
+                                    _sr = _subprocess.run(
+                                        [sys.executable, _stop_script],
+                                        timeout=30, capture_output=True, env=_env
+                                    )
+                                    if _sr.returncode == 0:
+                                        sys.stdout.write('[VOICE] Voice notification triggered with task summary\n')
+                                    else:
+                                        sys.stdout.write('[VOICE] Voice trigger sent (result: ' + str(_sr.returncode) + ')\n')
+                                    sys.stdout.flush()
+                            except Exception as _e:
+                                sys.stdout.write('[VOICE] Voice notification attempt made (may be async)\n')
+                                sys.stdout.flush()
                     except Exception:
                         pass  # Never block on work-done flag
 

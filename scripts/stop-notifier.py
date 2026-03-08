@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
 Script Name: stop-notifier.py
-Version: 4.0.0 (Session Summary Voice + Bug Fixes)
-Last Modified: 2026-02-28
+Version: 4.1.0 (Direct voice trigger on task complete + WORK_DONE_SUMMARY env var)
+Last Modified: 2026-03-08
 Description: Stop hook - speaks dynamic English voice updates via LLM.
 
+v4.1.0: Direct voice notification on TaskUpdate(completed)
+  - NEW: Accepts WORK_DONE_SUMMARY environment variable from post-tool-tracker.py
+  - NEW: Called directly by post-tool-tracker.py when all tasks complete (no Stop hook wait)
+  - Flow: TaskUpdate(completed) -> post-tool-tracker.py -> stop-notifier.py -> voice + summary
 v4.0.0: MAJOR FIXES + Session Summary Voice Integration
   - FIXED: increment_retry destroying original message (spoke '{"retries": 1}')
   - FIXED: Simplified flow - no retry complexity, just try LLM -> fallback -> speak -> done
@@ -854,7 +858,10 @@ def main():
             log_s(f"[PR-WORKFLOW] Error: {e}")
 
         # Voice notification (after PR workflow)
-        summary_context = get_session_summary_for_voice()
+        # v4.1.0: Check for WORK_DONE_SUMMARY env var (set by post-tool-tracker.py)
+        summary_context = os.environ.get('WORK_DONE_SUMMARY', '')
+        if not summary_context:
+            summary_context = get_session_summary_for_voice()
         spoke_something = handle_voice_flag(
             _work_done_flag,
             'work_done',
