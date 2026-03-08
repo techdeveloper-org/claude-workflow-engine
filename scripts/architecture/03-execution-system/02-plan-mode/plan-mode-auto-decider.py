@@ -52,11 +52,100 @@ class PlanModeAutoDecider:
         self.logs_path = self.memory_path / 'logs'
         self.plan_log = self.logs_path / 'plan-mode-decisions.log'
 
+    def _llm_risk_score(self, task_info):
+        """Use local LLM to evaluate task risk contextually.
+
+        Calls Ollama to analyze the task description and return a risk
+        score (0-30) based on actual understanding of the task.
+
+        Args:
+            task_info: Dict with task metadata (user_message, service_count, etc.)
+
+        Returns:
+            int or None: Risk score from LLM (0-30), or None if unavailable.
+        """
+        try:
+            from urllib import request as _urllib_request
+            import json as _json
+
+            user_msg = task_info.get('user_message', '')
+            if not user_msg:
+                return None
+
+            prompt = (
+                "Evaluate the RISK SCORE (0-30) for this coding task. "
+                "Return ONLY JSON: {\"risk_score\": number, \"reason\": \"string\"}\n\n"
+                "Scoring guide:\n"
+                "- 0-5: Simple/safe (read files, small edits, docs, config)\n"
+                "- 6-12: Moderate (single feature, one service, standard patterns)\n"
+                "- 13-20: High (multi-service, database schema, auth/security)\n"
+                "- 21-30: Critical (architecture redesign, data migration, breaking changes)\n\n"
+                "Risk factors: multi-service impact, database changes, security-critical, "
+                "architecture changes, novel problems, many files affected\n\n"
+                f"Task: {user_msg[:300]}\n"
+            )
+            if task_info.get('service_count', 0) > 0:
+                prompt += f"Services affected: {task_info['service_count']}\n"
+            if task_info.get('file_count', 0) > 0:
+                prompt += f"Files affected: {task_info['file_count']}\n"
+
+            # Auto-detect Ollama model
+            model = 'qwen2.5:7b'
+            try:
+                req = _urllib_request.Request('http://127.0.0.1:11434/api/tags')
+                with _urllib_request.urlopen(req, timeout=2) as resp:
+                    data = _json.loads(resp.read().decode('utf-8'))
+                    installed = [m['name'] for m in data.get('models', [])]
+                    for preferred in ['qwen3:4b', 'qwen2.5:7b', 'qwen2.5:3b', 'granite4:3b']:
+                        if preferred in installed:
+                            model = preferred
+                            break
+            except Exception:
+                pass
+
+            payload = _json.dumps({
+                'model': model,
+                'messages': [
+                    {'role': 'system', 'content': 'You evaluate coding task risk. Return ONLY valid JSON.'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                'max_tokens': 100,
+                'temperature': 0.1,
+                'response_format': {'type': 'json_object'},
+            }).encode('utf-8')
+
+            req = _urllib_request.Request(
+                'http://127.0.0.1:11434/v1/chat/completions',
+                data=payload,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+
+            with _urllib_request.urlopen(req, timeout=30) as resp:
+                result = _json.loads(resp.read().decode('utf-8'))
+                content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                parsed = _json.loads(content)
+                risk = parsed.get('risk_score', parsed.get('score', None))
+                if risk is not None:
+                    return max(0, min(30, int(risk)))
+        except Exception:
+            pass
+        return None
+
     def calculate_risk_score(self, task_info):
         """
         Calculate risk score (0-30)
         Higher = more risky = needs plan mode
+
+        Uses LLM classification first for contextual understanding,
+        falls back to hardcoded heuristics if LLM unavailable.
         """
+        # Try LLM-based risk evaluation first
+        llm_score = self._llm_risk_score(task_info)
+        if llm_score is not None:
+            return llm_score
+
+        # Fallback: hardcoded heuristics
         score = 0
 
         # Multi-service impact

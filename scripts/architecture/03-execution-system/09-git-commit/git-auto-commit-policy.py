@@ -505,13 +505,104 @@ class GitAutoCommitAI:
 
         return changes
 
+    def _llm_classify_commit(self, changes, context=None):
+        """Use local LLM to classify commit type from changes and context.
+
+        Calls Ollama (qwen2.5:7b or best available) to analyze the actual
+        changes and determine the semantic commit type intelligently.
+
+        Args:
+            changes: Dict with added/modified/deleted/renamed file lists.
+            context: Optional task context string.
+
+        Returns:
+            str or None: Commit type from LLM, or None if LLM unavailable.
+        """
+        try:
+            from urllib import request as _urllib_request
+            import json as _json
+
+            # Build a concise summary of changes for the LLM
+            parts = []
+            if changes.get('added'):
+                parts.append(f"Added: {', '.join(changes['added'][:10])}")
+            if changes.get('modified'):
+                parts.append(f"Modified: {', '.join(changes['modified'][:10])}")
+            if changes.get('deleted'):
+                parts.append(f"Deleted: {', '.join(changes['deleted'][:10])}")
+            if changes.get('renamed'):
+                parts.append(f"Renamed: {', '.join(changes['renamed'][:5])}")
+            if context:
+                parts.append(f"Context: {context[:200]}")
+
+            if not parts:
+                return None
+
+            prompt = (
+                "Classify this git commit. Return ONLY a JSON object: "
+                "{\"type\":\"string\",\"reason\":\"string\"}\n"
+                "type MUST be one of: feat, fix, refactor, docs, test, chore, style, perf\n"
+                "Rules:\n"
+                "- feat: new functionality, new files with business logic\n"
+                "- fix: bug fixes, error corrections, broken behavior repair\n"
+                "- refactor: restructuring without behavior change, cleanup, deletions\n"
+                "- docs: documentation, README, comments only\n"
+                "- test: test files added/modified\n"
+                "- chore: config, dependencies, build, CI/CD\n"
+                "- style: formatting, whitespace, linting\n"
+                "- perf: performance improvements\n\n"
+                "Changes:\n" + "\n".join(parts)
+            )
+
+            # Auto-detect Ollama model
+            model = 'qwen2.5:7b'
+            try:
+                req = _urllib_request.Request('http://127.0.0.1:11434/api/tags')
+                with _urllib_request.urlopen(req, timeout=2) as resp:
+                    data = _json.loads(resp.read().decode('utf-8'))
+                    installed = [m['name'] for m in data.get('models', [])]
+                    for preferred in ['qwen3:4b', 'qwen2.5:7b', 'qwen2.5:3b', 'granite4:3b']:
+                        if preferred in installed:
+                            model = preferred
+                            break
+            except Exception:
+                pass
+
+            payload = _json.dumps({
+                'model': model,
+                'messages': [
+                    {'role': 'system', 'content': 'You classify git commits. Return ONLY valid JSON.'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                'max_tokens': 100,
+                'temperature': 0.1,
+                'response_format': {'type': 'json_object'},
+            }).encode('utf-8')
+
+            req = _urllib_request.Request(
+                'http://127.0.0.1:11434/v1/chat/completions',
+                data=payload,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+
+            with _urllib_request.urlopen(req, timeout=30) as resp:
+                result = _json.loads(resp.read().decode('utf-8'))
+                content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                parsed = _json.loads(content)
+                commit_type = parsed.get('type', '').lower().strip()
+                valid_types = ('feat', 'fix', 'refactor', 'docs', 'test', 'chore', 'style', 'perf')
+                if commit_type in valid_types:
+                    return commit_type
+        except Exception:
+            pass
+        return None
+
     def determine_commit_type(self, changes, context=None):
         """Determine semantic commit type from changes and context.
 
-        Heuristic precedence:
-          1. Task context (flow-trace / session data)
-          2. File type heuristics
-          3. Change type heuristics
+        Uses LLM classification first (via local Ollama), falls back to
+        heuristic-based detection if LLM is unavailable.
 
         Args:
             changes: Dict from analyze_changes().
@@ -523,6 +614,12 @@ class GitAutoCommitAI:
         if not changes:
             return "chore"
 
+        # Try LLM classification first (more accurate)
+        llm_type = self._llm_classify_commit(changes, context)
+        if llm_type:
+            return llm_type
+
+        # Fallback: heuristic-based classification
         # Check for new features (new files with source extension)
         if changes.get("added"):
             source_files = [
