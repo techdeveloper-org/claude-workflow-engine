@@ -77,7 +77,13 @@ class AiTaskTypeDetector:
             if config_file.exists():
                 try:
                     with open(config_file, 'r', encoding='utf-8') as f:
-                        for line in f:
+                        content = f.read()
+                        # Remove BOM if present
+                        if content.startswith('\ufeff'):
+                            content = content[1:]
+                        # Parse lines
+                        for line in content.split('\n'):
+                            line = line.strip()
                             if line.startswith("TRYBONSAI_API_KEY="):
                                 self.api_key = line.split("=", 1)[1].strip()
                                 break
