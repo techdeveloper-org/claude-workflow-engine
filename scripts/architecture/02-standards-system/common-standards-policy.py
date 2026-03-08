@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
 """
-Common Standards Policy Enforcement (v1.0)
+Common Standards Policy Enforcement (v2.0)
 
 Maps to: policies/02-standards-system/common-standards-policy.md
 
-This module enforces the common coding standards applicable to all projects in
-the Claude Memory System. It initializes and loads a JSON standards file with
-the canonical set of architectural and design standards that Claude must follow
-across all sessions.
+This module enforces 12 categories of common coding standards (~65 real rules)
+applicable to ALL projects. Standards are language-agnostic best practices
+loaded into JSON before any code generation begins.
 
-Extracted from: standards-loader.py (common standards portion)
-
-Standards enforced:
-  - java_structure:    Standard Java project folder structure
-  - config_server:     Config server rules for Spring applications
-  - secret_management: Secret and credential management
-  - response_format:   Standard API response format
-  - api_design:        RESTful API design standards
-  - database:          Database design and query standards
-  - error_handling:    Standard error handling patterns
+Categories (12 total, ~65 rules):
+  1. naming_conventions   (7 rules)
+  2. error_handling       (6 rules)
+  3. logging_standards    (5 rules)
+  4. security_basics      (6 rules)
+  5. code_organization    (5 rules)
+  6. api_design           (6 rules)
+  7. database             (5 rules)
+  8. constants            (5 rules)
+  9. testing              (5 rules)
+  10. documentation       (5 rules)
+  11. git_standards       (5 rules)
+  12. file_organization   (5 rules)
 
 Key Functions:
   enforce(): Load and initialize the common standards file.
@@ -65,6 +67,164 @@ if sys.platform == 'win32':
 
 LOG_FILE = Path.home() / ".claude" / "memory" / "logs" / "policy-hits.log"
 STANDARDS_FILE = Path.home() / ".claude" / "memory" / "standards" / "common-standards.json"
+
+# Current standards version - bump when rules change
+STANDARDS_VERSION = "2.0.0"
+
+
+def _needs_upgrade(filepath):
+    """Check if existing JSON needs upgrade to real rules format."""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        stds = data.get('standards', {})
+        if not stds:
+            return True
+        first_val = next(iter(stds.values()))
+        # Old format had plain strings, new format has dicts with rules
+        if isinstance(first_val, str):
+            return True
+        if data.get('version', '0') != STANDARDS_VERSION:
+            return True
+        return False
+    except Exception:
+        return True
+
+
+def _build_common_standards():
+    """Build 12-category common standards with real enforcement rules.
+
+    Returns:
+        dict: 12 standard categories, each with description and rules list.
+              Total: ~65 rules across all categories.
+    """
+    return {
+        "naming_conventions": {
+            "description": "Naming conventions for all code",
+            "rules": [
+                "Variables and functions: camelCase",
+                "Classes and types: PascalCase",
+                "Constants: UPPER_SNAKE_CASE",
+                "Database tables/columns: snake_case",
+                "API endpoints: kebab-case plural nouns",
+                "Booleans: prefix with is/has/can/should",
+                "NEVER use abbreviations unless universally known (id, url, api)"
+            ]
+        },
+        "error_handling": {
+            "description": "Standard error handling patterns",
+            "rules": [
+                "NEVER swallow exceptions silently (empty catch blocks)",
+                "Catch specific exception types, not generic Exception/Error",
+                "Include context in error messages (what operation failed)",
+                "Log errors at the handling point with stack trace",
+                "Use appropriate error codes/status for each error type",
+                "NEVER expose internal details (stack traces, SQL) to end users"
+            ]
+        },
+        "logging_standards": {
+            "description": "Structured logging requirements",
+            "rules": [
+                "Use structured logging (key-value pairs, not free text)",
+                "Include correlation/request ID in all log entries",
+                "Use appropriate log levels (ERROR for failures, INFO for events)",
+                "NEVER log sensitive data (passwords, tokens, PII)",
+                "NEVER log at DEBUG level in production by default"
+            ]
+        },
+        "security_basics": {
+            "description": "Security fundamentals for all code",
+            "rules": [
+                "NEVER hardcode secrets, passwords, or API keys in source code",
+                "Validate ALL external input (user input, API parameters, file uploads)",
+                "Use parameterized queries for ALL database operations",
+                "Apply principle of least privilege for all access control",
+                "NEVER commit secrets to version control (.env, credentials)",
+                "Sanitize output to prevent injection (XSS, SQL injection)"
+            ]
+        },
+        "code_organization": {
+            "description": "Code structure and modularity",
+            "rules": [
+                "Each class/module has a single, clear responsibility (SRP)",
+                "Extract shared logic into reusable functions/utilities (DRY)",
+                "Separate business logic from data access and presentation",
+                "Keep functions small and focused (one task per function)",
+                "Avoid circular dependencies between modules"
+            ]
+        },
+        "api_design": {
+            "description": "RESTful API design standards",
+            "rules": [
+                "Use plural nouns for resource names (/users not /user)",
+                "Use standard HTTP methods (GET, POST, PUT, DELETE)",
+                "Return appropriate HTTP status codes",
+                "Support pagination for list endpoints",
+                "Version APIs in the URL path (/api/v1/)",
+                "Use consistent response envelope/wrapper"
+            ]
+        },
+        "database": {
+            "description": "Database design and query standards",
+            "rules": [
+                "Use snake_case for all table and column names",
+                "Use database migrations for ALL schema changes (never manual)",
+                "Add indexes on frequently queried columns",
+                "Use parameterized queries (NEVER concatenate SQL strings)",
+                "Include audit columns (created_at, updated_at) on all tables"
+            ]
+        },
+        "constants": {
+            "description": "Constants organization and naming",
+            "rules": [
+                "NO magic numbers in code (use named constants)",
+                "NO magic strings in code (use named constants)",
+                "Centralize related constants in dedicated files/classes",
+                "Centralize all user-facing messages (for i18n readiness)",
+                "NEVER duplicate constant definitions"
+            ]
+        },
+        "testing": {
+            "description": "Testing approach and standards",
+            "rules": [
+                "Write unit tests for business logic",
+                "Write integration tests for API endpoints and data access",
+                "NEVER use production data in tests",
+                "Use descriptive test names that explain the scenario",
+                "Each test should be independent (no shared state between tests)"
+            ]
+        },
+        "documentation": {
+            "description": "Code documentation requirements",
+            "rules": [
+                "Comments explain WHY, not WHAT the code does",
+                "Document all public APIs with request/response examples",
+                "Every project has a README with setup and run instructions",
+                "Keep documentation close to the code it describes",
+                "Update documentation when changing functionality"
+            ]
+        },
+        "git_standards": {
+            "description": "Git workflow and commit standards",
+            "rules": [
+                "Write meaningful commit messages describing the change",
+                "Use conventional commit format (feat/fix/refactor: description)",
+                "Create feature branches for new work (never commit directly to main)",
+                "Write PR descriptions explaining what and why",
+                "NEVER commit generated files, build artifacts, or secrets"
+            ]
+        },
+        "file_organization": {
+            "description": "File and project structure",
+            "rules": [
+                "Group related files by feature/domain",
+                "Separate configuration files from application code",
+                "Keep a clear, documented project entry point",
+                "Use consistent file naming conventions across the project",
+                "Separate test files from source files"
+            ]
+        }
+    }
 
 
 def log_action(action, context=""):
@@ -156,20 +316,18 @@ def enforce():
         _op_start = datetime.now()
         STANDARDS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-        # Initialize standards file if needed
-        if not STANDARDS_FILE.exists():
+        # Initialize or upgrade standards file with real rules
+        if not STANDARDS_FILE.exists() or _needs_upgrade(STANDARDS_FILE):
             standards_data = {
-                "standards": {
-                    "java_structure": "Standard Java project folder structure",
-                    "config_server": "Config server rules for Spring applications",
-                    "secret_management": "Secret and credential management",
-                    "response_format": "Standard API response format",
-                    "api_design": "RESTful API design standards",
-                    "database": "Database design and query standards",
-                    "error_handling": "Standard error handling patterns"
-                },
+                "version": STANDARDS_VERSION,
+                "standards": _build_common_standards(),
+                "total_rules": 0,
                 "loaded_at": datetime.now().isoformat()
             }
+            total = 0
+            for cat in standards_data["standards"].values():
+                total += len(cat.get("rules", []))
+            standards_data["total_rules"] = total
             STANDARDS_FILE.write_text(json.dumps(standards_data, indent=2), encoding='utf-8')
         try:
             _sub_operations.append(record_sub_operation(
@@ -179,26 +337,34 @@ def enforce():
         except Exception:
             pass
 
-        # Load standards
+        # Load standards and count real rules
         _op_start = datetime.now()
         with open(STANDARDS_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
         standard_count = len(data.get('standards', {}))
+        # Count actual rules across all categories
+        total_rules = data.get('total_rules', 0)
+        if total_rules == 0:
+            for cat in data.get('standards', {}).values():
+                if isinstance(cat, dict):
+                    total_rules += len(cat.get('rules', []))
+                else:
+                    total_rules += 1  # legacy format
         try:
             _sub_operations.append(record_sub_operation(
                 "load_standards", "success",
                 int((datetime.now() - _op_start).total_seconds() * 1000),
-                {"standards_count": standard_count}
+                {"standards_count": standard_count, "total_rules": total_rules}
             ))
         except Exception:
             pass
 
-        log_action("ENFORCE", f"common-standards-loaded | count={standard_count}")
-        # Output in format 3-level-flow.py parses (Common Standards: N)
+        log_action("ENFORCE", f"common-standards-loaded | categories={standard_count} | rules={total_rules}")
+        # Output in format 3-level-flow.py parses
         print(f"Common Standards: {standard_count}")
-        print(f"Common Rules Loaded: {standard_count}")
+        print(f"Common Rules Loaded: {total_rules}")
 
-        result = {"status": "success", "standards_count": standard_count}
+        result = {"status": "success", "standards_count": standard_count, "total_rules": total_rules}
         try:
             record_policy_execution(
                 session_id=get_session_id(),
@@ -207,7 +373,7 @@ def enforce():
                 policy_type="Policy Script",
                 input_params={},
                 output_results=result,
-                decision=f"loaded {standard_count} common standards",
+                decision=f"loaded {standard_count} categories, {total_rules} rules",
                 duration_ms=int((datetime.now() - _track_start_time).total_seconds() * 1000),
                 sub_operations=_sub_operations if _sub_operations else None
             )
