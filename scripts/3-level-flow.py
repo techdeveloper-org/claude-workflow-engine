@@ -2149,79 +2149,23 @@ def main():
 
     # =========================================================================
     # LEVEL 1.2: SESSION MANAGEMENT
+    # Every prompt gets its own session ID and folder. No reuse.
     # =========================================================================
     step_start = datetime.now()
     sess_script = CURRENT_DIR / 'session-id-generator.py'
-    # Use run_script (NOT run_script_with_retry) because "no active session"
-    # is an expected condition on first run or after /clear - not a failure.
-    # run_script_with_retry would hard-break (sys.exit(1)) after 3 retries,
-    # preventing the auto-create fallback below from ever running.
-    sess_stdout, _, sess_rc, sess_dur = run_script(sess_script, ['current'], timeout=8)
+
+    # ALWAYS create a new session for every prompt
+    create_desc = f"Session auto-created at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    new_out, _, new_rc, sess_dur = run_script(
+        sess_script, ['create', '--description', create_desc], timeout=8
+    )
 
     session_id = 'UNKNOWN'
-    for line in sess_stdout.splitlines():
-        if line.startswith('Current Session:'):
-            session_id = line.split(':', 1)[1].strip()
+    for line in new_out.splitlines():
+        line = line.strip()
+        if line.startswith('SESSION-'):
+            session_id = line
             break
-        if 'Session ID:' in line and session_id == 'UNKNOWN':
-            parts = line.split('Session ID:')
-            if len(parts) > 1:
-                candidate = parts[1].strip()
-                if candidate.startswith('SESSION-'):
-                    session_id = candidate
-
-    # If no current session exists, auto-create a new one
-    # This happens on first run, or after /clear (clear-session-handler deletes .current-session.json)
-    if session_id == 'UNKNOWN' or sess_rc != 0:
-        create_desc = f"Session auto-created at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        new_out, _, new_rc, new_dur2 = run_script(
-            sess_script, ['create', '--description', create_desc], timeout=8
-        )
-        sess_dur += new_dur2
-        for line in new_out.splitlines():
-            line = line.strip()
-            if line.startswith('SESSION-'):
-                session_id = line
-                break
-        # Reset session-progress.json so context % starts fresh (tool counts from old session don't bleed in)
-        try:
-            session_progress_file = MEMORY_BASE / 'logs' / 'session-progress.json'
-            fresh_progress = {
-                '_schema_version': '1.5',  # Artifact versioning (Improvement #6)
-                'total_progress': 0,
-                'tool_counts': {},
-                'started_at': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-                'tasks_completed': 0,
-                'errors_seen': 0,
-                'context_estimate_pct': 15,
-                'session_id': session_id,
-                'reset_reason': 'new session auto-created by 3-level-flow.py'
-            }
-            session_progress_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(session_progress_file, 'w', encoding='utf-8') as spf:
-                _lock_file(spf)
-                json.dump(fresh_progress, spf, indent=2)
-                _unlock_file(spf)
-        except Exception:
-            pass
-
-        # Voice notification: write flag for stop-notifier to speak on new session
-        # Only write if flag doesn't already exist (clear-session-handler may have set it)
-        try:
-            import datetime as _dt
-            _voice_flag = Path.home() / '.claude' / '.session-start-voice'
-            if not _voice_flag.exists():
-                _hour = _dt.datetime.now().hour
-                if _hour < 12:
-                    _greet = 'Good morning'
-                elif _hour < 17:
-                    _greet = 'Good afternoon'
-                else:
-                    _greet = 'Good evening'
-                _voice_msg = _greet + ' Sir. New session started. I am ready for your commands.'
-                _voice_flag.write_text(_voice_msg, encoding='utf-8')
-        except Exception:
-            pass
 
     # Set up session log directory NOW that we have session_id
     session_log_dir = MEMORY_BASE / 'logs' / 'sessions' / session_id
