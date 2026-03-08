@@ -3266,17 +3266,55 @@ Work to complete: Execute phase {i} of the identified work breakdown.
 
     # ------------------------------------------------------------------
     # STEP 3.3A: INTELLIGENT DECISION ENGINE (LLM-Powered)
-    # Replaces keyword-based guessing with OpenRouter LLM for:
+    # Replaces keyword-based guessing with local Ollama LLM for:
     #   - Task Type, Model Selection, Skill/Agent Selection, Complexity
-    # This is MANDATORY. If LLM fails, pipeline fails.
+    # SKIP for trivial prompts (questions, short messages, approvals)
     # ------------------------------------------------------------------
     step_start_llm = datetime.now()
     llm_decision = None
+    _skip_llm = False
+
+    # Skip LLM for trivial prompts - saves ~20-25s per prompt
+    _msg_lower = user_message.strip().lower()
+    _msg_words = len(user_message.split())
+    if _msg_words <= 5:
+        _skip_llm = True
+        print("   [3.3A] LLM Decision Engine: SKIPPED (message <= 5 words)")
+    elif _msg_lower.startswith(('yes', 'no', 'ok', 'haan', 'nahi', 'theek', 'sure', 'done',
+                                 'commit', 'push', 'ha ', 'ni ', 'kr', 'kar')):
+        _skip_llm = True
+        print("   [3.3A] LLM Decision Engine: SKIPPED (approval/short command)")
+    elif _msg_lower.endswith('?') and _msg_words <= 12:
+        _skip_llm = True
+        print("   [3.3A] LLM Decision Engine: SKIPPED (short question)")
+
+    # LLM result cache - avoid re-calling for similar prompts in same session
+    _llm_cache_file = MEMORY_BASE / 'logs' / 'llm-decision-cache.json'
+
+    if not _skip_llm:
+        # Check cache first
+        try:
+            if _llm_cache_file.exists():
+                with open(_llm_cache_file, 'r', encoding='utf-8') as _cf:
+                    _cache = json.load(_cf)
+                _cache_key = f"{task_type}:{','.join(sorted(tech_stack))}:{_msg_lower[:50]}"
+                _cached = _cache.get(_cache_key)
+                if _cached:
+                    _cache_age = (datetime.now() - datetime.fromisoformat(_cached.get('cached_at', '2000-01-01'))).total_seconds()
+                    if _cache_age < 300:  # 5 min cache TTL
+                        llm_decision = _cached.get('decision')
+                        if llm_decision:
+                            print(f"   [3.3A] LLM Decision Engine: CACHED (age={int(_cache_age)}s) "
+                                  f"task={llm_decision.get('task_type')}, agent={llm_decision.get('agent_name')}")
+                            _skip_llm = True
+        except Exception:
+            pass
+
     llm_engine_script = SCRIPT_DIR / 'architecture' / '03-execution-system' / '04-model-selection' / 'intelligent-decision-engine.py'
     if not llm_engine_script.exists():
         llm_engine_script = MEMORY_BASE / '03-execution-system' / '04-model-selection' / 'intelligent-decision-engine.py'
 
-    if llm_engine_script.exists():
+    if llm_engine_script.exists() and not _skip_llm:
         try:
             import tempfile as _llm_tempfile
             llm_context = {
@@ -3323,6 +3361,26 @@ Work to complete: Execute phase {i} of the identified work breakdown.
                           f"(confidence={llm_decision.get('confidence', 0):.1%}, "
                           f"{llm_decision.get('duration_ms', 0)}ms, "
                           f"llm={llm_decision.get('llm_model_used', 'unknown')})")
+                    # Cache the result (5 min TTL) to avoid re-calling for similar prompts
+                    try:
+                        _cache = {}
+                        if _llm_cache_file.exists():
+                            with open(_llm_cache_file, 'r', encoding='utf-8') as _cf:
+                                _cache = json.load(_cf)
+                        _cache_key = f"{task_type}:{','.join(sorted(tech_stack))}:{_msg_lower[:50]}"
+                        _cache[_cache_key] = {
+                            'decision': llm_decision,
+                            'cached_at': datetime.now().isoformat()
+                        }
+                        # Keep cache small - max 20 entries
+                        if len(_cache) > 20:
+                            _sorted = sorted(_cache.items(), key=lambda x: x[1].get('cached_at', ''))
+                            _cache = dict(_sorted[-20:])
+                        _llm_cache_file.parent.mkdir(parents=True, exist_ok=True)
+                        with open(_llm_cache_file, 'w', encoding='utf-8') as _cf:
+                            json.dump(_cache, _cf)
+                    except Exception:
+                        pass
                 else:
                     err_msg = llm_json.get('error', 'unknown') if llm_json else llm_err[:100]
                     print(f"   [3.3A] LLM Decision Engine FAILED: {err_msg}")
@@ -3330,7 +3388,7 @@ Work to complete: Execute phase {i} of the identified work breakdown.
                 print(f"   [3.3A] LLM Decision Engine FAILED: rc={llm_rc}")
         except Exception as _llm_ex:
             print(f"   [3.3A] LLM Decision Engine ERROR: {_llm_ex}")
-    else:
+    elif not _skip_llm:
         print(f"   [3.3A] LLM Decision Engine: script not found (skipped)")
 
     llm_dur_ms = int((datetime.now() - step_start_llm).total_seconds() * 1000)
