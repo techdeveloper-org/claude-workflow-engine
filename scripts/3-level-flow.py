@@ -1636,6 +1636,135 @@ def _ensure_architecture_modules_synced():
         pass
 
 
+
+# =============================================================================
+# SESSION CHANGE DETECTION (replaces clear-session-handler.py)
+# Reads Claude Code's history.jsonl to detect /clear or new conversation.
+# =============================================================================
+
+SESSION_STATE_FILE = Path.home() / '.claude' / '.hook-state.json'
+
+
+def _read_claude_code_session_id():
+    """Read the latest sessionId from Claude Code history.jsonl.
+
+    Claude Code writes each prompt to ~/.claude/history.jsonl with a sessionId
+    field that changes when the user starts a new conversation or uses /clear.
+
+    Returns:
+        str: The sessionId from the last history entry, or empty string.
+    """
+    history_file = Path.home() / '.claude' / 'history.jsonl'
+    if not history_file.exists():
+        return ''
+    try:
+        last_line = ''
+        with open(history_file, 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped:
+                    last_line = stripped
+        if last_line:
+            data = json.loads(last_line)
+            return data.get('sessionId', '')
+    except Exception:
+        pass
+    return ''
+
+
+def _read_session_state():
+    """Read persisted session state for change detection."""
+    if not SESSION_STATE_FILE.exists():
+        return {}
+    try:
+        with open(SESSION_STATE_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _write_session_state(conversation_id):
+    """Persist session state for next invocation comparison."""
+    state = _read_session_state()
+    state['last_conversation_id'] = conversation_id
+    state['flow_count'] = state.get('flow_count', 0) + 1
+    state['updated_at'] = datetime.now().isoformat()
+    try:
+        SESSION_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(SESSION_STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(state, f, indent=2)
+    except Exception:
+        pass
+
+
+def _detect_and_handle_session_change():
+    """Detect if /clear was used or a new conversation started.
+
+    Compares the current Claude Code sessionId (from history.jsonl) with the
+    previously stored one.  If changed, closes the old session and returns True.
+
+    Returns:
+        bool: True if session changed (new session needed), False otherwise.
+    """
+    current_conv_id = _read_claude_code_session_id()
+    state = _read_session_state()
+    last_conv_id = state.get('last_conversation_id', '')
+    flow_count = state.get('flow_count', 0)
+
+    is_fresh = False
+    reason = 'ongoing_conversation'
+
+    # Case 1: First ever run (no previous state)
+    if flow_count == 0:
+        is_fresh = True
+        reason = 'first_ever_conversation'
+
+    # Case 2: Conversation ID changed (/clear or new window)
+    elif (current_conv_id and last_conv_id
+          and current_conv_id != last_conv_id):
+        is_fresh = True
+        reason = 'conversation_id_changed'
+
+    if is_fresh:
+        # Close old session if one exists
+        try:
+            csf = MEMORY_BASE / '.current-session.json'
+            if csf.exists():
+                old_data = json.loads(csf.read_text(encoding='utf-8'))
+                old_session = old_data.get('current_session_id', '')
+                if old_session:
+                    # Close old session
+                    sess_file = MEMORY_BASE / 'sessions' / (old_session + '.json')
+                    if sess_file.exists():
+                        sdata = json.loads(sess_file.read_text(encoding='utf-8'))
+                        sdata['status'] = 'COMPLETED'
+                        sdata['end_time'] = datetime.now().isoformat()
+                        sess_file.write_text(json.dumps(sdata, indent=2), encoding='utf-8')
+
+                    # Finalize session summary
+                    try:
+                        ssm = CURRENT_DIR / 'session-summary-manager.py'
+                        if ssm.exists():
+                            subprocess.run(
+                                [PYTHON, str(ssm), 'finalize', '--session', old_session],
+                                timeout=10, capture_output=True
+                            )
+                    except Exception:
+                        pass
+
+                    # Delete current-session pointer so Level 1.2 creates fresh
+                    csf.unlink(missing_ok=True)
+
+                    print(f'[SESSION] /clear detected - old session saved: {old_session}')
+                    print(f'[SESSION] Reason: {reason}')
+        except Exception:
+            pass
+
+    # Always update state with current conversation ID
+    _write_session_state(current_conv_id)
+    return is_fresh
+
+
 def main():
     """Entry point for the 3-level architecture flow hook.
 
@@ -1807,6 +1936,13 @@ def main():
     else:
         trace['merge_detection'] = {'project_claude_md': None}
     print()
+
+    # =========================================================================
+    # SESSION CHANGE DETECTION (before any level runs)
+    # Detects /clear or new conversation via Claude Code history.jsonl sessionId.
+    # If changed, closes old session so Level 1.2 creates a fresh one.
+    # =========================================================================
+    _detect_and_handle_session_change()
 
     # =========================================================================
     # LEVEL -1: AUTO-FIX ENFORCEMENT (BLOCKING)
