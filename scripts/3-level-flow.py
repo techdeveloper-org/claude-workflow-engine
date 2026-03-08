@@ -11,6 +11,7 @@ Author: Claude Memory System
 
 import sys
 import os
+import io
 import json
 import subprocess
 from pathlib import Path
@@ -1810,8 +1811,8 @@ def _detect_and_handle_session_change():
                     # Delete current-session pointer so Level 1.2 creates fresh
                     csf.unlink(missing_ok=True)
 
-                    print(f'[SESSION] /clear detected - old session saved: {old_session}')
-                    print(f'[SESSION] Reason: {reason}')
+                    sys.stderr.write(f'[SESSION] /clear detected - old session saved: {old_session}\n')
+                    sys.stderr.write(f'[SESSION] Reason: {reason}\n')
         except Exception:
             pass
 
@@ -1874,8 +1875,8 @@ def main():
     if FLAG_CLEANUP_ON_STARTUP:
         _expired_count = _cleanup_expired_flags(max_age_minutes=FLAG_EXPIRY_MINUTES)
         if _expired_count > 0:
-            print(f"[FLAG-CLEANUP] Removed {_expired_count} expired flag(s) "
-                  f"older than {FLAG_EXPIRY_MINUTES} minutes")
+            sys.stderr.write(f"[FLAG-CLEANUP] Removed {_expired_count} expired flag(s) "
+                             f"older than {FLAG_EXPIRY_MINUTES} minutes\n")
 
     # =========================================================================
     # STEP 0: SYNC ARCHITECTURE MODULES + VERIFY POLICIES (v3.4.1)
@@ -1958,6 +1959,13 @@ def main():
         "errors": [],
         "warnings": [],
     }
+
+    # COMPACT OUTPUT: Redirect verbose prints to buffer, print compact at end
+    # All existing print() calls go to _verbose_buf (saved to verbose-output.txt)
+    # Only compact summary goes to real stdout (injected into Claude context)
+    _verbose_buf = io.StringIO()
+    _real_stdout = sys.stdout
+    sys.stdout = _verbose_buf
 
     print(SEP)
     print(f"3-LEVEL ARCHITECTURE FLOW v{VERSION} (Mode: {mode})")
@@ -2095,6 +2103,9 @@ def main():
                                       'checks': lvl_minus1_output.get('checks', {})})
         except Exception:
             pass
+        # Restore stdout before exit so error message is visible
+        sys.stdout = _real_stdout
+        print("[3-LEVEL FLOW] BLOCKED - Level -1 auto-fix failed")
         sys.exit(1)
 
     try:
@@ -4712,6 +4723,67 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     print(SEP)
     print("[OK] ALL 3 LEVELS + 12 STEPS VERIFIED - WORK STARTED")
     print(SEP)
+
+    # =========================================================================
+    # COMPACT OUTPUT: Restore real stdout, save verbose, print compact summary
+    # =========================================================================
+    sys.stdout = _real_stdout
+    _verbose_text = _verbose_buf.getvalue()
+    _verbose_buf.close()
+
+    # Save verbose output to session log directory
+    try:
+        if session_log_dir and session_log_dir.exists():
+            (session_log_dir / 'verbose-output.txt').write_text(
+                _verbose_text, encoding='utf-8'
+            )
+    except Exception:
+        pass
+
+    # --- COMPACT STDOUT (this is what Claude sees in context) ---
+    _ctx_pct = context_pct2 if 'context_pct2' in dir() else context_pct
+    _model = selected_model if 'selected_model' in dir() else '?'
+    _cplx = complexity if 'complexity' in dir() else '?'
+    _tasks = task_count if 'task_count' in dir() else 0
+    _skill = skill_agent_name if 'skill_agent_name' in dir() else ''
+    _plan = plan_str if 'plan_str' in dir() else 'NO'
+    _ttype = task_type if 'task_type' in dir() else 'General'
+    _parallel = 'Parallel' if (parallel_possible if 'parallel_possible' in dir() else False) else 'Sequential'
+    _std_count = standards_count if 'standards_count' in dir() else 0
+    _rules = rules_count if 'rules_count' in dir() else 0
+    _dep = dep_status if 'dep_status' in dir() else 'OK'
+    _prefs = prefs_loaded if 'prefs_loaded' in dir() else 0
+    _patterns = patterns_detected if 'patterns_detected' in dir() else 0
+    _completed = completed_tasks_count if 'completed_tasks_count' in dir() else 0
+    _files_mod = files_modified_count if 'files_modified_count' in dir() else 0
+    _pending = pending_work_count if 'pending_work_count' in dir() else 0
+
+    print(f"[3-LEVEL FLOW v{VERSION}] Session={session_id} | Context={_ctx_pct}% | Complexity={_cplx}/25 | Model={_model}")
+    print(f"[L-1] OK | [L1] Ctx={_ctx_pct}% Sess={session_id} Prefs={_prefs} State={_completed}t/{_files_mod}f/{_pending}p Patterns={_patterns} Dep={_dep}")
+    print(f"[L2] Standards={_std_count}/{_rules}r | [L3] Tasks={_tasks} Plan={_plan} Mode={_parallel}")
+    print(f"[L3] Agent/Skill={_skill} | Type={_ttype} | ToolOpt=Active | FailPrev=Active")
+
+    # Enforcement policies (compact 1-liners instead of 5+ lines each)
+    print("[ENFORCE] VersionRelease | IssueAutoClose | TaskBreakdown | ModelSelection | ToolOptimization | FailurePrevention | CommonStandards")
+
+    # Final decision
+    _decision_summary = ''
+    try:
+        _decision_summary = final_decision.get('summary', '') if 'final_decision' in dir() else ''
+    except Exception:
+        pass
+    if _decision_summary:
+        print(f"[DECISION] {_decision_summary}")
+
+    # Trace file location
+    print(f"[TRACE] {session_log_dir / 'flow-trace.json'}")
+
+    # Rewritten prompt (if any)
+    if 'rewritten_prompt' in dir() and rewritten_prompt and _needs_enforcement:
+        print(f"[REWRITTEN] {rewritten_prompt[:200]}")
+
+    # Claude instruction (keep - critical for behavior)
+    print("[OK] ALL 3 LEVELS VERIFIED - AUTO-PROCEED TO WORK")
 
     # LOOPHOLE #18 FIX: Checkpoint + task-breakdown flags are written EARLY (line ~968)
     # so they survive even if this script times out before reaching here.
