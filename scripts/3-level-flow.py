@@ -4920,11 +4920,10 @@ def _build_script_inventory():
 
 
 def _save_trace(trace, session_log_dir, flow_start):
-    """Save the complete flow-trace JSON to the session log directory.
+    """Save the flow-trace JSON to the session log directory.
 
-    APPEND mode (v4.4.0): Each prompt's trace is appended to a JSON array
-    in flow-trace.json, preserving full session history. Individual per-prompt
-    trace files (flow-trace-NNN.json) are also saved for safety.
+    OVERWRITE mode: flow-trace.json always contains ONLY the latest prompt's
+    trace. Each prompt overwrites the previous one. One session = one trace file.
 
     Also keeps a latest-flow-trace.json copy at the top-level logs directory
     for fast access by other hooks.
@@ -4943,67 +4942,15 @@ def _save_trace(trace, session_log_dir, flow_start):
             fname = f"flow-trace-{flow_start.strftime('%Y%m%d-%H%M%S')}.json"
             write_json(fallback_dir / fname, trace)
         else:
-            # 1. Save individual per-prompt trace file (never overwritten)
-            msg_num = trace.get('meta', {}).get('message_number', 0)
-            per_prompt_file = session_log_dir / f'flow-trace-{msg_num:03d}.json'
-            write_json(per_prompt_file, trace)
-
-            # 2. Append to cumulative flow-trace.json (JSON array)
+            # 1. Write flow-trace.json (OVERWRITE - always latest only)
             trace_file = session_log_dir / 'flow-trace.json'
-            _append_trace_to_array(trace_file, trace)
+            write_json(trace_file, trace)
 
-            # 3. Keep a "latest" copy for easy access by other hooks
+            # 2. Keep a "latest" copy for easy access by other hooks
             write_json(MEMORY_BASE / 'logs' / 'latest-flow-trace.json', trace)
     except Exception:
         pass
 
-
-def _append_trace_to_array(trace_file, trace):
-    """Append a trace entry to a JSON array file.
-
-    Reads the existing array (or creates a new one), appends the trace,
-    and writes back. Uses file locking for safety on Windows.
-
-    Args:
-        trace_file: Path to the flow-trace.json file.
-        trace: The trace dict to append.
-    """
-    try:
-        existing = []
-        if trace_file.exists():
-            try:
-                with open(trace_file, 'r', encoding='utf-8') as f:
-                    _lock_file(f)
-                    data = json.load(f)
-                    _unlock_file(f)
-                # Handle both old format (single dict) and new format (array)
-                if isinstance(data, list):
-                    existing = data
-                elif isinstance(data, dict):
-                    # Migrate old single-trace to array format
-                    existing = [data]
-            except (json.JSONDecodeError, Exception):
-                # Corrupted file - start fresh but save backup
-                try:
-                    backup = trace_file.with_suffix('.json.bak')
-                    import shutil
-                    shutil.copy2(trace_file, backup)
-                except Exception:
-                    pass
-                existing = []
-
-        existing.append(trace)
-
-        with open(trace_file, 'w', encoding='utf-8') as f:
-            _lock_file(f)
-            json.dump(existing, f, indent=2, ensure_ascii=False)
-            _unlock_file(f)
-    except Exception:
-        # Last resort: write just the current trace
-        try:
-            write_json(trace_file, [trace])
-        except Exception:
-            pass
 
 
 if __name__ == '__main__':
