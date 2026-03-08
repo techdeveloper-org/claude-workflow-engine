@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-AI-Based Task Type Detector using Trybonsai API
+AI-Based Task Type Detector using Local Ollama
 
-Instead of fragile keyword matching, use frontier AI models to intelligently
+Instead of fragile keyword matching, use local LLM via Ollama to intelligently
 classify user prompts into task types.
 
 REPLACES: Keyword-based detect_task_type() in prompt-generation-policy.py
 
-Supported Models (via Trybonsai):
-- Claude Sonnet/Opus
-- GPT-5
-- Grok
-- Gemini
-- Qwen
-- GLM
+Local Models (via Ollama):
+- llama2, llama2-uncensored
+- mistral, neural-chat
+- dolphin-mixtral
+- Any model available via: ollama pull <model>
 
 Usage:
   python ai-task-type-detector.py --detect "user prompt here"
-  python ai-task-type-detector.py --api-key YOUR_KEY
+  python ai-task-type-detector.py --list-models
 
-Environment:
-  Set TRYBONSAI_API_KEY for authentication
+Requirements:
+  1. Ollama installed: https://ollama.ai
+  2. Model pulled: ollama pull mistral (or your preferred model)
+  3. Ollama running on localhost:11434 (default port)
+  4. Environment: OLLAMA_MODEL (optional, defaults to mistral)
 """
 
 import sys
@@ -48,59 +49,36 @@ SUPPORTED_TASK_TYPES = [
     "General Task"         # Default fallback
 ]
 
+
 class AiTaskTypeDetector:
     """
-    Intelligent task type detection using Trybonsai API.
+    Intelligent task type detection using local Ollama.
 
-    Instead of keyword matching, send the user's prompt to a frontier LLM
-    and ask it to classify the task. Much more robust and handles varied
-    natural language inputs.
+    Uses locally-running LLM (no external API, no authentication needed).
+    Analyzes user's prompt and classifies task type with confidence score.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize with Trybonsai API key.
+    def __init__(self, model: Optional[str] = None, ollama_host: str = "localhost:11434"):
+        """Initialize with Ollama configuration.
 
-        Reads from (in priority order):
-        1. api_key parameter (passed directly)
-        2. TRYBONSAI_API_KEY environment variable
-        3. ~/.claude/trybonsai.conf file
+        Args:
+            model: Model name (e.g., 'mistral'). Defaults to env var OLLAMA_MODEL or 'mistral'
+            ollama_host: Ollama server address. Defaults to localhost:11434
         """
-        self.api_key = api_key
+        self.model = model or os.getenv("OLLAMA_MODEL", "mistral")
+        self.ollama_host = ollama_host
+        self.api_endpoint = f"http://{ollama_host}/api/generate"
 
-        # Try environment variable
-        if not self.api_key:
-            self.api_key = os.getenv("TRYBONSAI_API_KEY")
-
-        # Try config file
-        if not self.api_key:
-            config_file = Path.home() / ".claude" / "trybonsai.conf"
-            if config_file.exists():
-                try:
-                    with open(config_file, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        # Remove BOM if present
-                        if content.startswith('\ufeff'):
-                            content = content[1:]
-                        # Parse lines
-                        for line in content.split('\n'):
-                            line = line.strip()
-                            if line.startswith("TRYBONSAI_API_KEY="):
-                                self.api_key = line.split("=", 1)[1].strip()
-                                break
-                except Exception:
-                    pass
-
-        if not self.api_key:
+        # Verify Ollama is running
+        if not self._check_ollama_available():
             raise ValueError(
-                "TRYBONSAI_API_KEY not found. Set it using one of:\n"
-                "  1. export TRYBONSAI_API_KEY=\"your-key\" (environment variable)\n"
-                "  2. Create ~/.claude/trybonsai.conf with: TRYBONSAI_API_KEY=your-key\n"
-                "  3. Pass --api-key parameter: python ... --api-key \"your-key\""
+                f"Ollama not available at {self.ollama_host}\n"
+                "Please ensure:\n"
+                "  1. Ollama is installed: https://ollama.ai\n"
+                "  2. Ollama is running: ollama serve\n"
+                "  3. A model is available: ollama pull mistral\n"
+                f"  4. Ollama is listening on {self.ollama_host}"
             )
-
-        # Trybonsai API endpoint using Anthropic message format
-        # Correct endpoint: go.trybons.ai/v1/messages (not api.trybons.ai/v1/chat/completions)
-        self.api_endpoint = "https://go.trybons.ai/v1/messages"
 
         # System prompt for classification
         self.system_prompt = """You are a task classifier. Analyze the user's request and determine the task type.
@@ -123,13 +101,7 @@ Return ONLY the JSON object, no other text."""
 
     def detect(self, user_message: str) -> Dict:
         """
-        Detect task type using Trybonsai API (NO FALLBACK).
-
-        API-FIRST approach:
-        - Call Trybonsai API
-        - Return AI classification
-        - Fail explicitly if API unavailable (don't use broken keywords)
-        - User upgrades to paid API if free tier insufficient
+        Detect task type using local Ollama LLM.
 
         Args:
             user_message: User's prompt/request
@@ -138,76 +110,75 @@ Return ONLY the JSON object, no other text."""
             Dict with keys: task_type, confidence, reasoning
 
         Raises:
-            Exception: If API call fails (no silent fallback)
+            Exception: If Ollama is unavailable or request fails
         """
-        # Call Trybonsai API (this will raise if API fails)
-        response = self._call_api(user_message)
-
-        # Parse and return response
+        response = self._call_ollama(user_message)
         result = self._parse_response(response)
-
         return result
 
-    def _call_api(self, user_message: str) -> str:
-        """Call Trybonsai API and return response (Anthropic message format)."""
+    def _check_ollama_available(self) -> bool:
+        """Check if Ollama is running and accessible."""
+        try:
+            request = urllib.request.Request(
+                f"http://{self.ollama_host}/api/tags",
+                method='GET'
+            )
+            with urllib.request.urlopen(request, timeout=3) as response:
+                return response.status == 200
+        except Exception:
+            return False
 
-        # Request payload using Anthropic's message format
+    def _call_ollama(self, user_message: str) -> str:
+        """Call local Ollama API and return response."""
+
+        # Request payload for Ollama
         payload = {
-            "model": "anthropic/claude-sonnet-4.5",  # From techdeveloper scheduler config
-            "system": self.system_prompt,  # Anthropic uses 'system' field separately
-            "messages": [
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ],
-            "temperature": 0.2,  # Low temp for consistent classification
-            "max_tokens": 200
-        }
-
-        # HTTP request headers (Anthropic API format used by Trybonsai)
-        headers = {
-            "x-api-key": self.api_key,  # Anthropic uses x-api-key, not Bearer token
-            "anthropic-version": "2023-06-01",  # Required Anthropic API version
-            "Content-Type": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"  # Bypass Cloudflare
+            "model": self.model,
+            "prompt": f"{self.system_prompt}\n\nUser request: {user_message}",
+            "stream": False,  # Wait for complete response
+            "temperature": 0.2  # Low temp for consistent classification
         }
 
         request = urllib.request.Request(
             self.api_endpoint,
             data=json.dumps(payload).encode('utf-8'),
-            headers=headers,
+            headers={"Content-Type": "application/json"},
             method='POST'
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=10) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:
                 body = response.read().decode('utf-8')
                 return body
         except urllib.error.HTTPError as e:
-            raise Exception(f"API HTTP {e.code}: {e.reason}")
+            raise Exception(f"Ollama HTTP {e.code}: {e.reason}")
         except urllib.error.URLError as e:
-            raise Exception(f"API connection failed: {e.reason}")
+            raise Exception(f"Ollama connection failed: {e.reason}")
+        except Exception as e:
+            raise Exception(f"Ollama request failed: {str(e)}")
 
     def _parse_response(self, response_text: str) -> Dict:
-        """Parse Trybonsai API response (Anthropic message format)."""
+        """Parse Ollama API response."""
         try:
             response_json = json.loads(response_text)
 
-            # Extract content from Anthropic response format
-            # Anthropic returns: {"content": [{"type": "text", "text": "..."}], ...}
-            if "content" not in response_json:
-                raise ValueError("Invalid response format: missing 'content' field")
+            # Ollama returns: {"response": "...", "model": "...", ...}
+            response_text = response_json.get("response", "").strip()
 
-            # Get the text content
-            content_blocks = response_json.get("content", [])
-            if not content_blocks or content_blocks[0].get("type") != "text":
-                raise ValueError("Invalid response format: no text content")
+            if not response_text:
+                raise ValueError("Empty response from Ollama")
 
-            content = content_blocks[0].get("text", "").strip()
+            # Try to extract JSON from response
+            # Sometimes LLM wraps it in markdown code blocks
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0]
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0]
 
-            # Parse the JSON from content
-            classification = json.loads(content)
+            response_text = response_text.strip()
+
+            # Parse JSON
+            classification = json.loads(response_text)
 
             # Validate task type
             task_type = classification.get("task_type", "General Task")
@@ -219,35 +190,66 @@ Return ONLY the JSON object, no other text."""
                 "confidence": float(classification.get("confidence", 0.5)),
                 "reasoning": classification.get("reasoning", "")
             }
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
-            raise ValueError(f"Failed to parse API response: {str(e)}")
+        except (json.JSONDecodeError, KeyError, ValueError, IndexError, TypeError) as e:
+            raise ValueError(f"Failed to parse Ollama response: {str(e)}")
 
     @staticmethod
     def is_available() -> bool:
-        """Check if Trybonsai API is available."""
-        return bool(os.getenv("TRYBONSAI_API_KEY"))
+        """Check if Ollama is available."""
+        try:
+            detector = AiTaskTypeDetector()
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def list_models(ollama_host: str = "localhost:11434") -> list:
+        """List available models in Ollama."""
+        try:
+            request = urllib.request.Request(
+                f"http://{ollama_host}/api/tags",
+                method='GET'
+            )
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                return [model.get("name", "unknown") for model in data.get("models", [])]
+        except Exception:
+            return []
 
 
 def main():
     """CLI interface for testing."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="AI Task Type Detector")
+    parser = argparse.ArgumentParser(description="AI Task Type Detector (Local Ollama)")
     parser.add_argument("--detect", type=str, help="Detect task type for prompt")
-    parser.add_argument("--api-key", type=str, help="Trybonsai API key")
+    parser.add_argument("--model", type=str, help="Ollama model to use (default: mistral)")
+    parser.add_argument("--ollama-host", type=str, default="localhost:11434", help="Ollama server address")
     parser.add_argument("--test", action="store_true", help="Run test cases")
+    parser.add_argument("--list-models", action="store_true", help="List available Ollama models")
 
     args = parser.parse_args()
 
+    # List models
+    if args.list_models:
+        models = AiTaskTypeDetector.list_models(args.ollama_host)
+        if models:
+            print("Available Ollama models:")
+            for model in models:
+                print(f"  - {model}")
+        else:
+            print("No models found. Pull a model: ollama pull mistral")
+        return
+
     # Initialize detector
     try:
-        detector = AiTaskTypeDetector(api_key=args.api_key)
+        detector = AiTaskTypeDetector(model=args.model, ollama_host=args.ollama_host)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Test cases
     if args.test:
-        # Test cases
         test_prompts = [
             "redesign the login page",
             "create a REST API for users",
@@ -259,19 +261,28 @@ def main():
         ]
 
         print("=" * 80)
-        print("AI TASK TYPE DETECTOR - TEST CASES")
+        print("AI TASK TYPE DETECTOR - TEST CASES (Local Ollama)")
+        print(f"Model: {detector.model}")
         print("=" * 80)
 
         for prompt in test_prompts:
-            result = detector.detect(prompt)
-            print(f"\nPrompt: {prompt}")
-            print(f"  Task Type: {result['task_type']}")
-            print(f"  Confidence: {result['confidence']:.1%}")
-            print(f"  Reasoning: {result['reasoning']}")
+            try:
+                result = detector.detect(prompt)
+                print(f"\nPrompt: {prompt}")
+                print(f"  Task Type: {result['task_type']}")
+                print(f"  Confidence: {result['confidence']:.1%}")
+                print(f"  Reasoning: {result['reasoning']}")
+            except Exception as e:
+                print(f"\nPrompt: {prompt}")
+                print(f"  ERROR: {str(e)[:100]}")
 
     elif args.detect:
-        result = detector.detect(args.detect)
-        print(json.dumps(result, indent=2))
+        try:
+            result = detector.detect(args.detect)
+            print(json.dumps(result, indent=2))
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
 
     else:
         parser.print_help()
