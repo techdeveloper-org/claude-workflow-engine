@@ -254,32 +254,52 @@ def log_event(msg):
 # HOOK STDIN
 # =============================================================================
 
-def read_hook_stdin():
-    """Read JSON data piped by the Claude Code UserPromptSubmit hook via stdin.
 
-    Uses select() to avoid blocking indefinitely when stdin has no data.
-    Returns {} if stdin is empty or unavailable.
+def _read_claude_code_session_id():
+    """Read the latest sessionId from Claude Code history.jsonl.
+
+    Claude Code writes each prompt to ~/.claude/history.jsonl with a sessionId
+    field that changes when the user starts a new conversation or uses /clear.
+
+    Returns:
+        str: The sessionId from the last history entry, or empty string.
+    """
+    history_file = Path.home() / '.claude' / 'history.jsonl'
+    if not history_file.exists():
+        return ''
+    try:
+        last_line = ''
+        with open(history_file, 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped:
+                    last_line = stripped
+        if last_line:
+            data = json.loads(last_line)
+            return data.get('sessionId', '')
+    except Exception:
+        pass
+    return ''
+
+
+
+def read_hook_stdin():
+    """Read JSON data piped by the Claude Code hook or script-chain-executor via stdin.
+
+    On Windows, select.select() does not work on stdin pipes, so we read
+    stdin directly when it is not a TTY.  The script-chain-executor always
+    pipes JSON context via subprocess stdin, so blocking is not a concern.
 
     Returns:
         dict: Parsed hook payload, or {} on any read or parse error.
     """
     try:
-        import select
-
         if sys.stdin.isatty():
             return {}
 
-        # Use select to check if data is ready (with 0.1s timeout)
-        try:
-            readable, _, _ = select.select([sys.stdin], [], [], 0.1)
-            if readable:
-                raw = sys.stdin.read()
-                if raw and raw.strip():
-                    return json.loads(raw.strip())
-        except (OSError, IOError):
-            # select() not available on this platform
-            pass
-
+        raw = sys.stdin.read()
+        if raw and raw.strip():
+            return json.loads(raw.strip())
     except Exception:
         pass
     return {}
@@ -387,19 +407,22 @@ def read_state():
         return {}
 
 
-def write_state(transcript_path, msg_count):
-    """Persist the current transcript state to the PID-isolated hook state file.
+def write_state(transcript_path, msg_count, conversation_id=''):
+    """Persist the current conversation state to the PID-isolated hook state file.
 
     Creates parent directories if needed.  Uses _lock_file/_unlock_file to
     prevent data corruption from concurrent hook invocations.
 
     Args:
-        transcript_path (str or Path): Current transcript file path.
-        msg_count (int): Current message count in the transcript.
+        transcript_path (str or Path): Current transcript file path (may be empty).
+        msg_count (int): Current message count (-1 if unknown).
+        conversation_id (str): Claude Code conversation ID for tracking.
     """
     state = {
         'last_transcript_path': str(transcript_path) if transcript_path else '',
         'last_msg_count': msg_count,
+        'last_conversation_id': conversation_id,
+        'flow_count': read_state().get('flow_count', 0) + 1,
         'updated_at': datetime.now().isoformat()
     }
     try:
@@ -412,18 +435,20 @@ def write_state(transcript_path, msg_count):
         pass
 
 
-def detect_clear(current_transcript_path, current_msg_count):
-    """Compare current transcript state with the last persisted state to detect /clear.
+def detect_clear(current_transcript_path, current_msg_count, conversation_id=''):
+    """Detect whether /clear was used or a new conversation started.
 
-    Four detection cases are checked in order:
-      1. No previous state + msg count <= 1  -> first ever conversation.
-      2. Transcript file path changed        -> new conversation or window.
-      3. Message count dropped               -> /clear was used.
-      4. Same path, was non-empty, now empty -> transcript emptied.
+    Detection cases (checked in order):
+      1. No previous state at all           -> first ever conversation.
+      2. Conversation ID changed            -> new conversation or /clear.
+      3. Transcript file path changed       -> new conversation or window.
+      4. Message count dropped              -> /clear was used.
+      5. Transcript emptied                 -> /clear was used.
 
     Args:
         current_transcript_path (str or Path): Path to the active transcript.
         current_msg_count (int): Number of messages found in the transcript.
+        conversation_id (str): Claude Code conversation ID (from hook stdin).
 
     Returns:
         tuple: (is_fresh, reason_string) where is_fresh is True when a session
@@ -432,24 +457,31 @@ def detect_clear(current_transcript_path, current_msg_count):
     state = read_state()
     last_transcript = state.get('last_transcript_path', '')
     last_count = state.get('last_msg_count', -1)
+    last_conversation_id = state.get('last_conversation_id', '')
+    flow_count = state.get('flow_count', 0)
 
-    # Case 1: No previous state at all - fresh start
-    if not last_transcript and current_msg_count <= 1:
+    # Case 1: No previous state at all - first ever conversation
+    if flow_count == 0:
         return True, 'first_ever_conversation'
 
-    # Case 2: Transcript file changed - new conversation/window
+    # Case 2: Conversation ID changed - /clear or new window
+    if (conversation_id and last_conversation_id
+            and conversation_id != last_conversation_id):
+        return True, f'conversation_id_changed_from_{last_conversation_id[:12]}_to_{conversation_id[:12]}'
+
+    # Case 3: Transcript file changed - new conversation/window
     if (last_transcript
             and current_transcript_path
             and str(current_transcript_path) != last_transcript):
         return True, f'transcript_changed_from_{Path(last_transcript).name}_to_{Path(str(current_transcript_path)).name}'
 
-    # Case 3: Message count dropped - /clear was used
+    # Case 4: Message count dropped - /clear was used
     if (last_count != -1
             and current_msg_count != -1
             and current_msg_count < last_count):
         return True, f'msg_count_dropped_from_{last_count}_to_{current_msg_count}'
 
-    # Case 4: Transcript empty with same path - cleared
+    # Case 5: Transcript empty with same path - cleared
     if (last_transcript
             and current_transcript_path
             and str(current_transcript_path) == last_transcript
@@ -844,26 +876,33 @@ def main():
     hook_data = read_hook_stdin()
 
     transcript_path = hook_data.get('transcript_path', '')
-    prompt = hook_data.get('prompt', '')
+    prompt = hook_data.get('prompt', '') or hook_data.get('message', '')
     prompt_preview = prompt[:80].replace('\n', ' ')
 
-    # Count messages in current transcript
+    # Extract conversation_id from hook data (Claude Code may provide it)
+    # Also check hook_input (passed by script-chain-executor)
+    hook_input = hook_data.get('hook_input', {})
+    conversation_id = (hook_data.get('conversation_id', '')
+                       or hook_data.get('session_id', '')
+                       or hook_input.get('conversation_id', '')
+                       or hook_input.get('session_id', '')
+                       or os.environ.get('CLAUDE_SESSION_ID', ''))
+
+    # Fallback: read sessionId from Claude Code's history.jsonl (last entry)
+    if not conversation_id:
+        conversation_id = _read_claude_code_session_id()
+
+    # Count messages in current transcript (if path available)
     current_msg_count = count_transcript_messages(transcript_path)
 
     log_event(
         f"Hook fired | msg_count={current_msg_count} | "
+        f"conversation_id={conversation_id} | "
         f"transcript={transcript_path} | prompt='{prompt_preview}'"
     )
 
-    # If we can't determine state at all, skip
-    if current_msg_count == -1 and not transcript_path:
-        log_event("Cannot determine conversation state - skipping")
-        # Still update state with what we know
-        write_state(transcript_path, current_msg_count)
-        sys.exit(0)
-
     # Detect if this is a fresh conversation
-    is_fresh, reason = detect_clear(transcript_path, current_msg_count)
+    is_fresh, reason = detect_clear(transcript_path, current_msg_count, conversation_id)
 
     if is_fresh:
         log_event(f"[CLEAR DETECTED] reason={reason}")
@@ -966,7 +1005,7 @@ def main():
         log_event(f"Ongoing conversation ({reason}) - no session change")
 
     # Always update state with current values for next call comparison
-    write_state(transcript_path, current_msg_count)
+    write_state(transcript_path, current_msg_count, conversation_id)
 
     # Cleanup window state on exit
     try:

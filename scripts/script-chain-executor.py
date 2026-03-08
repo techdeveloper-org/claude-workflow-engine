@@ -196,6 +196,10 @@ if __name__ == "__main__":
         "prompt": hook_input.get("prompt", ""),
         "message": hook_input.get("prompt", ""),
         "cwd": hook_input.get("cwd", ""),
+        # Conversation tracking (for clear detection)
+        "conversation_id": hook_input.get("conversation_id", "")
+                           or hook_input.get("session_id", "")
+                           or os.environ.get("CLAUDE_SESSION_ID", ""),
         # PostToolUse fields (critical for flag clearing in post-tool-tracker.py)
         "tool_name": hook_input.get("tool_name", ""),
         "tool_input": hook_input.get("tool_input", {}),
