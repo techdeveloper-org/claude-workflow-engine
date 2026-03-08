@@ -754,6 +754,17 @@ def main():
 
     Exits 2 on policy violations (blocking).  Exits 0 otherwise.
     """
+    # ===== DEBUG START =====
+    debug_file = Path.home() / '.claude' / 'memory' / 'logs' / 'post-tool-tracker-debug.log'
+    debug_enabled = True
+    def debug_log(msg):
+        if debug_enabled:
+            try:
+                with open(debug_file, 'a', encoding='utf-8') as f:
+                    f.write(f"[{datetime.now().isoformat()}] {msg}\n")
+            except Exception:
+                pass
+    # ===== DEBUG END ====
     # ===================================================================
     # TRACKING: Record start time
     # ===================================================================
@@ -803,6 +814,10 @@ def main():
     tool_name = data.get('tool_name', '')
     tool_input = data.get('tool_input', {})
     tool_response = data.get('tool_response', {})
+
+    # DEBUG: Log all tool calls
+    debug_log(f"POST-TOOL-TRACKER CALLED: tool_name={tool_name}")
+    debug_log(f"  tool_input keys: {list(tool_input.keys()) if tool_input else 'None'}")
 
     try:
         # Determine status
@@ -1012,7 +1027,9 @@ def main():
         # STEP 3.1 ENFORCEMENT: Clear task-breakdown flag when TaskCreate is called
         # (Loophole #11: session-specific flag files)
         # -----------------------------------------------------------------------
+        debug_log(f"TaskCreate check: tool_name={tool_name}, is_error={is_error}")
         if tool_name == 'TaskCreate' and not is_error:
+            debug_log(f"  ✓ TaskCreate detected and no error - proceeding with issue creation")
             try:
                 # Loophole #15 fix: validate TaskCreate has meaningful content
                 tc_subject = (tool_input or {}).get('subject', '')
@@ -1046,8 +1063,10 @@ def main():
                 pass
 
             # GitHub Issues: Create issue for new task
+            debug_log(f"  GitHub issue creation block: attempting to load github_issue_manager")
             try:
                 gim = _get_github_issue_manager()
+                debug_log(f"  github_issue_manager loaded: {gim is not None}")
                 if not gim:
                     # LOGGING: Why github_issue_manager failed to load
                     sys.stdout.write('[GH-WORKFLOW] ⚠️ GitHub issue manager not available\n')
