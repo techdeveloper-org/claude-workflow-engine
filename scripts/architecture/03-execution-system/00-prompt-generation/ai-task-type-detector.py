@@ -58,12 +58,38 @@ class AiTaskTypeDetector:
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize with Trybonsai API key."""
-        self.api_key = api_key or os.getenv("TRYBONSAI_API_KEY")
+        """Initialize with Trybonsai API key.
+
+        Reads from (in priority order):
+        1. api_key parameter (passed directly)
+        2. TRYBONSAI_API_KEY environment variable
+        3. ~/.claude/trybonsai.conf file
+        """
+        self.api_key = api_key
+
+        # Try environment variable
+        if not self.api_key:
+            self.api_key = os.getenv("TRYBONSAI_API_KEY")
+
+        # Try config file
+        if not self.api_key:
+            config_file = Path.home() / ".claude" / "trybonsai.conf"
+            if config_file.exists():
+                try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            if line.startswith("TRYBONSAI_API_KEY="):
+                                self.api_key = line.split("=", 1)[1].strip()
+                                break
+                except Exception:
+                    pass
+
         if not self.api_key:
             raise ValueError(
-                "TRYBONSAI_API_KEY not set. "
-                "Either pass api_key parameter or set environment variable."
+                "TRYBONSAI_API_KEY not found. Set it using one of:\n"
+                "  1. export TRYBONSAI_API_KEY=\"your-key\" (environment variable)\n"
+                "  2. Create ~/.claude/trybonsai.conf with: TRYBONSAI_API_KEY=your-key\n"
+                "  3. Pass --api-key parameter: python ... --api-key \"your-key\""
             )
 
         # Trybonsai API endpoint
