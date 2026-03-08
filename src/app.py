@@ -1669,7 +1669,6 @@ def api_policy_timeline():
         }), 500
 
 @app.route('/api/3level-flow/latest')
-@login_required
 def api_3level_flow_latest():
     """Return the latest 3-level architecture flow execution"""
     try:
@@ -1691,7 +1690,6 @@ def api_3level_flow_latest():
 
 
 @app.route('/api/3level-flow/sessions')
-@login_required
 def api_3level_flow_sessions():
     """Return recent 3-level flow execution sessions"""
     try:
@@ -1708,7 +1706,6 @@ def api_3level_flow_sessions():
 
 
 @app.route('/api/3level-flow/stats')
-@login_required
 def api_3level_flow_stats():
     """Return aggregated stats for recent 3-level flow executions"""
     try:
@@ -1726,7 +1723,6 @@ def api_3level_flow_stats():
 
 
 @app.route('/api/3level-flow/log-files')
-@login_required
 def api_3level_flow_log_files():
     """Return list of 3-level flow session log directories"""
     try:
