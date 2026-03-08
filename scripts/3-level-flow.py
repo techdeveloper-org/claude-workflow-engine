@@ -2238,8 +2238,15 @@ def main():
             pass
 
     # Set up session log directory NOW that we have session_id
-    session_log_dir = MEMORY_BASE / 'logs' / 'sessions' / session_id
-    session_log_dir.mkdir(parents=True, exist_ok=True)
+    # NEVER create folder for UNKNOWN/unknown - only valid SESSION-* IDs
+    if session_id and session_id not in ('UNKNOWN', 'unknown'):
+        session_log_dir = MEMORY_BASE / 'logs' / 'sessions' / session_id
+        session_log_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        # Fallback: use a timestamped temp dir instead of polluting with 'unknown'
+        _ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+        session_log_dir = MEMORY_BASE / 'logs' / 'sessions' / f'TEMP-{_ts}'
+        session_log_dir.mkdir(parents=True, exist_ok=True)
     trace["meta"]["session_id"] = session_id
     trace["meta"]["log_dir"] = str(session_log_dir)
 
@@ -2308,7 +2315,7 @@ def main():
         # User approved auto-proceed (2026-02-23) - trusts Claude's decisions.
         # write_checkpoint_flag() removed - no more .checkpoint-pending-*.json written.
         write_task_breakdown_flag(
-            session_id=session_id or 'unknown',
+            session_id=session_id,
             prompt_preview=user_message
         )
 
