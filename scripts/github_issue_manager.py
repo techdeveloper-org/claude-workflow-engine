@@ -1470,10 +1470,11 @@ def create_issue_branch(issue_number, subject, issue_type=None):
                 verified_branch = verify_result.stdout.strip()
                 debug_log.append(f"[BRANCH-CREATE] STEP 5 VERIFY: Confirmed on {verified_branch}")
 
-            # STEP 6: Store branch name in mapping
+            # STEP 6: Store branch name in mapping (with session_id for future session validation)
             debug_log.append(f"[BRANCH-CREATE] STEP 6: Saving to github-issues.json...")
             mapping = _load_issues_mapping()
             mapping['session_branch'] = branch_name
+            mapping['session_id'] = _get_current_session_id()  # Save current session_id
             mapping['branch_created_at'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             mapping['branch_from_issue'] = issue_number
             mapping['branch_type'] = issue_type
@@ -1502,6 +1503,7 @@ def create_issue_branch(issue_number, subject, issue_type=None):
                 debug_log.append(f"[BRANCH-CREATE] STEP 4b OK: Existing branch checked out")
                 mapping = _load_issues_mapping()
                 mapping['session_branch'] = branch_name
+                mapping['session_id'] = _get_current_session_id()  # Save current session_id
                 mapping['branch_checked_out_at'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
                 _save_issues_mapping(mapping)
                 success_msg = f"[BRANCH-CREATE] ✅ SUCCESS: {branch_name} (existing)"
@@ -1569,15 +1571,69 @@ def _log_branch_debug(debug_log, final_msg):
 
 def get_session_branch():
     """
-    Get the branch name stored for the current session.
-    Returns branch name string or None if no session branch exists.
+    Get the branch name stored for the CURRENT SESSION ONLY.
+
+    Returns branch name string only if:
+    1. A session_branch exists in github-issues.json, AND
+    2. It was created in the current session (session_id matches)
+
+    Returns None if:
+    - No branch stored, or
+    - Branch is from a PREVIOUS session (stale)
     """
     try:
+        # Get current session ID by finding latest session folder
+        current_session_id = _get_current_session_id()
+
+        # Load github-issues.json mapping
         mapping = _load_issues_mapping()
-        return mapping.get('session_branch')
+
+        # Check if stored branch matches current session
+        stored_session_id = mapping.get('session_id', '')
+        stored_branch = mapping.get('session_branch')
+
+        # Only return branch if it's from CURRENT session
+        if stored_branch and stored_session_id and stored_session_id == current_session_id:
+            return stored_branch
+
+        # Branch is stale or from different session - return None
+        if stored_branch and stored_session_id != current_session_id:
+            # Log this for debugging
+            try:
+                _debug_log_gh(f"[SESSION] Ignoring stale branch from previous session: {stored_branch} (old_sid={stored_session_id[:20]}..., current_sid={current_session_id[:20]}...)")
+            except Exception:
+                pass
+
+        return None
+    except Exception as e:
+        # If anything fails, return None to prevent blocking
+        try:
+            _debug_log_gh(f"[SESSION] get_session_branch() exception: {type(e).__name__}: {str(e)[:150]}")
+        except Exception:
+            pass
+        return None
+
+
+def _get_current_session_id():
+    """
+    Get the current session ID by finding the latest session folder.
+    Returns session_id string like 'SESSION-20260308-234215-WLOD' or empty string if not found.
+    """
+    try:
+        sessions_dir = Path.home() / '.claude' / 'memory' / 'logs' / 'sessions'
+        if not sessions_dir.exists():
+            return ''
+
+        # Get all session folders, find the most recent one (by modification time)
+        session_folders = [f for f in sessions_dir.iterdir() if f.is_dir() and f.name.startswith('SESSION-')]
+        if not session_folders:
+            return ''
+
+        # Sort by modification time, get the latest
+        latest = max(session_folders, key=lambda f: f.stat().st_mtime)
+        return latest.name
     except Exception:
-        pass
-    return None
+        return ''
 
 
 def is_on_issue_branch():
