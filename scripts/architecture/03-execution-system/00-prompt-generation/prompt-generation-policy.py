@@ -210,32 +210,32 @@ class PromptGenerator:
         return analysis
 
     def detect_task_type(self, message: str) -> str:
-        """Classify a message into a task type using AI detection ONLY.
+        """Classify a message into a task type using local LLM (Ollama).
 
-        STRATEGY: API-FIRST, NO FALLBACK
+        STRATEGY: LOCAL-FIRST, NO EXTERNAL DEPENDENCIES
         - Keyword-based systems are fundamentally broken (proven by YouTube, SEO, etc.)
-        - AI detection is the ONLY correct approach
-        - If API unavailable, fail explicitly (don't silently use broken keywords)
-        - User can upgrade to paid API if free tier insufficient
+        - AI detection using local Ollama is the correct approach
+        - No external API dependency - works offline
+        - Supports any Ollama model (mistral, qwen, granite, etc.)
 
         Args:
             message (str): User message (original or lowercased).
 
         Returns:
-            str: Task type label determined by AI (e.g., 'Design', 'API Creation', 'Bug Fix').
+            str: Task type label determined by local LLM (e.g., 'Design', 'API Creation', 'Bug Fix').
 
         Raises:
-            ValueError: If TRYBONSAI_API_KEY not set or API call fails.
+            ValueError: If Ollama is not running or LLM request fails.
         """
         try:
             from ai_task_type_detector import AiTaskTypeDetector
 
-            # Require API key - no silent fallback to broken keyword system
+            # Check if Ollama is available
             if not AiTaskTypeDetector.is_available():
                 raise ValueError(
-                    "TRYBONSAI_API_KEY not set. "
-                    "AI-based task detection requires valid API key. "
-                    "Set environment variable or use --api-key parameter."
+                    "Ollama is not available. "
+                    "AI-based task detection requires Ollama to be running. "
+                    "Start Ollama: ollama serve"
                 )
 
             # Call AI detector
@@ -251,9 +251,9 @@ class PromptGenerator:
             print(f"[ERROR] {error_msg}", file=sys.stderr)
             # Return General Task as last resort, but log the error
             sys.stderr.write(
-                "\n[CRITICAL] Keyword-based fallback REMOVED (was broken)\n"
-                "[CRITICAL] Please ensure TRYBONSAI_API_KEY is set\n"
-                "[CRITICAL] Or upgrade to paid API if free tier exhausted\n"
+                "\n[CRITICAL] Keyword-based fallback REMOVED (was unreliable)\n"
+                "[CRITICAL] Please ensure Ollama is running: ollama serve\n"
+                "[CRITICAL] Or install Ollama: https://ollama.ai\n"
             )
             return "General Task"
 
