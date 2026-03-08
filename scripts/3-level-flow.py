@@ -3109,6 +3109,21 @@ Work to complete: Execute phase {i} of the identified work breakdown.
                     pass
         except Exception:
             pass
+        # Also update tasks_created in session-progress.json so post-tool-tracker
+        # L3.8 check sees tasks exist (prevents Edit/Write blocking)
+        try:
+            _sp_file = MEMORY_BASE / 'logs' / 'session-progress.json'
+            _sp_data = {}
+            if _sp_file.exists():
+                with open(_sp_file, 'r', encoding='utf-8') as _f:
+                    _sp_data = json.load(_f)
+            _sp_data['tasks_created'] = max(
+                _sp_data.get('tasks_created', 0), len(tasks_created)
+            )
+            with open(_sp_file, 'w', encoding='utf-8') as _f:
+                json.dump(_sp_data, _f, indent=2)
+        except Exception:
+            pass
 
     trace["pipeline"].append({
         "step": "LEVEL_3_STEP_3_0",

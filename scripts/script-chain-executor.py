@@ -162,12 +162,17 @@ def read_claude_stdin():
     """
     try:
         if sys.stdin.isatty():
+            sys.stderr.write("[CHAIN-STDIN] stdin is tty\n")
             return {}
         raw = sys.stdin.read()
         if raw and raw.strip():
-            return json.loads(raw.strip())
-    except Exception:
-        pass
+            data = json.loads(raw.strip())
+            sys.stderr.write(f"[CHAIN-STDIN] keys={list(data.keys())}, prompt={repr(data.get('prompt',''))[:60]}\n")
+            return data
+        else:
+            sys.stderr.write("[CHAIN-STDIN] stdin empty\n")
+    except Exception as e:
+        sys.stderr.write(f"[CHAIN-STDIN] error: {e}\n")
     return {}
 
 
