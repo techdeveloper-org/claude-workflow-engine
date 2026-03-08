@@ -6638,6 +6638,28 @@ def optimization_comprehensive():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+
+# =============================================================================
+# TASK MANAGEMENT PAGE (Computer Use E2E Testing)
+# =============================================================================
+
+@app.route('/tasks')
+@login_required
+def tasks_page():
+    """Display task management page with session progress"""
+    try:
+        progress_file = Path.home() / ".claude" / "memory" / "logs" / "session-progress.json"
+        progress = None
+
+        if progress_file.exists():
+            with open(progress_file, 'r') as f:
+                progress = json.load(f)
+
+        return render_template('tasks.html', progress=progress)
+    except Exception as e:
+        return render_template('tasks.html', progress=None, error=str(e))
+
+
 @app.errorhandler(404)
 def page_not_found(e):
     """Handle 404 errors"""

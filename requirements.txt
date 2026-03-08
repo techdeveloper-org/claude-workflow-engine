@@ -58,6 +58,13 @@ numpy>=1.24.3
 psutil>=5.9.8
 
 # ============================================================================
+# COMPUTER USE & AUTOMATION (E2E Testing)
+# ============================================================================
+anthropic>=0.50.0               # Anthropic SDK for Computer Use feature
+mss>=9.0.0                      # Screenshot library for desktop capture
+pyautogui>=0.9.54               # Mouse and keyboard automation library
+
+# ============================================================================
 # DEVELOPMENT & TESTING (Optional - install with: pip install -r requirements.txt[dev])
 # ============================================================================
 # Test Framework
