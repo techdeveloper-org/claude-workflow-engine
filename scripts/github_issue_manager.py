@@ -172,14 +172,21 @@ def _get_ops_count():
         return 0
 
 
-def _increment_ops_count():
-    """Increment the CURRENT SESSION's GitHub operations counter and persist to disk.
+def _increment_ops_count(mapping=None):
+    """Increment the CURRENT SESSION's GitHub operations counter.
+
+    Args:
+        mapping (dict, optional): If provided, updates this mapping. If None, loads from file.
+
+    Returns:
+        dict: Updated mapping with incremented session ops_count (does NOT save to disk)
 
     Each session gets its own ops_count limit, so moving to a new session resets the counter.
     """
     try:
         current_session_id = _get_current_session_id()
-        mapping = _load_issues_mapping()
+        if mapping is None:
+            mapping = _load_issues_mapping()
 
         # Initialize session_ops_count if missing
         if 'session_ops_count' not in mapping:
@@ -188,10 +195,10 @@ def _increment_ops_count():
         # Increment current session's ops_count
         mapping['session_ops_count'][current_session_id] = mapping['session_ops_count'].get(current_session_id, 0) + 1
 
-        _save_issues_mapping(mapping)
+        return mapping  # Return updated mapping for caller to save
     except Exception:
-        # If anything fails, silently continue (never block)
-        pass
+        # If anything fails, return mapping unchanged (never block)
+        return mapping if mapping else _load_issues_mapping()
 
 
 def is_gh_available():
@@ -746,8 +753,8 @@ def create_github_issue(task_id, subject, description):
                 'created_at': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
                 'status': 'open'
             }
-            # Increment per-session ops_count (not global)
-            _increment_ops_count()
+            # Increment per-session ops_count (not global) and save
+            mapping = _increment_ops_count(mapping)
             _save_issues_mapping(mapping)
 
             # ATOMIC: Create branch immediately after issue creation.
@@ -1096,8 +1103,8 @@ def close_github_issue(task_id):
             issue_data['status'] = 'closed'
             issue_data['closed_at'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
             mapping['task_to_issue'][task_key] = issue_data
-            # Increment per-session ops_count (not global)
-            _increment_ops_count()
+            # Increment per-session ops_count (not global) and save
+            mapping = _increment_ops_count(mapping)
             _save_issues_mapping(mapping)
             return True
 
