@@ -86,9 +86,13 @@ if sys.platform == 'win32':
 
 LOG_FILE = Path.home() / ".claude" / "memory" / "logs" / "policy-hits.log"
 
-# OpenRouter LLM Configuration
+# Primary: Local Ollama (IPEX-LLM on Intel Arc GPU + NPU)
+OLLAMA_URL = "http://127.0.0.1:11434/v1/chat/completions"
+OLLAMA_MODEL = "granite4:3b"
+
+# Fallback: OpenRouter (if Ollama is not running)
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-LLM_MODELS = [
+OPENROUTER_MODELS = [
     "meta-llama/llama-3.3-70b-instruct:free",
     "qwen/qwen3-coder:free",
     "mistralai/mistral-small-3.1-24b-instruct:free",
@@ -282,27 +286,70 @@ def load_api_key():
         return None
 
 
-def call_llm(system_prompt, user_prompt, max_tokens=None):
-    """Call OpenRouter LLM with model fallback chain.
+def _strip_code_fences(content):
+    """Remove markdown code fences from LLM response."""
+    if content.startswith('```'):
+        fence_lines = content.split('\n')
+        if fence_lines[0].startswith('```'):
+            fence_lines = fence_lines[1:]
+        if fence_lines and fence_lines[-1].strip() == '```':
+            fence_lines = fence_lines[:-1]
+        content = '\n'.join(fence_lines)
+    return content
 
-    Tries each model in LLM_MODELS until one succeeds and returns
-    valid JSON. Returns None if all models fail.
+
+def call_llm(system_prompt, user_prompt, max_tokens=None):
+    """Call LLM with Ollama-first, OpenRouter-fallback strategy.
+
+    Tries local Ollama first (fast, no rate limits), then falls back
+    to OpenRouter cloud models. Returns parsed JSON or None.
     """
     if urllib_request is None:
         log_action("LLM_SKIP", "urllib.request not available")
         return None
 
-    api_key = load_api_key()
-    if not api_key:
-        log_action("LLM_SKIP", "No API key found")
-        return None
-
     if max_tokens is None:
         max_tokens = DOC_MAX_TOKENS
 
-    for attempt, model in enumerate(LLM_MODELS, 1):
+    # 1. Try local Ollama first
+    try:
+        log_action("LLM_OLLAMA", f"Trying local: {OLLAMA_MODEL}")
+        payload = json.dumps({
+            "model": OLLAMA_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "max_tokens": max_tokens,
+            "temperature": 0.3,
+        }).encode('utf-8')
+
+        req = urllib_request.Request(
+            OLLAMA_URL, data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        with urllib_request.urlopen(req, timeout=LLM_TIMEOUT) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+            content = (result.get('choices', [{}])[0]
+                       .get('message', {}).get('content', '').strip())
+            if content:
+                content = _strip_code_fences(content)
+                parsed = json.loads(content)
+                log_action("LLM_SUCCESS", f"ollama/{OLLAMA_MODEL} returned valid JSON")
+                return parsed
+    except Exception as e:
+        log_action("LLM_OLLAMA_FAIL", f"{str(e)[:80]}")
+
+    # 2. Fallback to OpenRouter
+    api_key = load_api_key()
+    if not api_key:
+        log_action("LLM_SKIP", "No API key for OpenRouter fallback")
+        return None
+
+    for attempt, model in enumerate(OPENROUTER_MODELS, 1):
         try:
-            log_action("LLM_ATTEMPT", f"{attempt}/{len(LLM_MODELS)}: {model}")
+            log_action("LLM_ATTEMPT", f"{attempt}/{len(OPENROUTER_MODELS)}: {model}")
 
             payload = json.dumps({
                 "model": model,
@@ -335,15 +382,7 @@ def call_llm(system_prompt, user_prompt, max_tokens=None):
                     log_action("LLM_EMPTY", f"{model} returned empty response")
                     continue
 
-                # Strip markdown code fences if LLM wrapped the JSON
-                if content.startswith('```'):
-                    fence_lines = content.split('\n')
-                    if fence_lines[0].startswith('```'):
-                        fence_lines = fence_lines[1:]
-                    if fence_lines and fence_lines[-1].strip() == '```':
-                        fence_lines = fence_lines[:-1]
-                    content = '\n'.join(fence_lines)
-
+                content = _strip_code_fences(content)
                 parsed = json.loads(content)
                 log_action("LLM_SUCCESS", f"{model} returned valid JSON")
                 return parsed

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Intelligent Decision Engine (v1.0.0) - LLM-Powered Level 3 Decisions
+Intelligent Decision Engine (v1.1.0) - LLM-Powered Level 3 Decisions
 
-Replaces keyword-based guessing with OpenRouter LLM for ALL Level 3 decisions:
+Replaces keyword-based guessing with local LLM for ALL Level 3 decisions:
   - Task Type classification
   - Model Selection (HAIKU / SONNET / OPUS)
   - Skill/Agent Selection (from registry)
@@ -17,8 +17,10 @@ Called by: 3-level-flow.py
 Input: Master context dict with all collected data
 Output: JSON with all decisions
 
-LLM: OpenRouter API (same key as stop-notifier.py)
-API Key: ~/.claude/config/openrouter-api-key
+LLM: Local Ollama (IPEX-LLM on Intel Arc GPU + NPU) -> OpenRouter fallback
+Endpoint: http://127.0.0.1:11434/v1/chat/completions
+Model: qwen2.5:1.5b (no API key needed)
+Fallback: OpenRouter API if Ollama is not running
 """
 
 import sys
@@ -55,9 +57,13 @@ except ImportError:
 
 LOG_FILE = MEMORY_BASE / 'logs' / 'llm-decision-engine.log'
 
-# OpenRouter config - free models for cost-zero operation
+# Primary: Local Ollama (IPEX-LLM on Intel Arc GPU + NPU)
+OLLAMA_URL = "http://127.0.0.1:11434/v1/chat/completions"
+OLLAMA_MODEL = "granite4:3b"
+
+# Fallback: OpenRouter (if Ollama is not running)
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-LLM_MODELS = [
+OPENROUTER_MODELS = [
     "arcee-ai/trinity-large-preview:free",
     "liquid/lfm-2.5-1.2b-instruct:free",
     "nvidia/nemotron-3-nano-30b-a3b:free",
@@ -246,19 +252,158 @@ def build_user_prompt(context):
 # CALL OPENROUTER LLM
 # =============================================================================
 
-def call_llm(context):
-    """Call OpenRouter LLM with master context. Returns decision dict or None on failure."""
-    api_key = load_api_key()
-    if not api_key:
-        log("[FATAL] No OpenRouter API key found at " + str(API_KEY_FILE))
+def _parse_llm_response(content, model_name):
+    """Parse and validate LLM JSON response. Returns decision dict or None."""
+    if not content:
+        log(f"[LLM] {model_name} returned empty content")
         return None
 
-    user_prompt = build_user_prompt(context)
-    log(f"[LLM] Calling with message: {context.get('user_message', '')[:100]}")
+    # Strip markdown code fences if present
+    if content.startswith('```'):
+        lines = content.split('\n')
+        lines = [l for l in lines if not l.strip().startswith('```')]
+        content = '\n'.join(lines).strip()
 
-    for attempt, model in enumerate(LLM_MODELS, 1):
+    # Try to extract JSON from mixed output
+    try:
+        decision = json.loads(content)
+    except json.JSONDecodeError:
+        # Find JSON object in mixed text
+        first_brace = content.find('{')
+        if first_brace >= 0:
+            try:
+                decision = json.loads(content[first_brace:])
+            except json.JSONDecodeError:
+                log(f"[LLM] {model_name} JSON parse error")
+                return None
+        else:
+            log(f"[LLM] {model_name} no JSON found in response")
+            return None
+
+    # Validate required fields
+    if not all(k in decision for k in ('task_type', 'model', 'agent_name')):
+        log(f"[LLM] {model_name} missing required fields: {list(decision.keys())}")
+        return None
+
+    # Validate model value
+    if decision['model'] not in ('HAIKU', 'SONNET', 'OPUS'):
+        log(f"[LLM] {model_name} invalid model value: {decision['model']}")
+        return None
+
+    # Validate agent_name exists in registry (auto-fix if empty/invalid)
+    valid_names = set(AVAILABLE_AGENTS.keys()) | set(AVAILABLE_SKILLS.keys())
+    if decision['agent_name'] not in valid_names:
+        # Auto-map from task_type for small models that sometimes miss agent_name
+        task_type_agent_map = {
+            'API Creation': 'spring-boot-microservices',
+            'Authentication': 'spring-boot-microservices',
+            'Authorization': 'spring-boot-microservices',
+            'Security': 'spring-boot-microservices',
+            'Database': 'spring-boot-microservices',
+            'Dashboard': 'ui-ux-designer',
+            'Frontend': 'angular-engineer',
+            'UI/UX': 'ui-ux-designer',
+            'Configuration': 'devops-engineer',
+            'Bug Fix': 'spring-boot-microservices',
+            'Refactoring': 'spring-boot-microservices',
+            'Testing': 'qa-testing-agent',
+            'Documentation': 'python-backend-engineer',
+            'DevOps': 'devops-engineer',
+            'Deployment': 'devops-engineer',
+            'System/Script': 'python-backend-engineer',
+            'Sync/Update': 'python-backend-engineer',
+            'Architecture Design': 'orchestrator-agent',
+            'Migration': 'spring-boot-microservices',
+            'General Task': 'python-backend-engineer',
+        }
+        fallback_agent = task_type_agent_map.get(
+            decision.get('task_type', ''), 'python-backend-engineer'
+        )
+        log(f"[LLM] {model_name} invalid agent_name '{decision['agent_name']}' "
+            f"-> auto-mapped to '{fallback_agent}' from task_type '{decision.get('task_type')}'")
+        decision['agent_name'] = fallback_agent
+
+    # Validate supplementary_skills
+    supp = decision.get('supplementary_skills', [])
+    decision['supplementary_skills'] = [s for s in supp if s in AVAILABLE_SKILLS]
+
+    # Determine agent_type if not set
+    if 'agent_type' not in decision:
+        decision['agent_type'] = 'agent' if decision['agent_name'] in AVAILABLE_AGENTS else 'skill'
+
+    # Ensure complexity is int and clamped
+    decision['complexity'] = max(1, min(int(decision.get('complexity', 10)), 25))
+
+    # Ensure confidence
+    decision['confidence'] = min(1.0, max(0.0, float(decision.get('confidence', 0.8))))
+
+    return decision
+
+
+def _call_ollama(user_prompt):
+    """Try local Ollama first (fastest, no rate limits, GPU-accelerated).
+
+    Returns:
+        tuple: (decision_dict or None, model_name_used)
+    """
+    model = OLLAMA_MODEL
+    log(f"[OLLAMA] Trying local Ollama: {model}")
+
+    try:
+        payload = json.dumps({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            "max_tokens": 300,
+            "temperature": 0.1,
+        }).encode('utf-8')
+
+        req = urllib_request.Request(
+            OLLAMA_URL,
+            data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+
+        with urllib_request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+            msg = result.get('choices', [{}])[0].get('message', {})
+            content = (msg.get('content') or '').strip()
+
+            decision = _parse_llm_response(content, f"ollama/{model}")
+            if decision:
+                decision['llm_model_used'] = f"ollama/{model}"
+                decision['llm_source'] = 'local'
+                decision['llm_attempt'] = 1
+                decision['engine_version'] = '1.1.0'
+                log(f"[OLLAMA] SUCCESS: task={decision['task_type']}, "
+                    f"model={decision['model']}, agent={decision['agent_name']}")
+                return decision
+
+    except (URLError, HTTPError) as e:
+        log(f"[OLLAMA] Not available: {str(e)[:80]}")
+    except Exception as e:
+        log(f"[OLLAMA] Error ({type(e).__name__}): {str(e)[:80]}")
+
+    return None
+
+
+def _call_openrouter(user_prompt):
+    """Fallback to OpenRouter if Ollama is not running.
+
+    Returns:
+        decision_dict or None
+    """
+    api_key = load_api_key()
+    if not api_key:
+        log("[OPENROUTER] No API key found - skipping fallback")
+        return None
+
+    for attempt, model in enumerate(OPENROUTER_MODELS, 1):
         try:
-            log(f"[LLM] Attempt {attempt}/{len(LLM_MODELS)}: {model}")
+            log(f"[OPENROUTER] Attempt {attempt}/{len(OPENROUTER_MODELS)}: {model}")
 
             payload = json.dumps({
                 "model": model,
@@ -292,71 +437,51 @@ def call_llm(context):
                     reasoning = (msg.get('reasoning') or '').strip()
                     if reasoning:
                         content = reasoning
-                    else:
-                        log(f"[LLM] {model} returned empty content")
-                        continue
 
-                # Strip markdown code fences if present
-                if content.startswith('```'):
-                    lines = content.split('\n')
-                    lines = [l for l in lines if not l.strip().startswith('```')]
-                    content = '\n'.join(lines).strip()
-
-                # Parse JSON response
-                decision = json.loads(content)
-
-                # Validate required fields
-                if not all(k in decision for k in ('task_type', 'model', 'agent_name')):
-                    log(f"[LLM] {model} missing required fields: {list(decision.keys())}")
-                    continue
-
-                # Validate model value
-                if decision['model'] not in ('HAIKU', 'SONNET', 'OPUS'):
-                    log(f"[LLM] {model} invalid model value: {decision['model']}")
-                    continue
-
-                # Validate agent_name exists in registry
-                valid_names = set(AVAILABLE_AGENTS.keys()) | set(AVAILABLE_SKILLS.keys())
-                if decision['agent_name'] not in valid_names:
-                    log(f"[LLM] {model} invalid agent_name: {decision['agent_name']}, not in registry")
-                    continue
-
-                # Validate supplementary_skills
-                supp = decision.get('supplementary_skills', [])
-                decision['supplementary_skills'] = [s for s in supp if s in AVAILABLE_SKILLS]
-
-                # Determine agent_type if not set
-                if 'agent_type' not in decision:
-                    decision['agent_type'] = 'agent' if decision['agent_name'] in AVAILABLE_AGENTS else 'skill'
-
-                # Ensure complexity is int and clamped
-                decision['complexity'] = max(1, min(int(decision.get('complexity', 10)), 25))
-
-                # Ensure confidence
-                decision['confidence'] = min(1.0, max(0.0, float(decision.get('confidence', 0.8))))
-
-                # Add metadata
-                decision['llm_model_used'] = model
-                decision['llm_attempt'] = attempt
-                decision['engine_version'] = '1.0.0'
-
-                log(f"[LLM] SUCCESS ({model}): task={decision['task_type']}, "
-                    f"model={decision['model']}, agent={decision['agent_name']}, "
-                    f"confidence={decision['confidence']}")
-
-                return decision
+                decision = _parse_llm_response(content, model)
+                if decision:
+                    decision['llm_model_used'] = model
+                    decision['llm_source'] = 'openrouter'
+                    decision['llm_attempt'] = attempt
+                    decision['engine_version'] = '1.1.0'
+                    log(f"[OPENROUTER] SUCCESS ({model}): task={decision['task_type']}, "
+                        f"model={decision['model']}, agent={decision['agent_name']}")
+                    return decision
 
         except json.JSONDecodeError as e:
-            log(f"[LLM] {model} JSON parse error: {str(e)[:80]}")
+            log(f"[OPENROUTER] {model} JSON parse error: {str(e)[:80]}")
             continue
         except (URLError, HTTPError) as e:
-            log(f"[LLM] {model} HTTP error: {str(e)[:80]}")
+            log(f"[OPENROUTER] {model} HTTP error: {str(e)[:80]}")
             continue
         except Exception as e:
-            log(f"[LLM] {model} error ({type(e).__name__}): {str(e)[:80]}")
+            log(f"[OPENROUTER] {model} error ({type(e).__name__}): {str(e)[:80]}")
             continue
 
-    log("[FATAL] All LLM models failed - pipeline must fail")
+    return None
+
+
+def call_llm(context):
+    """Call LLM with master context. Tries local Ollama first, then OpenRouter.
+
+    Returns:
+        decision dict or None on failure.
+    """
+    user_prompt = build_user_prompt(context)
+    log(f"[LLM] Calling with message: {context.get('user_message', '')[:100]}")
+
+    # 1. Try local Ollama (fast, free, GPU-accelerated)
+    decision = _call_ollama(user_prompt)
+    if decision:
+        return decision
+
+    # 2. Fallback to OpenRouter (cloud, rate-limited)
+    log("[LLM] Ollama unavailable, falling back to OpenRouter")
+    decision = _call_openrouter(user_prompt)
+    if decision:
+        return decision
+
+    log("[FATAL] All LLM sources failed (Ollama + OpenRouter)")
     return None
 
 

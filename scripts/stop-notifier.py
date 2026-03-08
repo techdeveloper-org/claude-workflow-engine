@@ -123,10 +123,13 @@ WORK_DONE_FLAG_PID = FLAG_DIR / f'.session-work-done-{_PID}'
 
 VOICE_SCRIPT = CURRENT_DIR / 'voice-notifier.py'
 
-# OpenRouter config
+# Primary: Local Ollama (IPEX-LLM on Intel Arc GPU + NPU)
+OLLAMA_URL = "http://127.0.0.1:11434/v1/chat/completions"
+OLLAMA_MODEL = "granite4:3b"
+
+# Fallback: OpenRouter (if Ollama is not running)
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# Fast models in priority order (cheapest first)
-LLM_MODELS = [
+OPENROUTER_MODELS = [
     "meta-llama/llama-3.1-8b-instruct",
     "mistralai/mistral-7b-instruct",
     "google/gemini-2.0-flash-001",
@@ -403,18 +406,53 @@ def generate_dynamic_message(event_type, context=''):
         user_prompt += " Generate a brief completion notification."
 
     elif event_type == 'work_done':
-        user_prompt = f"All coding tasks for this session are done."
+        user_prompt = (
+            f"All coding tasks for this session are done. It is {time_context}. "
+            f"Generate a comprehensive wrap-up summary like telling a short story. "
+            f"Mention what was accomplished, how many tasks, what types of work. "
+            f"Keep it 3-4 sentences, warm and appreciative tone."
+        )
         if context:
-            user_prompt += f" Session summary: {context}."
-        user_prompt += " Generate a brief wrap-up notification."
+            user_prompt += f" Session details: {context}."
 
     else:
         user_prompt = f"Generate a brief notification. Context: {context}"
 
-    # Try each model until one works
-    for attempt, model in enumerate(LLM_MODELS, 1):
+    # 1. Try local Ollama first (fast, no rate limits)
+    try:
+        log_s(f"[ollama] Trying local: {OLLAMA_MODEL}")
+        payload = json.dumps({
+            "model": OLLAMA_MODEL,
+            "messages": [
+                {"role": "system", "content": VOICE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            "max_tokens": 60,
+            "temperature": 0.7,
+        }).encode('utf-8')
+
+        req = urllib_request.Request(
+            OLLAMA_URL, data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        with urllib_request.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+            message = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+            if message:
+                message = message.replace('*', '').replace('#', '').replace('`', '')
+                message = message.replace('\n', ' ').strip()
+                if message.startswith('"') and message.endswith('"'):
+                    message = message[1:-1]
+                log_s(f"[ollama] SUCCESS: {message[:80]}")
+                return message
+    except Exception as e:
+        log_s(f"[ollama] Not available: {str(e)[:80]}")
+
+    # 2. Fallback to OpenRouter
+    for attempt, model in enumerate(OPENROUTER_MODELS, 1):
         try:
-            log_s(f"[llm] Attempt {attempt}/{len(LLM_MODELS)}: {model}")
+            log_s(f"[openrouter] Attempt {attempt}/{len(OPENROUTER_MODELS)}: {model}")
 
             payload = json.dumps({
                 "model": model,
@@ -443,24 +481,23 @@ def generate_dynamic_message(event_type, context=''):
                 message = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
 
                 if message:
-                    # Clean up any markdown or special chars
                     message = message.replace('*', '').replace('#', '').replace('`', '')
                     message = message.replace('\n', ' ').strip()
                     if message.startswith('"') and message.endswith('"'):
                         message = message[1:-1]
-                    log_s(f"[llm] SUCCESS ({model}): {message[:80]}")
+                    log_s(f"[openrouter] SUCCESS ({model}): {message[:80]}")
                     return message
                 else:
-                    log_s(f"[llm] {model} returned empty, trying next...")
+                    log_s(f"[openrouter] {model} returned empty, trying next...")
 
         except urllib_request.URLError as e:
-            log_s(f"[llm] {model} URL error: {str(e)[:80]}")
+            log_s(f"[openrouter] {model} URL error: {str(e)[:80]}")
             continue
         except Exception as e:
-            log_s(f"[llm] {model} failed ({type(e).__name__}): {str(e)[:80]}")
+            log_s(f"[openrouter] {model} failed ({type(e).__name__}): {str(e)[:80]}")
             continue
 
-    log_s(f"[llm] All models failed - using static fallback")
+    log_s(f"[llm] All sources failed (Ollama + OpenRouter) - using static fallback")
     return None
 
 
@@ -606,7 +643,7 @@ def main():
             _commit_ok = False
             for _attempt in range(1, 4):
                 try:
-                    _r = subprocess.run([sys.executable, str(git_commit_script), '--enforce-now'], timeout=60, capture_output=True)
+                    _r = subprocess.run([sys.executable, str(git_commit_script), '--enforce'], timeout=60, capture_output=True)
                     if _r.returncode == 0:
                         _commit_ok = True
                         break
@@ -709,6 +746,22 @@ def main():
                 log_s('[POLICY-WARN] failure-detector failed after 3 retries')
     except Exception as e:
         log_s('[FAILURE-DETECT] Skipped: ' + str(e))
+
+    # 4. Preference auto-detection - learn user preferences from session
+    # Architecture: 01-sync-system/user-preferences/preference-auto-tracker.py
+    try:
+        pref_script = script_dir / 'architecture' / '01-sync-system' / 'user-preferences' / 'preference-auto-tracker.py'
+        if pref_script.exists():
+            _r = subprocess.run(
+                [sys.executable, str(pref_script)],
+                timeout=10, capture_output=True
+            )
+            if _r.returncode == 0:
+                log_s('[PREFERENCES] Auto-detected from session')
+            else:
+                log_s('[PREFERENCES] Detection skipped (no new patterns)')
+    except Exception:
+        pass
 
     # 4. Archive plan file to session folder (if plan mode was used this session)
     # Policy: 03-execution-system/02-plan-mode/auto-plan-mode-suggestion-policy.md (v2.0)

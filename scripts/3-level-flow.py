@@ -3401,12 +3401,11 @@ Work to complete: Execute phase {i} of the identified work breakdown.
     model_overrides = []
     model_script_used = False
 
-    # USE LLM DECISION if available (overrides all keyword-based logic)
+    # LLM decision is checked AFTER script fallback (see below, line marked LLM_FINAL)
+    _llm_model_override = None
     if llm_decision and llm_decision.get('model') in ('HAIKU', 'SONNET', 'OPUS'):
-        selected_model = llm_decision['model']
-        model_reason = f"[LLM] {llm_decision.get('model_reasoning', 'LLM decision')}"
-        model_script_used = True
-        model_overrides.append('llm_decision_engine_override')
+        _llm_model_override = llm_decision['model']
+        _llm_model_reason = f"[LLM] {llm_decision.get('model_reasoning', 'LLM decision')}"
 
     if model_script.exists():
         try:
@@ -3445,7 +3444,15 @@ Work to complete: Execute phase {i} of the identified work breakdown.
             selected_model = 'OPUS'
             model_reason = "Very complex (>=20) - Opus 4.6 'The Strategist' ($5/$25 MTok)"
 
-    # Override rules (always applied, even on script results)
+    # LLM_FINAL: LLM decision overrides BOTH script and inline fallback
+    # Only plan_required and security overrides can override LLM (below)
+    if _llm_model_override:
+        selected_model = _llm_model_override
+        model_reason = _llm_model_reason
+        model_script_used = True
+        model_overrides.append('llm_decision_engine_override')
+
+    # Override rules (always applied, even on LLM results)
     if plan_required:
         selected_model = 'OPUS'
         model_reason = "Plan mode active - Opus 4.6 'The Strategist' mandatory"

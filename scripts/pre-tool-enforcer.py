@@ -447,6 +447,23 @@ def check_task_breakdown_pending(tool_name):
     if flag_path is None:
         return hints, blocks
 
+    # TTL: auto-expire flag after 90 seconds (prevents permanent blocking)
+    flag_created = flag_data.get('created_at', '')
+    if flag_created:
+        try:
+            from datetime import datetime
+            created_dt = datetime.fromisoformat(flag_created)
+            age_seconds = (datetime.now() - created_dt).total_seconds()
+            if age_seconds > 90:
+                try:
+                    flag_path.unlink()
+                except Exception:
+                    pass
+                hints.append('[HINT] TaskCreate recommended but not required (flag expired after 90s)')
+                return hints, blocks
+        except Exception:
+            pass
+
     session_id = flag_data.get('session_id', 'unknown')
     prompt_preview = flag_data.get('prompt_preview', '')[:80]
 
@@ -489,6 +506,23 @@ def check_skill_selection_pending(tool_name):
     flag_path, flag_data = find_session_flag('.skill-selection-pending', current_session_id)
     if flag_path is None:
         return hints, blocks
+
+    # TTL: auto-expire flag after 90 seconds (prevents permanent blocking)
+    flag_created = flag_data.get('created_at', '')
+    if flag_created:
+        try:
+            from datetime import datetime
+            created_dt = datetime.fromisoformat(flag_created)
+            age_seconds = (datetime.now() - created_dt).total_seconds()
+            if age_seconds > 90:
+                try:
+                    flag_path.unlink()
+                except Exception:
+                    pass
+                hints.append('[HINT] Skill/Agent invocation recommended but not required (flag expired after 90s)')
+                return hints, blocks
+        except Exception:
+            pass
 
     session_id = flag_data.get('session_id', 'unknown')
     required_skill = flag_data.get('required_skill', 'unknown')

@@ -215,6 +215,13 @@ def accumulate(session_id, prompt='', task_type='', skill='', complexity=0,
     else:
         data = _new_summary(session_id)
 
+    # Ensure required keys exist (file may have been created by another script
+    # like plan-session-archiver with only plan_info)
+    defaults = _new_summary(session_id)
+    for key in defaults:
+        if key not in data:
+            data[key] = defaults[key]
+
     # Add this request as an entry (v2.1.0: enhanced fields + decision rationale)
     entry = {
         "timestamp": datetime.now().isoformat(),
