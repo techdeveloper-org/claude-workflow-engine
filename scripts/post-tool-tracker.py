@@ -1455,6 +1455,9 @@ def main():
             pass
         sys.exit(exit_code)
 
+    # Success: minimal output so hook system knows script ran
+    sys.stdout.write('[L3.9] Post-tool tracking complete\n')
+    sys.stdout.flush()
     sys.exit(0)
 
 

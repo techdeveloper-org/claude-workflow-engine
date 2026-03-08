@@ -1823,6 +1823,9 @@ def main():
     except Exception:
         pass
 
+    # Success: output confirmation
+    sys.stdout.write('[L3.6] Tool optimization verified\n')
+    sys.stdout.flush()
     sys.exit(0)
 
 
