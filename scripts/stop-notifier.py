@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
 Script Name: stop-notifier.py
-Version: 4.1.0 (Direct voice trigger on task complete + WORK_DONE_SUMMARY env var)
+Version: 4.2.0 (Local Ollama only, removed cloud OpenRouter)
 Last Modified: 2026-03-08
-Description: Stop hook - speaks dynamic English voice updates via LLM.
+Description: Stop hook - speaks dynamic English voice updates via local Ollama LLM.
 
+v4.2.0: Local LLM only (Ollama)
+  - REMOVED: OpenRouter fallback (cloud API)
+  - NEW: Ollama-only, no internet dependency
+  - UNCHANGED: WORK_DONE_SUMMARY environment variable support
+  - Static fallback if Ollama unavailable
 v4.1.0: Direct voice notification on TaskUpdate(completed)
   - NEW: Accepts WORK_DONE_SUMMARY environment variable from post-tool-tracker.py
   - NEW: Called directly by post-tool-tracker.py when all tasks complete (no Stop hook wait)
@@ -127,17 +132,13 @@ WORK_DONE_FLAG_PID = FLAG_DIR / f'.session-work-done-{_PID}'
 
 VOICE_SCRIPT = CURRENT_DIR / 'voice-notifier.py'
 
-# Primary: Local Ollama (IPEX-LLM on Intel Arc GPU + NPU)
+# LOCAL ONLY: Ollama (IPEX-LLM on Intel Arc GPU + NPU)
+# No cloud fallback - use static messages if Ollama unavailable
 OLLAMA_URL = "http://127.0.0.1:11434/v1/chat/completions"
 OLLAMA_MODEL = "granite4:3b"
 
-# Fallback: OpenRouter (if Ollama is not running)
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODELS = [
-    "meta-llama/llama-3.1-8b-instruct",
-    "mistralai/mistral-7b-instruct",
-    "google/gemini-2.0-flash-001",
-]
+# Removed: OpenRouter fallback (cloud API) - 2026-03-08
+# Now: Ollama only -> if unavailable -> static fallback messages
 
 VOICE_SYSTEM_PROMPT = (
     "You are Neerja, a professional Indian English-speaking female voice assistant. "
@@ -360,31 +361,13 @@ def get_session_summary_for_voice():
 # LLM MESSAGE GENERATION (OpenRouter)
 # =============================================================================
 
-def load_api_key():
-    """Load OpenRouter API key from config file. Returns None if missing or empty."""
-    if not API_KEY_FILE.exists():
-        return None
-    try:
-        key = API_KEY_FILE.read_text(encoding='utf-8').strip()
-        # v4.0.0: Check for empty file too
-        if not key or len(key) < 10:
-            return None
-        return key
-    except Exception:
-        return None
-
-
 def generate_dynamic_message(event_type, context=''):
     """
-    Call OpenRouter LLM to generate a natural, dynamic voice message.
+    Call local Ollama LLM to generate a natural, dynamic voice message.
     Returns message string or None (caller uses static fallback).
+    No cloud API required - local only.
     """
-    api_key = load_api_key()
-    if not api_key:
-        log_s(f"[llm] No API key found for {event_type} - using static fallback")
-        return None
-
-    log_s(f"[llm] Starting LLM call for {event_type}")
+    log_s(f"[llm] Starting local Ollama call for {event_type}")
 
     hour = datetime.now().hour
     if hour < 12:
@@ -422,7 +405,8 @@ def generate_dynamic_message(event_type, context=''):
     else:
         user_prompt = f"Generate a brief notification. Context: {context}"
 
-    # 1. Try local Ollama first (fast, no rate limits)
+    # OLLAMA ONLY: Local LLM (no cloud fallback)
+    # If Ollama unavailable, uses static fallback messages
     try:
         log_s(f"[ollama] Trying local: {OLLAMA_MODEL}")
         payload = json.dumps({
@@ -451,57 +435,9 @@ def generate_dynamic_message(event_type, context=''):
                 log_s(f"[ollama] SUCCESS: {message[:80]}")
                 return message
     except Exception as e:
-        log_s(f"[ollama] Not available: {str(e)[:80]}")
+        log_s(f"[ollama] Unavailable (local only): {str(e)[:80]} -> using static fallback")
 
-    # 2. Fallback to OpenRouter
-    for attempt, model in enumerate(OPENROUTER_MODELS, 1):
-        try:
-            log_s(f"[openrouter] Attempt {attempt}/{len(OPENROUTER_MODELS)}: {model}")
-
-            payload = json.dumps({
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": VOICE_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
-                ],
-                "max_tokens": 60,
-                "temperature": 0.7,
-            }).encode('utf-8')
-
-            req = urllib_request.Request(
-                OPENROUTER_URL,
-                data=payload,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Authorization': f'Bearer {api_key}',
-                    'HTTP-Referer': 'https://claude-code-voice.local',
-                    'X-Title': 'Claude Code Voice',
-                },
-                method='POST'
-            )
-
-            with urllib_request.urlopen(req, timeout=15) as resp:
-                result = json.loads(resp.read().decode('utf-8'))
-                message = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-
-                if message:
-                    message = message.replace('*', '').replace('#', '').replace('`', '')
-                    message = message.replace('\n', ' ').strip()
-                    if message.startswith('"') and message.endswith('"'):
-                        message = message[1:-1]
-                    log_s(f"[openrouter] SUCCESS ({model}): {message[:80]}")
-                    return message
-                else:
-                    log_s(f"[openrouter] {model} returned empty, trying next...")
-
-        except urllib_request.URLError as e:
-            log_s(f"[openrouter] {model} URL error: {str(e)[:80]}")
-            continue
-        except Exception as e:
-            log_s(f"[openrouter] {model} failed ({type(e).__name__}): {str(e)[:80]}")
-            continue
-
-    log_s(f"[llm] All sources failed (Ollama + OpenRouter) - using static fallback")
+    log_s(f"[llm] Ollama not available - using static fallback message")
     return None
 
 
