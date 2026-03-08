@@ -244,6 +244,9 @@ class PromptGenerator:
 
         # Standard keyword mapping (includes Hinglish verbs)
         keywords_map = {
+            "Design": ["design", "redesign", "ui", "ux", "ui/ux", "interface", "layout",
+                      "mockup", "wireframe", "styling", "theme", "color scheme", "component design",
+                      "design system", "figma", "xd", "sketch"],
             "API Creation": ["create api", "rest api", "endpoint", "crud"],
             "Authentication": ["auth", "login", "jwt", "token"],
             "Authorization": ["role", "permission", "access control"],

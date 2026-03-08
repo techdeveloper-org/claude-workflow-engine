@@ -9,6 +9,29 @@ priority: critical
 
 ---
 
+## 0. Task Type Detection (For Proper Agent Selection)
+
+✅ **Design/UI-UX tasks trigger ui-ux-designer:**
+```
+Keywords: design, redesign, ui, ux, interface, layout, mockup, wireframe,
+styling, theme, color scheme, component design, design system
+→ Agent: ui-ux-designer (NOT angular-engineer)
+```
+
+✅ **Backend tasks trigger appropriate backend engineer:**
+```
+Keywords: api, endpoint, database, service, repository
+→ Agent: python-backend-engineer, spring-boot-microservices (based on tech stack)
+```
+
+✅ **Frontend tasks trigger appropriate frontend engineer:**
+```
+Keywords: component, state management, hook, styling, accessibility
+→ Agent: angular-engineer, swiftui-designer (based on framework)
+```
+
+---
+
 ## 1. Naming Conventions
 
 - **Variables & functions:** camelCase
