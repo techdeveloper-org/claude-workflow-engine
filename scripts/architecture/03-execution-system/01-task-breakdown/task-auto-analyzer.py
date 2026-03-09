@@ -376,24 +376,68 @@ class TaskAutoAnalyzer:
 
 
 def main():
-    """CLI usage"""
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Task Auto-Analyzer (Phase 4)')
-    parser.add_argument('message', nargs='+', help='User message')
-
+    """CLI usage - outputs JSON for LangGraph"""
     if len(sys.argv) < 2:
+        # No input provided - return minimal task
+        output = {
+            "task_count": 1,
+            "tasks": [
+                {
+                    "id": 1,
+                    "name": "Execute task",
+                    "description": "Execute the requested task",
+                    "priority": "medium",
+                    "depends_on": []
+                }
+            ],
+            "status": "minimal"
+        }
+        print(json.dumps(output))
         sys.exit(0)
-    args = parser.parse_args()
 
-    user_message = ' '.join(args.message)
+    user_message = ' '.join(sys.argv[1:])
 
     analyzer = TaskAutoAnalyzer()
     result = analyzer.auto_analyze(user_message)
 
-    analyzer.print_result(result)
+    # Transform result to JSON output format
+    output = {
+        "task_count": result.get("total_tasks", 1),
+        "tasks": [
+            {
+                "id": task.get("id"),
+                "name": task.get("title", "Unnamed task"),
+                "description": task.get("description", f"Phase: {task.get('phase', 'General')}"),
+                "priority": _estimate_priority(task, result),
+                "depends_on": result.get("dependencies", {}).get(task.get("id"), []),
+                "type": task.get("type", "task"),
+                "phase": task.get("phase")
+            }
+            for task in result.get("tasks", [])
+        ],
+        "status": "OK"
+    }
 
+    # Output as JSON
+    print(json.dumps(output))
     sys.exit(0)
+
+
+def _estimate_priority(task, result):
+    """Estimate task priority based on position and dependencies"""
+    task_id = task.get("id", 1)
+    total_tasks = result.get("total_tasks", 1)
+    task_type = task.get("type", "")
+
+    # Early tasks are higher priority
+    position_ratio = task_id / total_tasks if total_tasks > 0 else 0.5
+
+    if position_ratio < 0.3:
+        return "high"
+    elif position_ratio < 0.7:
+        return "medium"
+    else:
+        return "low"
 
 
 if __name__ == '__main__':

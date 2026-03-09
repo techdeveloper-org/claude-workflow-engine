@@ -1,105 +1,115 @@
 #!/usr/bin/env python3
 """
-Context Monitor v2.0 - Level 1 Sync System Policy
+Context Monitor v2.1 - Level 1 Sync System Policy
 
-Monitor context usage and prevent bloat using LAZY LOADING:
-- Track memory usage of current session
-- Archive old sessions automatically
-- Use lazy loader to keep memory efficient
-- Alert if context approaching limits
+Monitor ACTUAL context usage from ~/.claude/memory/ and detect when limits approached.
 
 Invoked by: 3-level-flow.py (Level 1 Sync System)
 
-Version: 2.0.0
+Version: 2.1.0
 """
 
 import json
 import sys
 import os
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 
 MEMORY_BASE = Path.home() / '.claude' / 'memory'
+LOGS_DIR = MEMORY_BASE / 'logs'
 SESSIONS_DIR = MEMORY_BASE / 'sessions'
-ARCHIVE_DIR = MEMORY_BASE / 'archive'
-LOG_DIR = MEMORY_BASE / 'logs'
 
-# Context limits
-MAX_CONTEXT_PERCENT = 80
-ARCHIVE_AFTER_DAYS = 30
+# Context budget (estimate: 200KB = ~7000 tokens at 3.5 chars per token)
+CONTEXT_BUDGET_KB = 200
+CONTEXT_THRESHOLD_PERCENT = 85  # Alert when 85% full
 
 
-def get_context_usage():
-    """Get current session context usage."""
+def get_memory_size_kb(path: Path) -> float:
+    """Calculate total size of directory in KB."""
+    total = 0
     try:
-        # Get current session trace size
-        session_id = os.getenv('CLAUDE_SESSION_ID', 'unknown')
-        trace_file = SESSIONS_DIR / session_id / 'flow-trace.json'
-        
-        if trace_file.exists():
-            trace_size = trace_file.stat().st_size
-            # Estimate: trace file is ~70% of session context
-            estimated_context = (trace_size / 0.7) / 1024  # KB
-            return estimated_context
-        return 0
+        if path.is_file():
+            return path.stat().st_size / 1024
+
+        for item in path.rglob('*'):
+            if item.is_file():
+                total += item.stat().st_size
+        return total / 1024
     except Exception:
         return 0
 
 
-def archive_old_sessions():
-    """Archive sessions older than threshold (frees memory)."""
-    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-    cutoff = datetime.now() - timedelta(days=ARCHIVE_AFTER_DAYS)
-    archived = 0
-    
-    for session_dir in SESSIONS_DIR.glob('SESSION-*'):
-        try:
-            state_file = session_dir / 'session-state.json'
-            if state_file.exists():
-                data = json.loads(state_file.read_text())
-                created = datetime.fromisoformat(data.get('created_at', ''))
-                
-                if created < cutoff:
-                    # Move to archive
-                    dst = ARCHIVE_DIR / session_dir.name
-                    if not dst.exists():
-                        session_dir.rename(dst)
-                        archived += 1
-        except Exception:
-            pass
-    
-    return archived
+def calculate_context_percentage() -> dict:
+    """Calculate actual context usage percentage from memory logs."""
+    try:
+        # Get size of logs directory (main context usage)
+        logs_size_kb = get_memory_size_kb(LOGS_DIR) if LOGS_DIR.exists() else 0
 
+        # Get size of sessions directory (session context)
+        sessions_size_kb = get_memory_size_kb(SESSIONS_DIR) if SESSIONS_DIR.exists() else 0
 
-def monitor_context():
-    """Monitor context usage and take action if needed."""
-    usage = get_context_usage()
-    
-    # Archive old sessions if memory getting tight
-    if usage > (MAX_CONTEXT_PERCENT * 0.9):  # 90% of limit
-        archived = archive_old_sessions()
-        action = f"Archived {archived} old sessions"
-    else:
-        action = "OK - Within limits"
-    
-    # Log status
-    status = {
-        'timestamp': datetime.now().isoformat(),
-        'context_usage_percent': min(100, (usage / MAX_CONTEXT_PERCENT) * 100),
-        'action': action,
-        'sessions_archived': archived if usage > (MAX_CONTEXT_PERCENT * 0.9) else 0
-    }
-    
-    return status
+        # Total context used
+        total_used_kb = logs_size_kb + sessions_size_kb
+
+        # Calculate percentage
+        percentage = (total_used_kb / CONTEXT_BUDGET_KB) * 100
+        percentage = min(100, max(0, percentage))  # Clamp 0-100
+
+        # Determine status
+        if percentage > CONTEXT_THRESHOLD_PERCENT:
+            status = "THRESHOLD_EXCEEDED"
+            action = f"Context at {percentage:.1f}% - archive recommended"
+        elif percentage > 70:
+            status = "HIGH"
+            action = f"Context at {percentage:.1f}% - monitor closely"
+        else:
+            status = "OK"
+            action = f"Context at {percentage:.1f}% - normal"
+
+        return {
+            "percentage": percentage,
+            "logs_size_kb": logs_size_kb,
+            "sessions_size_kb": sessions_size_kb,
+            "total_used_kb": total_used_kb,
+            "budget_kb": CONTEXT_BUDGET_KB,
+            "status": status,
+            "action": action,
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        return {
+            "percentage": 0.0,
+            "logs_size_kb": 0,
+            "sessions_size_kb": 0,
+            "total_used_kb": 0,
+            "budget_kb": CONTEXT_BUDGET_KB,
+            "status": "ERROR",
+            "action": f"Could not read context: {str(e)[:50]}",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+        }
 
 
 if __name__ == '__main__':
-    status = monitor_context()
-    
-    # Print for 3-level-flow
-    print(json.dumps({
-        'step': 'LEVEL_1_CONTEXT_MONITOR',
-        'status': status['action'],
-        'context_usage_percent': status['context_usage_percent'],
-        'passed': True
-    }))
+    # Parse arguments
+    current_status = "--current-status" in sys.argv
+
+    result = calculate_context_percentage()
+
+    if current_status:
+        # Return format expected by level1_sync.py
+        output = {
+            "status": "SUCCESS",
+            "percentage": result["percentage"],
+            "logs_size_kb": result["logs_size_kb"],
+            "sessions_size_kb": result["sessions_size_kb"],
+            "total_used_kb": result["total_used_kb"],
+            "context_status": result["status"],
+            "message": result["action"],
+            "timestamp": result["timestamp"],
+        }
+    else:
+        output = result
+
+    # Output as JSON for LangGraph
+    print(json.dumps(output))

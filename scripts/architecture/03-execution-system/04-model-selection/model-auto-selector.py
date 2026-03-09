@@ -403,22 +403,109 @@ class ModelAutoSelector:
 
 
 def main():
-    """CLI usage"""
+    """CLI usage - simplified for LangGraph"""
+    # Check for complexity argument (simple mode for LangGraph)
+    if len(sys.argv) > 1 and sys.argv[1].startswith('--complexity='):
+        # LangGraph simple mode: python model-auto-selector.py --complexity=7
+        try:
+            complexity = int(sys.argv[1].split('=')[1])
+        except (ValueError, IndexError):
+            complexity = 5
+
+        # Get context percentage if provided
+        context_pct = 50
+        for arg in sys.argv[2:]:
+            if arg.startswith('--context='):
+                try:
+                    context_pct = int(arg.split('=')[1])
+                except (ValueError, IndexError):
+                    pass
+
+        # Select model based on complexity
+        if complexity <= 3:
+            selected_model = 'haiku'
+            reason = f'Simple task (complexity {complexity}) - fast, efficient'
+        elif complexity <= 7:
+            selected_model = 'sonnet'
+            reason = f'Medium task (complexity {complexity}) - balanced power and cost'
+            # Upgrade if context is high
+            if context_pct > 75:
+                selected_model = 'opus'
+                reason = f'Medium task (complexity {complexity}) with high context ({context_pct}%) - upgraded to opus'
+        else:
+            selected_model = 'opus'
+            reason = f'Complex task (complexity {complexity}) - maximum capability needed'
+
+        # Estimate token usage
+        estimated_tokens = max(1000, complexity * 2000)
+
+        # Calculate costs
+        model_cost = {
+            'haiku': {'input': 1.0, 'output': 5.0},
+            'sonnet': {'input': 3.0, 'output': 15.0},
+            'opus': {'input': 5.0, 'output': 25.0}
+        }
+
+        costs = model_cost[selected_model]
+        input_tokens = estimated_tokens // 3
+        output_tokens = (estimated_tokens * 2) // 3
+
+        cost_estimate = {
+            'estimated_tokens': estimated_tokens,
+            'input_cost': (input_tokens / 1_000_000) * costs['input'],
+            'output_cost': (output_tokens / 1_000_000) * costs['output'],
+            'total_cost': ((input_tokens / 1_000_000) * costs['input']) + ((output_tokens / 1_000_000) * costs['output'])
+        }
+
+        # Build alternatives
+        alternatives = []
+        if selected_model != 'haiku' and complexity <= 5:
+            alternatives.append({'model': 'haiku', 'reason': 'Cost savings'})
+        if selected_model != 'sonnet' and complexity >= 5:
+            alternatives.append({'model': 'sonnet', 'reason': 'Balanced option'})
+        if selected_model != 'opus' and complexity >= 8:
+            alternatives.append({'model': 'opus', 'reason': 'Maximum capability'})
+
+        output = {
+            'selected_model': selected_model,
+            'reason': reason,
+            'complexity': complexity,
+            'context_percentage': context_pct,
+            'alternatives': alternatives,
+            'cost_estimate': {
+                'total_cost': f'${cost_estimate["total_cost"]:.4f}',
+                'input_cost': f'${cost_estimate["input_cost"]:.4f}',
+                'output_cost': f'${cost_estimate["output_cost"]:.4f}',
+                'estimated_tokens': estimated_tokens
+            }
+        }
+
+        print(json.dumps(output))
+        sys.exit(0)
+
+    # Original full mode
     import argparse
 
     parser = argparse.ArgumentParser(description='Model Auto-Selector (Step 6)')
-    parser.add_argument('--task-info', required=True, help='Task information (JSON)')
+    parser.add_argument('--task-info', help='Task information (JSON)')
     parser.add_argument('--estimated-tokens', type=int, default=10000, help='Estimated token usage')
     parser.add_argument('--no-override', action='store_true', help='Disable override option')
 
     if len(sys.argv) < 2:
         sys.exit(0)
-    args = parser.parse_args()
+
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        sys.exit(0)
+
+    if not args.task_info:
+        sys.exit(0)
 
     try:
         task_info = json.loads(args.task_info)
     except json.JSONDecodeError:
-        print(f"❌ Invalid JSON task info: {args.task_info}")
+        print(f"Invalid JSON task info")
         sys.exit(1)
 
     selector = ModelAutoSelector()

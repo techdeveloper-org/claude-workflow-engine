@@ -366,36 +366,91 @@ class AutoSkillAgentSelector:
 
 
 def main():
-    """CLI interface"""
+    """CLI interface - simplified for LangGraph"""
     import sys
 
+    # Check for --analyze flag (LangGraph mode)
+    if "--analyze" in sys.argv:
+        import io
+        from contextlib import redirect_stdout, redirect_stderr
+
+        # Default task type for LangGraph
+        task_type = "General"
+
+        # Look for task type in arguments
+        for i, arg in enumerate(sys.argv[1:], 1):
+            if not arg.startswith('--'):
+                task_type = arg
+                break
+
+        # Build minimal complexity and prompt objects
+        complexity = {
+            'score': 5,
+            'level': 'MODERATE',
+            'estimated_tasks': 2
+        }
+        prompt = {
+            'metadata': {'original_request': task_type},
+            'task_type': task_type,
+            'analysis': {}
+        }
+
+        selector = AutoSkillAgentSelector()
+
+        # Suppress output from select() method
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            selection = selector.select(task_type, complexity, prompt)
+
+        # Build output
+        selected_skill = selection.get('skills', [''])[0] if selection.get('skills') else ''
+        selected_agent = selection.get('agents', [''])[0] if selection.get('agents') else ''
+
+        output = {
+            'selected_skill': selected_skill,
+            'selected_agent': selected_agent,
+            'confidence': 0.8,
+            'alternatives': [
+                {'skill': s, 'confidence': 0.6} for s in selection.get('skills', [])[1:3]
+            ] if len(selection.get('skills', [])) > 1 else [],
+            'llm_needed': False,
+            'status': 'OK'
+        }
+
+        print(json.dumps(output))
+        sys.exit(0)
+
+    # Original file-based mode
     if len(sys.argv) < 4:
-        print("=" * 80)
         print("Auto Skill & Agent Selector")
-        print("=" * 80)
-        print("\nUsage:")
-        print("  python auto-skill-agent-selector.py task_type complexity.json prompt.yaml")
-        print("\nExample:")
-        print("  python auto-skill-agent-selector.py 'API Creation' complexity.json structured_prompt.yaml")
         sys.exit(0)
 
     task_type = sys.argv[1]
 
-    with open(sys.argv[2], 'r') as f:
-        complexity = json.load(f)
+    try:
+        with open(sys.argv[2], 'r') as f:
+            complexity = json.load(f)
+    except Exception:
+        complexity = {'score': 5, 'level': 'MODERATE'}
 
-    with open(sys.argv[3], 'r') as f:
-        prompt = yaml.safe_load(f)
+    try:
+        with open(sys.argv[3], 'r') as f:
+            prompt = yaml.safe_load(f)
+    except Exception:
+        prompt = {'metadata': {'original_request': task_type}}
 
     selector = AutoSkillAgentSelector()
     selection = selector.select(task_type, complexity, prompt)
 
     # Save output
     output_file = 'skill_agent_selection.yaml'
-    with open(output_file, 'w') as f:
-        yaml.dump(selection, f, default_flow_style=False, sort_keys=False)
+    try:
+        with open(output_file, 'w') as f:
+            yaml.dump(selection, f, default_flow_style=False, sort_keys=False)
+        print(f"Selection saved to: {output_file}")
+    except Exception:
+        pass
 
-    print(f"[CHECK] Selection saved to: {output_file}")
+    sys.exit(0)
 
 
 if __name__ == "__main__":

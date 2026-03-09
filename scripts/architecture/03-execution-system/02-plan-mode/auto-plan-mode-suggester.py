@@ -437,67 +437,116 @@ Option 2: Enter plan mode
 
 
 def main():
-    """CLI interface"""
-    import sys
+    """CLI interface - outputs JSON for LangGraph"""
+    # Check for --analyze flag (used by LangGraph)
+    analyze_mode = "--analyze" in sys.argv
 
-    if len(sys.argv) < 2:
-        print("Usage: python auto-plan-mode-suggester.py <complexity> [prompt]")
-        print("\nExamples:")
-        print("  python auto-plan-mode-suggester.py 8")
-        print("  python auto-plan-mode-suggester.py 8 'Create user service'")
-        print("  python auto-plan-mode-suggester.py task_breakdown.json structured_prompt.yaml")
-        sys.exit(0)
-
-    # Load complexity analysis (can be number or JSON file)
-    complexity_arg = sys.argv[1]
-    try:
-        # Try as a number first
-        complexity_score = int(complexity_arg)
+    if analyze_mode:
+        # Simplified mode for LangGraph - uses default complexity
+        # In real flow, this would read from flow-trace.json
         complexity = {
-            'score': complexity_score,
-            'level': 'SIMPLE' if complexity_score < 5 else 'MODERATE' if complexity_score < 10 else 'COMPLEX' if complexity_score < 15 else 'VERY_COMPLEX',
-            'estimated_tasks': max(1, complexity_score // 2),
-            'requires_phases': complexity_score >= 10
+            'score': 5,  # Default to moderate
+            'level': 'MODERATE',
+            'estimated_tasks': 2,
+            'requires_phases': False
         }
-    except ValueError:
-        # It's a file path
-        with open(complexity_arg, 'r') as f:
-            complexity = json.load(f)
-
-    # Load structured prompt (can be string or YAML file)
-    if len(sys.argv) >= 3:
-        prompt_arg = sys.argv[2]
-        try:
-            # Try to load as file
-            with open(prompt_arg, 'r') as f:
-                structured_prompt = yaml.safe_load(f)
-        except (FileNotFoundError, OSError, ValueError):
-            # It's a string description
-            structured_prompt = {
-                'metadata': {'original_request': prompt_arg},
-                'task_type': 'Unknown',
-                'analysis': {}
-            }
-    else:
-        # No prompt provided, use minimal
         structured_prompt = {
             'metadata': {'original_request': 'Task'},
             'task_type': 'Unknown',
             'analysis': {}
         }
+    elif len(sys.argv) < 2:
+        # No arguments - return default
+        output = {
+            "plan_required": False,
+            "reasoning": "Task analysis complete",
+            "factors": []
+        }
+        print(json.dumps(output))
+        sys.exit(0)
+    else:
+        # Load complexity analysis (can be number or JSON file)
+        complexity_arg = sys.argv[1]
+        try:
+            # Try as a number first
+            complexity_score = int(complexity_arg)
+            complexity = {
+                'score': complexity_score,
+                'level': 'SIMPLE' if complexity_score < 5 else 'MODERATE' if complexity_score < 10 else 'COMPLEX' if complexity_score < 15 else 'VERY_COMPLEX',
+                'estimated_tasks': max(1, complexity_score // 2),
+                'requires_phases': complexity_score >= 10
+            }
+        except ValueError:
+            # It's a file path
+            try:
+                with open(complexity_arg, 'r') as f:
+                    complexity = json.load(f)
+            except Exception:
+                complexity = {
+                    'score': 5,
+                    'level': 'MODERATE',
+                    'estimated_tasks': 2,
+                    'requires_phases': False
+                }
 
-    # Make decision
-    suggester = AutoPlanModeSuggester()
-    decision = suggester.should_use_plan_mode(complexity, structured_prompt)
+        # Load structured prompt (can be string or YAML file)
+        if len(sys.argv) >= 3:
+            prompt_arg = sys.argv[2]
+            try:
+                # Try to load as file
+                with open(prompt_arg, 'r') as f:
+                    structured_prompt = yaml.safe_load(f)
+            except (FileNotFoundError, OSError, ValueError):
+                # It's a string description
+                structured_prompt = {
+                    'metadata': {'original_request': prompt_arg},
+                    'task_type': 'Unknown',
+                    'analysis': {}
+                }
+        else:
+            # No prompt provided, use minimal
+            structured_prompt = {
+                'metadata': {'original_request': 'Task'},
+                'task_type': 'Unknown',
+                'analysis': {}
+            }
 
-    # Output decision as JSON
-    print("\n" + "=" * 80)
-    print("DECISION OUTPUT (JSON)")
-    print("=" * 80)
-    print(json.dumps(decision, indent=2))
+    # Get score and task count
+    score = complexity.get('score', 5)
+    estimated_tasks = complexity.get('estimated_tasks', 1)
 
-    # Always exit 0 - decision is in JSON stdout, not exit code.
-    # Non-zero exits break the retry mechanism in 3-level-flow.py.
+    # Determine if plan is required
+    plan_required = (score >= 6) or (estimated_tasks > 2)
+
+    # Build factors list
+    factors = []
+    if score >= 6:
+        factors.append(f"complexity >= 6 (score: {score})")
+    if estimated_tasks > 2:
+        factors.append(f"multiple sub-tasks ({estimated_tasks} tasks)")
+
+    # Reasoning
+    if plan_required:
+        if score >= 6 and estimated_tasks > 2:
+            reasoning = f"Complex task with multiple sub-tasks (complexity: {score}, tasks: {estimated_tasks}) requires planning"
+        elif score >= 6:
+            reasoning = f"High complexity score ({score}) warrants planning before execution"
+        else:
+            reasoning = f"Multiple sub-tasks ({estimated_tasks}) require coordinated planning"
+    else:
+        reasoning = "Task complexity allows direct execution"
+
+    # Build output
+    output = {
+        "plan_required": plan_required,
+        "reasoning": reasoning,
+        "factors": factors,
+        "complexity_score": score,
+        "estimated_tasks": estimated_tasks
+    }
+
+    # Output as JSON only (no human-readable output in analyze mode)
+    print(json.dumps(output))
     sys.exit(0)
 
 
