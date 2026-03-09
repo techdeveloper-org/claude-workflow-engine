@@ -68,12 +68,36 @@ def _get_project_root() -> str:
     return str(Path.cwd())
 
 
-def run_langgraph_engine(session_id: str = "", project_root: str = "") -> dict:
+def _capture_user_message() -> str:
+    """Capture user message from stdin or environment.
+
+    Hook passes user message via stdin when script is executed.
+    Fallback to CLAUDE_USER_MESSAGE environment variable.
+    """
+    import sys
+    user_message = ""
+
+    # Try reading from stdin (hook typically pipes it here)
+    if not sys.stdin.isatty():
+        try:
+            user_message = sys.stdin.read().strip()
+            if user_message:
+                return user_message
+        except Exception:
+            pass
+
+    # Fallback to environment variable (for testing or alternative invocation)
+    user_message = os.environ.get("CLAUDE_USER_MESSAGE", "").strip()
+    return user_message
+
+
+def run_langgraph_engine(session_id: str = "", project_root: str = "", user_message: str = "") -> dict:
     """Execute the LangGraph 3-level flow engine.
 
     Args:
         session_id: Session identifier (auto-generated if empty)
         project_root: Project directory (defaults to cwd)
+        user_message: User's actual task/request (auto-captured if empty)
 
     Returns:
         Final FlowState as dict
@@ -89,14 +113,20 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "") -> dict:
         session_id = _generate_session_id()
     if not project_root:
         project_root = _get_project_root()
+    if not user_message:
+        user_message = _capture_user_message()
 
     if DEBUG:
         print(f"[DEBUG] LangGraph Engine v{VERSION}")
         print(f"[DEBUG] Session: {session_id}")
         print(f"[DEBUG] Project: {project_root}")
+        if user_message:
+            print(f"[DEBUG] Message: {user_message[:100]}..." if len(user_message) > 100 else f"[DEBUG] Message: {user_message}")
+        else:
+            print(f"[DEBUG] WARNING: No user message captured!")
 
     # Create initial state (session_id now immutable via Annotated reducer)
-    initial_state = create_initial_state(session_id, project_root)
+    initial_state = create_initial_state(session_id, project_root, user_message)
 
     # Create and invoke graph
     graph = create_flow_graph()
@@ -132,12 +162,15 @@ def main():
         # Parse arguments
         session_id = ""
         project_root = ""
+        user_message = ""
 
         for arg in sys.argv[1:]:
             if arg.startswith("--session-id="):
                 session_id = arg.split("=", 1)[1]
             elif arg.startswith("--project="):
                 project_root = arg.split("=", 1)[1]
+            elif arg.startswith("--message="):
+                user_message = arg.split("=", 1)[1]
             elif arg in ("--summary", "-s"):
                 DEBUG = True
             elif arg in ("--help", "-h"):
@@ -146,12 +179,13 @@ def main():
                 print("Options:")
                 print("  --session-id=ID    Session identifier")
                 print("  --project=PATH     Project directory")
+                print("  --message=MSG      User message/task")
                 print("  --summary,-s       Print summary output")
                 print("  --help,-h          Show this help")
                 sys.exit(0)
 
-        # Run engine
-        result = run_langgraph_engine(session_id, project_root)
+        # Run engine (user_message auto-captured from stdin if not provided)
+        result = run_langgraph_engine(session_id, project_root, user_message)
 
         # Write flow-trace.json (backward compatible format)
         trace_file = write_flow_trace_json(result)

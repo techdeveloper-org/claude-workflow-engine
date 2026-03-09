@@ -38,6 +38,12 @@ class FlowState(TypedDict, total=False):
     is_fresh_project: Annotated[bool, _keep_first_value]  # Immutable - detected once
 
     # ===========================================================================
+    # USER INPUT (immutable - captured at entry)
+    # ===========================================================================
+    user_message: Annotated[str, _keep_first_value]  # User's actual task/request
+    user_message_length: Annotated[int, _keep_first_value]  # Length of message for context tracking
+
+    # ===========================================================================
     # LEVEL -1: AUTO-FIX ENFORCEMENT
     # ===========================================================================
     level_minus1_status: str           # OK / BLOCKED / SKIPPED

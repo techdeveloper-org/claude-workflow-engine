@@ -277,15 +277,16 @@ def create_flow_graph():
     return compiled_graph
 
 
-def create_initial_state(session_id: str = "", project_root: str = "") -> FlowState:
+def create_initial_state(session_id: str = "", project_root: str = "", user_message: str = "") -> FlowState:
     """Create initial FlowState for a new execution.
 
     Args:
         session_id: Session identifier (auto-generated if empty)
         project_root: Project directory path
+        user_message: User's actual task/request
 
     Returns:
-        Initialized FlowState
+        Initialized FlowState with user message for all steps
     """
     if not session_id:
         import uuid
@@ -298,10 +299,13 @@ def create_initial_state(session_id: str = "", project_root: str = "") -> FlowSt
     # ONLY initialize immutable fields (with _keep_first_value reducer)
     # All other fields will be created/updated by nodes
     return FlowState(
-        # Immutable session info only
+        # Immutable session info
         session_id=session_id,
         timestamp=datetime.now().isoformat(),
         project_root=project_root,
+        # User input - critical for all execution steps
+        user_message=user_message,
+        user_message_length=len(user_message) if user_message else 0,
         # Other fields will be added by nodes as needed
     )
 
@@ -309,17 +313,19 @@ def create_initial_state(session_id: str = "", project_root: str = "") -> FlowSt
 def invoke_flow(
     session_id: str = "",
     project_root: str = "",
+    user_message: str = "",
 ) -> FlowState:
     """Convenience function to create and invoke flow in one call.
 
     Args:
         session_id: Session identifier
         project_root: Project directory
+        user_message: User's actual task/request
 
     Returns:
         Final FlowState after execution
     """
-    initial_state = create_initial_state(session_id, project_root)
+    initial_state = create_initial_state(session_id, project_root, user_message)
     graph = create_flow_graph()
 
     from .checkpointer import get_invoke_config

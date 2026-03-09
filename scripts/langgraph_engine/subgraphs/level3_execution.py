@@ -80,23 +80,37 @@ def call_execution_script(script_name: str, args: list = None) -> dict:
 
 
 def step0_prompt_generation(state: FlowState) -> dict:
-    """Step 0: Call prompt-generator.py"""
-    result = call_execution_script("prompt-generator")
+    """Step 0: Call prompt-generator.py with actual user message"""
+    user_message = state.get("user_message", "")
+
+    # Pass user message as argument to script
+    args = [user_message] if user_message else []
+    result = call_execution_script("prompt-generator", args)
+
     return {
         "step0_prompt": {
             "task_type": result.get("task_type", "general"),
             "complexity": result.get("complexity", 5),
+            "reasoning": result.get("reasoning", ""),
             "script_output": result
         }
     }
 
 
 def step1_task_breakdown(state: FlowState) -> dict:
-    """Step 1: Call task-auto-analyzer.py"""
-    result = call_execution_script("task-auto-analyzer")
+    """Step 1: Call task-auto-analyzer.py with task type from step 0"""
+    user_message = state.get("user_message", "")
+    task_type = state.get("step0_prompt", {}).get("task_type", "General Task")
+
+    # Pass both user message and task type for better analysis
+    args = [user_message] if user_message else []
+    args.extend([f"--task-type={task_type}"])
+    result = call_execution_script("task-auto-analyzer", args)
+
     return {
         "step1_tasks": {
             "count": result.get("task_count", 1),
+            "tasks": result.get("tasks", []),
             "script_output": result
         },
         "step1_task_count": result.get("task_count", 1)
@@ -104,11 +118,21 @@ def step1_task_breakdown(state: FlowState) -> dict:
 
 
 def step2_plan_mode_decision(state: FlowState) -> dict:
-    """Step 2: Call auto-plan-mode-suggester.py"""
-    result = call_execution_script("auto-plan-mode-suggester", ["--analyze"])
+    """Step 2: Call auto-plan-mode-suggester.py with complexity and task count"""
+    complexity = state.get("step0_prompt", {}).get("complexity", 5)
+    task_count = state.get("step1_task_count", 1)
+
+    args = [
+        "--analyze",
+        f"--complexity={complexity}",
+        f"--tasks={task_count}"
+    ]
+    result = call_execution_script("auto-plan-mode-suggester", args)
+
     return {
         "step2_plan_mode": result.get("plan_required", False),
-        "step2_reasoning": result.get("reasoning", "Task analysis complete")
+        "step2_reasoning": result.get("reasoning", "Task analysis complete"),
+        "step2_complexity_score": result.get("complexity_score", complexity)
     }
 
 
@@ -132,12 +156,23 @@ def step4_model_selection(state: FlowState) -> dict:
 
 
 def step5_skill_agent_selection(state: FlowState) -> dict:
-    """Step 5: Call auto-skill-agent-selector.py"""
-    result = call_execution_script("auto-skill-agent-selector", ["--analyze"])
+    """Step 5: Call auto-skill-agent-selector.py with task type and complexity"""
+    task_type = state.get("step0_prompt", {}).get("task_type", "General Task")
+    complexity = state.get("step0_prompt", {}).get("complexity", 5)
+
+    args = [
+        "--analyze",
+        f"--task-type={task_type}",
+        f"--complexity={complexity}"
+    ]
+    result = call_execution_script("auto-skill-agent-selector", args)
+
     return {
         "step5_skill": result.get("selected_skill", ""),
         "step5_agent": result.get("selected_agent", ""),
         "step5_reasoning": result.get("reasoning", ""),
+        "step5_confidence": result.get("confidence", 0.5),
+        "step5_alternatives": result.get("alternatives", []),
         "step5_llm_query_needed": result.get("llm_needed", False)
     }
 
@@ -154,11 +189,24 @@ def step6_tool_optimization(state: FlowState) -> dict:
 
 
 def step7_auto_recommendations(state: FlowState) -> dict:
-    """Step 7: Auto recommendations with Ollama"""
+    """Step 7: Auto recommendations with Ollama based on task type"""
     task_type = state.get("step0_prompt", {}).get("task_type", "General")
-    result = call_execution_script("recommendations-step", [task_type])
+    user_message = state.get("user_message", "")
+    complexity = state.get("step0_prompt", {}).get("complexity", 5)
+
+    args = [
+        f"--task-type={task_type}",
+        f"--complexity={complexity}"
+    ]
+    if user_message:
+        args.append(f"--context={user_message[:200]}")  # Pass first 200 chars as context
+
+    result = call_execution_script("recommendations-step", args)
+
     return {
-        "step7_recommendations": result.get("recommendations", [])
+        "step7_recommendations": result.get("recommendations", []),
+        "step7_best_practices": result.get("best_practices", []),
+        "step7_warnings": result.get("warnings", [])
     }
 
 
