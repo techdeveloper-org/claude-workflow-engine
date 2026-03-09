@@ -770,18 +770,16 @@ def create_github_issue(task_id, subject, description):
                 # because each issue should have its own dedicated branch
                 _debug_log_gh(f"[GH-CREATE] Creating branch for this issue ({issue_specific_branch})...")
                 branch = create_issue_branch(issue_number, subject, issue_type)
-                    _debug_log_gh(f"[GH-CREATE] create_issue_branch() returned: {branch}")
-                    if branch:
-                        _debug_log_gh(f"[GH-CREATE] ✓ Branch created successfully: {branch}")
-                        try:
-                            sys.stdout.write('[GH] Branch: ' + branch + ' (auto-created with issue #' + str(issue_number) + ')\n')
-                            sys.stdout.flush()
-                        except Exception as e:
-                            _debug_log_gh(f"[GH-CREATE] Could not write stdout: {str(e)[:100]}")
-                    else:
-                        _debug_log_gh(f"[GH-CREATE] ✗ Branch creation returned None")
+                _debug_log_gh(f"[GH-CREATE] create_issue_branch() returned: {branch}")
+                if branch:
+                    _debug_log_gh(f"[GH-CREATE] ✓ Branch created successfully: {branch}")
+                    try:
+                        sys.stdout.write('[GH] Branch: ' + branch + ' (auto-created with issue #' + str(issue_number) + ')\n')
+                        sys.stdout.flush()
+                    except Exception as e:
+                        _debug_log_gh(f"[GH-CREATE] Could not write stdout: {str(e)[:100]}")
                 else:
-                    _debug_log_gh(f"[GH-CREATE] ⚠️ Branch already exists ({existing_branch}), skipping creation")
+                    _debug_log_gh(f"[GH-CREATE] ✗ Branch creation returned None")
             else:
                 _debug_log_gh(f"[GH-CREATE] ✗ issue_number is falsy, skipping branch creation")
 
