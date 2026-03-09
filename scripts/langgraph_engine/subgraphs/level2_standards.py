@@ -210,17 +210,17 @@ def node_java_standards(state: FlowState) -> FlowState:
 # ============================================================================
 
 
-def level2_merge_node(state: FlowState) -> FlowState:
+def level2_merge_node(state: FlowState) -> dict:
     """Merge Level 2 results."""
+    updates = {}
     if state.get("standards_loaded"):
-        state["level2_status"] = "OK"
+        updates["level2_status"] = "OK"
     else:
-        state["level2_status"] = "FAILED"
-        if "errors" not in state:
-            state["errors"] = []
-        state["errors"].append("Level 2: Standards loading failed")
+        updates["level2_status"] = "FAILED"
+        existing_errors = state.get("errors") or []
+        updates["errors"] = list(existing_errors) + ["Level 2: Standards loading failed"]
 
-    return state
+    return updates
 
 
 # ============================================================================

@@ -12,6 +12,15 @@ from typing import TypedDict, Optional, List, Dict, Any, Annotated
 from datetime import datetime
 
 
+def _keep_first_value(current_value, update_value):
+    """Reducer for immutable fields - always keep the first value.
+
+    Used for session_id and other fields that should never change.
+    This prevents LangGraph from complaining about multiple updates.
+    """
+    return current_value if current_value is not None else update_value
+
+
 class FlowState(TypedDict, total=False):
     """Complete state for 3-level architecture execution.
 
@@ -20,13 +29,13 @@ class FlowState(TypedDict, total=False):
     """
 
     # ===========================================================================
-    # SESSION IDENTIFICATION
+    # SESSION IDENTIFICATION (all immutable - use reducer)
     # ===========================================================================
-    session_id: str                    # Unique session identifier
-    timestamp: str                     # ISO format timestamp when session started
-    project_root: str                  # Project directory being analyzed
-    is_java_project: bool              # True if project contains Java (pom.xml, build.gradle)
-    is_fresh_project: bool             # True if no README/CLAUDE.md found (new project)
+    session_id: Annotated[str, _keep_first_value]  # Immutable - never changes after init
+    timestamp: Annotated[str, _keep_first_value]   # Immutable - set at session start
+    project_root: Annotated[str, _keep_first_value]  # Immutable - project being analyzed
+    is_java_project: Annotated[bool, _keep_first_value]  # Immutable - detected once
+    is_fresh_project: Annotated[bool, _keep_first_value]  # Immutable - detected once
 
     # ===========================================================================
     # LEVEL -1: AUTO-FIX ENFORCEMENT

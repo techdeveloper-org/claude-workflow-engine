@@ -41,11 +41,9 @@ def node_unicode_fix(state: FlowState) -> dict:
     Returns:
         Updated state with unicode_check result
     """
-    # NOTE: session_id will be set by 3-level-flow.py before invoking
-    # Nodes should preserve it if it exists
+    # NOTE: session_id is immutable (Annotated with _keep_first_value reducer)
+    # Nodes should NOT return it - let LangGraph manage it
     updates = {}
-    if "session_id" in state:
-        updates["session_id"] = state["session_id"]
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
@@ -77,7 +75,8 @@ def node_unicode_fix(state: FlowState) -> dict:
 
         updates["unicode_check"] = True
         if applied:
-            updates["auto_fix_applied"] = state.get("auto_fix_applied", []) + ["Unicode UTF-8 encoding"]
+            existing = state.get("auto_fix_applied") or []
+            updates["auto_fix_applied"] = list(existing) + ["Unicode UTF-8 encoding"]
         return updates
 
     except Exception as e:
@@ -100,8 +99,6 @@ def node_encoding_validation(state: FlowState) -> dict:
         Updated state with encoding_check result (only changed fields)
     """
     updates = {}
-    if "session_id" in state:
-        updates["session_id"] = state["session_id"]
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
@@ -210,21 +207,19 @@ def level_minus1_merge_node(state: FlowState) -> dict:
     windows_path_ok = state.get("windows_path_check", False)
 
     updates = {}
-    if "session_id" in state:
-        updates["session_id"] = state["session_id"]
 
     # All checks must pass for Level -1 to be OK
     if unicode_ok and encoding_ok and windows_path_ok:
         updates["level_minus1_status"] = "OK"
     else:
         updates["level_minus1_status"] = "BLOCKED"
-        errors = state.get("errors", [])
+        errors = state.get("errors") or []  # Handle None case
         if not unicode_ok:
-            errors = errors + [f"Unicode check failed: {state.get('unicode_check_error')}"]
+            errors = list(errors) + [f"Unicode check failed: {state.get('unicode_check_error')}"]
         if not encoding_ok:
-            errors = errors + [f"Encoding check failed: {state.get('encoding_check_error')}"]
+            errors = list(errors) + [f"Encoding check failed: {state.get('encoding_check_error')}"]
         if not windows_path_ok:
-            errors = errors + [f"Windows path check failed: {state.get('windows_path_check_error')}"]
+            errors = list(errors) + [f"Windows path check failed: {state.get('windows_path_check_error')}"]
         updates["errors"] = errors
 
     return updates

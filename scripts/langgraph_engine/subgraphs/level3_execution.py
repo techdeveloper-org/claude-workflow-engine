@@ -189,19 +189,19 @@ def step11_failure_prevention(state: FlowState) -> FlowState:
 # ============================================================================
 
 
-def level3_merge_node(state: FlowState) -> FlowState:
+def level3_merge_node(state: FlowState) -> dict:
     """Determine final status based on all 12 steps."""
     error_steps = [k for k in state if k.endswith("_error") and state.get(k)]
 
+    updates = {}
     if error_steps:
-        state["final_status"] = "FAILED"
-        if "errors" not in state:
-            state["errors"] = []
-        state["errors"].append(f"Level 3: {len(error_steps)} steps had errors")
+        updates["final_status"] = "FAILED"
+        existing_errors = state.get("errors") or []
+        updates["errors"] = list(existing_errors) + [f"Level 3: {len(error_steps)} steps had errors"]
     else:
-        state["final_status"] = "OK"
+        updates["final_status"] = "OK"
 
-    return state
+    return updates
 
 
 # ============================================================================

@@ -233,7 +233,7 @@ def node_patterns_detector(state: FlowState) -> FlowState:
 # ============================================================================
 
 
-def level1_merge_node(state: FlowState) -> FlowState:
+def level1_merge_node(state: FlowState) -> dict:
     """Merge results from all 4 Level 1 tasks."""
     loaded_count = sum([
         state.get("context_loaded", False),
@@ -242,21 +242,21 @@ def level1_merge_node(state: FlowState) -> FlowState:
         1,  # patterns always counted
     ])
 
+    updates = {}
     if loaded_count == 4:
-        state["level1_status"] = "OK"
+        updates["level1_status"] = "OK"
     elif loaded_count >= 2:
-        state["level1_status"] = "PARTIAL"
+        updates["level1_status"] = "PARTIAL"
     else:
-        state["level1_status"] = "FAILED"
-        if "errors" not in state:
-            state["errors"] = []
-        state["errors"].append("Level 1: Policy script execution failed")
+        updates["level1_status"] = "FAILED"
+        existing_errors = state.get("errors") or []
+        updates["errors"] = list(existing_errors) + ["Level 1: Policy script execution failed"]
 
     # Check context threshold
     if state.get("context_percentage", 0) > 85:
-        state["context_threshold_exceeded"] = True
+        updates["context_threshold_exceeded"] = True
 
-    return state
+    return updates
 
 
 # ============================================================================

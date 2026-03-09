@@ -105,9 +105,8 @@ def route_standards_loading(state: FlowState) -> Literal["level2_java_standards"
 def emergency_archive(state: FlowState) -> dict:
     """Emergency archival when context threshold exceeded."""
     updates = {}
-    if "session_id" in state:
-        updates["session_id"] = state["session_id"]
-    warnings = state.get("warnings", []) + [
+    existing_warnings = state.get("warnings") or []
+    warnings = list(existing_warnings) + [
         f"Context usage high ({state.get('context_percentage', 0):.1f}%) - "
         "archive recommended"
     ]
@@ -118,8 +117,6 @@ def emergency_archive(state: FlowState) -> dict:
 def output_node(state: FlowState) -> dict:
     """Final output node - determines completion status."""
     updates = {}
-    if "session_id" in state:
-        updates["session_id"] = state["session_id"]
     if state.get("final_status") == "pending":
         # Check for blocking conditions
         if state.get("level_minus1_status") == "BLOCKED":
@@ -303,56 +300,14 @@ def create_initial_state(session_id: str = "", project_root: str = "") -> FlowSt
     if not project_root:
         project_root = str(Path.cwd())
 
+    # ONLY initialize immutable fields (with _keep_first_value reducer)
+    # All other fields will be created/updated by nodes
     return FlowState(
-        # DON'T initialize session_id here to avoid LangGraph conflict
-        # session_id will be set by nodes on first execution
-        # session_id=session_id,
+        # Immutable session info only
+        session_id=session_id,
         timestamp=datetime.now().isoformat(),
         project_root=project_root,
-        is_java_project=False,
-        is_fresh_project=False,
-        # Level -1
-        level_minus1_status="pending",
-        unicode_check=False,
-        encoding_check=False,
-        windows_path_check=False,
-        auto_fix_applied=[],
-        # Level 1
-        context_loaded=False,
-        context_percentage=0.0,
-        context_threshold_exceeded=False,
-        session_chain_loaded=False,
-        session_history=[],
-        preferences_loaded=False,
-        preferences_data={},
-        patterns_detected=[],
-        level1_status="pending",
-        # Level 2
-        standards_loaded=False,
-        standards_count=0,
-        java_standards_loaded=False,
-        level2_status="pending",
-        # Level 3
-        step0_prompt={},
-        step1_tasks={},
-        step2_plan_mode=False,
-        step3_context_read=False,
-        step4_model="haiku",
-        step5_skill="",
-        step5_agent="",
-        step6_tool_hints=[],
-        step7_recommendations=[],
-        step8_progress={},
-        step9_commit_ready=False,
-        step10_session={},
-        failure_prevention={},
-        # Output
-        final_status="pending",
-        pipeline=[],
-        errors=[],
-        warnings=[],
-        execution_time_ms=0,
-        level_durations={},
+        # Other fields will be added by nodes as needed
     )
 
 
