@@ -85,9 +85,12 @@ class ContextReader:
             'readme': 'README.md',
             'changelog': 'CHANGELOG.md',
             'version': 'VERSION',
-            'srs': ['SRS.md', 'SYSTEM_REQUIREMENTS_SPECIFICATION.md'],
+            'srs': 'SYSTEM_REQUIREMENTS_SPECIFICATION.md',
             'claude_md': 'CLAUDE.md'
         }
+        # MANDATORY for enforcement: ALL 3 MUST EXIST
+        # Policy: "Read README + SYSTEM_REQUIREMENTS_SPECIFICATION + CLAUDE.md before coding"
+        self.required_for_enforcement = {'readme', 'srs', 'claude_md'}
         self.files_found = {}
         self.context = {}
         self.metadata = {}
@@ -183,11 +186,23 @@ class ContextReader:
         self.files_found['claude_md']['size_bytes'] = path.stat().st_size if path.exists() else 0
 
     def extract_metadata(self):
-        """Extract project metadata from context files."""
+        """Extract project metadata from context files.
+
+        ENFORCEMENT LOGIC:
+        - is_new_project = True if ANY of the 3 required files are MISSING
+        - is_new_project = False only if ALL 3 required files EXIST
+        - enforcement_applies = NOT is_new_project
+        """
+        # Check if ALL required files exist
+        all_required_exist = all(
+            self.files_found.get(key, {}).get('exists', False)
+            for key in self.required_for_enforcement
+        )
+
         self.metadata = {
             'tech_stack': [],
             'project_type': 'Unknown',
-            'is_new_project': not self.detect_project()
+            'is_new_project': not all_required_exist  # True if any file missing
         }
 
         # Extract project name and type from README
