@@ -32,6 +32,18 @@ try:
     from metrics_emitter import (emit_hook_execution, emit_policy_step,
                                   emit_flag_lifecycle, emit_enforcement_event)
     _METRICS_AVAILABLE = True
+
+# Phase 2: Lazy loading APIs
+try:
+    from trace_api import TraceAPI, rotate_trace_before_save
+    from session_api import SessionAPI
+    _LAZY_LOADING_AVAILABLE = True
+except ImportError:
+    _LAZY_LOADING_AVAILABLE = False
+    def rotate_trace_before_save(trace, max_entries=30):
+        if 'pipeline' in trace and len(trace['pipeline']) > max_entries:
+            trace['pipeline'] = trace['pipeline'][-max_entries:]
+        return trace
 except Exception:
     # Define no-ops so call sites never need guards
     def emit_hook_execution(*a, **kw):
@@ -5053,6 +5065,17 @@ def _save_trace(trace, session_log_dir, flow_start):
 
             # 2. Keep a "latest" copy for easy access by other hooks
             write_json(MEMORY_BASE / 'logs' / 'latest-flow-trace.json', trace)
+
+            # Phase 2: Create trace index for lazy loading
+            if _LAZY_LOADING_AVAILABLE:
+                try:
+                    session_id = trace.get('meta', {}).get('session_id')
+                    if session_id:
+                        from trace_api import TraceIndex
+                        idx = TraceIndex(session_id)
+                        idx._build_index()  # Build and save index
+                except Exception:
+                    pass
     except Exception:
         pass
 
