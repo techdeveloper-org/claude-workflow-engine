@@ -164,7 +164,7 @@ def main():
     loader.save_index()
     print("[INDEX] Saved to ~/.claude/memory/session-index.json")
     print()
-    print("✅ Lazy loading active! Context bloat prevented.")
+    print("[OK] Lazy loading active! Context bloat prevented.")
 
 
 if __name__ == '__main__':

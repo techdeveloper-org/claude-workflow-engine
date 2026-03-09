@@ -1630,7 +1630,7 @@ def main():
         tool_input = {}
 
     # CRITICAL: VERIFY SKILL/AGENT EXISTS BEFORE INVOCATION (Step 3.5)
-    # LLM has skill definitions → decides to use one → we verify it exists
+    # LLM has skill definitions ? decides to use one ? we verify it exists
     if tool_name in ('Skill', 'Agent'):
         try:
             skill_or_agent_name = tool_input.get('skill', tool_input.get('agent', ''))

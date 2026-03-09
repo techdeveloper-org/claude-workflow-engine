@@ -511,22 +511,22 @@ def create_github_issue(task_id, subject, description):
 
         _debug_log_gh(f"[GH-CREATE] Checking if gh is available...")
         if not is_gh_available():
-            _debug_log_gh(f"[GH-CREATE] ✗ gh not available, returning None")
+            _debug_log_gh(f"[GH-CREATE] [FAIL] gh not available, returning None")
             return None
-        _debug_log_gh(f"[GH-CREATE] ✓ gh is available")
+        _debug_log_gh(f"[GH-CREATE] [PASS] gh is available")
 
         _debug_log_gh(f"[GH-CREATE] Checking ops count (MAX={MAX_OPS_PER_SESSION})...")
         ops_count = _get_ops_count()
         _debug_log_gh(f"[GH-CREATE] ops_count={ops_count}")
         if ops_count >= MAX_OPS_PER_SESSION:
-            _debug_log_gh(f"[GH-CREATE] ✗ ops_count >= MAX, returning None")
+            _debug_log_gh(f"[GH-CREATE] [FAIL] ops_count >= MAX, returning None")
             return None
 
         _debug_log_gh(f"[GH-CREATE] Getting repo root...")
         repo_root = _get_repo_root()
         _debug_log_gh(f"[GH-CREATE] repo_root={repo_root}")
         if not repo_root:
-            _debug_log_gh(f"[GH-CREATE] ✗ no repo_root, returning None")
+            _debug_log_gh(f"[GH-CREATE] [FAIL] no repo_root, returning None")
             return None
 
         # Build issue title and body
@@ -715,10 +715,10 @@ def create_github_issue(task_id, subject, description):
             if result.stderr:
                 _debug_log_gh(f"[GH-CREATE] stderr: {result.stderr[:200]}")
         except subprocess.TimeoutExpired:
-            _debug_log_gh(f"[GH-CREATE] ✗ gh command TIMEOUT after {GH_TIMEOUT}s")
+            _debug_log_gh(f"[GH-CREATE] [FAIL] gh command TIMEOUT after {GH_TIMEOUT}s")
             raise
         except Exception as e:
-            _debug_log_gh(f"[GH-CREATE] ✗ gh command EXCEPTION: {type(e).__name__}: {str(e)[:150]}")
+            _debug_log_gh(f"[GH-CREATE] [FAIL] gh command EXCEPTION: {type(e).__name__}: {str(e)[:150]}")
             raise
 
         # If label creation still failed, retry without labels
@@ -732,7 +732,7 @@ def create_github_issue(task_id, subject, description):
             _debug_log_gh(f"[GH-CREATE] Retry returned: returncode={result.returncode}")
 
         if result.returncode == 0 and result.stdout.strip():
-            _debug_log_gh(f"[GH-CREATE] ✓ gh command succeeded")
+            _debug_log_gh(f"[GH-CREATE] [PASS] gh command succeeded")
             # stdout contains the issue URL, e.g. https://github.com/user/repo/issues/42
             issue_url = result.stdout.strip()
             issue_number = None
@@ -762,7 +762,7 @@ def create_github_issue(task_id, subject, description):
             # never breaks. Branch is created in the same call as the issue.
             _debug_log_gh(f"[GH-CREATE] Branch creation block: issue_number={issue_number}")
             if issue_number:
-                _debug_log_gh(f"[GH-CREATE] ✓ issue_number exists, checking for THIS issue's branch...")
+                _debug_log_gh(f"[GH-CREATE] [PASS] issue_number exists, checking for THIS issue's branch...")
                 # Each issue gets its own branch: {issue_type}/{issue_number}
                 issue_specific_branch = f"{issue_type}/{issue_number}"
                 _debug_log_gh(f"[GH-CREATE] expected_branch_name={issue_specific_branch}")
@@ -772,28 +772,28 @@ def create_github_issue(task_id, subject, description):
                 branch = create_issue_branch(issue_number, subject, issue_type)
                 _debug_log_gh(f"[GH-CREATE] create_issue_branch() returned: {branch}")
                 if branch:
-                    _debug_log_gh(f"[GH-CREATE] ✓ Branch created successfully: {branch}")
+                    _debug_log_gh(f"[GH-CREATE] [PASS] Branch created successfully: {branch}")
                     try:
                         sys.stdout.write('[GH] Branch: ' + branch + ' (auto-created with issue #' + str(issue_number) + ')\n')
                         sys.stdout.flush()
                     except Exception as e:
                         _debug_log_gh(f"[GH-CREATE] Could not write stdout: {str(e)[:100]}")
                 else:
-                    _debug_log_gh(f"[GH-CREATE] ✗ Branch creation returned None")
+                    _debug_log_gh(f"[GH-CREATE] [FAIL] Branch creation returned None")
             else:
-                _debug_log_gh(f"[GH-CREATE] ✗ issue_number is falsy, skipping branch creation")
+                _debug_log_gh(f"[GH-CREATE] [FAIL] issue_number is falsy, skipping branch creation")
 
-            _debug_log_gh(f"[GH-CREATE] ✓ RETURNING issue_number={issue_number}")
+            _debug_log_gh(f"[GH-CREATE] [PASS] RETURNING issue_number={issue_number}")
             return issue_number
         else:
-            _debug_log_gh(f"[GH-CREATE] ✗ gh command failed: returncode={result.returncode}, stdout='{result.stdout[:100]}'")
+            _debug_log_gh(f"[GH-CREATE] [FAIL] gh command failed: returncode={result.returncode}, stdout='{result.stdout[:100]}'")
             return None
 
     except subprocess.TimeoutExpired as e:
-        _debug_log_gh(f"[GH-CREATE] ✗ TIMEOUT EXCEPTION: {str(e)[:150]}")
+        _debug_log_gh(f"[GH-CREATE] [FAIL] TIMEOUT EXCEPTION: {str(e)[:150]}")
         return None
     except Exception as e:
-        _debug_log_gh(f"[GH-CREATE] ✗ EXCEPTION: {type(e).__name__}: {str(e)[:200]}")
+        _debug_log_gh(f"[GH-CREATE] [FAIL] EXCEPTION: {type(e).__name__}: {str(e)[:200]}")
         import traceback
         _debug_log_gh(f"[GH-CREATE] Traceback: {traceback.format_exc()[:500]}")
         return None
@@ -1520,7 +1520,7 @@ def create_issue_branch(issue_number, subject, issue_type=None):
             _save_issues_mapping(mapping)
             debug_log.append(f"[BRANCH-CREATE] STEP 6 OK: Branch info saved")
 
-            success_msg = f"[BRANCH-CREATE] ✅ SUCCESS: {branch_name}"
+            success_msg = f"[BRANCH-CREATE] [OK] SUCCESS: {branch_name}"
             debug_log.append(success_msg)
             _log_branch_debug(debug_log, success_msg)
             sys.stdout.write(f"[GH] Branch: {branch_name} (created + checked out)\n")
@@ -1545,7 +1545,7 @@ def create_issue_branch(issue_number, subject, issue_type=None):
                 mapping['session_id'] = _get_current_session_id()  # Save current session_id
                 mapping['branch_checked_out_at'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
                 _save_issues_mapping(mapping)
-                success_msg = f"[BRANCH-CREATE] ✅ SUCCESS: {branch_name} (existing)"
+                success_msg = f"[BRANCH-CREATE] [OK] SUCCESS: {branch_name} (existing)"
                 debug_log.append(success_msg)
                 _log_branch_debug(debug_log, success_msg)
                 sys.stdout.write(f"[GH] Branch: {branch_name} (existing, checked out)\n")
@@ -1553,7 +1553,7 @@ def create_issue_branch(issue_number, subject, issue_type=None):
                 return branch_name
             else:
                 # CRITICAL: Both create AND checkout failed
-                error_msg = f"[BRANCH-CREATE] 🔴 CRITICAL FAILURE: Cannot create or checkout {branch_name}"
+                error_msg = f"[BRANCH-CREATE] ? CRITICAL FAILURE: Cannot create or checkout {branch_name}"
                 debug_log.append(f"[BRANCH-CREATE] STEP 4b FAILED: Checkout failed with code {result.returncode}")
                 debug_log.append(f"  stderr: {result.stderr[:300]}")
                 debug_log.append(error_msg)
@@ -1597,12 +1597,12 @@ def _log_branch_debug(debug_log, final_msg):
 
         with open(log_file, 'a', encoding='utf-8') as f:
             ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            f.write(f"\n{'═'*70}\n")
+            f.write(f"\n{'?'*70}\n")
             f.write(f"[{ts}] Branch Creation Debug Log\n")
-            f.write(f"{'═'*70}\n")
+            f.write(f"{'?'*70}\n")
             for line in debug_log:
                 f.write(f"{line}\n")
-            f.write(f"{'═'*70}\n")
+            f.write(f"{'?'*70}\n")
             f.write(f"[{ts}] FINAL: {final_msg}\n\n")
     except Exception:
         pass  # Logging errors should never block

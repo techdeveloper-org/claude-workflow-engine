@@ -924,9 +924,9 @@ def main():
                 entry['complexity'] = flow_ctx['complexity']
             if flow_ctx.get('skill'):
                 entry['skill'] = flow_ctx['skill']
-            debug_log(f"  [GRANULAR] Step 3.1.1: ✓ Task context added")
+            debug_log(f"  [GRANULAR] Step 3.1.1: ? Task context added")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.1: ✗ EXCEPTION in task context: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.1: ? EXCEPTION in task context: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         # v2.1.0: Rich activity data per tool type (for narrative session summaries)
@@ -989,7 +989,7 @@ def main():
         elif tool_name in ('WebSearch', 'WebFetch'):
             entry['query'] = inp.get('query', inp.get('url', ''))[:150]
 
-        debug_log(f"  [GRANULAR] Step 3.1.2: ✓ Rich activity data processed for {tool_name}")
+        debug_log(f"  [GRANULAR] Step 3.1.2: ? Rich activity data processed for {tool_name}")
 
         # NEW (v3.2.0): Enrich entry with failure detection results (3.7 middleware)
         debug_log(f"  [GRANULAR] Step 3.1.3: Enriching with failure detection")
@@ -1000,27 +1000,27 @@ def main():
                 entry['failure_severity'] = failure_info.get('severity', 'medium')
             else:
                 entry['failure_detected'] = False
-            debug_log(f"  [GRANULAR] Step 3.1.3: ✓ Failure detection enriched")
+            debug_log(f"  [GRANULAR] Step 3.1.3: ? Failure detection enriched")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.3: ✗ EXCEPTION in failure enrichment: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.3: ? EXCEPTION in failure enrichment: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         # Log the entry
         debug_log(f"  [GRANULAR] Step 3.1.4: About to call log_tool_entry()")
         try:
             log_tool_entry(entry)
-            debug_log(f"  [GRANULAR] Step 3.1.4: ✓ log_tool_entry() completed")
+            debug_log(f"  [GRANULAR] Step 3.1.4: ? log_tool_entry() completed")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.4: ✗ EXCEPTION in log_tool_entry: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.4: ? EXCEPTION in log_tool_entry: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         # Update session progress
         debug_log(f"  [GRANULAR] Step 3.1.5: Loading session progress")
         try:
             state = load_session_progress()
-            debug_log(f"  [GRANULAR] Step 3.1.5: ✓ Session progress loaded")
+            debug_log(f"  [GRANULAR] Step 3.1.5: ? Session progress loaded")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.5: ✗ EXCEPTION in load_session_progress: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.5: ? EXCEPTION in load_session_progress: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         debug_log(f"  [GRANULAR] Step 3.1.6: Updating progress counters")
@@ -1029,9 +1029,9 @@ def main():
             state['tool_counts'][tool_name] = state['tool_counts'].get(tool_name, 0) + 1
             state['last_tool'] = tool_name
             state['last_tool_at'] = entry['ts']
-            debug_log(f"  [GRANULAR] Step 3.1.6: ✓ Progress counters updated")
+            debug_log(f"  [GRANULAR] Step 3.1.6: ? Progress counters updated")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.6: ✗ EXCEPTION in counters: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.6: ? EXCEPTION in counters: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         # Track file modifications since last commit (for git reminder)
@@ -1048,9 +1048,9 @@ def main():
 
             if is_error:
                 state['errors_seen'] = state.get('errors_seen', 0) + 1
-            debug_log(f"  [GRANULAR] Step 3.1.7: ✓ File tracking done")
+            debug_log(f"  [GRANULAR] Step 3.1.7: ? File tracking done")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.7: ✗ EXCEPTION in file tracking: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.7: ? EXCEPTION in file tracking: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         # Loophole #17 fix: removed Write/Edit tasks_completed increment
@@ -1066,9 +1066,9 @@ def main():
             # Compute and store dynamic context estimate so context-monitor-v2.py reads it
             ctx_est = estimate_context_pct(state['tool_counts'], state.get('content_chars', 0))
             state['context_estimate_pct'] = ctx_est
-            debug_log(f"  [GRANULAR] Step 3.1.8: ✓ Context estimates computed")
+            debug_log(f"  [GRANULAR] Step 3.1.8: ? Context estimates computed")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.8: ✗ EXCEPTION in context estimation: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.8: ? EXCEPTION in context estimation: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         # NEW (v3.2.0): Track tool optimization statistics (3.7 middleware)
@@ -1087,26 +1087,26 @@ def main():
                 per_tool = state['tool_optimization_stats'].get('per_tool_failure_counts', {})
                 per_tool[tool_name] = per_tool.get(tool_name, 0) + 1
                 state['tool_optimization_stats']['per_tool_failure_counts'] = per_tool
-            debug_log(f"  [GRANULAR] Step 3.1.9: ✓ Tool optimization stats tracked")
+            debug_log(f"  [GRANULAR] Step 3.1.9: ? Tool optimization stats tracked")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.9: ✗ EXCEPTION in optimization stats: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.9: ? EXCEPTION in optimization stats: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         debug_log(f"  [GRANULAR] Step 3.1.10: Saving session progress")
         try:
             save_session_progress(state)
-            debug_log(f"  [GRANULAR] Step 3.1.10: ✓ Session progress saved")
+            debug_log(f"  [GRANULAR] Step 3.1.10: ? Session progress saved")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.10: ✗ EXCEPTION in save_session_progress: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.10: ? EXCEPTION in save_session_progress: {type(e).__name__}: {str(e)[:200]}")
             raise
         debug_log(f"  [GRANULAR] Step 3.1.11: Emitting context sample")
         try:
             _sid_ctx = _get_session_id_from_progress() or ''
             emit_context_sample(ctx_est, session_id=_sid_ctx,
                                 source='post-tool-tracker', tool_name=tool_name)
-            debug_log(f"  [GRANULAR] Step 3.1.11: ✓ Context sample emitted")
+            debug_log(f"  [GRANULAR] Step 3.1.11: ? Context sample emitted")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.11: ⚠️ EXCEPTION in emit_context_sample (non-fatal): {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.11: ?? EXCEPTION in emit_context_sample (non-fatal): {type(e).__name__}: {str(e)[:200]}")
             # Don't raise - this is non-fatal
 
         # -----------------------------------------------------------------------
@@ -1119,12 +1119,12 @@ def main():
             if tool_name in ('TaskUpdate', 'TaskCreate'):
                 state['tools_since_last_update'] = 0
                 save_session_progress(state)
-                debug_log(f"  [GRANULAR] Step 3.1.12: ✓ Reset tools_since_last_update for TaskCreate/TaskUpdate")
+                debug_log(f"  [GRANULAR] Step 3.1.12: ? Reset tools_since_last_update for TaskCreate/TaskUpdate")
             else:
                 tools_since = state.get('tools_since_last_update', 0) + 1
                 state['tools_since_last_update'] = tools_since
                 save_session_progress(state)
-                debug_log(f"  [GRANULAR] Step 3.1.12: ✓ Incremented tools_since_last_update to {tools_since}")
+                debug_log(f"  [GRANULAR] Step 3.1.12: ? Incremented tools_since_last_update to {tools_since}")
 
                 # Only warn for file-modifying tools (not reads/searches)
                 if tools_since > 5 and tool_name in ('Write', 'Edit', 'Bash', 'NotebookEdit'):
@@ -1138,9 +1138,9 @@ def main():
                             '  Example: TaskUpdate(id, metadata={"progress": "step X/Y complete"})\n'
                         )
                         sys.stdout.flush()
-                        debug_log(f"  [GRANULAR] Step 3.1.12: ✓ Wrote task-progress-tracking policy warning")
+                        debug_log(f"  [GRANULAR] Step 3.1.12: ? Wrote task-progress-tracking policy warning")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.12: ✗ EXCEPTION in task-progress-tracking policy: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.12: ? EXCEPTION in task-progress-tracking policy: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         # -----------------------------------------------------------------------
@@ -1160,11 +1160,11 @@ def main():
                     '  ACTION: Call TaskCreate to define tasks BEFORE writing code.\n'
                 )
                 sys.stdout.flush()
-                debug_log(f"  [GRANULAR] Step 3.1.13: ✓ Wrote phase-enforcement policy warning")
+                debug_log(f"  [GRANULAR] Step 3.1.13: ? Wrote phase-enforcement policy warning")
             else:
-                debug_log(f"  [GRANULAR] Step 3.1.13: ✓ No phase-enforcement warning needed (complexity={complexity}, tasks_created={tasks_created})")
+                debug_log(f"  [GRANULAR] Step 3.1.13: ? No phase-enforcement warning needed (complexity={complexity}, tasks_created={tasks_created})")
         except Exception as e:
-            debug_log(f"  [GRANULAR] Step 3.1.13: ✗ EXCEPTION in complexity-aware-phase-reminder: {type(e).__name__}: {str(e)[:200]}")
+            debug_log(f"  [GRANULAR] Step 3.1.13: ? EXCEPTION in complexity-aware-phase-reminder: {type(e).__name__}: {str(e)[:200]}")
             raise
 
         # -----------------------------------------------------------------------
@@ -1174,7 +1174,7 @@ def main():
         debug_log(f"  [GRANULAR] Step 3.1.14: REACHED TaskCreate check block! tool_name={tool_name}, is_error={is_error}")
         debug_log(f"TaskCreate check: tool_name={tool_name}, is_error={is_error}")
         if tool_name == 'TaskCreate' and not is_error:
-            debug_log(f"  ✓ TaskCreate detected and no error - proceeding with issue creation")
+            debug_log(f"  ? TaskCreate detected and no error - proceeding with issue creation")
             debug_log(f"  [GH-START] ========== BEGIN GITHUB WORKFLOW FOR TaskCreate ==========")
             try:
                 # Loophole #15 fix: validate TaskCreate has meaningful content
@@ -1216,7 +1216,7 @@ def main():
                 if not gim:
                     # LOGGING: Why github_issue_manager failed to load
                     debug_log(f"  [GH-GRANULAR] github_issue_manager is None, skipping")
-                    sys.stdout.write('[GH-WORKFLOW] ⚠️ GitHub issue manager not available\n')
+                    sys.stdout.write('[GH-WORKFLOW] ?? GitHub issue manager not available\n')
                     sys.stdout.flush()
                 else:
                     debug_log(f"  [GH-GRANULAR] github_issue_manager loaded successfully, proceeding")
@@ -1234,11 +1234,11 @@ def main():
 
                     if not tc_subject:
                         debug_log(f"  [GH-GRANULAR] No subject, skipping issue creation")
-                        sys.stdout.write('[GH-WORKFLOW] ⚠️ No task subject - skipping GitHub issue\n')
+                        sys.stdout.write('[GH-WORKFLOW] ?? No task subject - skipping GitHub issue\n')
                         sys.stdout.flush()
                     elif len(tc_subject) < 5:
                         debug_log(f"  [GH-GRANULAR] Subject too short ({len(tc_subject)} chars), skipping")
-                        sys.stdout.write(f'[GH-WORKFLOW] ⚠️ Subject too short ({len(tc_subject)} chars, need 5+)\n')
+                        sys.stdout.write(f'[GH-WORKFLOW] ?? Subject too short ({len(tc_subject)} chars, need 5+)\n')
                         sys.stdout.flush()
                     else:
                         # CREATE GITHUB ISSUE
@@ -1251,18 +1251,18 @@ def main():
                         debug_log(f"  [GH-GRANULAR] create_github_issue() returned: {issue_num}")
 
                         if issue_num:
-                            sys.stdout.write(f'[GH-WORKFLOW] ✅ Issue #{issue_num} created (branch created automatically)\n')
+                            sys.stdout.write(f'[GH-WORKFLOW] ? Issue #{issue_num} created (branch created automatically)\n')
                             sys.stdout.flush()
-                            debug_log(f"  [GH-GRANULAR] ✓ Issue #{issue_num} creation reported success")
+                            debug_log(f"  [GH-GRANULAR] ? Issue #{issue_num} creation reported success")
                             # Branch is now created atomically inside create_github_issue()
                         else:
-                            sys.stdout.write(f'[GH-WORKFLOW] ❌ Issue creation returned None - check logs\n')
+                            sys.stdout.write(f'[GH-WORKFLOW] ? Issue creation returned None - check logs\n')
                             sys.stdout.flush()
-                            debug_log(f"  [GH-GRANULAR] ✗ Issue creation returned None")
+                            debug_log(f"  [GH-GRANULAR] ? Issue creation returned None")
             except Exception as e:
                 # LOG THE ACTUAL ERROR instead of silent failure
-                debug_log(f"  [GH-GRANULAR] ❌ EXCEPTION in GitHub block: {type(e).__name__}: {str(e)[:150]}")
-                sys.stdout.write(f'[GH-WORKFLOW] ❌ EXCEPTION: {type(e).__name__}: {str(e)[:150]}\n')
+                debug_log(f"  [GH-GRANULAR] ? EXCEPTION in GitHub block: {type(e).__name__}: {str(e)[:150]}")
+                sys.stdout.write(f'[GH-WORKFLOW] ? EXCEPTION: {type(e).__name__}: {str(e)[:150]}\n')
                 sys.stdout.flush()
                 # Also log to file
                 try:

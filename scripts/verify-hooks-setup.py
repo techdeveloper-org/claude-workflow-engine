@@ -40,9 +40,9 @@ def verify_hooks():
         script_path = SCRIPTS_DIR / script
         if script_path.exists():
             size = script_path.stat().st_size / 1024
-            print(f"  ✅ {script:30s} ({size:.1f} KB) - {description}")
+            print(f"  ? {script:30s} ({size:.1f} KB) - {description}")
         else:
-            print(f"  ❌ {script:30s} NOT FOUND")
+            print(f"  ? {script:30s} NOT FOUND")
             all_good = False
 
     return all_good
@@ -53,7 +53,7 @@ def verify_settings():
     settings_file = CLAUDE_BASE / 'settings.json'
 
     if not settings_file.exists():
-        print("  ❌ settings.json NOT FOUND")
+        print("  ? settings.json NOT FOUND")
         return False
 
     try:
@@ -62,7 +62,7 @@ def verify_settings():
 
         # Check if commented
         if content.strip().startswith('//'):
-            print("  ❌ settings.json is COMMENTED (still disabled)")
+            print("  ? settings.json is COMMENTED (still disabled)")
             return False
 
         # Try to parse as JSON
@@ -74,17 +74,17 @@ def verify_settings():
 
         for hook_name in required_hooks:
             if hook_name in hooks:
-                print(f"  ✅ {hook_name:20s} - CONFIGURED")
+                print(f"  ? {hook_name:20s} - CONFIGURED")
             else:
-                print(f"  ❌ {hook_name:20s} - MISSING")
+                print(f"  ? {hook_name:20s} - MISSING")
                 return False
 
         return True
     except json.JSONDecodeError as e:
-        print(f"  ❌ Invalid JSON: {e}")
+        print(f"  ? Invalid JSON: {e}")
         return False
     except Exception as e:
-        print(f"  ❌ Error: {e}")
+        print(f"  ? Error: {e}")
         return False
 
 def verify_new_features():
@@ -96,9 +96,9 @@ def verify_new_features():
         script_path = SCRIPTS_DIR / script
         if script_path.exists():
             size = script_path.stat().st_size / 1024
-            print(f"  ✅ {description:40s} ({size:.1f} KB)")
+            print(f"  ? {description:40s} ({size:.1f} KB)")
         else:
-            print(f"  ❌ {description:40s} NOT FOUND")
+            print(f"  ? {description:40s} NOT FOUND")
             all_good = False
 
     return all_good
@@ -123,10 +123,10 @@ def verify_skills():
         except Exception:
             pass
 
-        print(f"  ✅ Skills directory: {len(categories)} categories, {skills_count} skills")
+        print(f"  ? Skills directory: {len(categories)} categories, {skills_count} skills")
         print(f"     Categories: {', '.join(sorted(categories)[:5])}{'...' if len(categories) > 5 else ''}")
     else:
-        print(f"  ❌ Skills directory not found")
+        print(f"  ? Skills directory not found")
 
     if agents_dir.exists():
         agents_count = 0
@@ -137,9 +137,9 @@ def verify_skills():
         except Exception:
             pass
 
-        print(f"  ✅ Agents directory: {agents_count} agents")
+        print(f"  ? Agents directory: {agents_count} agents")
     else:
-        print(f"  ❌ Agents directory not found")
+        print(f"  ? Agents directory not found")
 
 def main():
     """Main verification."""
@@ -158,12 +158,12 @@ def main():
     # Summary
     print("\n" + "="*70)
     if all(results.values()):
-        print("✅ ALL CHECKS PASSED - PRODUCTION READY!")
+        print("? ALL CHECKS PASSED - PRODUCTION READY!")
         print("="*70)
         print("\nHooks are now ENABLED. Next message will trigger full 3-level flow!")
         return 0
     else:
-        print("❌ SOME CHECKS FAILED - FIX ISSUES BEFORE PRODUCTION")
+        print("? SOME CHECKS FAILED - FIX ISSUES BEFORE PRODUCTION")
         print("="*70)
         return 1
 

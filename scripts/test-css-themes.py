@@ -39,7 +39,7 @@ class CSSThemeTestor:
             url = self.base_url + path
             try:
                 response = requests.get(url, timeout=5)
-                status = "✅ PASS" if response.status_code == 200 else f"❌ FAIL ({response.status_code})"
+                status = "? PASS" if response.status_code == 200 else f"? FAIL ({response.status_code})"
                 size = len(response.content)
                 results.append({
                     "file": name,
@@ -54,7 +54,7 @@ class CSSThemeTestor:
                     "status": False,
                     "error": str(e)
                 })
-                print(f"  {name:25} ❌ ERROR: {str(e)}")
+                print(f"  {name:25} ? ERROR: {str(e)}")
 
         self.results["tests"].append({
             "name": "CSS File Loading",
@@ -82,7 +82,7 @@ class CSSThemeTestor:
 
             for theme, pattern in themes_to_test.items():
                 found = bool(re.search(pattern, css_content, re.MULTILINE | re.DOTALL))
-                status = "✅ PASS" if found else "❌ FAIL"
+                status = "? PASS" if found else "? FAIL"
                 results.append({
                     "theme": theme,
                     "status": found,
@@ -90,7 +90,7 @@ class CSSThemeTestor:
                 })
                 print(f"  {theme:15} {status:15} - Theme definition")
         except Exception as e:
-            print(f"  ❌ ERROR: {str(e)}")
+            print(f"  ? ERROR: {str(e)}")
             results.append({"error": str(e), "status": False})
 
         self.results["tests"].append({
@@ -125,7 +125,7 @@ class CSSThemeTestor:
 
             for var in required_vars:
                 found = var in css_content
-                status = "✅" if found else "❌"
+                status = "?" if found else "?"
                 results.append({
                     "variable": var,
                     "status": found,
@@ -133,7 +133,7 @@ class CSSThemeTestor:
                 })
                 print(f"  {var:30} {status}")
         except Exception as e:
-            print(f"  ❌ ERROR: {str(e)}")
+            print(f"  ? ERROR: {str(e)}")
             results.append({"error": str(e), "status": False})
 
         passed = sum(1 for r in results if r.get("status", False))
@@ -168,7 +168,7 @@ class CSSThemeTestor:
 
             for name, pattern in elements_to_check:
                 found = pattern in html_content
-                status = "✅" if found else "❌"
+                status = "?" if found else "?"
                 results.append({
                     "element": name,
                     "status": found,
@@ -176,7 +176,7 @@ class CSSThemeTestor:
                 })
                 print(f"  {name:25} {status}")
         except Exception as e:
-            print(f"  ❌ ERROR: {str(e)}")
+            print(f"  ? ERROR: {str(e)}")
             results.append({"error": str(e), "status": False})
 
         passed = sum(1 for r in results if r.get("status", False))
@@ -211,7 +211,7 @@ class CSSThemeTestor:
 
             for name, pattern in js_patterns:
                 found = pattern in html_content
-                status = "✅" if found else "❌"
+                status = "?" if found else "?"
                 results.append({
                     "component": name,
                     "status": found,
@@ -219,7 +219,7 @@ class CSSThemeTestor:
                 })
                 print(f"  {name:35} {status}")
         except Exception as e:
-            print(f"  ❌ ERROR: {str(e)}")
+            print(f"  ? ERROR: {str(e)}")
             results.append({"error": str(e), "status": False})
 
         passed = sum(1 for r in results if r.get("status", False))
@@ -265,7 +265,7 @@ class CSSThemeTestor:
                 material_block = material_match.group(1)
                 for color_def in material_colors:
                     found = color_def in material_block or color_def.split(":")[0].strip() in material_block
-                    status = "✅" if found else "❌"
+                    status = "?" if found else "?"
                     results.append({
                         "color": color_def.split(":")[0].strip(),
                         "status": found,
@@ -273,10 +273,10 @@ class CSSThemeTestor:
                     })
                     print(f"  {color_def:45} {status}")
             else:
-                print("  ❌ Material theme block not found in CSS")
+                print("  ? Material theme block not found in CSS")
                 results.append({"status": False, "error": "Material theme not found"})
         except Exception as e:
-            print(f"  ❌ ERROR: {str(e)}")
+            print(f"  ? ERROR: {str(e)}")
             results.append({"error": str(e), "status": False})
 
         passed = sum(1 for r in results if r.get("status", False))
@@ -315,7 +315,7 @@ class CSSThemeTestor:
                 # Convert class to regex pattern
                 pattern = re.escape(cls)
                 found = bool(re.search(pattern, css_content))
-                status = "✅" if found else "❌"
+                status = "?" if found else "?"
                 results.append({
                     "class": cls,
                     "status": found,
@@ -323,7 +323,7 @@ class CSSThemeTestor:
                 })
                 print(f"  {cls:40} {status}")
         except Exception as e:
-            print(f"  ❌ ERROR: {str(e)}")
+            print(f"  ? ERROR: {str(e)}")
             results.append({"error": str(e), "status": False})
 
         passed = sum(1 for r in results if r.get("status", False))
@@ -346,7 +346,7 @@ class CSSThemeTestor:
         passed_tests = sum(1 for t in self.results["tests"] if t.get("passed", False))
 
         for test in self.results["tests"]:
-            status = "✅ PASS" if test.get("passed", False) else "❌ FAIL"
+            status = "? PASS" if test.get("passed", False) else "? FAIL"
             print(f"{status} - {test['name']}")
 
         print("\n" + "="*70)
@@ -361,7 +361,7 @@ class CSSThemeTestor:
         with open(report_file, "w") as f:
             json.dump(self.results, f, indent=2)
 
-        print(f"\n📊 Report saved to: {report_file}")
+        print(f"\n? Report saved to: {report_file}")
 
         return passed_tests == total_tests
 
@@ -387,7 +387,7 @@ class CSSThemeTestor:
                 if not test_func():
                     all_passed = False
             except Exception as e:
-                print(f"❌ Test {test_func.__name__} failed: {str(e)}")
+                print(f"? Test {test_func.__name__} failed: {str(e)}")
                 all_passed = False
 
         return all_passed
@@ -399,10 +399,10 @@ def main():
     testor.generate_report()
 
     if success:
-        print("\n✅ ALL CSS THEME TESTS PASSED!")
+        print("\n? ALL CSS THEME TESTS PASSED!")
         print("The Material Design 3 theme system is properly configured and ready to use.")
     else:
-        print("\n❌ SOME TESTS FAILED")
+        print("\n? SOME TESTS FAILED")
         print("Review the report and fix any CSS issues.")
 
     return 0 if success else 1

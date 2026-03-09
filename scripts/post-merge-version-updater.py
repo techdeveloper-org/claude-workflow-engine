@@ -79,9 +79,9 @@ def bump_version(project_root):
 
     VERSION file format: X.Y.Z
     Rules:
-    - feature/bug on main → bump MINOR (X.Y+1.0)
-    - hotfix on main → bump PATCH (X.Y.Z+1)
-    - breaking change → bump MAJOR (X+1.0.0)
+    - feature/bug on main -> bump MINOR (X.Y+1.0)
+    - hotfix on main -> bump PATCH (X.Y.Z+1)
+    - breaking change -> bump MAJOR (X+1.0.0)
     """
     version_file = project_root / 'VERSION'
 
@@ -105,7 +105,7 @@ def bump_version(project_root):
         new_version = f"{major}.{minor}.{patch}"
         version_file.write_text(new_version + '\n', encoding='utf-8')
 
-        return True, f"{current} → {new_version}"
+        return True, f"{current} -> {new_version}"
     except Exception as e:
         return False, str(e)
 
@@ -253,7 +253,7 @@ def main():
         return 1
 
     # Extract new version
-    new_version = result.split(' → ')[-1].strip()
+    new_version = result.split(' -> ')[-1].strip()
 
     # Step 3: Update README
     success, result = update_readme(project_root, new_version)

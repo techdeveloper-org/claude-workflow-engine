@@ -620,36 +620,36 @@ def _smart_code_review(repo_root, pr_number, session_summary, flow_trace):
             # Basic pattern validation per skill
             if skill == 'java-spring-boot-microservices':
                 if file_path.endswith('.java') and 'Controller' in file_path:
-                    file_review['checks'].append('✅ Controller file detected')
+                    file_review['checks'].append('[OK] Controller file detected')
                 if file_path.endswith('Test.java'):
-                    file_review['checks'].append('✅ Test file with proper naming')
+                    file_review['checks'].append('[OK] Test file with proper naming')
 
             elif skill == 'angular-engineer':
                 if file_path.endswith('.ts') and 'component' in file_path.lower():
-                    file_review['checks'].append('✅ Angular component file detected')
+                    file_review['checks'].append('[OK] Angular component file detected')
 
             elif skill == 'python-backend-engineer':
                 if file_path.endswith('.py'):
-                    file_review['checks'].append('✅ Python file detected')
+                    file_review['checks'].append('[OK] Python file detected')
                     if 'test' in file_path.lower():
-                        file_review['checks'].append('✅ Test file with proper naming')
+                        file_review['checks'].append('[OK] Test file with proper naming')
 
             review_findings[file_path] = file_review
 
         # Build review comment
         comment_parts = [
-            '## 🔍 Smart Code Review (Session-Aware + Skill-Aware)\n',
-            '### 📋 Review Context',
+            '## ? Smart Code Review (Session-Aware + Skill-Aware)\n',
+            '### ? Review Context',
             f'- **Task:** {task_description[:100]}' if task_description else '- **Task:** Session work',
             f'- **Tech Stack:** {", ".join(tech_stack)}' if tech_stack else '',
             f'- **Skills Used:** {", ".join(skills_used)}' if skills_used else '',
             '',
-            f'### 📁 Files Reviewed: {len(changed_files)}\n'
+            f'### ? Files Reviewed: {len(changed_files)}\n'
         ]
 
         for file_path, findings in review_findings.items():
             skill = findings['skill']
-            comment_parts.append(f"**{file_path}** → {skill}")
+            comment_parts.append(f"**{file_path}** ? {skill}")
 
             if findings['checks']:
                 for check in findings['checks']:
@@ -657,18 +657,18 @@ def _smart_code_review(repo_root, pr_number, session_summary, flow_trace):
 
             if findings['suggestions']:
                 for sugg in findings['suggestions']:
-                    comment_parts.append(f"  💡 {sugg}")
+                    comment_parts.append(f"  ? {sugg}")
 
             comment_parts.append('')
 
         # Summary
         comment_parts.extend([
-            '### 📊 Review Summary',
+            '### ? Review Summary',
             f'- **Files Reviewed:** {len(changed_files)}',
-            f'- **Critical Issues:** {critical_count} ✅',
+            f'- **Critical Issues:** {critical_count} [OK]',
             f'- **Warnings:** {warning_count}',
             '',
-            '✅ **Ready to Auto-Merge** - All files comply with skill patterns.',
+            '[OK] **Ready to Auto-Merge** - All files comply with skill patterns.',
             '',
             '_Smart Review by Claude Memory System (v3.0)_'
         ])
@@ -1050,13 +1050,13 @@ def _bump_and_push_on_main(repo_root: str, session_summary: dict,
 
 def _print_workflow_step(step_num, step_name, status='IN_PROGRESS'):
     """Print formatted workflow step to user."""
-    status_symbol = {'IN_PROGRESS': '⏳', 'OK': '✅', 'SKIP': '⊘', 'ERROR': '❌', 'WARN': '⚠️'}
+    status_symbol = {'IN_PROGRESS': '[WAIT]', 'OK': '[OK]', 'SKIP': '?', 'ERROR': '[FAIL]', 'WARN': '??'}
     symbol = status_symbol.get(status, '?')
 
     if step_num == -1:
-        sys.stdout.write(f"\n{'═'*70}\n")
+        sys.stdout.write(f"\n{'?'*70}\n")
         sys.stdout.write(f"[PR WORKFLOW] Starting 7-step GitHub workflow\n")
-        sys.stdout.write(f"{'═'*70}\n")
+        sys.stdout.write(f"{'?'*70}\n")
     else:
         sys.stdout.write(f"[{step_num}] {symbol} {step_name}\n")
 
@@ -1080,9 +1080,9 @@ def run_pr_workflow(session_id=None):
     Non-blocking: all steps wrapped in try/except, never raises.
     Returns True if PR was merged successfully, False otherwise.
     """
-    _log("═"*70)
+    _log("?"*70)
     _log("=== PR WORKFLOW v1.1.0 STARTING ===")
-    _log("═"*70)
+    _log("?"*70)
     _print_workflow_step(-1, "GitHub PR Workflow")
 
     try:
@@ -1114,7 +1114,7 @@ def run_pr_workflow(session_id=None):
             sys.stdout.flush()
             return False
 
-        _log(f"✅ Branch: {branch_name} (feature branch detected - PR workflow will run)")
+        _log(f"[OK] Branch: {branch_name} (feature branch detected - PR workflow will run)")
 
         # Check if gh CLI is available
         try:
@@ -1144,23 +1144,23 @@ def run_pr_workflow(session_id=None):
             import auto_build_validator
             build_result = auto_build_validator.validate_build(repo_root)
             if build_result['all_passed']:
-                _log("  ✅ Build validation PASSED")
+                _log("  [OK] Build validation PASSED")
                 _log(f"  Summary: {build_result['summary']}")
                 _print_workflow_step(0, "Build validation", 'OK')
-                sys.stdout.write(f"  ✅ {build_result['summary']}\n")
+                sys.stdout.write(f"  [OK] {build_result['summary']}\n")
                 sys.stdout.flush()
             else:
-                _log("  ⚠️  Build validation WARNINGS")
+                _log("  ??  Build validation WARNINGS")
                 _log(f"  Summary: {build_result['summary']}")
                 _print_workflow_step(0, "Build validation", 'WARN')
-                sys.stdout.write(f"  ⚠️  {build_result['summary']}\n")
+                sys.stdout.write(f"  ??  {build_result['summary']}\n")
                 sys.stdout.flush()
                 # Log errors but don't stop - PR will show build status
                 for r in build_result['results']:
                     if not r['passed']:
                         _log(f"    - {r['label']}: {r.get('output', '')[:200]}")
         except Exception as e:
-            _log(f"  ⚠️  Build validation error (non-fatal): {e}")
+            _log(f"  ??  Build validation error (non-fatal): {e}")
             _print_workflow_step(0, "Build validation", 'WARN')
 
         # STEP 1: Commit changes (feature work only, no version bump here)
@@ -1168,10 +1168,10 @@ def run_pr_workflow(session_id=None):
         _log("STEP 1: Committing all changes...")
         try:
             _commit_session_changes(repo_root, session_summary, issue_numbers)
-            _log("  ✅ Changes committed")
+            _log("  [OK] Changes committed")
             _print_workflow_step(1, "Commit changes", 'OK')
         except Exception as e:
-            _log(f"  ❌ Commit failed: {e}")
+            _log(f"  [FAIL] Commit failed: {e}")
             _print_workflow_step(1, "Commit changes", 'ERROR')
             sys.stdout.write(f"\n[PR-WORKFLOW ERROR] Commit failed: {str(e)[:100]}\n\n")
             sys.stdout.flush()
@@ -1182,13 +1182,13 @@ def run_pr_workflow(session_id=None):
         _log("STEP 2: Pushing branch to remote...")
         pushed = _push_branch(repo_root, branch_name)
         if not pushed:
-            _log("  ❌ Push failed - cannot create PR without remote branch")
+            _log("  [FAIL] Push failed - cannot create PR without remote branch")
             _print_workflow_step(2, "Push branch", 'ERROR')
             sys.stdout.write(f"\n[PR-WORKFLOW ERROR] Could not push {branch_name} to remote\n")
             sys.stdout.write(f"  ACTION: Check network and git remote configuration\n\n")
             sys.stdout.flush()
             return False
-        _log(f"  ✅ Branch pushed to origin/{branch_name}")
+        _log(f"  [OK] Branch pushed to origin/{branch_name}")
         _print_workflow_step(2, "Push branch", 'OK')
 
         # STEP 3: Create PR
@@ -1196,13 +1196,13 @@ def run_pr_workflow(session_id=None):
         _log("STEP 3: Creating pull request...")
         pr_number = _create_pull_request(repo_root, branch_name, issue_numbers, session_summary)
         if not pr_number:
-            _log("  ❌ PR creation failed")
+            _log("  [FAIL] PR creation failed")
             _print_workflow_step(3, "Create PR", 'ERROR')
             sys.stdout.write(f"\n[PR-WORKFLOW ERROR] Could not create PR\n")
             sys.stdout.write(f"  Check gh CLI authentication with 'gh auth status'\n\n")
             sys.stdout.flush()
             return False
-        _log(f"  ✅ PR #{pr_number} created")
+        _log(f"  [OK] PR #{pr_number} created")
         _print_workflow_step(3, "Create PR", 'OK')
 
         # STEP 4: Auto-review comment (includes build status)
@@ -1210,10 +1210,10 @@ def run_pr_workflow(session_id=None):
         _log("STEP 4: Posting auto-review comment...")
         try:
             _auto_review_pr(repo_root, pr_number, session_summary, build_result)
-            _log("  ✅ Auto-review comment posted")
+            _log("  [OK] Auto-review comment posted")
             _print_workflow_step(4, "Post auto-review comment", 'OK')
         except Exception as e:
-            _log(f"  ⚠️  Auto-review comment failed (non-fatal): {e}")
+            _log(f"  ??  Auto-review comment failed (non-fatal): {e}")
             _print_workflow_step(4, "Post auto-review comment", 'WARN')
 
         # STEP 4.5: Smart Code Review before merge (CRITICAL)
@@ -1224,17 +1224,17 @@ def run_pr_workflow(session_id=None):
             safe_to_merge = _smart_code_review(repo_root, pr_number, session_summary, flow_trace)
 
             if not safe_to_merge:
-                _log("  ❌ Smart review found CRITICAL issues - NOT merging")
+                _log("  [FAIL] Smart review found CRITICAL issues - NOT merging")
                 _print_workflow_step(5, "Smart code review", 'ERROR')
                 sys.stdout.write(f"\n[SMART REVIEW] Critical issues detected\n")
                 sys.stdout.write(f"  PR #{pr_number} left open for manual review\n")
                 sys.stdout.write(f"  Check PR comments for details\n\n")
                 sys.stdout.flush()
                 return False
-            _log("  ✅ Smart review PASSED - safe to merge")
+            _log("  [OK] Smart review PASSED - safe to merge")
             _print_workflow_step(5, "Smart code review", 'OK')
         except Exception as e:
-            _log(f"  ⚠️  Smart review error (skipping): {e}")
+            _log(f"  ??  Smart review error (skipping): {e}")
             _print_workflow_step(5, "Smart code review", 'WARN')
 
         # STEP 5: Merge PR
@@ -1243,7 +1243,7 @@ def run_pr_workflow(session_id=None):
         merged = _merge_pr(repo_root, pr_number)
 
         if not merged:
-            _log(f"  ⚠️  Merge failed or blocked (PR #{pr_number} left open)")
+            _log(f"  ??  Merge failed or blocked (PR #{pr_number} left open)")
             _print_workflow_step(6, "Merge PR", 'WARN')
             sys.stdout.write(f"\n[PR-WORKFLOW] PR #{pr_number} could not be auto-merged\n")
             sys.stdout.write(f"  Likely cause: Branch protection rules require manual review\n")
@@ -1251,7 +1251,7 @@ def run_pr_workflow(session_id=None):
             sys.stdout.flush()
             return False
 
-        _log(f"  ✅ PR #{pr_number} merged successfully")
+        _log(f"  [OK] PR #{pr_number} merged successfully")
         _print_workflow_step(6, "Merge PR", 'OK')
 
         # STEP 6: Switch back to main (only if merged)
@@ -1259,10 +1259,10 @@ def run_pr_workflow(session_id=None):
         _log("STEP 6: Switching to main branch...")
         try:
             _switch_to_main(repo_root)
-            _log("  ✅ Switched to main")
+            _log("  [OK] Switched to main")
             _print_workflow_step(7, "Switch to main", 'OK')
         except Exception as e:
-            _log(f"  ⚠️  Switch to main failed: {e}")
+            _log(f"  ??  Switch to main failed: {e}")
             _print_workflow_step(7, "Switch to main", 'WARN')
 
         # STEP 7: Version bump on main (AFTER merge, on main branch)
@@ -1270,20 +1270,20 @@ def run_pr_workflow(session_id=None):
         _log("STEP 7: Bumping version on main...")
         try:
             _bump_and_push_on_main(repo_root, session_summary, issue_numbers)
-            _log("  ✅ Version bumped and pushed")
+            _log("  [OK] Version bumped and pushed")
             _print_workflow_step(8, "Version bump", 'OK')
         except Exception as e:
-            _log(f"  ⚠️  Version bump failed (non-fatal): {e}")
+            _log(f"  ??  Version bump failed (non-fatal): {e}")
             _print_workflow_step(8, "Version bump", 'WARN')
 
-        _log("═"*70)
+        _log("?"*70)
         _log("=== PR WORKFLOW COMPLETED SUCCESSFULLY ===")
-        _log("═"*70)
-        sys.stdout.write(f"\n{'═'*70}\n")
-        sys.stdout.write(f"[PR-WORKFLOW] ✅ COMPLETED SUCCESSFULLY\n")
+        _log("?"*70)
+        sys.stdout.write(f"\n{'?'*70}\n")
+        sys.stdout.write(f"[PR-WORKFLOW] [OK] COMPLETED SUCCESSFULLY\n")
         sys.stdout.write(f"  PR #{pr_number} merged into main\n")
         sys.stdout.write(f"  Version bumped\n")
-        sys.stdout.write(f"{'═'*70}\n\n")
+        sys.stdout.write(f"{'?'*70}\n\n")
         sys.stdout.flush()
         return True
 

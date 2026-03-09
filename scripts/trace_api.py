@@ -7,7 +7,7 @@ Key Design:
 - Full trace files stay on disk (100+ KB OK)
 - Index files stay in memory (< 10 KB each)
 - Query API loads only requested data
-- Result: 100 KB/session → 10 KB/session
+- Result: 100 KB/session ? 10 KB/session
 """
 
 import json

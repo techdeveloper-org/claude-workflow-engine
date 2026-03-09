@@ -168,7 +168,7 @@ _TRACKING_START_TIME = None
 
         for i, line in enumerate(lines):
             if re.match(enforce_pattern, line.strip()):
-                print(f"  ├─ Found {line.strip()}")
+                print(f"  |-- Found {line.strip()}")
                 # Found function, add tracking at start and end
                 # For now, add simple tracking template
                 self._add_tracking_template(lines, i)
@@ -230,11 +230,11 @@ _TRACKING_START_TIME = None
                     self.script_path.read_text(encoding='utf-8'),
                     encoding='utf-8'
                 )
-                print(f"  └─ Backup created: {backup_path.name}")
+                print(f"  \-- Backup created: {backup_path.name}")
 
             # Write modified content
             self.script_path.write_text(self.content, encoding='utf-8')
-            print(f"  └─ ✅ Updated successfully")
+            print(f"  \-- [OK] Updated successfully")
             return True
 
         except Exception as e:
@@ -247,7 +247,7 @@ _TRACKING_START_TIME = None
             "script": str(self.script_path),
             "has_tracking": self.has_tracking_import(),
             "modified": self.modified,
-            "status": "✅ updated" if self.modified else "⏭️ skipped"
+            "status": "[OK] updated" if self.modified else "[SKIP] skipped"
         }
 
 
