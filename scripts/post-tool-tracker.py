@@ -697,6 +697,60 @@ def check_level_3_11_git_status(tool_name, tool_input):
         return False, ''  # Fail-open: never block on git status errors
 
 
+def run_post_merge_version_update(tool_name, tool_input, is_error):
+    """Level 3.10+: Auto-update VERSION, README, SRS after PR merge (non-blocking).
+
+    Policy: version-release-policy.md
+    Rule: After PR merge to main, automatically bump VERSION and update docs.
+
+    Detects: 'gh pr merge', 'git push' with merge in recent commits
+    Calls: post-merge-version-updater.py
+
+    Returns:
+        (bool, str): Always (False, '') - this check is non-blocking.
+    """
+    if tool_name != 'Bash' or is_error:
+        return False, ''
+
+    cmd = (tool_input or {}).get('command', '').lower()
+    # Check if this looks like a merge/push operation
+    is_merge_cmd = ('gh pr merge' in cmd or ('git push' in cmd and 'main' in cmd))
+
+    if not is_merge_cmd:
+        return False, ''
+
+    try:
+        import subprocess as _sp_merge
+
+        updater_script = Path(__file__).parent / 'post-merge-version-updater.py'
+        if updater_script.exists():
+            result = _sp_merge.run(
+                [sys.executable, str(updater_script)],
+                capture_output=True,
+                timeout=120
+            )
+
+            if result.returncode == 0:
+                try:
+                    output = json.loads(result.stdout.decode())
+                    if output.get('status') == 'OK':
+                        new_version = output.get('new_version', 'unknown')
+                        sys.stdout.write(
+                            f'[POST-MERGE] Version auto-updated to {new_version}\n'
+                            f'  - VERSION file updated\n'
+                            f'  - README.md updated\n'
+                            f'  - SYSTEM_REQUIREMENTS_SPECIFICATION.md updated\n'
+                            f'  - Auto-commit created\n'
+                        )
+                        sys.stdout.flush()
+                except Exception:
+                    pass  # Could not parse output
+    except Exception:
+        pass  # Non-blocking: version update errors never fail the hook
+
+    return False, ''
+
+
 def close_github_issues_on_completion(tool_name, tool_input, tool_response, is_error, state):
     """Level 3.12: Close GitHub issues when a task is marked completed (non-blocking).
 
@@ -1489,6 +1543,9 @@ def main():
                 _BLOCKING_RESULT = (2, _msg)
             # Level 3.12: non-blocking GitHub issue close (runs regardless)
             close_github_issues_on_completion(tool_name, tool_input, tool_response, is_error, state)
+
+            # Level 3.10+: Post-merge version auto-update (non-blocking)
+            run_post_merge_version_update(tool_name, tool_input, is_error)
         except Exception:
             pass  # Never block on enforcement errors (fail-open)
 
