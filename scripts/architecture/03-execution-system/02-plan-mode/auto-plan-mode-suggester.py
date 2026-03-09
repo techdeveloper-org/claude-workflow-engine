@@ -517,7 +517,7 @@ def main():
 
     # Get Ollama config
     ollama_endpoint = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
-    ollama_model = os.getenv("OLLAMA_MODEL", "mistral")
+    ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
     score = complexity.get('score', 5)
     estimated_tasks = complexity.get('estimated_tasks', 1)
