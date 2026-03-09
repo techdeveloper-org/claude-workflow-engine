@@ -253,7 +253,7 @@ def create_level2_subgraph():
     graph.add_node("merge", level2_merge_node)
 
     # Common standards run first
-    graph.add_edge("START", "common_standards")
+    graph.add_edge(START, "common_standards")
 
     # Conditional routing: Java standards only for Java projects
     graph.add_conditional_edges(
@@ -268,6 +268,6 @@ def create_level2_subgraph():
     # Java standards (if taken) leads to merge
     graph.add_edge("java_standards", "merge")
 
-    graph.add_edge("merge", "END")
+    graph.add_edge("merge", END)
 
     return graph.compile()

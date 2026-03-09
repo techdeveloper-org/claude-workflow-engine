@@ -8,7 +8,7 @@ Level 1 has 4 independent context/state tasks that can run in parallel:
 4. Pattern Detection - cross-project pattern analysis
 
 These 4 tasks are entirely independent (no shared state between them)
-so they can run simultaneously using LangGraph's Send() API.
+so they can run simultaneously using LangGraph's parallel execution.
 
 After all 4 complete, merge_node collects results and determines
 overall Level 1 status.
@@ -16,12 +16,11 @@ overall Level 1 status.
 
 import sys
 from pathlib import Path
-from typing import List
-
 from typing import List, Any
 
 try:
-    from langgraph.graph import StateGraph, START, END, Send
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.types import Send
     _LANGGRAPH_AVAILABLE = True
 except ImportError:
     _LANGGRAPH_AVAILABLE = False
@@ -235,31 +234,6 @@ def node_patterns_detector(state: FlowState) -> FlowState:
 
 
 # ============================================================================
-# PARALLEL DISPATCHER
-# ============================================================================
-
-
-def level1_dispatch(state: FlowState) -> List[Any]:
-    """Dispatcher node that creates 4 parallel Send() calls.
-
-    This node is called once and returns a list of Send() objects,
-    one for each parallel task. LangGraph runs all 4 simultaneously.
-
-    Args:
-        state: FlowState
-
-    Returns:
-        List of Send(node_name, state) for each parallel task
-    """
-    return [
-        Send("node_context", state),
-        Send("node_session", state),
-        Send("node_preferences", state),
-        Send("node_patterns", state),
-    ]
-
-
-# ============================================================================
 # MERGE NODE
 # ============================================================================
 
@@ -310,6 +284,10 @@ def level1_merge_node(state: FlowState) -> FlowState:
 def create_level1_subgraph():
     """Create Level 1 subgraph with parallel execution.
 
+    Note: LangGraph 1.0.10 requires individual add_edge() calls
+    for multiple destinations. Multiple edges from one node
+    achieve parallel execution automatically.
+
     Returns:
         Compiled StateGraph for Level 1
     """
@@ -319,16 +297,18 @@ def create_level1_subgraph():
     graph = StateGraph(FlowState)
 
     # Add nodes
-    graph.add_node("dispatcher", level1_dispatch)
     graph.add_node("node_context", node_context_loader)
     graph.add_node("node_session", node_session_loader)
     graph.add_node("node_preferences", node_preferences_loader)
     graph.add_node("node_patterns", node_patterns_detector)
     graph.add_node("merge", level1_merge_node)
 
-    # Dispatcher sends to all 4 parallel nodes
-    graph.add_edge(START, "dispatcher")
-    graph.add_edge("dispatcher", ["node_context", "node_session", "node_preferences", "node_patterns"])
+    # Parallel execution: START -> all 4 nodes simultaneously
+    # In LangGraph, multiple edges from START run those nodes in parallel
+    graph.add_edge(START, "node_context")
+    graph.add_edge(START, "node_session")
+    graph.add_edge(START, "node_preferences")
+    graph.add_edge(START, "node_patterns")
 
     # All 4 nodes converge to merge
     graph.add_edge("node_context", "merge")
