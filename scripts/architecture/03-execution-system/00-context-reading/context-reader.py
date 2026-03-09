@@ -322,6 +322,30 @@ class ContextReader:
         else:
             return "No context files found. New project detected. Skipping context enrichment."
 
+    def create_context_read_flag(self, session_id):
+        """Create a flag file to signal that context has been read."""
+        try:
+            flag_dir = Path.home() / '.claude' / 'memory' / 'flags'
+            flag_dir.mkdir(parents=True, exist_ok=True)
+
+            pid = os.getpid()
+            flag_file = flag_dir / f'.context-read-{session_id}-{pid}.json'
+
+            flag_data = {
+                'session_id': session_id,
+                'pid': pid,
+                'timestamp': datetime.now().isoformat(),
+                'status': 'completed',
+                'project_detected': self.detect_project(),
+                'files_found': list(k for k, v in self.files_found.items() if v.get('exists'))
+            }
+
+            flag_file.write_text(json.dumps(flag_data, indent=2), encoding='utf-8')
+            return True
+        except Exception as e:
+            print(f"[WARN] Failed to create context-read flag: {e}")
+            return False
+
     def run(self):
         """Main execution."""
         print("[CONTEXT] Reading project context files...")
@@ -361,6 +385,12 @@ def main():
 
     # Cache and output trace entry
     reader.cache_in_session(session_id)
+
+    # CREATE FLAG TO SIGNAL CONTEXT READ COMPLETION
+    # This flag is checked by pre-tool-enforcer.py to enforce
+    # the "read context before writing code" policy
+    reader.create_context_read_flag(session_id)
+
     trace_entry = reader.build_trace_entry()
 
     # Output as JSON for 3-level-flow.py to parse
