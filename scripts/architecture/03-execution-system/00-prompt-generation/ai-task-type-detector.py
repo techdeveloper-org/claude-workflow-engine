@@ -65,7 +65,7 @@ class AiTaskTypeDetector:
             model: Model name (e.g., 'mistral'). Defaults to env var OLLAMA_MODEL or 'mistral'
             ollama_host: Ollama server address. Defaults to localhost:11434
         """
-        self.model = model or os.getenv("OLLAMA_MODEL", "mistral")
+        self.model = model or os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
         self.ollama_host = ollama_host
         self.api_endpoint = f"http://{ollama_host}/api/generate"
 
