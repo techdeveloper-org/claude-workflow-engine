@@ -128,6 +128,12 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "", user_mess
     # Create initial state (session_id now immutable via Annotated reducer)
     initial_state = create_initial_state(session_id, project_root, user_message)
 
+    if DEBUG:
+        print(f"[DEBUG] Initial state keys: {list(initial_state.keys())}", file=sys.stderr)
+        print(f"[DEBUG] Initial state user_message: {'user_message' in initial_state}", file=sys.stderr)
+        if "user_message" in initial_state:
+            print(f"[DEBUG] user_message value: {initial_state['user_message'][:50] if initial_state['user_message'] else 'EMPTY'}", file=sys.stderr)
+
     # Create and invoke graph
     graph = create_flow_graph()
 
