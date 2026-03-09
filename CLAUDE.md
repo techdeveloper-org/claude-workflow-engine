@@ -348,6 +348,22 @@ python scripts/bump-version.py --patch
 
 ---
 
+## Settings Configuration (v5.2.1+)
+
+**Source of Truth:** `scripts/settings-config.json`
+
+Claude Insight now maintains settings as a version-controlled JSON file:
+- **Location:** `claude-insight/scripts/settings-config.json`
+- **Purpose:** Single source of truth for hook configuration
+- **Usage:** Setup scripts read from this file and generate `~/.claude/settings.json`
+- **Auto-sync:** claude-code-ide hook-downloader automatically pulls from this repo
+
+**Never edit** `~/.claude/settings.json` directly. Always update `scripts/settings-config.json` and rerun setup.
+
+For complete settings documentation, see `scripts/README.md`.
+
+---
+
 ## Nested Hooks Architecture (v5.2.1+)
 
 **Unified Enforcement:** Matchers for granular control with Level 3.6 optimization mandatory.

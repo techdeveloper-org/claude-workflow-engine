@@ -138,8 +138,16 @@ EOF
     fi
 fi
 
-# Step 4: Install hooks in settings.json
+# Step 4: Install hooks in settings.json (from settings-config.json)
 echo "[4/5] Installing hooks in ~/.claude/settings.json..."
+
+CONFIG_FILE="$SCRIPT_DIR/settings-config.json"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "  [ERROR] settings-config.json not found at $CONFIG_FILE"
+    echo "  [INFO] This file should be in the scripts/ directory of claude-insight"
+    exit 1
+fi
 
 if [ -f "$SETTINGS_FILE" ]; then
     echo "  [INFO] Existing settings.json found"
@@ -148,72 +156,15 @@ if [ -f "$SETTINGS_FILE" ]; then
         echo "  [OK] Hooks already configured in settings.json - skipping"
     else
         echo "  [WARN] settings.json exists but no 3-level-flow hooks found"
-        echo "  [INFO] Please manually add hooks - see scripts/hooks-config.json for reference"
+        echo "  [INFO] Installing hooks from settings-config.json..."
+        cp "$CONFIG_FILE" "$SETTINGS_FILE"
+        echo "  [OK] Hooks installed from settings-config.json"
     fi
 else
-    # Create new settings.json with all 4 hook types
-    cat > "$SETTINGS_FILE" << EOF
-{
-  "model": "sonnet",
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python $MEMORY_CURRENT/clear-session-handler.py",
-            "timeout": 15,
-            "statusMessage": "Level 1: Checking session state..."
-          },
-          {
-            "type": "command",
-            "command": "python $MEMORY_CURRENT/3-level-flow.py --summary",
-            "timeout": 30,
-            "statusMessage": "Level -1/1/2/3: Running 3-level architecture check..."
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python $MEMORY_CURRENT/pre-tool-enforcer.py",
-            "timeout": 10,
-            "statusMessage": "Level 3.6/3.7: Tool optimization + failure prevention..."
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python $MEMORY_CURRENT/post-tool-tracker.py",
-            "timeout": 10,
-            "statusMessage": "Level 3.9: Tracking task progress..."
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python $MEMORY_CURRENT/stop-notifier.py",
-            "timeout": 20,
-            "statusMessage": "Level 3.10: Session save + voice notification..."
-          }
-        ]
-      }
-    ]
-  }
-}
-EOF
-    echo "  [OK] settings.json created with all 4 hooks (UserPromptSubmit + PreToolUse + PostToolUse + Stop)"
+    # Create new settings.json from config template
+    echo "  [INFO] Creating new settings.json from settings-config.json..."
+    cp "$CONFIG_FILE" "$SETTINGS_FILE"
+    echo "  [OK] settings.json created from settings-config.json"
 fi
 
 # Step 5: Finalize

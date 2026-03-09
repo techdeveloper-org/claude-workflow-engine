@@ -113,89 +113,31 @@ if (Test-Path $GlobalClaudeMd) {
     }
 }
 
-# Step 4: Install hooks in settings.json
+# Step 4: Install hooks in settings.json (from settings-config.json)
 Write-Host "[4/5] Installing hooks in ~/.claude/settings.json..."
 
-$hookCmd3Level   = "python " + (Join-Path $MemoryCurrent "3-level-flow.py") + " --summary"
-$hookCmdClear    = "python " + (Join-Path $MemoryCurrent "clear-session-handler.py")
-$hookCmdStop     = "python " + (Join-Path $MemoryCurrent "stop-notifier.py")
-$hookCmdPreTool  = "python " + (Join-Path $MemoryCurrent "pre-tool-enforcer.py")
-$hookCmdPostTool = "python " + (Join-Path $MemoryCurrent "post-tool-tracker.py")
+$ConfigFile = Join-Path $ScriptDir "settings-config.json"
+
+if (-not (Test-Path $ConfigFile)) {
+    Write-Host "  [ERROR] settings-config.json not found at $ConfigFile"
+    Write-Host "  [INFO] This file should be in the scripts/ directory of claude-insight"
+    exit 1
+}
 
 if (Test-Path $SettingsFile) {
     $settingsContent = Get-Content $SettingsFile -Raw
     if ($settingsContent -match "3-level-flow") {
         Write-Host "  [OK] Hooks already in settings.json - skipping"
-        if ($settingsContent -notmatch "PreToolUse") {
-            Write-Host "  [WARN] PreToolUse and PostToolUse hooks may be missing"
-            Write-Host "  [INFO] Add pre-tool-enforcer.py and post-tool-tracker.py manually to settings.json"
-        }
     } else {
         Write-Host "  [WARN] settings.json exists but no hooks found"
-        Write-Host "  [INFO] See README.md 'How the Hooks Work' section for manual setup"
+        Write-Host "  [INFO] Installing hooks from settings-config.json..."
+        Copy-Item $ConfigFile $SettingsFile -Force
+        Write-Host "  [OK] Hooks installed from settings-config.json"
     }
 } else {
-    $settingsJson = @{
-        model = "sonnet"
-        hooks = @{
-            UserPromptSubmit = @(
-                @{
-                    hooks = @(
-                        @{
-                            type = "command"
-                            command = $hookCmdClear
-                            timeout = 15
-                            statusMessage = "Level 1: Checking session state..."
-                        },
-                        @{
-                            type = "command"
-                            command = $hookCmd3Level
-                            timeout = 30
-                            statusMessage = "Level -1/1/2/3: Running 3-level architecture check..."
-                        }
-                    )
-                }
-            )
-            PreToolUse = @(
-                @{
-                    hooks = @(
-                        @{
-                            type = "command"
-                            command = $hookCmdPreTool
-                            timeout = 10
-                            statusMessage = "Level 3.6/3.7: Tool optimization + failure prevention..."
-                        }
-                    )
-                }
-            )
-            PostToolUse = @(
-                @{
-                    hooks = @(
-                        @{
-                            type = "command"
-                            command = $hookCmdPostTool
-                            timeout = 10
-                            statusMessage = "Level 3.9: Tracking task progress..."
-                        }
-                    )
-                }
-            )
-            Stop = @(
-                @{
-                    hooks = @(
-                        @{
-                            type = "command"
-                            command = $hookCmdStop
-                            timeout = 20
-                            statusMessage = "Level 3.10: Session save + voice notification..."
-                        }
-                    )
-                }
-            )
-        }
-    }
-    $settingsJson | ConvertTo-Json -Depth 10 | Set-Content $SettingsFile -Encoding UTF8
-    Write-Host "  [OK] settings.json created with all 4 hooks (UserPromptSubmit + PreToolUse + PostToolUse + Stop)"
+    Write-Host "  [INFO] Creating new settings.json from settings-config.json..."
+    Copy-Item $ConfigFile $SettingsFile -Force
+    Write-Host "  [OK] settings.json created from settings-config.json"
 }
 
 # Step 5: Finalize

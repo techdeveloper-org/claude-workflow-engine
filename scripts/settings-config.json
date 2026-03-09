@@ -1,0 +1,82 @@
+{
+  "permissions": {
+    "defaultMode": "default"
+  },
+  "model": "haiku",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/scripts/3-level-flow.py",
+            "timeout": 120,
+            "statusMessage": "3-Level Architecture: Session + Level -1 -> 1 -> 2 -> 3",
+            "async": false
+          },
+          {
+            "type": "command",
+            "command": "python ~/.claude/scripts/github_issue_manager.py",
+            "timeout": 30,
+            "statusMessage": "GitHub Issue Management: Creating branches from issues with labels...",
+            "async": false
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Write|Edit|NotebookEdit|Bash|Read|Grep|Glob)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/scripts/pre-tool-enforcer.py",
+            "timeout": 12,
+            "statusMessage": "Level 3.6/3.7: Tool optimization + blocking enforcement...",
+            "async": false
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Write|Edit|NotebookEdit|Bash|TaskCreate|TaskUpdate|Skill|Task)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/scripts/post-tool-tracker.py",
+            "timeout": 30,
+            "statusMessage": "Level 3.9-3.12: Progress + GitHub issue/close + flags...",
+            "async": false
+          }
+        ]
+      },
+      {
+        "matcher": "^(Read|Grep|Glob|WebFetch|WebSearch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/scripts/post-tool-tracker.py",
+            "timeout": 10,
+            "statusMessage": "Level 3.9: Progress tracking...",
+            "async": false
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ~/.claude/scripts/stop-notifier.py",
+            "timeout": 60,
+            "statusMessage": "Level 3.10: Session save + voice...",
+            "async": false
+          }
+        ]
+      }
+    ]
+  },
+  "skipDangerousModePermissionPrompt": true
+}
