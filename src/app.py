@@ -98,9 +98,9 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from pathlib import Path
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PERSISTENCE HELPERS — widgets and search history stored as JSON on disk
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# PERSISTENCE HELPERS -- widgets and search history stored as JSON on disk
+# -----------------------------------------------------------------------------
 _APP_CONFIG_DIR = Path(__file__).parent.parent / 'config'
 _APP_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1856,7 +1856,7 @@ def api_trace_mode():
             'claude_md_exists': claude_md.exists()
         })
 
-    # POST — toggle
+    # POST -- toggle
     data = request.get_json() or {}
     new_value = data.get('enabled', True)
     if not claude_md.exists():
@@ -2099,7 +2099,7 @@ def api_architecture_summary():
 @app.route('/api/architecture/sync', methods=['POST'])
 @login_required
 def api_architecture_sync():
-    """Trigger architecture module sync (informational — actual sync via hook-downloader)."""
+    """Trigger architecture module sync (informational -- actual sync via hook-downloader)."""
     return jsonify({
         'success': True,
         'message': (

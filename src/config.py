@@ -61,7 +61,7 @@ class Config:
 
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-    # Memory System Paths (MEMORY_SYSTEM_DIR is already the data root — no double nesting)
+    # Memory System Paths (MEMORY_SYSTEM_DIR is already the data root -- no double nesting)
     MEMORY_DIR = MEMORY_SYSTEM_DIR
     LOGS_DIR = MEMORY_DIR / 'logs'
     SESSIONS_DIR = MEMORY_DIR / 'sessions'
