@@ -864,9 +864,16 @@ def main():
     try:
         raw = sys.stdin.read()
         if not raw or not raw.strip():
+            # Empty stdin - hook was called but no data provided
+            # This is OK - just output success and exit
+            sys.stdout.write('[L3.9] Post-tool tracking complete (no stdin)\n')
+            sys.stdout.flush()
             sys.exit(0)
         data = json.loads(raw)
-    except Exception:
+    except Exception as e:
+        # Failed to read/parse stdin - still output success
+        sys.stdout.write(f'[L3.9] Post-tool tracking complete (read error: {str(e)[:30]})\n')
+        sys.stdout.flush()
         sys.exit(0)
 
     tool_name = data.get('tool_name', '')
