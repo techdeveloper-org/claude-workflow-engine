@@ -104,13 +104,10 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "") -> dict:
     if DEBUG:
         print("[DEBUG] Starting LangGraph execution...")
 
-    # Try invoking without config first to see if that's the issue
-    try:
-        result = graph.invoke(initial_state)
-    except Exception as e:
-        # If that fails, try with config
-        invoke_config = get_invoke_config(session_id)
-        result = graph.invoke(initial_state, config=invoke_config)
+    # Invoke with proper config for multi-window multi-session support
+    # LangGraph uses thread_id for session isolation
+    invoke_config = get_invoke_config(session_id)
+    result = graph.invoke(initial_state, config=invoke_config)
 
     if DEBUG:
         print(f"[DEBUG] Execution complete. Status: {result.get('final_status')}")

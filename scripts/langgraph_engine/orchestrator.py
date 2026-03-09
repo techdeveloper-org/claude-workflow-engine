@@ -102,31 +102,30 @@ def route_standards_loading(state: FlowState) -> Literal["level2_java_standards"
 # ============================================================================
 
 
-def emergency_archive(state: FlowState) -> FlowState:
+def emergency_archive(state: FlowState) -> dict:
     """Emergency archival when context threshold exceeded."""
-    if "warnings" not in state:
-        state["warnings"] = []
-    state["warnings"].append(
+    warnings = state.get("warnings", []) + [
         f"Context usage high ({state.get('context_percentage', 0):.1f}%) - "
         "archive recommended"
-    )
-    return state
+    ]
+    return {"warnings": warnings}
 
 
-def output_node(state: FlowState) -> FlowState:
+def output_node(state: FlowState) -> dict:
     """Final output node - determines completion status."""
+    updates = {}
     if state.get("final_status") == "pending":
         # Check for blocking conditions
         if state.get("level_minus1_status") == "BLOCKED":
-            state["final_status"] = "BLOCKED"
+            updates["final_status"] = "BLOCKED"
         elif state.get("errors"):
-            state["final_status"] = "FAILED"
+            updates["final_status"] = "FAILED"
         elif state.get("warnings"):
-            state["final_status"] = "PARTIAL"
+            updates["final_status"] = "PARTIAL"
         else:
-            state["final_status"] = "OK"
+            updates["final_status"] = "OK"
 
-    return state
+    return updates
 
 
 # ============================================================================
