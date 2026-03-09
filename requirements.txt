@@ -52,6 +52,12 @@ networkx>=3.1               # Graph construction + algorithms (centrality, pager
 lizard>=1.17.0              # Multi-language cyclomatic complexity (Python/Java/JS/Go/C++)
 
 # ============================================================================
+# LANGGRAPH ORCHESTRATION (3-Level Flow Engine)
+# ============================================================================
+langgraph>=0.2.0            # StateGraph orchestration for parallel + conditional execution
+langchain-core>=0.3.0       # Core primitives (TypedDict, Annotated)
+
+# ============================================================================
 # SYSTEM MONITORING & ANALYTICS
 # ============================================================================
 numpy>=1.24.3
