@@ -15,8 +15,18 @@ from pathlib import Path
 from typing import Optional
 
 try:
-    from langgraph.checkpoint.memory import MemorySaver
-    from langgraph.checkpoint.sqlite import SqliteSaver
+    try:
+        from langgraph.checkpoint.memory import MemorySaver
+    except ImportError:
+        # LangGraph 1.0.10 has checkpointing in different location
+        from langgraph.checkpoint import MemorySaver
+
+    try:
+        from langgraph.checkpoint.sqlite import SqliteSaver
+    except ImportError:
+        # SqliteSaver might not be available in all versions
+        SqliteSaver = MemorySaver  # Fallback to memory
+
     _LANGGRAPH_AVAILABLE = True
 except ImportError:
     _LANGGRAPH_AVAILABLE = False
