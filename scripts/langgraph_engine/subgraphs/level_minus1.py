@@ -29,7 +29,7 @@ from ..flow_state import FlowState
 # ============================================================================
 
 
-def node_unicode_fix(state: FlowState) -> dict:
+def node_unicode_fix(state: FlowState) -> FlowState:
     """Auto-fix Windows Unicode/UTF-8 encoding issues.
 
     On Windows, ensures sys.stdout and sys.stderr are UTF-8 encoded
@@ -41,12 +41,11 @@ def node_unicode_fix(state: FlowState) -> dict:
     Returns:
         Updated state with unicode_check result
     """
-    updates = {}
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
-            updates["unicode_check"] = True
-            return updates
+            state["unicode_check"] = True
+            return state
 
         # Windows - apply UTF-8 reconfiguration
         import io
@@ -71,19 +70,19 @@ def node_unicode_fix(state: FlowState) -> dict:
             )
             applied = True
 
-        updates["unicode_check"] = True
+        state["unicode_check"] = True
         if applied:
-            updates["auto_fix_applied"] = state.get("auto_fix_applied", []) + ["Unicode UTF-8 encoding"]
+            state.setdefault("auto_fix_applied", []).append("Unicode UTF-8 encoding")
 
-        return updates
+        return state
 
     except Exception as e:
-        updates["unicode_check"] = False
-        updates["unicode_check_error"] = str(e)
-        return updates
+        state["unicode_check"] = False
+        state["unicode_check_error"] = str(e)
+        return state
 
 
-def node_encoding_validation(state: FlowState) -> dict:
+def node_encoding_validation(state: FlowState) -> FlowState:
     """Validate file encoding standards for Python on Windows.
 
     On Windows, enforces ASCII-only Python files (cp1252 safe) to avoid
@@ -96,12 +95,11 @@ def node_encoding_validation(state: FlowState) -> dict:
     Returns:
         Updated state with encoding_check result
     """
-    updates = {}
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
-            updates["encoding_check"] = True
-            return updates
+            state["encoding_check"] = True
+            return state
 
         project_root = Path(state.get("project_root", "."))
         py_files = list(project_root.glob("**/*.py"))
@@ -117,22 +115,22 @@ def node_encoding_validation(state: FlowState) -> dict:
                 non_ascii_files.append(str(py_file.relative_to(project_root)))
 
         if non_ascii_files:
-            updates["encoding_check"] = False
-            updates["encoding_check_error"] = (
+            state["encoding_check"] = False
+            state["encoding_check_error"] = (
                 f"Non-ASCII Python files found: {', '.join(non_ascii_files[:3])}"
             )
         else:
-            updates["encoding_check"] = True
+            state["encoding_check"] = True
 
-        return updates
+        return state
 
     except Exception as e:
-        updates["encoding_check"] = False
-        updates["encoding_check_error"] = str(e)
-        return updates
+        state["encoding_check"] = False
+        state["encoding_check_error"] = str(e)
+        return state
 
 
-def node_windows_path_check(state: FlowState) -> dict:
+def node_windows_path_check(state: FlowState) -> FlowState:
     """Validate Windows path handling in code and configs.
 
     Checks that all paths use forward slashes (/) and don't contain
@@ -144,12 +142,11 @@ def node_windows_path_check(state: FlowState) -> dict:
     Returns:
         Updated state with windows_path_check result
     """
-    updates = {}
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
-            updates["windows_path_check"] = True
-            return updates
+            state["windows_path_check"] = True
+            return state
 
         project_root = Path(state.get("project_root", "."))
 
@@ -165,19 +162,19 @@ def node_windows_path_check(state: FlowState) -> dict:
                 pass
 
         if issues:
-            updates["windows_path_check"] = False
-            updates["windows_path_check_error"] = (
+            state["windows_path_check"] = False
+            state["windows_path_check_error"] = (
                 f"Backslash paths found: {', '.join(issues[:2])}"
             )
         else:
-            updates["windows_path_check"] = True
+            state["windows_path_check"] = True
 
-        return updates
+        return state
 
     except Exception as e:
-        updates["windows_path_check"] = False
-        updates["windows_path_check_error"] = str(e)
-        return updates
+        state["windows_path_check"] = False
+        state["windows_path_check_error"] = str(e)
+        return state
 
 
 # ============================================================================
@@ -185,7 +182,7 @@ def node_windows_path_check(state: FlowState) -> dict:
 # ============================================================================
 
 
-def level_minus1_merge_node(state: FlowState) -> dict:
+def level_minus1_merge_node(state: FlowState) -> FlowState:
     """Merge results from all Level -1 checks.
 
     Determines overall Level -1 status based on individual checks:
@@ -198,26 +195,25 @@ def level_minus1_merge_node(state: FlowState) -> dict:
     Returns:
         Updated state with level_minus1_status
     """
-    updates = {}
     unicode_ok = state.get("unicode_check", False)
     encoding_ok = state.get("encoding_check", False)
     windows_path_ok = state.get("windows_path_check", False)
 
     # All checks must pass for Level -1 to be OK
     if unicode_ok and encoding_ok and windows_path_ok:
-        updates["level_minus1_status"] = "OK"
+        state["level_minus1_status"] = "OK"
     else:
-        updates["level_minus1_status"] = "BLOCKED"
-        errors = state.get("errors", [])
+        state["level_minus1_status"] = "BLOCKED"
+        if "errors" not in state:
+            state["errors"] = []
         if not unicode_ok:
-            errors = errors + [f"Unicode check failed: {state.get('unicode_check_error')}"]
+            state["errors"].append(f"Unicode check failed: {state.get('unicode_check_error')}")
         if not encoding_ok:
-            errors = errors + [f"Encoding check failed: {state.get('encoding_check_error')}"]
+            state["errors"].append(f"Encoding check failed: {state.get('encoding_check_error')}")
         if not windows_path_ok:
-            errors = errors + [f"Windows path check failed: {state.get('windows_path_check_error')}"]
-        updates["errors"] = errors
+            state["errors"].append(f"Windows path check failed: {state.get('windows_path_check_error')}")
 
-    return updates
+    return state
 
 
 # ============================================================================

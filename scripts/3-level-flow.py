@@ -100,12 +100,17 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "") -> dict:
 
     # Create and invoke graph
     graph = create_flow_graph()
-    invoke_config = get_invoke_config(session_id)
 
     if DEBUG:
         print("[DEBUG] Starting LangGraph execution...")
 
-    result = graph.invoke(initial_state, config=invoke_config)
+    # Try invoking without config first to see if that's the issue
+    try:
+        result = graph.invoke(initial_state)
+    except Exception as e:
+        # If that fails, try with config
+        invoke_config = get_invoke_config(session_id)
+        result = graph.invoke(initial_state, config=invoke_config)
 
     if DEBUG:
         print(f"[DEBUG] Execution complete. Status: {result.get('final_status')}")

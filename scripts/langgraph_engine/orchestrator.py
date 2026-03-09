@@ -274,14 +274,9 @@ def create_flow_graph():
     graph.add_edge("level3_merge", "output_node")
     graph.add_edge("output_node", END)
 
-    # Compile with checkpointer (optional for LangGraph 1.0.10)
-    try:
-        from .checkpointer import CheckpointerManager
-        checkpointer = CheckpointerManager.get_default_checkpointer(use_sqlite=False)
-        compiled_graph = graph.compile(checkpointer=checkpointer)
-    except Exception:
-        # Fallback: compile without checkpointer
-        compiled_graph = graph.compile()
+    # Compile graph WITHOUT checkpointer to avoid session_id conflicts
+    # TODO: Add checkpointer support after fixing state merge issues
+    compiled_graph = graph.compile()
     return compiled_graph
 
 
