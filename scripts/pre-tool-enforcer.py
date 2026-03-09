@@ -1629,6 +1629,34 @@ def main():
     if not isinstance(tool_input, dict):
         tool_input = {}
 
+    # CRITICAL: PRE-LOAD SKILLS/AGENTS BEFORE INVOCATION (Step 3.5)
+    # Don't let LLM invoke a skill that hasn't been loaded yet!
+    if tool_name in ('Skill', 'Agent'):
+        try:
+            skill_or_agent_name = tool_input.get('skill', tool_input.get('agent', ''))
+            if skill_or_agent_name:
+                skill_loader_script = Path(__file__).parent / 'architecture' / \
+                    '03-execution-system' / '05-skill-agent-selection' / 'core-skills-loader.py'
+
+                if skill_loader_script.exists():
+                    # Load the skill/agent BEFORE LLM invokes it
+                    result = subprocess.run(
+                        [sys.executable, str(skill_loader_script), skill_or_agent_name],
+                        capture_output=True,
+                        timeout=15
+                    )
+
+                    if result.returncode == 0:
+                        try:
+                            load_info = json.loads(result.stdout)
+                            if load_info.get('skill_loaded', {}).get('loaded'):
+                                hint = f'[PRELOAD] {skill_or_agent_name}: Loaded and ready'
+                                sys.stdout.write(hint + '\n')
+                        except Exception:
+                            pass  # Non-critical
+        except Exception:
+            pass  # Non-blocking - let tool invocation proceed anyway
+
     all_hints = []
     all_blocks = []
 
