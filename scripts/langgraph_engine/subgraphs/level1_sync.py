@@ -426,6 +426,10 @@ def level1_merge_node(state: FlowState) -> dict:
     if state.get("context_percentage", 0) > 85:
         updates["context_threshold_exceeded"] = True
 
+    # Explicitly preserve immutable fields through graph execution
+    updates["user_message"] = state.get("user_message", "")
+    updates["user_message_length"] = state.get("user_message_length", 0)
+
     return updates
 
 
