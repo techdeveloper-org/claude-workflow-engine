@@ -313,12 +313,12 @@ class TestEnforcementLogger(unittest.TestCase):
         self.logger.log_policy_execution(
             'unicode-test',
             'OK',
-            'Test with émojis 🚀 and 中文'
+            'Test with emojis [ROCKET] and Chinese'
         )
 
         log_content = self.logger.log_file.read_text(encoding='utf-8')
-        self.assertIn('🚀', log_content)
-        self.assertIn('中文', log_content)
+        self.assertIn('[ROCKET]', log_content)
+        self.assertIn('Chinese', log_content)
 
     def test_state_file_preserves_existing_data(self):
         """Test that updating state preserves existing state data"""

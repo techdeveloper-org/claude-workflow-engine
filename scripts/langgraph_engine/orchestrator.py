@@ -75,10 +75,9 @@ from .subgraphs.level3_execution import (
 # ============================================================================
 
 
-def route_after_level_minus1(state: FlowState) -> Literal["output_node", "level1_unicode"]:
+def route_after_level_minus1(state: FlowState) -> Literal["output_node", "level1_context"]:
     """Route based on Level -1 blocking status."""
     if state.get("level_minus1_status") == "BLOCKED":
-        state["final_status"] = "BLOCKED"
         return "output_node"
     return "level1_context"
 
@@ -117,7 +116,10 @@ def emergency_archive(state: FlowState) -> FlowState:
 def output_node(state: FlowState) -> FlowState:
     """Final output node - determines completion status."""
     if state.get("final_status") == "pending":
-        if state.get("errors"):
+        # Check for blocking conditions
+        if state.get("level_minus1_status") == "BLOCKED":
+            state["final_status"] = "BLOCKED"
+        elif state.get("errors"):
             state["final_status"] = "FAILED"
         elif state.get("warnings"):
             state["final_status"] = "PARTIAL"
