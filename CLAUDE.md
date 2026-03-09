@@ -21,6 +21,30 @@ It does **NOT** override the global `~/.claude/CLAUDE.md` policies.
 
 ---
 
+## FUTURE ARCHITECTURE (Approved & Saved)
+
+### Vector DB RAG Implementation (Q2 2026)
+**Status:** Designed, approved, saved for future
+**Location:** `docs/VECTOR-DB-RAG-FUTURE-PLAN.md`
+
+Permanent solution for context bloat + AI model training readiness:
+- Vector Database (Qdrant) with semantic search
+- 64-dim quantized embeddings (99% memory reduction)
+- 4-week implementation roadmap
+- Schema design for tool_calls, sessions, flow_traces
+
+**When to implement:** After Phase 1-3 quick fixes, before custom Claude model training
+
+### Session Bloat Analysis & Solutions
+**Location:** `docs/SESSION-BLOAT-ANALYSIS.md`
+
+Root cause analysis and three-phase fix plan:
+1. **Phase 1 (Immediate):** Trace rotation + print optimization
+2. **Phase 2 (Short-term):** Session metadata cleanup
+3. **Phase 3 (Long-term):** Auto-archival system
+
+---
+
 ## FIRST TIME SETUP - INSTALL THE MEMORY SYSTEM
 
 Before working on this project, set up the Claude Memory System globally.
