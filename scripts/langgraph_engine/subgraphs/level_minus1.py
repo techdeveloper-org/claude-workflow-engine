@@ -39,12 +39,18 @@ def node_unicode_fix(state: FlowState) -> dict:
         state: FlowState
 
     Returns:
-        Updated state with unicode_check result (excluding immutable fields like session_id)
+        Updated state with unicode_check result
     """
+    # NOTE: session_id will be set by 3-level-flow.py before invoking
+    # Nodes should preserve it if it exists
+    updates = {}
+    if "session_id" in state:
+        updates["session_id"] = state["session_id"]
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
-            return {"unicode_check": True}
+            updates["unicode_check"] = True
+            return updates
 
         # Windows - apply UTF-8 reconfiguration
         import io
@@ -69,16 +75,15 @@ def node_unicode_fix(state: FlowState) -> dict:
             )
             applied = True
 
-        updates = {"unicode_check": True}
+        updates["unicode_check"] = True
         if applied:
             updates["auto_fix_applied"] = state.get("auto_fix_applied", []) + ["Unicode UTF-8 encoding"]
         return updates
 
     except Exception as e:
-        return {
-            "unicode_check": False,
-            "unicode_check_error": str(e)
-        }
+        updates["unicode_check"] = False
+        updates["unicode_check_error"] = str(e)
+        return updates
 
 
 def node_encoding_validation(state: FlowState) -> dict:
@@ -94,10 +99,14 @@ def node_encoding_validation(state: FlowState) -> dict:
     Returns:
         Updated state with encoding_check result (only changed fields)
     """
+    updates = {}
+    if "session_id" in state:
+        updates["session_id"] = state["session_id"]
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
-            return {"encoding_check": True}
+            updates["encoding_check"] = True
+            return updates
 
         project_root = Path(state.get("project_root", "."))
         py_files = list(project_root.glob("**/*.py"))
@@ -113,20 +122,19 @@ def node_encoding_validation(state: FlowState) -> dict:
                 non_ascii_files.append(str(py_file.relative_to(project_root)))
 
         if non_ascii_files:
-            return {
-                "encoding_check": False,
-                "encoding_check_error": (
-                    f"Non-ASCII Python files found: {', '.join(non_ascii_files[:3])}"
-                )
-            }
+            updates["encoding_check"] = False
+            updates["encoding_check_error"] = (
+                f"Non-ASCII Python files found: {', '.join(non_ascii_files[:3])}"
+            )
         else:
-            return {"encoding_check": True}
+            updates["encoding_check"] = True
+
+        return updates
 
     except Exception as e:
-        return {
-            "encoding_check": False,
-            "encoding_check_error": str(e)
-        }
+        updates["encoding_check"] = False
+        updates["encoding_check_error"] = str(e)
+        return updates
 
 
 def node_windows_path_check(state: FlowState) -> dict:
@@ -141,10 +149,14 @@ def node_windows_path_check(state: FlowState) -> dict:
     Returns:
         Updated state with windows_path_check result (only changed fields)
     """
+    updates = {}
+    if "session_id" in state:
+        updates["session_id"] = state["session_id"]
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
-            return {"windows_path_check": True}
+            updates["windows_path_check"] = True
+            return updates
 
         project_root = Path(state.get("project_root", "."))
 
@@ -160,20 +172,19 @@ def node_windows_path_check(state: FlowState) -> dict:
                 pass
 
         if issues:
-            return {
-                "windows_path_check": False,
-                "windows_path_check_error": (
-                    f"Backslash paths found: {', '.join(issues[:2])}"
-                )
-            }
+            updates["windows_path_check"] = False
+            updates["windows_path_check_error"] = (
+                f"Backslash paths found: {', '.join(issues[:2])}"
+            )
         else:
-            return {"windows_path_check": True}
+            updates["windows_path_check"] = True
+
+        return updates
 
     except Exception as e:
-        return {
-            "windows_path_check": False,
-            "windows_path_check_error": str(e)
-        }
+        updates["windows_path_check"] = False
+        updates["windows_path_check_error"] = str(e)
+        return updates
 
 
 # ============================================================================
@@ -199,6 +210,8 @@ def level_minus1_merge_node(state: FlowState) -> dict:
     windows_path_ok = state.get("windows_path_check", False)
 
     updates = {}
+    if "session_id" in state:
+        updates["session_id"] = state["session_id"]
 
     # All checks must pass for Level -1 to be OK
     if unicode_ok and encoding_ok and windows_path_ok:

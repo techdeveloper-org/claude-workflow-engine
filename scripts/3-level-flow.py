@@ -98,6 +98,10 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "") -> dict:
     # Create initial state
     initial_state = create_initial_state(session_id, project_root)
 
+    # FIX: Set session_id after creation to avoid LangGraph duplicate update conflict
+    # Don't initialize it in create_initial_state - nodes will preserve it
+    initial_state["session_id"] = session_id
+
     # Create and invoke graph
     graph = create_flow_graph()
 
@@ -107,6 +111,8 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "") -> dict:
     # Invoke with proper config for multi-window multi-session support
     # LangGraph uses thread_id for session isolation
     invoke_config = get_invoke_config(session_id)
+
+    # Invoke with initial state - LangGraph handles it with thread_id config
     result = graph.invoke(initial_state, config=invoke_config)
 
     if DEBUG:

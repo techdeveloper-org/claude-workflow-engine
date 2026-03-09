@@ -104,16 +104,22 @@ def route_standards_loading(state: FlowState) -> Literal["level2_java_standards"
 
 def emergency_archive(state: FlowState) -> dict:
     """Emergency archival when context threshold exceeded."""
+    updates = {}
+    if "session_id" in state:
+        updates["session_id"] = state["session_id"]
     warnings = state.get("warnings", []) + [
         f"Context usage high ({state.get('context_percentage', 0):.1f}%) - "
         "archive recommended"
     ]
-    return {"warnings": warnings}
+    updates["warnings"] = warnings
+    return updates
 
 
 def output_node(state: FlowState) -> dict:
     """Final output node - determines completion status."""
     updates = {}
+    if "session_id" in state:
+        updates["session_id"] = state["session_id"]
     if state.get("final_status") == "pending":
         # Check for blocking conditions
         if state.get("level_minus1_status") == "BLOCKED":
@@ -298,7 +304,9 @@ def create_initial_state(session_id: str = "", project_root: str = "") -> FlowSt
         project_root = str(Path.cwd())
 
     return FlowState(
-        session_id=session_id,
+        # DON'T initialize session_id here to avoid LangGraph conflict
+        # session_id will be set by nodes on first execution
+        # session_id=session_id,
         timestamp=datetime.now().isoformat(),
         project_root=project_root,
         is_java_project=False,
