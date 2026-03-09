@@ -66,11 +66,13 @@ def run_policy_script(script_name: str, args: list = None, timeout: int = 30) ->
         if args:
             cmd.extend(args)
 
-        # Execute
+        # Execute with UTF-8 encoding for Windows compatibility
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=timeout,
             cwd=scripts_dir
         )

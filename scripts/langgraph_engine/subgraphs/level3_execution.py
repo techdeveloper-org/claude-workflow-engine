@@ -46,6 +46,8 @@ def call_execution_script(script_name: str, args: list = None) -> dict:
             cmd,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=30,
             cwd=scripts_dir
         )

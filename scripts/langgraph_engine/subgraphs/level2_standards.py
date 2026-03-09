@@ -82,11 +82,13 @@ def run_standards_loader_script() -> dict:
         if not script_path.exists():
             return {"status": "SCRIPT_NOT_FOUND"}
 
-        # Run script
+        # Run script with UTF-8 encoding for Windows compatibility
         result = subprocess.run(
             [sys.executable, str(script_path), "--load-all"],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=30,
             cwd=scripts_dir
         )
