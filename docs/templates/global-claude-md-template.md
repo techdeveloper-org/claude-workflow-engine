@@ -33,15 +33,9 @@
     ]}],
     "PreToolUse": [
       {
-        "matcher": "^(Write|Edit|NotebookEdit|Bash)$",
+        "matcher": "^(Write|Edit|NotebookEdit|Bash|Read|Grep|Glob)$",
         "hooks": [
-          {"type": "command", "command": "python ~/.claude/scripts/pre-tool-enforcer.py", "timeout": 15, "statusMessage": "Level 3.1/3.3/3.5/3.7: Checkpoint + task + skill + blocking..."}
-        ]
-      },
-      {
-        "matcher": "^(Read|Grep|Glob)$",
-        "hooks": [
-          {"type": "command", "command": "python ~/.claude/scripts/pre-tool-enforcer.py", "timeout": 10, "statusMessage": "Level 3.6: Tool optimization hints..."}
+          {"type": "command", "command": "python ~/.claude/scripts/pre-tool-enforcer.py", "timeout": 12, "statusMessage": "Level 3.6/3.7: Tool optimization + blocking enforcement..."}
         ]
       }
     ],
@@ -66,10 +60,15 @@
 }
 ```
 
-**Nested Hooks Explanation:**
-- **PreToolUse matchers:** Target code-modifying tools (Write, Edit, etc.) with full blocking + 3.1/3.3/3.5/3.7 levels, and read-only tools (Read, Grep, Glob) with hints only (3.6)
-- **PostToolUse matchers:** Track code/task tools (Write, Edit, TaskCreate, etc.) with full progress + GitHub integration, and read-only tools (Read, WebFetch, etc.) with lightweight progress only
-- **Non-matched tools:** WebFetch, WebSearch, and other tools pass through without hook processing (no unnecessary overhead)
+**Matchers Explanation:**
+- **PreToolUse:** Single unified matcher for all tools needing Level 3.6/3.7 enforcement (Write, Edit, Bash, Read, Grep, Glob)
+  - Enforces tool optimization (offset/limit for large files, head_limit for Grep, etc.)
+  - Blocks code-modifying operations AND read operations that violate optimization policy
+  - WebFetch, WebSearch, Agent pass through without hooks (external APIs, no optimization possible)
+- **PostToolUse:** Two matchers for different tracking scopes
+  - Code/task tools: Full progress + GitHub integration (3.9-3.12)
+  - Read-only tools: Lightweight progress tracking (3.9 only)
+- **Non-matched tools:** Agent, Task and others pass through without hook processing
 
 ---
 

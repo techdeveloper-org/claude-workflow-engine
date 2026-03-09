@@ -2,7 +2,7 @@
 
 **Project:** Claude Insight
 **Type:** Python Flask Monitoring Dashboard
-**Version:** 5.2.0
+**Version:** 5.2.1
 **Status:** Active Development
 
 ---
@@ -348,9 +348,9 @@ python scripts/bump-version.py --patch
 
 ---
 
-## Nested Hooks Architecture (v5.2.0+)
+## Nested Hooks Architecture (v5.2.1+)
 
-**Upgrade:** Added matchers to PreToolUse and PostToolUse hooks for granular control.
+**Unified Enforcement:** Matchers for granular control with Level 3.6 optimization mandatory.
 
 ### Structure
 
@@ -360,24 +360,25 @@ python scripts/bump-version.py --patch
 github_issue_manager.py (issue tracking)
 ```
 
-**PreToolUse** (2 matchers)
+**PreToolUse** (1 unified matcher for enforcement)
 ```
-Matcher 1: ^(Write|Edit|NotebookEdit|Bash)$
-  └─ pre-tool-enforcer.py → Level 3.1/3.3/3.5/3.7 (full blocking)
+Matcher: ^(Write|Edit|NotebookEdit|Bash|Read|Grep|Glob)$
+  └─ pre-tool-enforcer.py → Level 3.6/3.7 (tool optimization + blocking)
+     ├─ Read: enforce offset/limit for large files (>500 lines)
+     ├─ Grep: enforce head_limit for large result sets
+     ├─ Write/Edit/Bash: full code enforcement + blocking
+     └─ BLOCKING: All tools must comply with optimization policy
 
-Matcher 2: ^(Read|Grep|Glob)$
-  └─ pre-tool-enforcer.py → Level 3.6 (hints only, no blocking)
-
-No matcher: WebFetch, WebSearch, Task, etc. → pass through, no hook
+No matcher: WebFetch, WebSearch, Agent, Task → pass through, no hook
 ```
 
-**PostToolUse** (2 matchers)
+**PostToolUse** (2 matchers for different tracking scopes)
 ```
 Matcher 1: ^(Write|Edit|NotebookEdit|Bash|TaskCreate|TaskUpdate|Skill|Task)$
   └─ post-tool-tracker.py → Level 3.9-3.12 (progress + GitHub + flags)
 
 Matcher 2: ^(Read|Grep|Glob|WebFetch|WebSearch)$
-  └─ post-tool-tracker.py → Level 3.9 (progress only, lightweight)
+  └─ post-tool-tracker.py → Level 3.9 (progress tracking only)
 
 No matcher: Agent, etc. → pass through, no hook
 ```
@@ -388,13 +389,14 @@ stop-notifier.py (Level 3.10 session save + voice)
 ```
 
 ### Benefits
-- **Efficiency:** No unnecessary hooks on read-only tools
-- **Clarity:** Status message shows correct level per tool type
-- **Blocking:** Only code-modifying tools trigger blocking enforcement
-- **GitHub:** Full workflow only on code/task tools
+- **Unified Enforcement:** Single matcher, same blocking policy for all tools
+- **Optimization Mandatory:** Read/Grep/Glob must follow optimization rules (not optional)
+- **Clarity:** Status message "Level 3.6/3.7" applies to all matched tools
+- **Efficiency:** WebFetch/WebSearch/Agent pass through (no unnecessary overhead)
+- **GitHub Integration:** Full workflow only on code/task tools
 
 ---
 
-**Version:** 5.2.0 (Nested Hooks Architecture)
-**Last Updated:** 2026-03-09
+**Version:** 5.2.1 (Unified Hook Enforcement)
+**Last Updated:** 2026-03-09 10:45
 **Source:** https://github.com/piyushmakhija28/claude-insight
