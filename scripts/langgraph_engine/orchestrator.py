@@ -89,12 +89,12 @@ def route_context_threshold(state: FlowState) -> Literal["emergency_archive", "l
     return "level2_common_standards"
 
 
-def route_standards_loading(state: FlowState) -> Literal["level2_java_standards", "level3_step0"]:
+def route_standards_loading(state: FlowState) -> Literal["level2_java_standards", "level2_merge"]:
     """Route based on project type (Java detection)."""
     detect_project_type(state)
     if state.get("is_java_project"):
         return "level2_java_standards"
-    return "level3_step0"
+    return "level2_merge"
 
 
 # ============================================================================
@@ -116,19 +116,16 @@ def emergency_archive(state: FlowState) -> dict:
 
 def output_node(state: FlowState) -> dict:
     """Final output node - determines completion status."""
-    updates = {}
-    if state.get("final_status") == "pending":
-        # Check for blocking conditions
-        if state.get("level_minus1_status") == "BLOCKED":
-            updates["final_status"] = "BLOCKED"
-        elif state.get("errors"):
-            updates["final_status"] = "FAILED"
-        elif state.get("warnings"):
-            updates["final_status"] = "PARTIAL"
-        else:
-            updates["final_status"] = "OK"
-
-    return updates
+    # If final_status not yet set, determine it now
+    # Check for blocking conditions
+    if state.get("level_minus1_status") == "BLOCKED":
+        return {"final_status": "BLOCKED"}
+    elif state.get("errors"):
+        return {"final_status": "FAILED"}
+    elif state.get("warnings"):
+        return {"final_status": "PARTIAL"}
+    else:
+        return {"final_status": "OK"}
 
 
 # ============================================================================
@@ -226,14 +223,12 @@ def create_flow_graph():
         route_standards_loading,
         {
             "level2_java_standards": "level2_java_standards",
-            "level3_step0": "level3_step0",
+            "level2_merge": "level2_merge",
         },
     )
 
     # Java standards merge
     graph.add_edge("level2_java_standards", "level2_merge")
-    # Common-only path merges too
-    graph.add_edge("level2_common_standards", "level2_merge")
 
     # Merge to Level 3
     graph.add_edge("level2_merge", "level3_step0")
@@ -330,6 +325,8 @@ def invoke_flow(
     from .checkpointer import get_invoke_config
 
     config = get_invoke_config(initial_state["session_id"])
+    # Set very high recursion limit to debug infinite loops
+    config["recursion_limit"] = 1000
 
     result = graph.invoke(initial_state, config=config)
     return result

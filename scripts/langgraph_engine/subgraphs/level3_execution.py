@@ -168,29 +168,32 @@ def step8_progress_tracking(state: FlowState) -> dict:
     }
 
 
-def step9_git_commit_preparation(state: FlowState) -> FlowState:
+def step9_git_commit_preparation(state: FlowState) -> dict:
     """Step 9: Call git-auto-commit-policy.py"""
     result = call_execution_script("git-auto-commit-policy", ["--prepare"])
-    state["step9_commit_ready"] = result.get("commit_ready", False)
-    state["step9_commit_message"] = result.get("message", "")
-    state["step9_version_bump"] = result.get("version", "")
-    return state
+    return {
+        "step9_commit_ready": result.get("commit_ready", False),
+        "step9_commit_message": result.get("message", ""),
+        "step9_version_bump": result.get("version", "")
+    }
 
 
-def step10_session_save(state: FlowState) -> FlowState:
+def step10_session_save(state: FlowState) -> dict:
     """Step 10: Call session save operations"""
     result = call_execution_script("auto-save-session")
-    state["step10_session"] = result.get("session", {})
-    state["step10_archive_needed"] = result.get("archive", False)
-    return state
+    return {
+        "step10_session": result.get("session", {}),
+        "step10_archive_needed": result.get("archive", False)
+    }
 
 
-def step11_failure_prevention(state: FlowState) -> FlowState:
+def step11_failure_prevention(state: FlowState) -> dict:
     """Step 11: Call common-failures-prevention.py"""
     result = call_execution_script("common-failures-prevention")
-    state["failure_prevention"] = result.get("prevention_checks", {})
-    state["failure_prevention_warnings"] = result.get("warnings", [])
-    return state
+    return {
+        "failure_prevention": result.get("prevention_checks", {}),
+        "failure_prevention_warnings": result.get("warnings", [])
+    }
 
 
 # ============================================================================
