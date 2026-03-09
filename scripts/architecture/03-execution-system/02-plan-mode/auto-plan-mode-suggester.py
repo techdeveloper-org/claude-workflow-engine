@@ -511,30 +511,69 @@ def main():
                 'analysis': {}
             }
 
-    # Get score and task count
+    import urllib.request
+    import urllib.error
+    import os
+
+    # Get Ollama config
+    ollama_endpoint = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
+    ollama_model = os.getenv("OLLAMA_MODEL", "mistral")
+
     score = complexity.get('score', 5)
     estimated_tasks = complexity.get('estimated_tasks', 1)
 
-    # Determine if plan is required
-    plan_required = (score >= 6) or (estimated_tasks > 2)
+    # Use Ollama to decide if plan mode needed
+    prompt = f"""Based on task complexity and sub-tasks, should we use plan mode? Respond ONLY with JSON (no markdown):
 
-    # Build factors list
+Complexity Score: {score}/10
+Estimated Tasks: {estimated_tasks}
+
+JSON format (no markdown):
+{{
+  "plan_required": true/false,
+  "reasoning": "explanation"
+}}
+
+JSON only:"""
+
+    try:
+        payload = {
+            "model": ollama_model,
+            "prompt": prompt,
+            "stream": False,
+            "temperature": 0.3
+        }
+        req = urllib.request.Request(
+            ollama_endpoint,
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json.loads(response.read().decode())
+            llm_response = result.get("response", "")
+
+        # Parse JSON from response
+        if "{" in llm_response:
+            json_start = llm_response.index("{")
+            json_end = llm_response.rindex("}") + 1
+            llm_result = json.loads(llm_response[json_start:json_end])
+        else:
+            llm_result = json.loads(llm_response)
+
+        plan_required = llm_result.get("plan_required", (score >= 6) or (estimated_tasks > 2))
+        reasoning = llm_result.get("reasoning", "Analyzed by Ollama LLM")
+
+    except Exception:
+        # Fallback to rule-based
+        plan_required = (score >= 6) or (estimated_tasks > 2)
+        reasoning = f"Complexity: {score}/10, Tasks: {estimated_tasks}" if plan_required else "Simple task"
+
+    # Build factors
     factors = []
     if score >= 6:
         factors.append(f"complexity >= 6 (score: {score})")
     if estimated_tasks > 2:
         factors.append(f"multiple sub-tasks ({estimated_tasks} tasks)")
-
-    # Reasoning
-    if plan_required:
-        if score >= 6 and estimated_tasks > 2:
-            reasoning = f"Complex task with multiple sub-tasks (complexity: {score}, tasks: {estimated_tasks}) requires planning"
-        elif score >= 6:
-            reasoning = f"High complexity score ({score}) warrants planning before execution"
-        else:
-            reasoning = f"Multiple sub-tasks ({estimated_tasks}) require coordinated planning"
-    else:
-        reasoning = "Task complexity allows direct execution"
 
     # Build output
     output = {
@@ -545,7 +584,7 @@ def main():
         "estimated_tasks": estimated_tasks
     }
 
-    # Output as JSON only (no human-readable output in analyze mode)
+    # Output as JSON only
     print(json.dumps(output))
     sys.exit(0)
 

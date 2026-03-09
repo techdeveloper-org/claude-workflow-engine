@@ -371,8 +371,13 @@ def main():
 
     # Check for --analyze flag (LangGraph mode)
     if "--analyze" in sys.argv:
-        import io
-        from contextlib import redirect_stdout, redirect_stderr
+        import urllib.request
+        import urllib.error
+        import os
+
+        # Get Ollama config
+        ollama_endpoint = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
+        ollama_model = os.getenv("OLLAMA_MODEL", "mistral")
 
         # Default task type for LangGraph
         task_type = "General"
@@ -383,38 +388,70 @@ def main():
                 task_type = arg
                 break
 
-        # Build minimal complexity and prompt objects
-        complexity = {
-            'score': 5,
-            'level': 'MODERATE',
-            'estimated_tasks': 2
-        }
-        prompt = {
-            'metadata': {'original_request': task_type},
-            'task_type': task_type,
-            'analysis': {}
-        }
+        # Use Ollama to suggest skills/agents
+        available_skills = "docker, java-spring-boot, python-backend, angular-frontend, kubernetes, jenkins, database, security"
+        available_agents = "orchestrator-agent, spring-boot-microservices, python-backend-engineer, angular-engineer"
 
-        selector = AutoSkillAgentSelector()
+        prompt = f"""What skill and agent would best help with this task? Respond ONLY with JSON (no markdown):
 
-        # Suppress output from select() method
-        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-            selection = selector.select(task_type, complexity, prompt)
+Task Type: {task_type}
+Available Skills: {available_skills}
+Available Agents: {available_agents}
 
-        # Build output
-        selected_skill = selection.get('skills', [''])[0] if selection.get('skills') else ''
-        selected_agent = selection.get('agents', [''])[0] if selection.get('agents') else ''
+JSON format (no markdown):
+{{
+  "selected_skill": "skill name or empty string",
+  "selected_agent": "agent name or empty string",
+  "confidence": 0.0 to 1.0,
+  "reasoning": "why these choices"
+}}
 
-        output = {
-            'selected_skill': selected_skill,
-            'selected_agent': selected_agent,
-            'confidence': 0.8,
-            'alternatives': [
-                {'skill': s, 'confidence': 0.6} for s in selection.get('skills', [])[1:3]
-            ] if len(selection.get('skills', [])) > 1 else [],
-            'llm_needed': False,
-            'status': 'OK'
-        }
+JSON only:"""
+
+        try:
+            payload = {
+                "model": ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "temperature": 0.3
+            }
+            req = urllib.request.Request(
+                ollama_endpoint,
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=30) as response:
+                result = json.loads(response.read().decode())
+                llm_response = result.get("response", "")
+
+            # Parse JSON from response
+            if "{" in llm_response:
+                json_start = llm_response.index("{")
+                json_end = llm_response.rindex("}") + 1
+                llm_result = json.loads(llm_response[json_start:json_end])
+            else:
+                llm_result = json.loads(llm_response)
+
+            output = {
+                'selected_skill': llm_result.get('selected_skill', ''),
+                'selected_agent': llm_result.get('selected_agent', ''),
+                'confidence': float(llm_result.get('confidence', 0.7)),
+                'alternatives': [],
+                'llm_needed': False,
+                'status': 'OK'
+            }
+
+        except Exception as e:
+            # Fallback if Ollama not available
+            output = {
+                'selected_skill': '',
+                'selected_agent': '',
+                'confidence': 0.0,
+                'alternatives': [],
+                'llm_needed': False,
+                'status': 'error',
+                'error': str(e)
+            }
 
         print(json.dumps(output))
         sys.exit(0)

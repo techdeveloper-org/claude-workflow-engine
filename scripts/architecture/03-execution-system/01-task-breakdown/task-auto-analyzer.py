@@ -377,19 +377,17 @@ class TaskAutoAnalyzer:
 
 def main():
     """CLI usage - outputs JSON for LangGraph"""
+    import urllib.request
+    import urllib.error
+    import os
+
+    ollama_endpoint = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
+    ollama_model = os.getenv("OLLAMA_MODEL", "mistral")
+
     if len(sys.argv) < 2:
-        # No input provided - return minimal task
         output = {
             "task_count": 1,
-            "tasks": [
-                {
-                    "id": 1,
-                    "name": "Execute task",
-                    "description": "Execute the requested task",
-                    "priority": "medium",
-                    "depends_on": []
-                }
-            ],
+            "tasks": [{"id": 1, "name": "Execute task", "description": "Execute the requested task", "priority": "medium", "depends_on": []}],
             "status": "minimal"
         }
         print(json.dumps(output))
@@ -397,29 +395,71 @@ def main():
 
     user_message = ' '.join(sys.argv[1:])
 
-    analyzer = TaskAutoAnalyzer()
-    result = analyzer.auto_analyze(user_message)
+    # Use Ollama to break down tasks
+    prompt = f"""Break down this task into sub-tasks. Respond ONLY with JSON (no markdown):
 
-    # Transform result to JSON output format
-    output = {
-        "task_count": result.get("total_tasks", 1),
-        "tasks": [
-            {
-                "id": task.get("id"),
-                "name": task.get("title", "Unnamed task"),
-                "description": task.get("description", f"Phase: {task.get('phase', 'General')}"),
-                "priority": _estimate_priority(task, result),
-                "depends_on": result.get("dependencies", {}).get(task.get("id"), []),
-                "type": task.get("type", "task"),
-                "phase": task.get("phase")
-            }
-            for task in result.get("tasks", [])
-        ],
-        "status": "OK"
-    }
+Task: {user_message}
 
-    # Output as JSON
-    print(json.dumps(output))
+JSON format (no markdown):
+{{
+  "task_count": number,
+  "tasks": [
+    {{"id": 1, "name": "task name", "description": "what to do", "priority": "high/medium/low"}},
+    ...
+  ]
+}}
+
+JSON only:"""
+
+    try:
+        payload = {
+            "model": ollama_model,
+            "prompt": prompt,
+            "stream": False,
+            "temperature": 0.3
+        }
+        req = urllib.request.Request(
+            ollama_endpoint,
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json.loads(response.read().decode())
+            llm_response = result.get("response", "")
+
+        # Parse JSON from response
+        if "{" in llm_response:
+            json_start = llm_response.index("{")
+            json_end = llm_response.rindex("}") + 1
+            output = json.loads(llm_response[json_start:json_end])
+        else:
+            output = json.loads(llm_response)
+
+        # Ensure required fields
+        output["task_count"] = len(output.get("tasks", []))
+        output["status"] = "OK"
+        print(json.dumps(output))
+
+    except Exception as e:
+        # Fallback to simple task breakdown
+        analyzer = TaskAutoAnalyzer()
+        result = analyzer.auto_analyze(user_message)
+        output = {
+            "task_count": result.get("total_tasks", 1),
+            "tasks": [
+                {
+                    "id": task.get("id"),
+                    "name": task.get("title", "Unnamed task"),
+                    "description": task.get("description", f"Phase: {task.get('phase', 'General')}"),
+                    "priority": _estimate_priority(task, result),
+                    "depends_on": result.get("dependencies", {}).get(task.get("id"), []),
+                }
+                for task in result.get("tasks", [])
+            ],
+            "status": "OK"
+        }
+        print(json.dumps(output))
+
     sys.exit(0)
 
 
