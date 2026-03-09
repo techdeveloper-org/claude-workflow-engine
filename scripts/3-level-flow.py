@@ -128,6 +128,10 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "", user_mess
     # Create initial state (session_id now immutable via Annotated reducer)
     initial_state = create_initial_state(session_id, project_root, user_message)
 
+    # CRITICAL FIX: Store user_message in env var so Step 0 can access it
+    # (LangGraph strips immutable fields between nodes due to reducer limitations)
+    os.environ["CURRENT_USER_MESSAGE"] = user_message
+
     if DEBUG:
         print(f"[DEBUG] Initial state keys: {list(initial_state.keys())}", file=sys.stderr)
         print(f"[DEBUG] Initial state user_message: {'user_message' in initial_state}", file=sys.stderr)

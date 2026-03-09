@@ -104,6 +104,10 @@ def step0_prompt_generation(state: FlowState) -> dict:
 
     user_message = state.get("user_message", "")
 
+    # Fallback: read from env var (workaround for LangGraph stripping immutable fields)
+    if not user_message:
+        user_message = os.environ.get("CURRENT_USER_MESSAGE", "")
+
     if DEBUG:
         print(f"[L3-DEBUG] State keys: {list(state.keys())[:5]}", file=sys.stderr)
         print(f"[L3] → Step 0 user_message: {user_message[:50] if user_message else 'EMPTY'}...", file=sys.stderr)
