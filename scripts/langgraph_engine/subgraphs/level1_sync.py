@@ -40,9 +40,17 @@ def run_policy_script(script_name: str, args: list = None, timeout: int = 30) ->
     Returns:
         Parsed JSON output from script
     """
+    import sys
+    import os
+
+    DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
+
     try:
         # Find script in architecture directories
         scripts_dir = Path(__file__).parent.parent.parent
+
+        if DEBUG:
+            print(f"[L1-DEBUG] Finding script: {script_name}", file=sys.stderr)
 
         # Search Level 1, 2, 3 directories
         search_paths = [
@@ -59,12 +67,17 @@ def run_policy_script(script_name: str, args: list = None, timeout: int = 30) ->
                 break
 
         if not script_path:
+            if DEBUG:
+                print(f"[L1-DEBUG] Script not found: {script_name}", file=sys.stderr)
             return {"error": f"Script not found: {script_name}", "status": "NOT_FOUND"}
 
         # Build command
         cmd = [sys.executable, str(script_path)]
         if args:
             cmd.extend(args)
+
+        if DEBUG:
+            print(f"[L1-DEBUG] Running: {script_name} (timeout={timeout}s)", file=sys.stderr)
 
         # Execute with UTF-8 encoding for Windows compatibility
         result = subprocess.run(
@@ -76,6 +89,9 @@ def run_policy_script(script_name: str, args: list = None, timeout: int = 30) ->
             timeout=timeout,
             cwd=scripts_dir
         )
+
+        if DEBUG:
+            print(f"[L1-DEBUG] {script_name} returned: {result.returncode}", file=sys.stderr)
 
         # Parse JSON output
         if result.stdout:
@@ -109,6 +125,13 @@ def run_policy_script(script_name: str, args: list = None, timeout: int = 30) ->
 
 def node_context_loader(state: FlowState) -> dict:
     """Load context using context-monitor-v2.py script."""
+    import os
+    import sys
+
+    DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
+    if DEBUG:
+        print("[L1] → node_context_loader START", file=sys.stderr)
+
     updates = {}
     try:
         # Call actual context-monitor-v2.py
@@ -132,9 +155,13 @@ def node_context_loader(state: FlowState) -> dict:
             "script_output": output
         }
 
+        if DEBUG:
+            print(f"[L1] → node_context_loader END", file=sys.stderr)
         return updates
 
     except Exception as e:
+        if DEBUG:
+            print(f"[L1] → node_context_loader ERROR: {str(e)}", file=sys.stderr)
         updates["context_loaded"] = False
         updates["context_error"] = str(e)
         return updates

@@ -152,8 +152,14 @@ def create_flow_graph():
             "pip install langgraph>=0.2.0 langchain-core>=0.3.0"
         )
 
+    import sys
+    DEBUG = sys.stderr.isatty() or __import__('os').getenv("CLAUDE_DEBUG") == "1"
+
     # Create graph
     graph = StateGraph(FlowState)
+
+    if DEBUG:
+        print("[DEBUG] Creating StateGraph...", file=sys.stderr)
 
     # ========================================================================
     # LEVEL -1: AUTO-FIX ENFORCEMENT (3 checks, sequential)

@@ -25,9 +25,16 @@ from ..flow_state import FlowState
 
 def call_execution_script(script_name: str, args: list = None) -> dict:
     """Call a Level 3 execution script and return parsed output."""
+    import os
+
+    DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
+
     try:
         scripts_dir = Path(__file__).parent.parent.parent
         script_path = scripts_dir / "architecture" / "03-execution-system" / f"{script_name}.py"
+
+        if DEBUG:
+            print(f"[L3-DEBUG] Finding script: {script_name}", file=sys.stderr)
 
         # Try variations if exact path not found
         if not script_path.exists():
@@ -35,12 +42,17 @@ def call_execution_script(script_name: str, args: list = None) -> dict:
             if found:
                 script_path = found[0]
             else:
+                if DEBUG:
+                    print(f"[L3-DEBUG] Script not found: {script_name}", file=sys.stderr)
                 return {"status": "SCRIPT_NOT_FOUND", "script": script_name}
 
         # Run script
         cmd = [sys.executable, str(script_path)]
         if args:
             cmd.extend(args)
+
+        if DEBUG:
+            print(f"[L3-DEBUG] Running: {script_name}", file=sys.stderr)
 
         result = subprocess.run(
             cmd,
@@ -51,6 +63,9 @@ def call_execution_script(script_name: str, args: list = None) -> dict:
             timeout=30,
             cwd=scripts_dir
         )
+
+        if DEBUG:
+            print(f"[L3-DEBUG] {script_name} returned: {result.returncode}", file=sys.stderr)
 
         # Parse output
         if result.stdout:
@@ -81,11 +96,23 @@ def call_execution_script(script_name: str, args: list = None) -> dict:
 
 def step0_prompt_generation(state: FlowState) -> dict:
     """Step 0: Call prompt-generator.py with actual user message"""
+    import os
+
+    DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
+    if DEBUG:
+        print("[L3] → Step 0 START", file=sys.stderr)
+
     user_message = state.get("user_message", "")
+
+    if DEBUG:
+        print(f"[L3] → Step 0 user_message: {user_message[:50] if user_message else 'EMPTY'}...", file=sys.stderr)
 
     # Pass user message as argument to script
     args = [user_message] if user_message else []
     result = call_execution_script("prompt-generator", args)
+
+    if DEBUG:
+        print(f"[L3] → Step 0 END: {result.get('task_type')}", file=sys.stderr)
 
     return {
         "step0_prompt": {
