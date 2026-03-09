@@ -187,6 +187,8 @@ def main():
                 sys.exit(0)
 
         # Run engine (user_message auto-captured from stdin if not provided)
+        if not user_message:
+            user_message = _capture_user_message()
         result = run_langgraph_engine(session_id, project_root, user_message)
 
         # Write flow-trace.json (backward compatible format)
