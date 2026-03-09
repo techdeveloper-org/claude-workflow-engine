@@ -2,7 +2,7 @@
 
 **Project:** Claude Insight
 **Type:** Python Flask Monitoring Dashboard
-**Version:** 5.1.0
+**Version:** 5.2.0
 **Status:** Active Development
 
 ---
@@ -347,17 +347,53 @@ python scripts/bump-version.py --patch
 
 ---
 
-## IMPORTANT: Hook Configuration for Checkpoint Display
+## Nested Hooks Architecture (v5.2.0+)
 
-**Issue Fixed (v3.9.0):** Review checkpoint visibility
-- The checkpoint table (Session ID, complexity, model, context %) is now displayed after every message
-- **How:** Changed UserPromptSubmit hooks from `"async": true` to `"async": false`
-- **Location:** `~/.claude/settings.json`
-- **Why:** With async=true, Claude Code runs the hook in background and discards stdout
-- **Impact:** The 3-level-flow.py output is now visible to users in the checkpoint format
+**Upgrade:** Added matchers to PreToolUse and PostToolUse hooks for granular control.
+
+### Structure
+
+**UserPromptSubmit** (no matcher) — Runs on every prompt
+```
+3-level-flow.py (Level -1/1/2/3)
+github_issue_manager.py (issue tracking)
+```
+
+**PreToolUse** (2 matchers)
+```
+Matcher 1: ^(Write|Edit|NotebookEdit|Bash)$
+  └─ pre-tool-enforcer.py → Level 3.1/3.3/3.5/3.7 (full blocking)
+
+Matcher 2: ^(Read|Grep|Glob)$
+  └─ pre-tool-enforcer.py → Level 3.6 (hints only, no blocking)
+
+No matcher: WebFetch, WebSearch, Task, etc. → pass through, no hook
+```
+
+**PostToolUse** (2 matchers)
+```
+Matcher 1: ^(Write|Edit|NotebookEdit|Bash|TaskCreate|TaskUpdate|Skill|Task)$
+  └─ post-tool-tracker.py → Level 3.9-3.12 (progress + GitHub + flags)
+
+Matcher 2: ^(Read|Grep|Glob|WebFetch|WebSearch)$
+  └─ post-tool-tracker.py → Level 3.9 (progress only, lightweight)
+
+No matcher: Agent, etc. → pass through, no hook
+```
+
+**Stop** (no matcher) — Runs once per response
+```
+stop-notifier.py (Level 3.10 session save + voice)
+```
+
+### Benefits
+- **Efficiency:** No unnecessary hooks on read-only tools
+- **Clarity:** Status message shows correct level per tool type
+- **Blocking:** Only code-modifying tools trigger blocking enforcement
+- **GitHub:** Full workflow only on code/task tools
 
 ---
 
-**Version:** 3.9.0
-**Last Updated:** 2026-02-25
+**Version:** 5.2.0 (Nested Hooks Architecture)
+**Last Updated:** 2026-03-09
 **Source:** https://github.com/piyushmakhija28/claude-insight

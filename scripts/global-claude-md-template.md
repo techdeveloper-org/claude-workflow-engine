@@ -22,27 +22,54 @@
 - `PostToolUse` tracks tool progress silently (always exit 0, never blocks)
 - `Stop` saves session state after every response
 
-**Required `~/.claude/settings.json`:**
+**Required `~/.claude/settings.json` (with nested matchers for granular control):**
 ```json
 {
   "model": "sonnet",
   "hooks": {
     "UserPromptSubmit": [{"hooks": [
-      {"type": "command", "command": "python ~/.claude/memory/current/clear-session-handler.py", "timeout": 15},
-      {"type": "command", "command": "python ~/.claude/memory/current/3-level-flow.py --summary", "timeout": 30}
+      {"type": "command", "command": "python ~/.claude/scripts/3-level-flow.py", "timeout": 120},
+      {"type": "command", "command": "python ~/.claude/scripts/github_issue_manager.py", "timeout": 30}
     ]}],
-    "PreToolUse": [{"hooks": [
-      {"type": "command", "command": "python ~/.claude/memory/current/pre-tool-enforcer.py", "timeout": 10}
-    ]}],
-    "PostToolUse": [{"hooks": [
-      {"type": "command", "command": "python ~/.claude/memory/current/post-tool-tracker.py", "timeout": 10}
-    ]}],
+    "PreToolUse": [
+      {
+        "matcher": "^(Write|Edit|NotebookEdit|Bash)$",
+        "hooks": [
+          {"type": "command", "command": "python ~/.claude/scripts/pre-tool-enforcer.py", "timeout": 15, "statusMessage": "Level 3.1/3.3/3.5/3.7: Checkpoint + task + skill + blocking..."}
+        ]
+      },
+      {
+        "matcher": "^(Read|Grep|Glob)$",
+        "hooks": [
+          {"type": "command", "command": "python ~/.claude/scripts/pre-tool-enforcer.py", "timeout": 10, "statusMessage": "Level 3.6: Tool optimization hints..."}
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Write|Edit|NotebookEdit|Bash|TaskCreate|TaskUpdate|Skill|Task)$",
+        "hooks": [
+          {"type": "command", "command": "python ~/.claude/scripts/post-tool-tracker.py", "timeout": 30, "statusMessage": "Level 3.9-3.12: Progress + GitHub issue/close + flags..."}
+        ]
+      },
+      {
+        "matcher": "^(Read|Grep|Glob|WebFetch|WebSearch)$",
+        "hooks": [
+          {"type": "command", "command": "python ~/.claude/scripts/post-tool-tracker.py", "timeout": 10, "statusMessage": "Level 3.9: Progress tracking..."}
+        ]
+      }
+    ],
     "Stop": [{"hooks": [
-      {"type": "command", "command": "python ~/.claude/memory/current/stop-notifier.py", "timeout": 20}
+      {"type": "command", "command": "python ~/.claude/scripts/stop-notifier.py", "timeout": 60}
     ]}]
   }
 }
 ```
+
+**Nested Hooks Explanation:**
+- **PreToolUse matchers:** Target code-modifying tools (Write, Edit, etc.) with full blocking + 3.1/3.3/3.5/3.7 levels, and read-only tools (Read, Grep, Glob) with hints only (3.6)
+- **PostToolUse matchers:** Track code/task tools (Write, Edit, TaskCreate, etc.) with full progress + GitHub integration, and read-only tools (Read, WebFetch, etc.) with lightweight progress only
+- **Non-matched tools:** WebFetch, WebSearch, and other tools pass through without hook processing (no unnecessary overhead)
 
 ---
 
