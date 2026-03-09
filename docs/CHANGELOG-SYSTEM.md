@@ -3,6 +3,9 @@ All notable changes to the Claude Memory System.
 
 ---
 
+- v4.22.5 (2026-03-10): Session updates
+  - Closes: #1, #2, #99, #100, #101, #110, #112, #113, #114, #116, #118, #119, #120
+
 - v4.22.4 (2026-03-09): Session updates
   - Closes: #99, #100, #101, #105, #106, #107, #108, #109, #110, #112, #113, #114, #116
 
