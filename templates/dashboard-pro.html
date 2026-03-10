@@ -1,0 +1,471 @@
+{% extends "base.html" %}
+{% from "macros.html" import stat_card, chart_container, loading_state %}
+
+{% block title %}Professional Monitoring Dashboard - Claude Insight{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <h1 class="page-title">
+                <i class="fas fa-tachometer-alt me-3"></i>
+                System Monitoring Dashboard
+            </h1>
+            <p class="page-subtitle">
+                <i class="fas fa-circle-notch fa-spin text-success me-2"></i>
+                Real-time monitoring of Claude Insight 3-level flow execution
+            </p>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <span class="badge badge-success">
+                <i class="fas fa-circle me-1"></i> LIVE
+            </span>
+            <span id="lastUpdate" class="text-muted small">Updated just now</span>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     TOP METRICS - CRITICAL HEALTH INDICATORS
+     ============================================================================ -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-3">
+        <div class="stat-card status-ok">
+            <div class="stat-card-icon">
+                <i class="fas fa-heartbeat"></i>
+            </div>
+            <div class="stat-card-title">System Health</div>
+            <div class="stat-card-value" id="healthScore">98%</div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge badge-success">
+                    <i class="fas fa-arrow-up me-1"></i>Excellent
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-3">
+        <div class="stat-card status-ok">
+            <div class="stat-card-icon">
+                <i class="fas fa-plug"></i>
+            </div>
+            <div class="stat-card-title">Active Hooks</div>
+            <div class="stat-card-value" id="hooksActive">4</div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge badge-success">All Ready</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-3">
+        <div class="stat-card status-ok">
+            <div class="stat-card-icon">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <div class="stat-card-title">Active Policies</div>
+            <div class="stat-card-value" id="activePolicies">37</div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge badge-info">Enforced</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-3">
+        <div class="stat-card">
+            <div class="stat-card-icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="stat-card-title">Context Usage</div>
+            <div class="stat-card-value" id="contextUsage">72%</div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge badge-warning">Monitor</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     CONTROL PANEL & FILTERS
+     ============================================================================ -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-sliders-h me-2"></i>
+                        Control Panel
+                    </h5>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-outline-primary btn-sm" onclick="refreshDashboard()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh Now
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                            <i class="fas fa-cog me-1"></i>Settings
+                        </button>
+                        <a href="{{ url_for('export_metrics') }}" class="btn btn-success btn-sm">
+                            <i class="fas fa-download me-1"></i>Export
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 col-lg-3 mb-3">
+                        <label class="form-label">Time Range</label>
+                        <select class="form-select form-select-sm" id="timeRangeSelect">
+                            <option value="1h">Last 1 Hour</option>
+                            <option value="6h">Last 6 Hours</option>
+                            <option value="24h" selected>Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                            <option value="30d">Last 30 Days</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 col-lg-3 mb-3">
+                        <label class="form-label">Metric Type</label>
+                        <select class="form-select form-select-sm" id="metricTypeSelect">
+                            <option value="all" selected>All Metrics</option>
+                            <option value="policy">Policy Hits</option>
+                            <option value="performance">Performance</option>
+                            <option value="context">Context Usage</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 col-lg-3 mb-3">
+                        <label class="form-label">Update Frequency</label>
+                        <select class="form-select form-select-sm" id="refreshRateSelect">
+                            <option value="10">Every 10s</option>
+                            <option value="30" selected>Every 30s</option>
+                            <option value="60">Every 60s</option>
+                            <option value="0">Manual</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 col-lg-3 mb-3">
+                        <label class="form-label">Auto-refresh</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="autoRefreshToggle" checked>
+                            <label class="form-check-label" for="autoRefreshToggle">
+                                <span class="badge badge-success" id="autoRefreshStatus">
+                                    <i class="fas fa-circle-notch fa-spin me-1"></i>Active
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     LIVE METRICS & FLOW EXECUTION
+     ============================================================================ -->
+<div class="row mb-4">
+    <div class="col-lg-8 mb-4 mb-lg-0">
+        <div class="card h-100">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5>
+                        <i class="fas fa-chart-line me-2"></i>
+                        Flow Execution Timeline
+                    </h5>
+                    <span class="live-indicator">
+                        <i class="fas fa-circle-notch fa-spin text-primary"></i>
+                        LIVE
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="executionChart" style="position: relative; height: 350px;">
+                    <canvas id="flowChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5>
+                    <i class="fas fa-layer-group me-2"></i>
+                    3-Level Flow Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Level -1 -->
+                <div class="mb-3 pb-3 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">
+                            <i class="fas fa-hammer text-primary me-2"></i>
+                            Level -1: Auto-fix
+                        </span>
+                        <span class="badge badge-success">✓ OK</span>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar" role="progressbar" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Level 1 -->
+                <div class="mb-3 pb-3 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">
+                            <i class="fas fa-database text-info me-2"></i>
+                            Level 1: Context Sync
+                        </span>
+                        <span class="badge badge-success">✓ OK</span>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Level 2 -->
+                <div class="mb-3 pb-3 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">
+                            <i class="fas fa-shield-alt text-warning me-2"></i>
+                            Level 2: Standards
+                        </span>
+                        <span class="badge badge-success">✓ OK</span>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-warning" role="progressbar" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Level 3 -->
+                <div class="mb-0">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">
+                            <i class="fas fa-rocket text-success me-2"></i>
+                            Level 3: Execution
+                        </span>
+                        <span class="badge badge-success">✓ OK</span>
+                    </div>
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <div class="mt-4 p-3 bg-primary bg-opacity-10 rounded">
+                    <small class="text-muted d-block mb-2">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Latest Synthesis
+                    </small>
+                    <div class="text-primary small fw-600">
+                        <span id="synthesisStatus">1111 chars generated</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     RECENT ACTIVITY LOG
+     ============================================================================ -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>
+                    <i class="fas fa-history me-2"></i>
+                    Recent Activity Log
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="activityLog" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                        <p>Loading activity log...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     PERFORMANCE METRICS
+     ============================================================================ -->
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>
+                    <i class="fas fa-bolt me-2"></i>
+                    Execution Performance
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="performanceChart" style="position: relative; height: 300px;">
+                    <canvas id="performanceMetrics"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>
+                    <i class="fas fa-brain me-2"></i>
+                    Model Distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="modelChart" style="position: relative; height: 300px;">
+                    <canvas id="modelDistribution"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================================
+     SETTINGS MODAL
+     ============================================================================ -->
+<div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="settingsModalLabel">
+                    <i class="fas fa-cog me-2"></i>
+                    Dashboard Settings
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="enableNotifications" checked>
+                    <label class="form-check-label" for="enableNotifications">
+                        Enable desktop notifications
+                    </label>
+                </div>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="enableAlerts" checked>
+                    <label class="form-check-label" for="enableAlerts">
+                        Enable alerts on critical errors
+                    </label>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="compactView">
+                    <label class="form-check-label" for="compactView">
+                        Use compact view
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary">Save Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Professional Dashboard Enhancements */
+    .stat-card-icon {
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(99, 102, 241, 0.05));
+    }
+
+    .live-indicator {
+        font-weight: 600;
+        color: var(--text-primary);
+        font-size: 13px;
+    }
+
+    #activityLog {
+        border-top: 1px solid var(--border-color);
+        padding-top: 15px;
+    }
+
+    .activity-item {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: start;
+        gap: 12px;
+        transition: all 0.3s ease;
+    }
+
+    .activity-item:hover {
+        background: rgba(99, 102, 241, 0.05);
+        padding-left: 8px;
+    }
+
+    .activity-time {
+        color: var(--text-tertiary);
+        font-size: 12px;
+        white-space: nowrap;
+        margin-top: 2px;
+    }
+
+    .activity-message {
+        color: var(--text-secondary);
+        font-size: 13px;
+    }
+
+    .badge-live {
+        animation: pulse 2s infinite;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Dashboard real-time updates
+let autoRefreshInterval;
+const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+const refreshRateSelect = document.getElementById('refreshRateSelect');
+
+function refreshDashboard() {
+    // Reload metrics from API
+    fetch('/api/dashboard-metrics')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('healthScore').textContent = data.healthScore + '%';
+            document.getElementById('hooksActive').textContent = data.hooksActive;
+            document.getElementById('activePolicies').textContent = data.activePolicies;
+            document.getElementById('contextUsage').textContent = data.contextUsage + '%';
+            updateLastUpdate();
+        });
+}
+
+function updateLastUpdate() {
+    document.getElementById('lastUpdate').textContent = 'Updated just now';
+}
+
+function startAutoRefresh() {
+    clearInterval(autoRefreshInterval);
+    const rate = parseInt(refreshRateSelect.value) * 1000;
+    if (rate > 0) {
+        autoRefreshInterval = setInterval(refreshDashboard, rate);
+        document.getElementById('autoRefreshStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin me-1"></i>Active';
+    } else {
+        document.getElementById('autoRefreshStatus').innerHTML = '<i class="fas fa-pause me-1"></i>Manual';
+    }
+}
+
+// Event listeners
+autoRefreshToggle.addEventListener('change', () => {
+    if (autoRefreshToggle.checked) {
+        startAutoRefresh();
+    } else {
+        clearInterval(autoRefreshInterval);
+        document.getElementById('autoRefreshStatus').innerHTML = '<i class="fas fa-pause me-1"></i>Paused';
+    }
+});
+
+refreshRateSelect.addEventListener('change', startAutoRefresh);
+
+// Initial load
+document.addEventListener('DOMContentLoaded', () => {
+    refreshDashboard();
+    startAutoRefresh();
+});
+</script>
+{% endblock %}
