@@ -73,6 +73,11 @@ from services.notifications.notification_manager import NotificationManager
 from services.notifications.alert_sender import AlertSender
 from services.notifications.alert_routing import AlertRoutingEngine
 
+# Import AI services
+from services.ai.anomaly_detector import AnomalyDetector
+from services.ai.predictive_analytics import PredictiveAnalytics
+from services.ai.bottleneck_analyzer import BottleneckAnalyzer
+
 # Import utilities
 from utils.history_tracker import HistoryTracker
 from services.monitoring.cache_manager import get_cache
@@ -305,6 +310,19 @@ policy_execution_tracker = PolicyExecutionTracker()
 three_level_flow_tracker = ThreeLevelFlowTracker()
 individual_policy_tracker = IndividualPolicyTracker()
 architecture_module_monitor = ArchitectureModuleMonitor()
+
+# AI services (anomaly detection, forecasting, bottleneck analysis)
+anomaly_detector = AnomalyDetector()
+predictive_analytics = PredictiveAnalytics()
+bottleneck_analyzer = BottleneckAnalyzer()
+
+# Widget and compliance services
+policy_compliance_analyzer = PolicyComplianceAnalyzer()
+community_widgets_manager = CommunityWidgetsManager()
+widget_version_manager = WidgetVersionManager()
+widget_comments_manager = WidgetCommentsManager()
+collaboration_manager = CollaborationSessionManager()
+trending_calculator = TrendingCalculator()
 
 # User database (in production, use a proper database)
 # Password: 'admin' (hashed with bcrypt)

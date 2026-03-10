@@ -23,5 +23,7 @@ Usage::
 """
 
 from .bottleneck_analyzer import BottleneckAnalyzer
+from .anomaly_detector import AnomalyDetector
+from .predictive_analytics import PredictiveAnalytics
 
-__all__ = ['BottleneckAnalyzer']
+__all__ = ['BottleneckAnalyzer', 'AnomalyDetector', 'PredictiveAnalytics']
