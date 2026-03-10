@@ -234,7 +234,7 @@ def node_context_loader(state: FlowState) -> dict:
 
     DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
     if DEBUG:
-        print("[L1] → node_context_loader START", file=sys.stderr)
+        print("[L1] -> node_context_loader START", file=sys.stderr)
 
     updates = {}
     try:
@@ -260,12 +260,12 @@ def node_context_loader(state: FlowState) -> dict:
         }
 
         if DEBUG:
-            print(f"[L1] → node_context_loader END", file=sys.stderr)
+            print(f"[L1] -> node_context_loader END", file=sys.stderr)
         return updates
 
     except Exception as e:
         if DEBUG:
-            print(f"[L1] → node_context_loader ERROR: {str(e)}", file=sys.stderr)
+            print(f"[L1] -> node_context_loader ERROR: {str(e)}", file=sys.stderr)
         updates["context_loaded"] = False
         updates["context_error"] = str(e)
         return updates
@@ -278,7 +278,7 @@ def node_session_loader(state: FlowState) -> dict:
 
     DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
     if DEBUG:
-        print("[L1] → node_session_loader START", file=sys.stderr)
+        print("[L1] -> node_session_loader START", file=sys.stderr)
 
     updates = {}
     try:
@@ -288,7 +288,7 @@ def node_session_loader(state: FlowState) -> dict:
         # Check for errors
         if output.get("status") == "ERROR" or output.get("status") == "NOT_FOUND":
             if DEBUG:
-                print("[L1] → node_session_loader SCRIPT_NOT_FOUND", file=sys.stderr)
+                print("[L1] -> node_session_loader SCRIPT_NOT_FOUND", file=sys.stderr)
             updates["session_chain_loaded"] = False
             updates["session_history"] = []
             updates["session_state_data"] = {}
@@ -303,13 +303,13 @@ def node_session_loader(state: FlowState) -> dict:
         updates["session_state_data"] = parsed["session_state_data"]
 
         if DEBUG:
-            print("[L1] → node_session_loader END", file=sys.stderr)
+            print("[L1] -> node_session_loader END", file=sys.stderr)
 
         return updates
 
     except Exception as e:
         if DEBUG:
-            print(f"[L1] → node_session_loader ERROR: {str(e)}", file=sys.stderr)
+            print(f"[L1] -> node_session_loader ERROR: {str(e)}", file=sys.stderr)
         updates["session_chain_loaded"] = False
         updates["session_error"] = str(e)
         return updates
@@ -322,7 +322,7 @@ def node_preferences_loader(state: FlowState) -> dict:
 
     DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
     if DEBUG:
-        print("[L1] → node_preferences_loader START", file=sys.stderr)
+        print("[L1] -> node_preferences_loader START", file=sys.stderr)
 
     updates = {}
     try:
@@ -331,7 +331,7 @@ def node_preferences_loader(state: FlowState) -> dict:
 
         if output.get("status") == "ERROR" or output.get("status") == "NOT_FOUND":
             if DEBUG:
-                print("[L1] → node_preferences_loader SCRIPT_NOT_FOUND", file=sys.stderr)
+                print("[L1] -> node_preferences_loader SCRIPT_NOT_FOUND", file=sys.stderr)
             updates["preferences_loaded"] = False
             updates["preferences_data"] = {}
             return updates
@@ -344,13 +344,13 @@ def node_preferences_loader(state: FlowState) -> dict:
         updates["preferences_data"] = parsed["preferences_data"]
 
         if DEBUG:
-            print("[L1] → node_preferences_loader END", file=sys.stderr)
+            print("[L1] -> node_preferences_loader END", file=sys.stderr)
 
         return updates
 
     except Exception as e:
         if DEBUG:
-            print(f"[L1] → node_preferences_loader ERROR: {str(e)}", file=sys.stderr)
+            print(f"[L1] -> node_preferences_loader ERROR: {str(e)}", file=sys.stderr)
         updates["preferences_loaded"] = False
         updates["preferences_error"] = str(e)
         return updates
@@ -363,7 +363,7 @@ def node_patterns_detector(state: FlowState) -> dict:
 
     DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
     if DEBUG:
-        print("[L1] → node_patterns_detector START", file=sys.stderr)
+        print("[L1] -> node_patterns_detector START", file=sys.stderr)
 
     updates = {}
     try:
@@ -373,7 +373,7 @@ def node_patterns_detector(state: FlowState) -> dict:
 
         if output.get("status") == "ERROR" or output.get("status") == "NOT_FOUND":
             if DEBUG:
-                print("[L1] → node_patterns_detector SCRIPT_NOT_FOUND", file=sys.stderr)
+                print("[L1] -> node_patterns_detector SCRIPT_NOT_FOUND", file=sys.stderr)
             updates["patterns_detected"] = []
             updates["pattern_metadata"] = {}
             return updates
@@ -386,13 +386,13 @@ def node_patterns_detector(state: FlowState) -> dict:
         updates["pattern_metadata"] = parsed["pattern_metadata"]
 
         if DEBUG:
-            print(f"[L1] → node_patterns_detector END: {len(parsed['patterns_detected'])} patterns", file=sys.stderr)
+            print(f"[L1] -> node_patterns_detector END: {len(parsed['patterns_detected'])} patterns", file=sys.stderr)
 
         return updates
 
     except Exception as e:
         if DEBUG:
-            print(f"[L1] → node_patterns_detector ERROR: {str(e)}", file=sys.stderr)
+            print(f"[L1] -> node_patterns_detector ERROR: {str(e)}", file=sys.stderr)
         updates["patterns_detected"] = []
         updates["patterns_error"] = str(e)
         return updates

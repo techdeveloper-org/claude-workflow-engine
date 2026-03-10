@@ -100,7 +100,7 @@ def step0_prompt_generation(state: FlowState) -> dict:
 
     DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
     if DEBUG:
-        print("[L3] → Step 0 START", file=sys.stderr)
+        print("[L3] -> Step 0 START", file=sys.stderr)
 
     user_message = state.get("user_message", "")
 
@@ -110,14 +110,14 @@ def step0_prompt_generation(state: FlowState) -> dict:
 
     if DEBUG:
         print(f"[L3-DEBUG] State keys: {list(state.keys())[:5]}", file=sys.stderr)
-        print(f"[L3] → Step 0 user_message: {user_message[:50] if user_message else 'EMPTY'}...", file=sys.stderr)
+        print(f"[L3] -> Step 0 user_message: {user_message[:50] if user_message else 'EMPTY'}...", file=sys.stderr)
 
     # Pass user message as argument to script
     args = [user_message] if user_message else []
     result = call_execution_script("prompt-generator", args)
 
     if DEBUG:
-        print(f"[L3] → Step 0 END: {result.get('task_type')}", file=sys.stderr)
+        print(f"[L3] -> Step 0 END: {result.get('task_type')}", file=sys.stderr)
 
     return {
         "step0_prompt": {
