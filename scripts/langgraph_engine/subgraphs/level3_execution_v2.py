@@ -1,14 +1,15 @@
 """
-Level 3 SubGraph v2 - Integrated 14-Step Execution Pipeline
+Level 3 SubGraph v2 - Integrated 13-Step Execution Pipeline
 
 Integrates all new modules:
 - Ollama service (Steps 1, 5, 7)
-- Git operations (Steps 9, 11)
-- GitHub integration (Steps 8, 11, 12)
+- Git operations (Steps 8, 10)
+- GitHub integration (Steps 8, 10, 11)
 - Session management and logging
 - TOON object persistence
 
-All 14 steps implemented with proper LangGraph routing.
+All 13 steps implemented with proper LangGraph routing.
+Skills/agents fetched from Claude Code (internet-available, no validation needed).
 """
 
 import sys
@@ -170,7 +171,11 @@ def step4_toon_refinement_node(state: FlowState) -> Dict[str, Any]:
 
 
 def step5_skill_selection_node(state: FlowState) -> Dict[str, Any]:
-    """Step 5: Skill & Agent Selection."""
+    """Step 5: Skill & Agent Selection.
+
+    Skills and agents are fetched from Claude Code (internet-available).
+    No validation needed - Claude Code skills are dynamically available.
+    """
     logger.info("\n🔄 [STEP 5] Skill & Agent Selection")
     step_start = time.time()
 
@@ -178,15 +183,31 @@ def step5_skill_selection_node(state: FlowState) -> Dict[str, Any]:
         from ..ollama_service import get_ollama_service
 
         blueprint = state.get("step4_blueprint", {})
-        available_skills = ["python-backend-engineer", "java-spring-boot-microservices", "docker", "orchestrator-agent"]
-        available_agents = ["spring-boot-microservices", "orchestrator-agent", "python-backend-engineer"]
+
+        # Claude Code internet-available skills (comprehensive list)
+        available_skills = [
+            "python-backend-engineer", "java-spring-boot-microservices", "docker",
+            "kubernetes", "jenkins-pipeline", "devops-engineer", "angular-engineer",
+            "swift-backend-engineer", "swiftui-designer", "android-backend-engineer",
+            "android-ui-designer", "orchestrator-agent", "spring-boot-microservices"
+        ]
+
+        # Claude Code internet-available agents (comprehensive list)
+        available_agents = [
+            "spring-boot-microservices", "orchestrator-agent", "python-backend-engineer",
+            "devops-engineer", "android-backend-engineer", "angular-engineer",
+            "swift-backend-engineer", "qa-testing-agent", "dynamic-seo-agent",
+            "static-seo-agent"
+        ]
+
+        logger.info(f"Available {len(available_skills)} skills and {len(available_agents)} agents from Claude Code")
 
         ollama = get_ollama_service()
         skill_result = ollama.step5_skill_agent_selection(blueprint, available_skills, available_agents)
 
         execution_time_ms = (time.time() - step_start) * 1000
 
-        logger.info(f"✓ Step 5 completed: {len(skill_result.get('final_skills_selected', []))} skills ({execution_time_ms:.0f}ms)")
+        logger.info(f"✓ Step 5 completed: {len(skill_result.get('final_skills_selected', []))} skills selected ({execution_time_ms:.0f}ms)")
 
         return {
             "step5_skill_mappings": skill_result.get("skill_mappings", []),
@@ -198,33 +219,6 @@ def step5_skill_selection_node(state: FlowState) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Step 5 failed: {e}")
         return {"step5_error": str(e)}
-
-
-def step6_skill_validation_node(state: FlowState) -> Dict[str, Any]:
-    """Step 6: Skill Validation."""
-    logger.info("\n🔄 [STEP 6] Skill Validation")
-    step_start = time.time()
-
-    try:
-        session_dir = state.get("session_dir", ".")
-        skill_mappings = state.get("step5_skill_mappings", [])
-
-        steps = Level3RemainingSteps(session_dir)
-        validation_result = steps.step6_validate_skills(skill_mappings)
-
-        execution_time_ms = (time.time() - step_start) * 1000
-
-        logger.info(f"✓ Step 6 completed ({execution_time_ms:.0f}ms)")
-
-        return {
-            "step6_valid_skills": validation_result.get("valid_skills", []),
-            "step6_warnings": validation_result.get("warnings", []),
-            "step6_execution_time_ms": execution_time_ms
-        }
-
-    except Exception as e:
-        logger.error(f"Step 6 failed: {e}")
-        return {"step6_error": str(e)}
 
 
 def step7_final_prompt_node(state: FlowState) -> Dict[str, Any]:
@@ -499,19 +493,21 @@ def level3_merge_node(state: FlowState) -> Dict[str, Any]:
 
 
 def create_level3_execution_subgraph_v2():
-    """Create Level 3 execution subgraph with full 14-step pipeline."""
+    """Create Level 3 execution subgraph with full 13-step pipeline.
+
+    Note: Step 6 (skill validation) removed - skills fetched from Claude Code (internet-available).
+    """
     if not _LANGGRAPH_AVAILABLE:
         raise RuntimeError("LangGraph not installed")
 
     graph = StateGraph(FlowState)
 
-    # Add all 14 step nodes
+    # Add all 13 step nodes
     graph.add_node("step1_plan_decision", step1_plan_mode_decision_node)
     graph.add_node("step2_plan_execution", step2_plan_execution_node)
     graph.add_node("step3_task_breakdown", step3_task_breakdown_node)
     graph.add_node("step4_toon_refinement", step4_toon_refinement_node)
     graph.add_node("step5_skill_selection", step5_skill_selection_node)
-    graph.add_node("step6_skill_validation", step6_skill_validation_node)
     graph.add_node("step7_final_prompt", step7_final_prompt_node)
     graph.add_node("step8_github_issue", step8_github_issue_node)
     graph.add_node("step9_branch_creation", step9_branch_creation_node)
@@ -546,8 +542,7 @@ def create_level3_execution_subgraph_v2():
     # Rest of the pipeline (sequential)
     graph.add_edge("step3_task_breakdown", "step4_toon_refinement")
     graph.add_edge("step4_toon_refinement", "step5_skill_selection")
-    graph.add_edge("step5_skill_selection", "step6_skill_validation")
-    graph.add_edge("step6_skill_validation", "step7_final_prompt")
+    graph.add_edge("step5_skill_selection", "step7_final_prompt")
     graph.add_edge("step7_final_prompt", "step8_github_issue")
     graph.add_edge("step8_github_issue", "step9_branch_creation")
     graph.add_edge("step9_branch_creation", "step10_implementation")
