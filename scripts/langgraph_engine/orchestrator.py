@@ -218,8 +218,31 @@ def save_workflow_memory(state: FlowState) -> dict:
     return {}
 
 
+def verify_prompt_integrity(state: FlowState) -> bool:
+    """Verify that original user prompt was never modified during flow.
+
+    CRITICAL: user_message must equal user_message_original
+    If modified, that's a bug in the flow design.
+    """
+    original = state.get("user_message_original", "")
+    current = state.get("user_message", "")
+
+    if original != current:
+        print(f"[WARNING] PROMPT INTEGRITY VIOLATION!", file=sys.stderr)
+        print(f"  Original: {original[:50]}...", file=sys.stderr)
+        print(f"  Current:  {current[:50]}...", file=sys.stderr)
+        return False
+
+    return True
+
+
 def output_node(state: FlowState) -> dict:
     """Final output node - determines completion status."""
+    # Verify prompt integrity before finishing
+    if not verify_prompt_integrity(state):
+        # Log but don't block - prompt should never be modified
+        pass
+
     # Save workflow memory before finishing
     save_workflow_memory(state)
 
@@ -401,13 +424,19 @@ def create_flow_graph():
 def create_initial_state(session_id: str = "", project_root: str = "", user_message: str = "") -> FlowState:
     """Create initial FlowState for a new execution.
 
+    CRITICAL DESIGN RULE - PROMPT INTEGRITY:
+    - user_message is ORIGINAL user prompt - NEVER modify or regenerate
+    - All analysis steps (Steps 0-11) work on COPIES of user_message
+    - Original user_message sent to Claude AS-IS without any modification
+    - No prompt enhancement, no regeneration, no intermediate LLM processing
+
     Args:
         session_id: Session identifier (auto-generated if empty)
         project_root: Project directory path
-        user_message: User's actual task/request
+        user_message: User's actual task/request (IMMUTABLE)
 
     Returns:
-        Initialized FlowState with user message for all steps
+        Initialized FlowState with UNMODIFIED user message for Claude
     """
     if not session_id:
         import uuid
@@ -424,8 +453,9 @@ def create_initial_state(session_id: str = "", project_root: str = "", user_mess
         session_id=session_id,
         timestamp=datetime.now().isoformat(),
         project_root=project_root,
-        # User input - critical for all execution steps
+        # User input - NEVER MODIFIED - this is the original prompt for Claude
         user_message=user_message,
+        user_message_original=user_message,  # Backup of original - for integrity verification
         user_message_length=len(user_message) if user_message else 0,
         # Other fields will be added by nodes as needed
     )

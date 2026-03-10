@@ -38,10 +38,14 @@ class FlowState(TypedDict, total=False):
     is_fresh_project: Annotated[bool, _keep_first_value]  # Immutable - detected once
 
     # ===========================================================================
-    # USER INPUT (immutable - captured at entry)
+    # USER INPUT (immutable - captured at entry, NEVER MODIFIED)
     # ===========================================================================
-    user_message: Annotated[str, _keep_first_value]  # User's actual task/request
+    user_message: Annotated[str, _keep_first_value]  # User's ORIGINAL prompt - NEVER modify, NEVER regenerate
+    user_message_original: Annotated[str, _keep_first_value]  # Backup of original - for safety
     user_message_length: Annotated[int, _keep_first_value]  # Length of message for context tracking
+
+    # CRITICAL: All analysis/processing COPIES user_message for analysis only
+    # Original stays pristine and gets sent to Claude AS-IS without any modification
 
     # ===========================================================================
     # LEVEL -1: AUTO-FIX ENFORCEMENT
