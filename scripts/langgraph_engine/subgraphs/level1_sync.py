@@ -220,44 +220,54 @@ def node_toon_compression(state: FlowState) -> dict:
     - Verbose data saved to disk as TOON
     - Memory variables cleared
     - Only compact TOON remains in memory
+
+    TOON object includes:
+    - session_id
+    - complexity_score
+    - files_loaded_count
+    - compressed context
     """
     try:
         session_path = Path(state.get("session_path", ""))
         context_data = state.get("context_data", {})
         complexity_score = state.get("complexity_score", 5)
         session_id = state.get("session_id", "")
+        files_loaded = context_data.get("files_loaded", [])
 
-        # Build TOON object
+        # Build TOON object WITH complexity and file count INSIDE
         toon_object = {
             "session_id": session_id,
             "timestamp": datetime.now().isoformat(),
-            "complexity": complexity_score,
+            "complexity_score": complexity_score,  # ✓ INSIDE TOON
+            "files_loaded_count": len(files_loaded),  # ✓ INSIDE TOON
             "context": {
-                "files": context_data.get("files_loaded", []),
+                "files": files_loaded,
                 "srs": bool(context_data.get("srs")),  # Just boolean, not full content
                 "readme": bool(context_data.get("readme")),
                 "claude_md": bool(context_data.get("claude_md")),
             }
         }
 
-        # Try to compress with TOONS if available
-        compressed_data = toon_object
-        if _TOONS_AVAILABLE:
-            try:
-                # TOONS provides compression
-                compressed_data = toons.compress(toon_object)
-            except:
-                pass  # Fallback to uncompressed
-
-        # Save TOON to session folder
+        # Save TOON to session folder (uses toons format if available)
         if session_path:
             toon_file = Path(session_path) / "context.toon.json"
-            with open(toon_file, 'w', encoding='utf-8') as f:
-                json.dump(compressed_data, f, indent=2)
+            if _TOONS_AVAILABLE:
+                try:
+                    # Use TOONS for efficient serialization
+                    with open(toon_file, 'w', encoding='utf-8') as f:
+                        f.write(toons.dumps(toon_object))
+                except:
+                    # Fallback to standard JSON
+                    with open(toon_file, 'w', encoding='utf-8') as f:
+                        json.dump(toon_object, f, indent=2)
+            else:
+                # Standard JSON serialization
+                with open(toon_file, 'w', encoding='utf-8') as f:
+                    json.dump(toon_object, f, indent=2)
 
         # Return TOON object, signal memory cleanup
         return {
-            "toon_object": compressed_data,
+            "toon_object": toon_object,  # Return the TOON dict (with session_id, complexity, files_count)
             "toon_saved": True,
             "clear_verbose_memory": True,  # Signal to clear: srs, readme, claude_md, context_data
         }
@@ -276,17 +286,13 @@ def node_toon_compression(state: FlowState) -> dict:
 def level1_merge_node(state: FlowState) -> dict:
     """Merge all Level 1 data and prepare for Level 2.
 
-    OUTPUT: Only TOON object (compact)
+    OUTPUT: Only TOON object (contains session_id, complexity_score, files_loaded_count + context)
     CLEARED: All verbose variables from memory
     """
     # Build final Level 1 output
     updates = {
         "level1_complete": True,
-        "level1_session_id": state.get("session_id", ""),
-        "level1_session_path": state.get("session_path", ""),
-        "level1_complexity": state.get("complexity_score", 5),
-        "level1_context_toon": state.get("toon_object", {}),
-        "level1_context_files_loaded": state.get("files_loaded_count", 0),
+        "level1_context_toon": state.get("toon_object", {}),  # ✓ TOON has everything inside
     }
 
     # Signal memory cleanup - these variables should be cleared from memory
@@ -297,7 +303,8 @@ def level1_merge_node(state: FlowState) -> dict:
             "srs",               # Raw SRS content
             "readme",            # Raw README content
             "claude_md",         # Raw CLAUDE.md content
-            "complexity_score",  # Can keep this small
+            "complexity_score",  # Now in TOON object
+            "files_loaded_count",# Now in TOON object
             "project_graph",     # Large graph object
             "architecture",      # Large architecture object
         ]
