@@ -7004,9 +7004,12 @@ def background_thread():
                 anomaly_detector.feed_metrics(health_score, error_count, context_usage, 0)
             except NameError:
                 pass  # anomaly_detector not defined - skip
-            predictive_analytics.feed_data_point('health_score', health_score)
-            predictive_analytics.feed_data_point('context_usage', context_usage)
-            predictive_analytics.feed_data_point('error_count', error_count)
+            try:
+                predictive_analytics.feed_data_point('health_score', health_score)
+                predictive_analytics.feed_data_point('context_usage', context_usage)
+                predictive_analytics.feed_data_point('error_count', error_count)
+            except NameError:
+                pass  # predictive_analytics not defined - skip
         except Exception as e:
             print(f"Error in background thread: {e}")
 
