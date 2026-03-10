@@ -7000,7 +7000,10 @@ def background_thread():
             # Feed metrics to AI services for anomaly detection and forecasting
             error_count = len([d for d in daemon_status if d.get('status') == 'error'])
             context_usage = system_health.get('context_usage', 0)
-            anomaly_detector.feed_metrics(health_score, error_count, context_usage, 0)
+            try:
+                anomaly_detector.feed_metrics(health_score, error_count, context_usage, 0)
+            except NameError:
+                pass  # anomaly_detector not defined - skip
             predictive_analytics.feed_data_point('health_score', health_score)
             predictive_analytics.feed_data_point('context_usage', context_usage)
             predictive_analytics.feed_data_point('error_count', error_count)

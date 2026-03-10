@@ -143,8 +143,6 @@
                     </a>
                     <div class="sidebar-submenu {% if current_section in ['settings', 'policies'] %}show{% endif %}" id="settingsSubmenu">
                         <a href="{{ url_for('settings') }}" class="sidebar-submenu-link">General Settings</a>
-                        <!-- Claude API route not available (route file missing) -->
-                        <!-- <a href="{{ url_for('claude_credentials.credentials_page') }}" class="sidebar-submenu-link">Claude API</a> -->
                         <a href="{{ url_for('twofa_settings') }}" class="sidebar-submenu-link">2FA Security</a>
                         <a href="{{ url_for('policies') }}" class="sidebar-submenu-link">Policies</a>
                         <a href="{{ url_for('policy_compliance_report') }}" class="sidebar-submenu-link">Compliance Report</a>
