@@ -25,6 +25,20 @@ from pathlib import Path
 from datetime import datetime
 
 # ============================================================================
+# PATH SETUP - Add claude-insight scripts to path for hook execution
+# ============================================================================
+
+# When hook runs, add the claude-insight scripts directory to path
+claude_insight_scripts = Path.home() / "Documents" / "workspace-spring-tool-suite-4-4.27.0-new" / "claude-insight" / "scripts"
+if claude_insight_scripts.exists() and str(claude_insight_scripts) not in sys.path:
+    sys.path.insert(0, str(claude_insight_scripts))
+
+# Also try direct path in case structure is different
+alt_path = Path.home() / "claude-insight" / "scripts"
+if alt_path.exists() and str(alt_path) not in sys.path:
+    sys.path.insert(0, str(alt_path))
+
+# ============================================================================
 # IMPORTS & SETUP
 # ============================================================================
 
@@ -40,6 +54,12 @@ try:
 except ImportError as e:
     _LANGGRAPH_AVAILABLE = False
     import_error = str(e)
+    # Log detailed error for debugging
+    import sys
+    print(f"[IMPORT ERROR] {import_error}", file=sys.stderr)
+    print(f"[DEBUG] Python path:", file=sys.stderr)
+    for p in sys.path[:5]:
+        print(f"  {p}", file=sys.stderr)
 
 # Windows-safe encoding
 if sys.platform == 'win32':
