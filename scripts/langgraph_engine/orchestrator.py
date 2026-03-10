@@ -28,7 +28,7 @@ try:
 except ImportError:
     _LANGGRAPH_AVAILABLE = False
 
-from .flow_state import FlowState
+from .flow_state import FlowState, WorkflowContextOptimizer
 
 # Import all nodes from subgraphs
 from .subgraphs.level_minus1 import (
@@ -114,8 +114,115 @@ def emergency_archive(state: FlowState) -> dict:
     return updates
 
 
+# ============================================================================
+# CONTEXT OPTIMIZATION NODES - Smart context compression between levels
+# ============================================================================
+
+
+def optimize_context_after_level1(state: FlowState) -> dict:
+    """Optimize context after Level 1 completes before passing to Level 2.
+
+    Stores full Level 1 output in workflow_memory, passes only summary to Level 2.
+    This keeps context clean while preserving full data for fallback/debugging.
+    """
+    # Store full level 1 output
+    level1_output = {
+        "context_loaded": state.get("context_loaded"),
+        "context_percentage": state.get("context_percentage"),
+        "session_chain_loaded": state.get("session_chain_loaded"),
+        "patterns_detected": state.get("patterns_detected", []),
+        "preferences_data": state.get("preferences_data", {}),
+    }
+
+    state = WorkflowContextOptimizer.store_step_output(state, "level1_output", level1_output)
+
+    # Build optimized context for Level 2
+    optimized = WorkflowContextOptimizer.build_optimized_context(state)
+    state["workflow_context_optimized"] = optimized
+
+    return state
+
+
+def optimize_context_after_level2(state: FlowState) -> dict:
+    """Optimize context after Level 2 before Level 3 execution.
+
+    Stores standards info in memory, passes only summary to Level 3.
+    """
+    # Store full level 2 output
+    level2_output = {
+        "standards_loaded": state.get("standards_loaded"),
+        "standards_count": state.get("standards_count"),
+        "java_standards_loaded": state.get("java_standards_loaded"),
+        "spring_boot_patterns": state.get("spring_boot_patterns", {}),
+    }
+
+    state = WorkflowContextOptimizer.store_step_output(state, "level2_output", level2_output)
+
+    # Build optimized context for Level 3
+    optimized = WorkflowContextOptimizer.build_optimized_context(state)
+    state["workflow_context_optimized"] = optimized
+
+    return state
+
+
+def optimize_context_for_level3_step(state: FlowState, step_name: str) -> dict:
+    """Optimize context before each Level 3 step.
+
+    For Level 3, only pass data specific to current step.
+    All previous step outputs stay in workflow_memory.
+    """
+    # Store current step's inputs/outputs
+    current_data = {
+        k: v for k, v in state.items()
+        if k.startswith("step") and isinstance(v, dict)
+    }
+
+    state = WorkflowContextOptimizer.store_step_output(state, step_name, current_data)
+
+    return state
+
+
+def save_workflow_memory(state: FlowState) -> dict:
+    """Save workflow memory to disk for session persistence."""
+    try:
+        import json
+        from pathlib import Path
+
+        session_id = state.get("session_id", "unknown")
+        memory = state.get("workflow_memory", {})
+
+        if memory and session_id != "unknown":
+            # Save to ~/.claude/memory/sessions/{session_id}/workflow-memory.json
+            memory_dir = Path.home() / ".claude" / "memory" / "logs" / "sessions" / session_id
+            memory_dir.mkdir(parents=True, exist_ok=True)
+
+            memory_file = memory_dir / "workflow-memory.json"
+            with open(memory_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "session_id": session_id,
+                        "timestamp": state.get("timestamp"),
+                        "workflow_memory": memory,
+                        "context_optimization_stats": state.get("step_optimization_stats", {}),
+                        "memory_size_kb": state.get("workflow_memory_size_kb", 0),
+                    },
+                    f,
+                    indent=2,
+                )
+
+            return {"workflow_memory_file": str(memory_file)}
+    except Exception as e:
+        # Don't fail if memory save fails - it's non-critical
+        pass
+
+    return {}
+
+
 def output_node(state: FlowState) -> dict:
     """Final output node - determines completion status."""
+    # Save workflow memory before finishing
+    save_workflow_memory(state)
+
     # If final_status not yet set, determine it now
     # Check for blocking conditions
     if state.get("level_minus1_status") == "BLOCKED":
@@ -202,9 +309,13 @@ def create_flow_graph():
     graph.add_edge("level1_preferences", "level1_patterns")
     graph.add_edge("level1_patterns", "level1_merge")
 
-    # Route based on context threshold
+    # Optimize context after Level 1 (compress for Level 2 consumption)
+    graph.add_node("optimize_after_level1", optimize_context_after_level1)
+    graph.add_edge("level1_merge", "optimize_after_level1")
+
+    # Route based on context threshold - from optimized context node
     graph.add_conditional_edges(
-        "level1_merge",
+        "optimize_after_level1",
         route_context_threshold,
         {
             "emergency_archive": "emergency_archive",
@@ -236,8 +347,12 @@ def create_flow_graph():
     # Java standards merge
     graph.add_edge("level2_java_standards", "level2_merge")
 
-    # Merge to Level 3
-    graph.add_edge("level2_merge", "level3_step0")
+    # Optimize context after Level 2 (compress for Level 3 consumption)
+    graph.add_node("optimize_after_level2", optimize_context_after_level2)
+    graph.add_edge("level2_merge", "optimize_after_level2")
+
+    # Merge to Level 3 (through optimized context)
+    graph.add_edge("optimize_after_level2", "level3_step0")
 
     # ========================================================================
     # LEVEL 3: EXECUTION SYSTEM (12 sequential steps)
