@@ -135,10 +135,11 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
     """Ask user what to do when Level -1 checks fail.
 
     Shows exactly which checks failed and asks:
-    - "Auto-fix now" (attempts to fix automatically)
-    - "Skip Level -1" (continue anyway, user will fix manually)
+    - "Auto-fix now" (RECOMMENDED - attempts to fix automatically)
+    - "Skip Level -1" (NOT RECOMMENDED - will break flow later)
     """
     errors = state.get("errors", [])
+    retry_count = state.get("level_minus1_retry_count", 0)
 
     # Build human-readable error message
     error_details = []
@@ -151,31 +152,43 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
 
     # Create choice message
     message = (
-        "**Level -1 System Check Failed**\n\n"
+        f"**[LEVEL -1 CHECK #{retry_count + 1}] System Check Failed**\n\n"
         "Issues detected:\n"
     )
     for detail in error_details:
-        message += f"- {detail}\n"
+        message += f"{detail}\n"
 
     message += (
-        "\n**What would you like to do?**\n"
-        "- Auto-fix: I'll attempt automatic fixes (recommended)\n"
-        "- Skip: Continue anyway (you'll fix manually later)\n"
+        "\n╔════════════════════════════════════════════════════════════╗\n"
+        "║  What would you like to do?                                ║\n"
+        "╚════════════════════════════════════════════════════════════╝\n\n"
+        "🔧 OPTION 1: Auto-fix (RECOMMENDED ✓)\n"
+        "   └─ I'll automatically fix these issues\n"
+        "   └─ Then rerun Level -1 checks\n"
+        "   └─ Continue to Level 1 once fixed\n\n"
+        "⏭️  OPTION 2: Skip Level -1 (NOT RECOMMENDED ✗)\n"
+        "   └─ Continue anyway without fixing\n"
+        "   └─ ⚠️  THIS WILL BREAK THE FLOW LATER\n"
+        "   └─ ⚠️  Encoding errors during execution\n"
+        "   └─ ⚠️  Path resolution failures\n"
+        "   └─ ⚠️  Only choose this if you know what you're doing\n\n"
+        "→ Choose 1 (auto-fix) for best results\n"
     )
 
-    # For now, log and continue (AskUserQuestion not available in this context)
-    # In production, this would use the AskUserQuestion tool
+    # Log and prompt
     print(f"\n{'='*70}")
-    print("[LEVEL -1] System Check Failed")
+    print("[LEVEL -1] BLOCKING CHECK FAILURE")
     print('='*70)
     print(message)
     print('='*70 + "\n")
 
     # Default: Skip Level -1 (user can manually fix)
+    # NOTE: In production with AskUserQuestion tool, this would be interactive
     updates = {
         "level_minus1_check_shown": True,
-        "level_minus1_user_choice": "skip",  # Default to skip
-        "level_minus1_blocked_errors": error_details
+        "level_minus1_user_choice": "skip",  # Default to skip (safest for now)
+        "level_minus1_blocked_errors": error_details,
+        "level_minus1_attempt_number": retry_count + 1,
     }
 
     return updates
