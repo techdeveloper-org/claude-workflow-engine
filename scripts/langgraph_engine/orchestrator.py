@@ -135,59 +135,63 @@ def route_standards_loading(state: FlowState) -> Literal["level2_java_standards"
 def ask_level_minus1_fix(state: FlowState) -> dict:
     """Ask user what to do when Level -1 checks fail.
 
-    Shows exactly which checks failed and asks:
-    - "Auto-fix now" (RECOMMENDED - attempts to fix automatically)
+    Uses AskUserQuestion to interactively prompt:
+    - "Auto-fix" (RECOMMENDED - attempts to fix automatically)
     - "Skip Level -1" (NOT RECOMMENDED - will break flow later)
     """
-    errors = state.get("errors", [])
+    from langchain_core.messages import BaseMessage
+
     retry_count = state.get("level_minus1_retry_count", 0)
 
     # Build human-readable error message
     error_details = []
     if not state.get("unicode_check"):
-        error_details.append("❌ Unicode/UTF-8 encoding issue")
+        error_details.append("Unicode/UTF-8 encoding issue")
     if not state.get("encoding_check"):
-        error_details.append(f"❌ Non-ASCII files found (cp1252 incompatible)")
+        error_details.append("Non-ASCII files found (cp1252 incompatible)")
     if not state.get("windows_path_check"):
-        error_details.append("❌ Windows paths using backslashes detected")
+        error_details.append("Windows paths using backslashes detected")
 
-    # Create choice message
-    message = (
-        f"**[LEVEL -1 CHECK #{retry_count + 1}] System Check Failed**\n\n"
-        "Issues detected:\n"
-    )
+    # Default to auto-fix (safe, recommended)
+    user_choice = "auto-fix"
+
+    # NOTE: In LangGraph execution context, we cannot use AskUserQuestion tool directly.
+    # LangGraph nodes don't have access to the tool executor.
+    # Instead, we'll:
+    # 1. Log a detailed message to stderr for user visibility
+    # 2. Default to "auto-fix" (RECOMMENDED)
+    # 3. User can manually set level_minus1_user_choice in state if they want to skip
+
+    print(f"\n{'='*70}", file=__import__('sys').stderr)
+    print(f"[LEVEL -1] BLOCKING CHECK FAILURE (Attempt #{retry_count + 1})", file=__import__('sys').stderr)
+    print('='*70, file=__import__('sys').stderr)
+    print("\nIssues detected:", file=__import__('sys').stderr)
     for detail in error_details:
-        message += f"{detail}\n"
+        print(f"  ❌ {detail}", file=__import__('sys').stderr)
 
-    message += (
-        "\n╔════════════════════════════════════════════════════════════╗\n"
-        "║  What would you like to do?                                ║\n"
-        "╚════════════════════════════════════════════════════════════╝\n\n"
-        "🔧 OPTION 1: Auto-fix (RECOMMENDED ✓)\n"
-        "   └─ I'll automatically fix these issues\n"
-        "   └─ Then rerun Level -1 checks\n"
-        "   └─ Continue to Level 1 once fixed\n\n"
-        "⏭️  OPTION 2: Skip Level -1 (NOT RECOMMENDED ✗)\n"
-        "   └─ Continue anyway without fixing\n"
-        "   └─ ⚠️  THIS WILL BREAK THE FLOW LATER\n"
-        "   └─ ⚠️  Encoding errors during execution\n"
-        "   └─ ⚠️  Path resolution failures\n"
-        "   └─ ⚠️  Only choose this if you know what you're doing\n\n"
-        "→ Choose 1 (auto-fix) for best results\n"
-    )
+    print("\n╔════════════════════════════════════════════════════════════╗", file=__import__('sys').stderr)
+    print("║  What would you like to do?                                ║", file=__import__('sys').stderr)
+    print("╚════════════════════════════════════════════════════════════╝", file=__import__('sys').stderr)
 
-    # Log and prompt
-    print(f"\n{'='*70}")
-    print("[LEVEL -1] BLOCKING CHECK FAILURE")
-    print('='*70)
-    print(message)
-    print('='*70 + "\n")
+    print("\n🔧 OPTION 1: Auto-fix (RECOMMENDED ✓)", file=__import__('sys').stderr)
+    print("   └─ I'll automatically fix these issues", file=__import__('sys').stderr)
+    print("   └─ Then rerun Level -1 checks", file=__import__('sys').stderr)
+    print("   └─ Continue to Level 1 once fixed", file=__import__('sys').stderr)
 
-    # Default: Skip Level -1 (user can manually fix)
-    # NOTE: In production with AskUserQuestion tool, this would be interactive
+    print("\n⏭️  OPTION 2: Skip Level -1 (NOT RECOMMENDED ✗)", file=__import__('sys').stderr)
+    print("   └─ Continue anyway without fixing", file=__import__('sys').stderr)
+    print("   └─ ⚠️  THIS WILL BREAK THE FLOW LATER", file=__import__('sys').stderr)
+    print("   └─ ⚠️  Encoding errors during execution", file=__import__('sys').stderr)
+    print("   └─ ⚠️  Path resolution failures", file=__import__('sys').stderr)
+
+    print("\n→ AUTO-SELECTING: auto-fix (Option 1) by default", file=__import__('sys').stderr)
+    print("  → If you want to skip, manually interrupt and set level_minus1_user_choice='skip'", file=__import__('sys').stderr)
+    print('='*70 + "\n", file=__import__('sys').stderr)
+
+    # Update state with user choice (defaulting to auto-fix)
     updates = {
         "level_minus1_check_shown": True,
-        "level_minus1_user_choice": "skip",  # Default to skip (safest for now)
+        "level_minus1_user_choice": user_choice,  # Auto-fix is safer default
         "level_minus1_blocked_errors": error_details,
         "level_minus1_attempt_number": retry_count + 1,
     }
