@@ -40,6 +40,8 @@ import qrcode
 import base64
 import secrets
 import json
+# Import configuration
+from config import get_config
 # Import monitoring services
 from services.monitoring.metrics_collector import MetricsCollector
 from services.monitoring.log_parser import LogParser
@@ -7052,4 +7054,7 @@ if __name__ == '__main__':
     ============================================================
     """)
 
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
+    # Get configuration based on FLASK_ENV (defaults to production)
+    config = get_config()
+
+    socketio.run(app, debug=config.DEBUG, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
