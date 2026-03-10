@@ -506,8 +506,8 @@ Step 1: Plan Mode Decision    ✓ (2-5s)
 Step 2: Plan Execution        ✓ (10-20s)
 Step 3: Task Breakdown        ✓ (<1s)
 Step 4: TOON Refinement       ✓ (<1s)
-Step 5: Skill Selection       ✓ (5-10s) [Claude Code internet-available skills]
-Step 6: Skill Validation      ✗ (REMOVED - skills now from Claude Code)
+Step 5: Skill Selection       ✓ (5-10s)    [LLM recommends needed skills]
+Step 6: Skill Validation      ✓ (1-5s)    [Scan local + download if needed]
 Step 7: Prompt Generation     ✓ (5-10s)
 Step 8: GitHub Issue          ✓ (1-2s)
 Step 9: Branch Creation       ✓ (2-3s)
@@ -517,7 +517,12 @@ Step 12: Issue Closure        ✓ (1-2s)
 Step 13: Docs Update          ✓ (<1s)
 Step 14: Final Summary        ✓ (<1s)
 
-Total: ~40-70 seconds (excluding Step 10, Step 6 removed saves ~1s)
+Total: ~41-81 seconds (excluding Step 10)
+
+Step 6 Breakdown:
+- Scan local skills/agents:    <1s
+- Download missing (if any):   1-5s (depends on internet + file size)
+- Return selected skills:      <1s
 ```
 
 ---
