@@ -247,12 +247,21 @@ app.register_blueprint(monitor_bp)
 app.register_blueprint(settings_bp)
 
 # Initialize SocketIO for real-time updates
+class NoOpSocketIO:
+    """Dummy SocketIO that does nothing but allows .on() decorator syntax"""
+    def on(self, event, namespace=None):
+        def decorator(func):
+            return func
+        return decorator
+    def emit(self, *args, **kwargs):
+        pass
+
 try:
     socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=10, ping_interval=5)
-except ValueError:
+except (ValueError, Exception):
     # Fallback if async_mode detection fails
-    socketio = None
-    print("[WARN] SocketIO real-time disabled - use REST API polling instead")
+    socketio = NoOpSocketIO()
+    print("[WARN] SocketIO real-time disabled - using REST API polling instead")
 
 # Initialize Swagger for API documentation
 swagger_config = {
