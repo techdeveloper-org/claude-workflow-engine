@@ -40,8 +40,12 @@ import qrcode
 import base64
 import secrets
 import json
-# Import configuration
-from config import get_config
+import os
+# Load .env file first so FLASK_ENV is set before app creation
+from dotenv import load_dotenv
+env_file = Path(__file__).parent.parent / '.env'
+if env_file.exists():
+    load_dotenv(env_file)
 # Import monitoring services
 from services.monitoring.metrics_collector import MetricsCollector
 from services.monitoring.log_parser import LogParser
@@ -7054,7 +7058,4 @@ if __name__ == '__main__':
     ============================================================
     """)
 
-    # Get configuration based on FLASK_ENV (defaults to production)
-    config = get_config()
-
-    socketio.run(app, debug=config.DEBUG, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=app.config.get('DEBUG', False), host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
