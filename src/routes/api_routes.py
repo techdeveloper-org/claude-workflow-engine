@@ -65,26 +65,9 @@ def get_metrics():
         return jsonify({'error': str(e)}), 500
 
 
-@api_bp.route('/activity', methods=['GET'])
-@login_required
-def get_activity():
-    """Get recent system activity with filtering and pagination."""
-    try:
-        from utils.history_tracker import HistoryTracker
-
-        tracker = HistoryTracker()
-        limit = request.args.get('limit', 50, type=int)
-        offset = request.args.get('offset', 0, type=int)
-
-        activity = tracker.get_activity(limit=limit, offset=offset)
-
-        return jsonify({
-            'activity': activity,
-            'limit': limit,
-            'offset': offset
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# NOTE: /activity endpoint is defined in app.py line 1314 (api_activity)
+# This blueprint route has been removed to avoid duplication
+# The app.py route takes precedence and is properly tested
 
 
 @api_bp.route('/policies', methods=['GET'])
