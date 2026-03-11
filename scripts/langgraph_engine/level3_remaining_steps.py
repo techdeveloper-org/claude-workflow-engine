@@ -1094,146 +1094,93 @@ Be very specific and actionable - mention actual file paths and existing functio
 
     def step13_update_documentation(self, files_modified: List[str]) -> Dict[str, Any]:
         """
-        Update project documentation (SRS, README, CLAUDE.md).
+        Update project documentation (README, CLAUDE.md, SRA, VERSION, CHANGELOG).
+
+        Uses enterprise-grade templates with intelligent creation/update logic:
+        - CREATE: Full codebase analysis → complete documentation
+        - UPDATE: Latest changes only → smart merge with existing content
 
         Args:
             files_modified: Files that were modified
 
         Returns:
-            {"success": bool, "updated_files": List[str]}
+            {
+                "success": bool,
+                "updated_files": List[str],
+                "errors": Optional[List[str]],
+                "execution_time_ms": float,
+                "context": {project_name, languages, frameworks, version}
+            }
         """
         logger.info("=" * 60)
         logger.info("LEVEL 3 - STEP 13: DOCUMENTATION UPDATE")
+        logger.info("Enterprise-grade documentation generation")
         logger.info("=" * 60)
 
         step_start = time.time()
 
         try:
-            updated = []
+            from .documentation_generator import DocumentationGenerator
 
-            # Update README if it exists
-            readme_path = Path("README.md")
-            if readme_path.exists():
-                self._update_readme(readme_path, files_modified)
-                updated.append("README.md")
-                logger.info("Updated README.md")
+            # Initialize generator (analyzes codebase automatically)
+            gen = DocumentationGenerator(
+                project_root=".",
+                session_dir=self.session_manager.session_dir
+            )
 
-            # Create/update SRS if needed
-            srs_path = Path("SRS.md")
-            if srs_path.exists():
-                self._update_srs(srs_path, files_modified)
-                updated.append("SRS.md")
-                logger.info("Updated SRS.md")
+            logger.info("Generating/updating all documentation files...")
 
-            # Create/update CLAUDE.md (project-specific context)
-            claude_md_path = Path("CLAUDE.md")
-            if claude_md_path.exists():
-                self._update_claude_md(claude_md_path, files_modified)
-                updated.append("CLAUDE.md")
-                logger.info("Updated CLAUDE.md")
+            # Generate/update all 5 documentation files intelligently
+            result = gen.update_all_documentation(files_modified)
+
+            execution_time_ms = (time.time() - step_start) * 1000
+
+            # Log results
+            if result["success"]:
+                logger.info(f"✓ Documentation generation successful")
+                logger.info(f"  Files updated: {len(result['updated_files'])}")
+                for file in result['updated_files']:
+                    logger.info(f"    - {file}")
+
+                if result.get('context'):
+                    ctx = result['context']
+                    logger.info(f"  Project: {ctx.get('project_name')}")
+                    logger.info(f"  Languages: {', '.join(ctx.get('languages', []))}")
+                    logger.info(f"  Frameworks: {', '.join(ctx.get('frameworks', []))}")
+                    logger.info(f"  Version: {ctx.get('version')}")
             else:
-                self._create_claude_md(claude_md_path)
-                updated.append("CLAUDE.md (created)")
-                logger.info("Created CLAUDE.md")
+                logger.error(f"Documentation generation had errors")
+                if result.get('errors'):
+                    for error in result['errors']:
+                        logger.error(f"  - {error}")
 
             # Save to session
             self.session_manager.save_github_details({
-                "documentation_updated": updated,
+                "documentation_updated": result['updated_files'],
+                "documentation_status": "success" if result['success'] else "partial",
+                "documentation_context": result.get('context', {}),
                 "timestamp": datetime.now().isoformat()
             })
 
-            logger.info(f"✓ Documentation updated: {len(updated)} files")
-
             return {
-                "success": True,
-                "updated_files": updated,
+                "success": result['success'],
+                "updated_files": result['updated_files'],
+                "errors": result.get('errors'),
+                "execution_time_ms": execution_time_ms,
+                "context": result.get('context'),
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"Step 13 failed: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "updated_files": [],
                 "execution_time_ms": (time.time() - step_start) * 1000,
                 "timestamp": datetime.now().isoformat()
             }
 
-        except Exception as e:
-            logger.error(f"Step 13 failed: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "execution_time_ms": (time.time() - step_start) * 1000
-            }
-
-    def _update_readme(self, readme_path: Path, files_modified: List[str]):
-        """Add update note to README."""
-        # Simple approach: add a note at the end
-        content = readme_path.read_text(encoding='utf-8')
-        note = f"\n\n## Latest Updates\nUpdated {datetime.now().strftime('%Y-%m-%d')}:\n"
-        for file in files_modified[:5]:  # Show first 5
-            note += f"- {file}\n"
-        readme_path.write_text(content + note, encoding='utf-8')
-
-    def _update_srs(self, srs_path: Path, files_modified: List[str]):
-        """Update SRS with changes."""
-        # Simple approach: ensure SRS exists and is valid
-        if not srs_path.exists():
-            srs_path.write_text("# System Requirements Specification\n\n## Latest Changes\n")
-
-    def _update_claude_md(self, claude_md_path: Path, files_modified: List[str]):
-        """Update CLAUDE.md with latest changes and modifications."""
-        try:
-            content = claude_md_path.read_text(encoding='utf-8')
-
-            # Find the "Last Updated" section
-            timestamp = datetime.now().isoformat()
-            update_section = (
-                f"\n## Recent Changes (Auto-Updated)\n"
-                f"**Last Updated:** {timestamp}\n"
-                f"**Modified Files:**\n"
-            )
-            for file in files_modified[:10]:
-                update_section += f"- `{file}`\n"
-
-            # Add to end of file if not already there
-            if "Recent Changes" not in content:
-                content += update_section
-                claude_md_path.write_text(content, encoding='utf-8')
-            else:
-                # Replace existing section
-                pattern = r"## Recent Changes \(Auto-Updated\).*?(?=\n## |\Z)"
-                content = re.sub(pattern, update_section.strip(), content, flags=re.DOTALL)
-                claude_md_path.write_text(content, encoding='utf-8')
-
-            logger.info(f"✓ Updated CLAUDE.md with {len(files_modified)} modified files")
-        except Exception as e:
-            logger.warning(f"Could not update CLAUDE.md: {e}")
-
-    def _create_claude_md(self, claude_md_path: Path):
-        """Create a new CLAUDE.md with default project context."""
-        try:
-            content = f"""# Project Context (CLAUDE.md)
-
-## Overview
-Generated automatically by Claude Insight Level 3 Pipeline.
-
-## Recent Changes (Auto-Updated)
-**Last Updated:** {datetime.now().isoformat()}
-
-## Development Notes
-Add project-specific context, setup instructions, and conventions here.
-
-## Architecture Notes
-Update this section with your project architecture as it evolves.
-
-## Commands
-Document useful development commands here:
-- Build: `make build`
-- Test: `make test`
-- Run: `python run.py`
-
----
-
-*This file is maintained by Claude Insight and updated during execution.*
-"""
-            claude_md_path.write_text(content, encoding='utf-8')
-            logger.info(f"✓ Created new CLAUDE.md")
-        except Exception as e:
-            logger.warning(f"Could not create CLAUDE.md: {e}")
 
     # ===== STEP 14: FINAL SUMMARY =====
 
