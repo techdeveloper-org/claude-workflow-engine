@@ -54,20 +54,23 @@ from .subgraphs.level2_standards import (
     detect_project_type,
 )
 
-from .subgraphs.level3_execution import (
-    step0_prompt_generation,
-    step1_task_breakdown,
-    step2_plan_mode_decision,
-    step3_context_read_enforcement,
-    step4_model_selection,
-    step5_skill_agent_selection,
-    step6_tool_optimization,
-    step7_auto_recommendations,
-    step8_progress_tracking,
-    step9_git_commit_preparation,
-    step10_session_save,
-    step11_failure_prevention,
-    level3_merge_node,
+from .subgraphs.level3_execution_v2 import (
+    level3_init_node,
+    step1_plan_mode_decision_node,
+    step2_plan_execution_node,
+    step3_task_breakdown_node,
+    step4_toon_refinement_node,
+    step5_skill_selection_node,
+    step6_skill_validation_node,
+    step7_final_prompt_node,
+    step8_github_issue_node,
+    step9_branch_creation_node,
+    step10_implementation_note,
+    step11_pull_request_node,
+    step12_issue_closure_node,
+    step13_docs_update_node,
+    step14_final_summary_node,
+    level3_merge_node as level3_v2_merge_node,
 )
 
 
@@ -125,6 +128,13 @@ def route_standards_loading(state: FlowState) -> Literal["level2_java_standards"
     if state.get("is_java_project"):
         return "level2_java_standards"
     return "level2_merge"
+
+
+def route_after_step1_decision(state: FlowState) -> Literal["level3_step2", "level3_step3"]:
+    """Conditional routing: if plan required, execute Step 2; else skip to Step 3."""
+    if state.get("step1_plan_required", True):
+        return "level3_step2"
+    return "level3_step3"
 
 
 # ============================================================================
@@ -660,39 +670,82 @@ def create_flow_graph():
     graph.add_node("optimize_after_level2", optimize_context_after_level2)
     graph.add_edge("level2_merge", "optimize_after_level2")
 
-    # Merge to Level 3 (through optimized context)
-    graph.add_edge("optimize_after_level2", "level3_step0")
-
     # ========================================================================
-    # LEVEL 3: EXECUTION SYSTEM (12 sequential steps)
+    # LEVEL 3: EXECUTION SYSTEM - 14-STEP PIPELINE (v2 WORKFLOW.MD COMPLIANT)
     # ========================================================================
-    graph.add_node("level3_step0", step0_prompt_generation)
-    graph.add_node("level3_step1", step1_task_breakdown)
-    graph.add_node("level3_step2", step2_plan_mode_decision)
-    graph.add_node("level3_step3", step3_context_read_enforcement)
-    graph.add_node("level3_step4", step4_model_selection)
-    graph.add_node("level3_step5", step5_skill_agent_selection)
-    graph.add_node("level3_step6", step6_tool_optimization)
-    graph.add_node("level3_step7", step7_auto_recommendations)
-    graph.add_node("level3_step8", step8_progress_tracking)
-    graph.add_node("level3_step9", step9_git_commit_preparation)
-    graph.add_node("level3_step10", step10_session_save)
-    graph.add_node("level3_step11", step11_failure_prevention)
-    graph.add_node("level3_merge", level3_merge_node)
 
-    # Sequential edges through all 12 steps
-    graph.add_edge("level3_step0", "level3_step1")
-    graph.add_edge("level3_step1", "level3_step2")
+    # Bridge node: session_path → session_dir
+    graph.add_node("level3_init", level3_init_node)
+    graph.add_edge("optimize_after_level2", "level3_init")
+
+    # Step 1: Plan Mode Decision (LOCAL LLM - Ollama)
+    graph.add_node("level3_step1", step1_plan_mode_decision_node)
+    graph.add_edge("level3_init", "level3_step1")
+
+    # CONDITIONAL: plan_required → step2 | direct → step3
+    graph.add_conditional_edges(
+        "level3_step1",
+        route_after_step1_decision,
+        {
+            "level3_step2": "level3_step2",
+            "level3_step3": "level3_step3",
+        }
+    )
+
+    # Step 2: Plan Execution (only when plan_required=True)
+    graph.add_node("level3_step2", step2_plan_execution_node)
     graph.add_edge("level3_step2", "level3_step3")
+
+    # Step 3: Task Breakdown
+    graph.add_node("level3_step3", step3_task_breakdown_node)
+
+    # Step 4: TOON Refinement
+    graph.add_node("level3_step4", step4_toon_refinement_node)
     graph.add_edge("level3_step3", "level3_step4")
+
+    # Step 5: Skill & Agent Selection (LOCAL LLM + filesystem scan)
+    graph.add_node("level3_step5", step5_skill_selection_node)
     graph.add_edge("level3_step4", "level3_step5")
+
+    # Step 6: Skill Validation & Download (RESTORED)
+    graph.add_node("level3_step6", step6_skill_validation_node)
     graph.add_edge("level3_step5", "level3_step6")
+
+    # Step 7: Final Prompt Generation (LOCAL LLM)
+    graph.add_node("level3_step7", step7_final_prompt_node)
     graph.add_edge("level3_step6", "level3_step7")
+
+    # Step 8: GitHub Issue Creation
+    graph.add_node("level3_step8", step8_github_issue_node)
     graph.add_edge("level3_step7", "level3_step8")
+
+    # Step 9: Branch Creation (issue-42-bug format)
+    graph.add_node("level3_step9", step9_branch_creation_node)
     graph.add_edge("level3_step8", "level3_step9")
+
+    # Step 10: Implementation Placeholder (writes prompt.txt)
+    graph.add_node("level3_step10", step10_implementation_note)
     graph.add_edge("level3_step9", "level3_step10")
+
+    # Step 11: PR Creation & Merge
+    graph.add_node("level3_step11", step11_pull_request_node)
     graph.add_edge("level3_step10", "level3_step11")
-    graph.add_edge("level3_step11", "level3_merge")
+
+    # Step 12: Issue Closure
+    graph.add_node("level3_step12", step12_issue_closure_node)
+    graph.add_edge("level3_step11", "level3_step12")
+
+    # Step 13: Documentation Update
+    graph.add_node("level3_step13", step13_docs_update_node)
+    graph.add_edge("level3_step12", "level3_step13")
+
+    # Step 14: Final Summary + Voice Notification
+    graph.add_node("level3_step14", step14_final_summary_node)
+    graph.add_edge("level3_step13", "level3_step14")
+
+    # Merge node
+    graph.add_node("level3_merge", level3_v2_merge_node)
+    graph.add_edge("level3_step14", "level3_merge")
 
     # ========================================================================
     # OUTPUT
