@@ -38,6 +38,22 @@ from ..level3_steps8to12_github import Level3GitHubWorkflow
 # ============================================================================
 
 
+def level3_init_node(state: FlowState) -> Dict[str, Any]:
+    """Bridge: Map session_path (from Level 1) to session_dir (used by v2 steps)."""
+    session_path = state.get("session_path", "")
+    session_id = state.get("session_id", "unknown")
+
+    if not session_path:
+        from pathlib import Path
+        session_path = str(Path.home() / ".claude" / "logs" / "sessions" / session_id)
+
+    # Also set user_requirement as alias for user_message
+    return {
+        "session_dir": session_path,
+        "user_requirement": state.get("user_message", ""),
+    }
+
+
 def step1_plan_mode_decision_node(state: FlowState) -> Dict[str, Any]:
     """Step 1: Plan Mode Decision using Ollama."""
     logger.info("\n🔄 [STEP 1] Plan Mode Decision")
@@ -110,8 +126,13 @@ def step3_task_breakdown_node(state: FlowState) -> Dict[str, Any]:
 
     try:
         session_dir = state.get("session_dir", ".")
-        plan = state.get("step2_plan", "")
-        files = state.get("step2_files_affected", [])
+        # Fallback: if step2 was skipped, use user_message; otherwise use step2 plan
+        plan = state.get("step2_plan") or state.get("user_message", "")
+        files = state.get("step2_files_affected") or []
+        # If no files from step2, derive from context
+        if not files:
+            toon = state.get("level1_context_toon", {})
+            files = toon.get("context", {}).get("files", [])
 
         steps = Level3RemainingSteps(session_dir)
         task_result = steps.step3_task_breakdown(plan, files)
@@ -556,7 +577,12 @@ def step13_docs_update_node(state: FlowState) -> Dict[str, Any]:
 
     try:
         session_dir = state.get("session_dir", ".")
-        files_modified = state.get("step3_tasks", [])
+        # Get files modified from step2 plan, fallback to step3 tasks
+        files_modified = (
+            state.get("step2_files_affected")
+            or [t.get("file", "") for t in state.get("step3_tasks", []) if t.get("file")]
+            or []
+        )
 
         steps = Level3RemainingSteps(session_dir)
         docs_result = steps.step13_update_documentation(files_modified)
@@ -584,7 +610,12 @@ def step14_final_summary_node(state: FlowState) -> Dict[str, Any]:
         session_dir = state.get("session_dir", ".")
         issue_number = state.get("step8_issue_number", 0)
         pr_number = state.get("step11_pr_number", 0)
-        files_modified = state.get("step3_tasks", [])
+        # Get files modified from step2 plan, fallback to step3 tasks
+        files_modified = (
+            state.get("step2_files_affected")
+            or [t.get("file", "") for t in state.get("step3_tasks", []) if t.get("file")]
+            or []
+        )
 
         steps = Level3RemainingSteps(session_dir)
         summary_result = steps.step14_final_summary(issue_number, pr_number, files_modified)
@@ -685,13 +716,17 @@ def create_level3_execution_subgraph_v2():
             logger.info("Skipping planning, going direct to execution")
             return "step3_task_breakdown"
 
-    graph.add_conditional_edges("step1_plan_decision", route_after_step1)
+    graph.add_conditional_edges(
+        "step1_plan_decision",
+        route_after_step1,
+        {
+            "step2_plan_execution": "step2_plan_execution",
+            "step3_task_breakdown": "step3_task_breakdown"
+        }
+    )
 
     # Sequential edges for planned path
     graph.add_edge("step2_plan_execution", "step3_task_breakdown")
-
-    # Direct path (skip planning)
-    graph.add_edge("step1_plan_decision", "step3_task_breakdown")  # Fallback for router
 
     # Rest of the pipeline (sequential)
     graph.add_edge("step3_task_breakdown", "step4_toon_refinement")

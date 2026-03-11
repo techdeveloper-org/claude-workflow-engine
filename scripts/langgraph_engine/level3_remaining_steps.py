@@ -809,8 +809,8 @@ All changes are tested and documented.
     def _send_voice_notification(self, summary: str) -> bool:
         """Attempt to send voice notification."""
         try:
-            # Try to use system notification or text-to-speech
             import platform
+            import sys
             system = platform.system()
 
             if system == "Darwin":  # macOS
@@ -819,11 +819,18 @@ All changes are tested and documented.
                     timeout=5
                 )
             elif system == "Windows":
-                # Windows PowerShell notification
-                subprocess.run(
-                    ["powershell", "-Command", '[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = Release] > $null; $template = @\"<toast><visual><binding template=\"ToastText02\"><text id=\"1\">Task Completed</text><text id=\"2\">Successfully resolved</text></binding></visual></toast>\"@'],
-                    timeout=5
-                )
+                # Windows MessageBox notification
+                try:
+                    msg = "Task completed successfully"
+                    subprocess.run(
+                        ["powershell", "-Command",
+                         f'[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null; [System.Windows.Forms.MessageBox]::Show("{msg}", "Claude Insight")'],
+                        timeout=5,
+                        capture_output=True
+                    )
+                except Exception:
+                    # If PowerShell fails, just log it
+                    pass
             else:  # Linux
                 subprocess.run(
                     ["notify-send", "Task", "Completed successfully"],
