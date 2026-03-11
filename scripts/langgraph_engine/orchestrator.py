@@ -338,6 +338,8 @@ def optimize_context_after_level2(state: FlowState) -> dict:
         "standards_count": state.get("standards_count"),
         "java_standards_loaded": state.get("java_standards_loaded"),
         "spring_boot_patterns": state.get("spring_boot_patterns", {}),
+        "tool_optimization_rules": state.get("tool_optimization_rules", {}),
+        "tool_optimization_loaded": state.get("tool_optimization_loaded", False),
     }
 
     state = WorkflowContextOptimizer.store_step_output(state, "level2_output", level2_output)

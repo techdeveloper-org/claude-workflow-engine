@@ -212,6 +212,36 @@ def node_java_standards(state: FlowState) -> dict:
         return updates
 
 
+def node_tool_optimization_standards(state: FlowState) -> dict:
+    """Level 2: Load tool optimization standards.
+
+    Defines HOW tools must be used. Enforced by PreToolUse hook on every call.
+    """
+    rules = {
+        "read_max_lines": 500,       # Read tool: max lines per call
+        "read_max_bytes": 51200,     # Read tool: max bytes (50KB)
+        "grep_max_matches": 50,      # Grep tool: max matches (head_limit)
+        "grep_max_results": 100,     # Grep tool: absolute max with output_mode
+        "search_max_results": 10,    # Search: max results
+        "cache_after_n_reads": 3,    # Reuse cache after 3 reads of same file
+        "bash_find_head": 20,        # find commands: pipe to | head -20
+    }
+
+    updates = {
+        "tool_optimization_rules": rules,
+        "tool_optimization_loaded": True,
+    }
+
+    existing_pipeline = state.get("pipeline") or []
+    updates["pipeline"] = list(existing_pipeline) + [{
+        "node": "node_tool_optimization_standards",
+        "rules_loaded": list(rules.keys()),
+        "total_rules": len(rules)
+    }]
+
+    return updates
+
+
 # ============================================================================
 # MERGE NODE
 # ============================================================================
@@ -257,12 +287,14 @@ def create_level2_subgraph():
     # Add nodes
     graph.add_node("level2_common_standards", node_common_standards)
     graph.add_node("level2_java_standards", node_java_standards)
+    graph.add_node("level2_tool_optimization", node_tool_optimization_standards)
     graph.add_node("level2_merge", level2_merge_node)
 
-    # Common standards first
+    # Common standards and tool optimization run in parallel
     graph.add_edge(START, "level2_common_standards")
+    graph.add_edge(START, "level2_tool_optimization")
 
-    # Conditional routing for Java
+    # Conditional routing for Java (from common standards)
     graph.add_conditional_edges(
         "level2_common_standards",
         route_java_standards,
@@ -272,8 +304,9 @@ def create_level2_subgraph():
         },
     )
 
-    # Java leads to merge
+    # Java and tool optimization both lead to merge
     graph.add_edge("level2_java_standards", "level2_merge")
+    graph.add_edge("level2_tool_optimization", "level2_merge")
 
     # Done
     graph.add_edge("level2_merge", END)

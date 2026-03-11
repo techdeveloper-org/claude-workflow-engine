@@ -108,6 +108,10 @@ class FlowState(TypedDict, total=False):
     spring_boot_patterns: Dict         # Spring Boot-specific patterns
     java_standards_error: Optional[str]
 
+    # Tool Optimization Standards (loaded at Level 2, enforced by PreToolUse hook)
+    tool_optimization_rules: Optional[Dict]   # {read_max_lines, grep_max_matches, etc.}
+    tool_optimization_loaded: Optional[bool]  # True after Level 2 loads rules
+
     level2_status: str                 # OK / PARTIAL / FAILED
 
     # ===========================================================================

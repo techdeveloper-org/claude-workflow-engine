@@ -1070,6 +1070,18 @@ def check_grep(tool_input):
             hints.append(
                 f'[TOOL-OPT] Grep: Consider adding head_limit={suggested} to limit output.'
             )
+    else:
+        # ADDITIONAL ENFORCEMENT: Check if head_limit exceeds max allowed
+        try:
+            max_head_limit = 100  # Level 2 standard: grep_max_results
+            if int(head_limit) > max_head_limit:
+                blocks.append(
+                    f'[TOOL-OPT BLOCKED] Grep: head_limit={head_limit} exceeds max {max_head_limit}. '
+                    f'Use head_limit={max_head_limit} to prevent context overflow. '
+                    f'Rule: Maximum {max_head_limit} matches per Grep call (output_mode=content).'
+                )
+        except (ValueError, TypeError):
+            pass
 
     return hints, blocks
 
@@ -1127,6 +1139,19 @@ def check_read(tool_input):
                     '[TOOL-OPT] Read: No limit/offset set. '
                     'High complexity task - use offset+limit to conserve context.'
                 )
+
+    # ADDITIONAL ENFORCEMENT: Check for limit exceeding max allowed
+    elif limit:
+        try:
+            max_limit = 500  # Level 2 standard: read_max_lines
+            if int(limit) > max_limit:
+                blocks.append(
+                    f'[TOOL-OPT BLOCKED] Read: limit={limit} exceeds max {max_limit}. '
+                    f'Use limit={max_limit} and offset to read large files in chunks. '
+                    f'Rule: Maximum {max_limit} lines per Read call.'
+                )
+        except (ValueError, TypeError):
+            pass
 
     return hints, blocks
 
