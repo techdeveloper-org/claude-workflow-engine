@@ -216,6 +216,107 @@ class FlowState(TypedDict, total=False):
     synthesized_prompt: str            # Comprehensive prompt created from 3-level flow data
     synthesis_metadata: Dict[str, Any] # Metadata about synthesis (context_level, data_used, etc.)
 
+    # ===========================================================================
+    # v2 LEVEL 3 PIPELINE FIELDS (14-STEP WORKFLOW.MD COMPLIANT)
+    # ===========================================================================
+    # Bridge fields
+    session_dir: Optional[str]         # v2 uses session_dir (str path)
+    user_requirement: Optional[str]    # Alias for user_message in v2 context
+
+    # Step 1: Plan Mode Decision
+    step1_decision: Optional[Dict[str, Any]]
+    step1_plan_required: Optional[bool]
+    step1_execution_time_ms: Optional[float]
+    step1_error: Optional[str]
+
+    # Step 2: Plan Execution
+    step2_plan: Optional[str]
+    step2_files_affected: Optional[List[str]]
+    step2_phases: Optional[List[Dict]]
+    step2_risks: Optional[Dict]
+    step2_execution_time_ms: Optional[float]
+    step2_error: Optional[str]
+
+    # Step 3: Task Breakdown
+    step3_tasks: Optional[List[Dict]]
+    step3_task_count: Optional[int]
+    step3_execution_time_ms: Optional[float]
+    step3_error: Optional[str]
+
+    # Step 4: TOON Refinement
+    step4_blueprint: Optional[Dict]
+    step4_execution_time_ms: Optional[float]
+    step4_error: Optional[str]
+
+    # Step 5: Skill Selection
+    step5_available_skills: Optional[List[str]]
+    step5_available_agents: Optional[List[str]]
+    step5_available_skills_full: Optional[List[Dict]]
+    step5_available_agents_full: Optional[List[Dict]]
+    step5_skill_mappings: Optional[Dict]
+    step5_skills: Optional[List[str]]
+    step5_agents: Optional[List[str]]
+    step5_execution_time_ms: Optional[float]
+    step5_error: Optional[str]
+
+    # Step 6: Skill Validation & Download
+    step6_available_on_system: Optional[List[str]]
+    step6_final_skills: Optional[List[Dict]]
+    step6_final_agents: Optional[List[Dict]]
+    step6_downloaded: Optional[List[str]]
+    step6_execution_time_ms: Optional[float]
+    step6_error: Optional[str]
+
+    # Step 7: Final Prompt Generation
+    step7_execution_prompt: Optional[str]
+    step7_execution_time_ms: Optional[float]
+    step7_error: Optional[str]
+
+    # Step 8: GitHub Issue
+    step8_issue_number: Optional[int]
+    step8_issue_url: Optional[str]
+    step8_label: Optional[str]
+    step8_execution_time_ms: Optional[float]
+    step8_error: Optional[str]
+
+    # Step 9: Branch Creation
+    step9_branch_name: Optional[str]
+    step9_execution_time_ms: Optional[float]
+    step9_error: Optional[str]
+
+    # Step 10: Implementation Placeholder
+    step10_status: Optional[str]
+    step10_message: Optional[str]
+    step10_execution_time_ms: Optional[float]
+    step10_error: Optional[str]
+
+    # Step 11: PR & Review
+    step11_pr_number: Optional[int]
+    step11_pr_url: Optional[str]
+    step11_merged: Optional[bool]
+    step11_execution_time_ms: Optional[float]
+    step11_error: Optional[str]
+
+    # Step 12: Issue Closure
+    step12_closed: Optional[bool]
+    step12_execution_time_ms: Optional[float]
+    step12_error: Optional[str]
+
+    # Step 13: Documentation Update
+    step13_updated_files: Optional[List[str]]
+    step13_execution_time_ms: Optional[float]
+    step13_error: Optional[str]
+
+    # Step 14: Final Summary
+    step14_summary: Optional[str]
+    step14_voice_sent: Optional[bool]
+    step14_execution_time_ms: Optional[float]
+    step14_error: Optional[str]
+
+    # Level 3 Overall
+    level3_status: Optional[str]
+    level3_total_execution_time_ms: Optional[float]
+
 
 # ==============================================================================
 # WORKFLOW CONTEXT OPTIMIZER - Smart context compression for LLM efficiency
