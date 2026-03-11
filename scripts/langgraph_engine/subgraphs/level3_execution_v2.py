@@ -491,6 +491,63 @@ def step9_branch_creation_node(state: FlowState) -> Dict[str, Any]:
         return {"step9_error": str(e)}
 
 
+def _build_retry_history_context(state: FlowState) -> str:
+    """Build complete retry history context for Claude.
+
+    Shows what was fixed in previous attempts + current issues.
+    Helps Claude avoid repeating same fixes and understand progress.
+    """
+    retry_count = state.get("step11_retry_count", 0)
+    retry_messages = state.get("step11_retry_messages", [])
+    review_issues = state.get("step11_review_issues", [])
+
+    if retry_count == 0:
+        return ""  # No retry history
+
+    history = "\n" + "=" * 70 + "\n"
+    history += "📋 COMPLETE RETRY HISTORY\n"
+    history += "=" * 70 + "\n\n"
+
+    # Show previous attempts
+    if retry_messages:
+        history += "✓ PREVIOUS ATTEMPTS (What was fixed):\n"
+        history += "-" * 70 + "\n"
+        for i, msg in enumerate(retry_messages, 1):
+            history += f"\n  Attempt {i}:\n"
+            history += f"  {msg}\n"
+        history += "\n"
+
+    # Show current issues
+    if review_issues:
+        history += "🔴 CURRENT ATTEMPT (Issues to fix now):\n"
+        history += "-" * 70 + "\n"
+        for i, issue in enumerate(review_issues[:10], 1):  # Show up to 10
+            issue_msg = issue
+            if isinstance(issue, dict):
+                issue_msg = issue.get("message", str(issue))
+            history += f"  {i}. {issue_msg}\n"
+
+        if len(review_issues) > 10:
+            history += f"  ... and {len(review_issues) - 10} more issues\n"
+        history += "\n"
+
+    # Show retry status
+    history += "📊 RETRY STATUS:\n"
+    history += "-" * 70 + "\n"
+    max_retries = 3
+    remaining = max_retries - retry_count
+    history += f"  Current Attempt: #{retry_count} of {max_retries}\n"
+    history += f"  Remaining Attempts: {remaining}\n"
+
+    if remaining <= 0:
+        history += f"\n  ⚠️  FINAL ATTEMPT: This is your last retry!\n"
+        history += f"      If this fails, PR will be blocked for manual review.\n"
+
+    history += "\n" + "=" * 70 + "\n\n"
+
+    return history
+
+
 def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
     """Step 10: Implementation (Handled by Claude).
 
@@ -498,7 +555,10 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
     using Read, Edit, Write, Bash tools directly with the execution prompt.
 
     This is idempotent - can be called multiple times if Step 11 code review fails.
-    On retry, includes feedback about what issues were found for re-implementation.
+    On retry, includes COMPLETE FEEDBACK HISTORY to help Claude:
+    - See what was already fixed
+    - Understand current issues
+    - Avoid repeating same fixes
     """
     logger.info("\n⏳ [STEP 10] Implementation (Handled by Claude)")
 
@@ -509,31 +569,49 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
     if retry_count > 0 and review_issues:
         logger.info(f"🔄 [STEP 10 RETRY #{retry_count}] Code review found issues, implementing fixes...")
         logger.info(f"Issues to fix: {len(review_issues)} items")
+
+        # Build complete retry history
+        retry_history = _build_retry_history_context(state)
+
+        # Show in logs
         for issue in review_issues[:5]:  # Show first 5 issues
-            issue_type = issue.get("type", "issue")
-            issue_file = issue.get("file", "unknown")
-            issue_line = issue.get("line", "?")
-            issue_message = issue.get("message", "")
-            logger.info(f"  - {issue_type} in {issue_file}:{issue_line}: {issue_message[:60]}")
+            if isinstance(issue, dict):
+                issue_message = issue.get("message", "")
+            else:
+                issue_message = str(issue)
+            logger.info(f"  - {issue_message[:80]}")
 
         prompt = state.get("step7_execution_prompt", "")
-        updated_prompt = f"""[RETRY #{retry_count}] Fix the following code review issues and re-implement:
 
-CODE REVIEW FINDINGS:
-{chr(10).join([f'- {issue.get("message", "")}' for issue in review_issues[:5]])}
+        # Build updated prompt with complete history
+        updated_prompt = f"""{retry_history}
+
+[RETRY #{retry_count}] Fix the following code review issues while keeping previous fixes:
+
+CURRENT ISSUES TO FIX:
+{chr(10).join([
+    f'- {issue.get("message", str(issue)) if isinstance(issue, dict) else str(issue)}'
+    for issue in review_issues[:10]
+])}
+
+IMPORTANT:
+• Do NOT undo previous fixes (shown in history above)
+• Fix ONLY the current issues listed above
+• Keep all working code from previous attempts
+• Run tests to verify fixes if possible
 
 Original implementation prompt:
 ---
 {prompt}
 ---
 
-Please fix ONLY the issues listed above. Update the relevant files."""
+Please fix the issues above and re-implement. Update the relevant files."""
 
-        message = f"Retry attempt {retry_count}: Fixing code review issues found in previous attempt"
+        message = f"🔄 Retry attempt {retry_count}: Fixing code review issues (see complete history above)"
     else:
         logger.info("Claude will now execute the prompt.txt using available tools")
         updated_prompt = state.get("step7_execution_prompt", "")
-        message = "Claude is executing implementation using tools"
+        message = "▶️  Claude is executing implementation using tools"
 
     # Save prompt to session
     session_dir = state.get("session_dir", ".")
@@ -548,7 +626,8 @@ Please fix ONLY the issues listed above. Update the relevant files."""
         "step10_status": "manual",
         "step10_message": message,
         "step10_retry_count": retry_count,
-        "step10_execution_prompt": updated_prompt  # Updated prompt for retries
+        "step10_execution_prompt": updated_prompt,  # Updated prompt with complete history
+        "step10_has_retry_context": retry_count > 0
     }
 
 
