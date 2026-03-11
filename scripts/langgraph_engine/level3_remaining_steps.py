@@ -17,6 +17,7 @@ Note: Step 5 (Skill selection) is in ollama_service.py, wrapper here
 import time
 import json
 import subprocess
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -668,6 +669,17 @@ Be very specific and actionable."""
                 updated.append("SRS.md")
                 logger.info("Updated SRS.md")
 
+            # Create/update CLAUDE.md (project-specific context)
+            claude_md_path = Path("CLAUDE.md")
+            if claude_md_path.exists():
+                self._update_claude_md(claude_md_path, files_modified)
+                updated.append("CLAUDE.md")
+                logger.info("Updated CLAUDE.md")
+            else:
+                self._create_claude_md(claude_md_path)
+                updated.append("CLAUDE.md (created)")
+                logger.info("Created CLAUDE.md")
+
             # Save to session
             self.session_manager.save_github_details({
                 "documentation_updated": updated,
@@ -705,6 +717,67 @@ Be very specific and actionable."""
         # Simple approach: ensure SRS exists and is valid
         if not srs_path.exists():
             srs_path.write_text("# System Requirements Specification\n\n## Latest Changes\n")
+
+    def _update_claude_md(self, claude_md_path: Path, files_modified: List[str]):
+        """Update CLAUDE.md with latest changes and modifications."""
+        try:
+            content = claude_md_path.read_text(encoding='utf-8')
+
+            # Find the "Last Updated" section
+            timestamp = datetime.now().isoformat()
+            update_section = (
+                f"\n## Recent Changes (Auto-Updated)\n"
+                f"**Last Updated:** {timestamp}\n"
+                f"**Modified Files:**\n"
+            )
+            for file in files_modified[:10]:
+                update_section += f"- `{file}`\n"
+
+            # Add to end of file if not already there
+            if "Recent Changes" not in content:
+                content += update_section
+                claude_md_path.write_text(content, encoding='utf-8')
+            else:
+                # Replace existing section
+                pattern = r"## Recent Changes \(Auto-Updated\).*?(?=\n## |\Z)"
+                content = re.sub(pattern, update_section.strip(), content, flags=re.DOTALL)
+                claude_md_path.write_text(content, encoding='utf-8')
+
+            logger.info(f"✓ Updated CLAUDE.md with {len(files_modified)} modified files")
+        except Exception as e:
+            logger.warning(f"Could not update CLAUDE.md: {e}")
+
+    def _create_claude_md(self, claude_md_path: Path):
+        """Create a new CLAUDE.md with default project context."""
+        try:
+            content = f"""# Project Context (CLAUDE.md)
+
+## Overview
+Generated automatically by Claude Insight Level 3 Pipeline.
+
+## Recent Changes (Auto-Updated)
+**Last Updated:** {datetime.now().isoformat()}
+
+## Development Notes
+Add project-specific context, setup instructions, and conventions here.
+
+## Architecture Notes
+Update this section with your project architecture as it evolves.
+
+## Commands
+Document useful development commands here:
+- Build: `make build`
+- Test: `make test`
+- Run: `python run.py`
+
+---
+
+*This file is maintained by Claude Insight and updated during execution.*
+"""
+            claude_md_path.write_text(content, encoding='utf-8')
+            logger.info(f"✓ Created new CLAUDE.md")
+        except Exception as e:
+            logger.warning(f"Could not create CLAUDE.md: {e}")
 
     # ===== STEP 14: FINAL SUMMARY =====
 

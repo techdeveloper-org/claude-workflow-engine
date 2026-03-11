@@ -15,6 +15,7 @@ Configuration:
 import json
 import subprocess
 import os
+import requests
 from typing import Dict, Any, Optional, List
 from loguru import logger
 from pathlib import Path
@@ -25,6 +26,10 @@ class OllamaService:
 
     def __init__(self, endpoint: str = "http://127.0.0.1:11434"):
         self.endpoint = endpoint
+
+        # VALIDATE OLLAMA SERVER IS RUNNING
+        self._validate_ollama_server()
+
         self.available_models = self._check_available_models()
 
         # Model routing
@@ -36,6 +41,48 @@ class OllamaService:
 
         logger.info(f"Ollama service initialized at {endpoint}")
         logger.info(f"Available models: {self.available_models}")
+
+        # Initialize Claude API client for fallback
+        self.claude_client = None
+        self._init_claude_fallback()
+
+    def _validate_ollama_server(self):
+        """Validate that Ollama server is running and accessible."""
+        try:
+            response = requests.get(f"{self.endpoint}/api/tags", timeout=3)
+            if response.status_code == 200:
+                logger.info(f"✓ Ollama server is running at {self.endpoint}")
+                return True
+            else:
+                raise RuntimeError(f"Ollama server returned status {response.status_code}")
+        except requests.ConnectionError as e:
+            error_msg = (
+                f"\n{'='*70}\n"
+                f"[ERROR] Cannot connect to Ollama server at {self.endpoint}\n"
+                f"{'='*70}\n\n"
+                f"Ollama is not running or not accessible.\n\n"
+                f"HOW TO FIX:\n"
+                f"1. Install Ollama (if not already installed):\n"
+                f"   Download from: https://ollama.ai\n\n"
+                f"2. Download required models:\n"
+                f"   ollama pull qwen2.5:7b\n"
+                f"   ollama pull qwen2.5:14b\n\n"
+                f"3. Start the Ollama server:\n"
+                f"   ollama serve\n\n"
+                f"4. Keep Ollama running in background while using this pipeline\n"
+                f"{'='*70}\n"
+            )
+            raise RuntimeError(error_msg) from e
+        except requests.Timeout:
+            raise RuntimeError(
+                f"Ollama server at {self.endpoint} is not responding (timeout). "
+                f"Make sure it's running: ollama serve"
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Error validating Ollama server: {e}. "
+                f"Start with: ollama serve"
+            )
 
     def _check_available_models(self) -> List[str]:
         """Check which models are installed locally."""
@@ -126,15 +173,83 @@ class OllamaService:
 
             return response
 
-        except subprocess.TimeoutExpired:
-            logger.error(f"Ollama timeout for {model_name}")
-            return {"error": "Ollama timeout (model too slow)"}
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON from Ollama: {e}")
-            return {"error": f"Invalid JSON response: {str(e)}"}
+        except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception) as e:
+            # Try Claude API fallback
+            logger.warning(f"Ollama failed, attempting Claude API fallback: {e}")
+            try:
+                claude_response = self._chat_claude(
+                    messages=messages,
+                    model_type=model,
+                    temperature=temperature
+                )
+                # Return in same format as Ollama
+                return {
+                    "message": {
+                        "content": claude_response,
+                        "role": "assistant"
+                    },
+                    "model": "claude-fallback",
+                    "done": True
+                }
+            except Exception as fallback_error:
+                logger.error(f"Claude fallback also failed: {fallback_error}")
+                return {"error": f"Both Ollama and Claude failed: {str(e)} / {str(fallback_error)}"}
+
+
+    def _init_claude_fallback(self):
+        """Initialize Claude API client for fallback if available."""
+        try:
+            import anthropic
+            api_key = os.getenv("ANTHROPIC_KEY")
+            if api_key:
+                self.claude_client = anthropic.Anthropic(api_key=api_key)
+                logger.info("✓ Claude API fallback initialized (ANTHROPIC_KEY found)")
+            else:
+                logger.info("Claude API fallback not configured (set ANTHROPIC_KEY to enable)")
+        except ImportError:
+            logger.debug("anthropic SDK not installed, Claude fallback unavailable")
         except Exception as e:
-            logger.error(f"Ollama call failed: {e}")
-            return {"error": str(e)}
+            logger.debug(f"Could not initialize Claude fallback: {e}")
+
+    def _chat_claude(
+        self,
+        messages: List[Dict[str, str]],
+        model_type: str = "complex_reasoning",
+        temperature: float = 0.7
+    ) -> str:
+        """Fallback to Claude API when Ollama unavailable."""
+        if not self.claude_client:
+            raise RuntimeError(
+                "Claude API not configured. "
+                "Set ANTHROPIC_KEY environment variable to enable fallback. "
+                "Or start Ollama with: ollama serve"
+            )
+
+        # Map model types to Claude models
+        model_map = {
+            "fast_classification": "claude-haiku-4-5-20251001",
+            "complex_reasoning": "claude-opus-4-6",
+            "synthesis": "claude-sonnet-4-6"
+        }
+
+        claude_model = model_map.get(model_type, "claude-opus-4-6")
+
+        try:
+            logger.warning(f"Using Claude API fallback ({claude_model})")
+
+            response = self.claude_client.messages.create(
+                model=claude_model,
+                max_tokens=2000,
+                temperature=temperature,
+                messages=messages
+            )
+
+            content = response.content[0].text
+            return content
+
+        except Exception as e:
+            logger.error(f"Claude API fallback failed: {e}")
+            raise
 
     # ===== LEVEL 3 STEP 1: PLAN MODE DECISION =====
 
@@ -266,7 +381,7 @@ Return ONLY valid JSON (no markdown, no explanation):
             # Use FULL DEFINITIONS if available
             for skill in skills_full_defs:
                 skill_name = skill.get("name", "unknown")
-                skill_content = skill.get("content", "No description")[:500]  # First 500 chars
+                skill_content = skill.get("content", "No description")  # FULL content (no truncation)
                 skills_section += f"## {skill_name}\n{skill_content}\n\n"
             logger.info(f"Using FULL skill definitions ({len(skills_full_defs)} skills) for LLM")
         else:
@@ -282,7 +397,7 @@ Return ONLY valid JSON (no markdown, no explanation):
             # Use FULL DEFINITIONS if available
             for agent in agents_full_defs:
                 agent_name = agent.get("name", "unknown")
-                agent_content = agent.get("content", "No description")[:500]  # First 500 chars
+                agent_content = agent.get("content", "No description")  # FULL content (no truncation)
                 agents_section += f"## {agent_name}\n{agent_content}\n\n"
             logger.info(f"Using FULL agent definitions ({len(agents_full_defs)} agents) for LLM")
         else:

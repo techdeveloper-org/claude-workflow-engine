@@ -224,7 +224,9 @@ class Level3GitHubWorkflow:
         issue_number: int,
         branch_name: str,
         changes_summary: str = "",
-        auto_merge: bool = True
+        auto_merge: bool = True,
+        selected_skills: List[str] = None,
+        selected_agents: List[str] = None
     ) -> Dict[str, Any]:
         """
         Create and optionally merge pull request.
@@ -278,9 +280,34 @@ class Level3GitHubWorkflow:
             logger.info(f"✓ PR created: #{pr_number}")
             logger.info(f"  URL: {pr_url}")
 
-            # Optionally merge
+            # CODE REVIEW (NEW: Using selected skills/agents)
+            review_passed = True
+            review_issues = []
+            if selected_skills or selected_agents:
+                logger.info(f"Running code review with selected skills: {selected_skills}, agents: {selected_agents}")
+                review_result = self._run_code_review(
+                    pr_number=pr_number,
+                    branch_name=branch_name,
+                    selected_skills=selected_skills or [],
+                    selected_agents=selected_agents or []
+                )
+                review_passed = review_result.get("passed", False)
+                review_issues = review_result.get("issues", [])
+
+                if not review_passed:
+                    logger.warning(f"Code review found {len(review_issues)} issues")
+                    # Comment on PR with issues
+                    self._comment_on_pr_with_review(pr_number, review_issues)
+                else:
+                    logger.info("✓ Code review passed")
+                    # Comment on PR that review passed
+                    self.github.add_pr_comment(pr_number, "✓ Code review passed. Ready to merge.")
+            else:
+                logger.info("No skills/agents selected, skipping code review")
+
+            # Optionally merge (only if review passed)
             merged = False
-            if auto_merge:
+            if auto_merge and review_passed:
                 logger.info(f"Auto-merging PR #{pr_number}...")
                 merge_result = self.github.merge_pull_request(
                     pr_number,
