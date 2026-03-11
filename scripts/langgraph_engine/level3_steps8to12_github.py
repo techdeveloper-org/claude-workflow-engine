@@ -328,6 +328,8 @@ class Level3GitHubWorkflow:
                 "pr_number": pr_number,
                 "pr_url": pr_url,
                 "merged": merged,
+                "review_passed": review_passed,
+                "review_issues": review_issues,
                 "execution_time_ms": execution_time_ms,
                 "timestamp": datetime.now().isoformat()
             }

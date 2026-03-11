@@ -492,31 +492,75 @@ def step9_branch_creation_node(state: FlowState) -> Dict[str, Any]:
 
 
 def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
-    """Step 10: Implementation Placeholder.
+    """Step 10: Implementation (Handled by Claude).
 
     NOTE: Actual implementation (file modifications) is done by Claude
     using Read, Edit, Write, Bash tools directly with the execution prompt.
+
+    This is idempotent - can be called multiple times if Step 11 code review fails.
+    On retry, includes feedback about what issues were found for re-implementation.
     """
     logger.info("\n⏳ [STEP 10] Implementation (Handled by Claude)")
-    logger.info("Claude will now execute the prompt.txt using available tools")
+
+    # Check if this is a retry due to code review failure
+    retry_count = state.get("step11_retry_count", 0)
+    review_issues = state.get("step11_review_issues", [])
+
+    if retry_count > 0 and review_issues:
+        logger.info(f"🔄 [STEP 10 RETRY #{retry_count}] Code review found issues, implementing fixes...")
+        logger.info(f"Issues to fix: {len(review_issues)} items")
+        for issue in review_issues[:5]:  # Show first 5 issues
+            issue_type = issue.get("type", "issue")
+            issue_file = issue.get("file", "unknown")
+            issue_line = issue.get("line", "?")
+            issue_message = issue.get("message", "")
+            logger.info(f"  - {issue_type} in {issue_file}:{issue_line}: {issue_message[:60]}")
+
+        prompt = state.get("step7_execution_prompt", "")
+        updated_prompt = f"""[RETRY #{retry_count}] Fix the following code review issues and re-implement:
+
+CODE REVIEW FINDINGS:
+{chr(10).join([f'- {issue.get("message", "")}' for issue in review_issues[:5]])}
+
+Original implementation prompt:
+---
+{prompt}
+---
+
+Please fix ONLY the issues listed above. Update the relevant files."""
+
+        message = f"Retry attempt {retry_count}: Fixing code review issues found in previous attempt"
+    else:
+        logger.info("Claude will now execute the prompt.txt using available tools")
+        updated_prompt = state.get("step7_execution_prompt", "")
+        message = "Claude is executing implementation using tools"
 
     # Save prompt to session
     session_dir = state.get("session_dir", ".")
     try:
         prompt_file = Path(session_dir) / "prompt.txt"
-        prompt_file.write_text(state.get("step7_execution_prompt", ""))
+        prompt_file.write_text(updated_prompt)
         logger.info(f"Saved prompt to {prompt_file}")
     except Exception as e:
         logger.warning(f"Could not save prompt: {e}")
 
     return {
         "step10_status": "manual",
-        "step10_message": "Claude is executing implementation using tools"
+        "step10_message": message,
+        "step10_retry_count": retry_count,
+        "step10_execution_prompt": updated_prompt  # Updated prompt for retries
     }
 
 
 def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
-    """Step 11: Pull Request Creation & Merge."""
+    """Step 11: Pull Request Creation & Merge with Retry Tracking.
+
+    This step:
+    1. Creates a PR for the implementation
+    2. Runs code review on the changes
+    3. Returns review status for routing logic
+    4. If review fails, flow can retry (handled by orchestrator routing)
+    """
     logger.info("\n🔄 [STEP 11] Pull Request Creation & Merge")
     step_start = time.time()
 
@@ -526,6 +570,10 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
         branch_name = state.get("step9_branch_name", "")
         selected_skills = state.get("step5_skills", [])
         selected_agents = state.get("step5_agents", [])
+
+        # Get retry count (incremented from Level 1 init or previous attempt)
+        current_retry_count = state.get("step11_retry_count", 0)
+        retry_messages = state.get("step11_retry_messages", [])
 
         workflow = Level3GitHubWorkflow(session_dir)
         pr_result = workflow.step11_create_pull_request(
@@ -538,11 +586,29 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
         execution_time_ms = (time.time() - step_start) * 1000
 
         if pr_result.get("success"):
-            logger.info(f"✓ Step 11 completed: PR #{pr_result.get('pr_number')} ({execution_time_ms:.0f}ms)")
+            review_passed = pr_result.get("review_passed", True)
+            review_issues = pr_result.get("review_issues", [])
+
+            # Track review status
+            review_status = "✓ PASSED" if review_passed else f"✗ FAILED ({len(review_issues)} issues)"
+            logger.info(f"✓ Step 11 completed: PR #{pr_result.get('pr_number')} - Review: {review_status} ({execution_time_ms:.0f}ms)")
+
+            # Build retry message if review failed
+            if not review_passed:
+                issue_summary = "; ".join([issue.get("type", "issue") for issue in review_issues[:3]])
+                retry_msg = f"Attempt {current_retry_count + 1}: Code review found issues - {issue_summary}"
+                retry_messages.append(retry_msg)
+                logger.warning(f"Code review failed. Issues: {issue_summary}")
+                logger.info(f"Available retries: {3 - (current_retry_count + 1)} attempts remaining")
+
             return {
                 "step11_pr_number": pr_result.get("pr_number"),
                 "step11_pr_url": pr_result.get("pr_url"),
                 "step11_merged": pr_result.get("merged"),
+                "step11_review_passed": review_passed,
+                "step11_review_issues": review_issues,
+                "step11_retry_count": current_retry_count + 1,  # Increment counter
+                "step11_retry_messages": retry_messages,
                 "step11_execution_time_ms": execution_time_ms
             }
         else:
@@ -748,7 +814,41 @@ def create_level3_execution_subgraph_v2():
     graph.add_edge("step8_github_issue", "step9_branch_creation")
     graph.add_edge("step9_branch_creation", "step10_implementation")
     graph.add_edge("step10_implementation", "step11_pull_request")
-    graph.add_edge("step11_pull_request", "step12_issue_closure")
+
+    # ===== STEP 11 RETRY LOOP =====
+    # Conditional routing after Step 11: retry if review failed and attempts < 3
+    def route_after_step11(state: FlowState) -> str:
+        """Route after Step 11: retry loop if code review failed.
+
+        Logic:
+        - If review passed OR merged: continue to Step 12 (closure)
+        - If review failed AND attempts < 3: loop back to Step 10 (re-implementation)
+        - If max retries reached: continue to Step 12 (force closure)
+        """
+        review_passed = state.get("step11_review_passed", True)
+        retry_count = state.get("step11_retry_count", 0)
+        max_retries = 3
+
+        if review_passed or state.get("step11_merged", False):
+            logger.info("Code review passed or PR merged, proceeding to closure")
+            return "step12_issue_closure"
+
+        if retry_count < max_retries:
+            logger.info(f"Code review failed. Retry {retry_count}/{max_retries-1} - looping back to Step 10")
+            return "step10_implementation"
+
+        logger.warning(f"Max retries ({max_retries}) reached. Forcing closure regardless of review status")
+        return "step12_issue_closure"
+
+    graph.add_conditional_edges(
+        "step11_pull_request",
+        route_after_step11,
+        {
+            "step12_issue_closure": "step12_issue_closure",
+            "step10_implementation": "step10_implementation"
+        }
+    )
+
     graph.add_edge("step12_issue_closure", "step13_docs_update")
     graph.add_edge("step13_docs_update", "step14_final_summary")
     graph.add_edge("step14_final_summary", "merge")

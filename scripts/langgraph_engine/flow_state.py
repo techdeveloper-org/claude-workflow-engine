@@ -296,6 +296,10 @@ class FlowState(TypedDict, total=False):
     step11_pr_number: Optional[int]
     step11_pr_url: Optional[str]
     step11_merged: Optional[bool]
+    step11_review_passed: Optional[bool]        # Did code review pass?
+    step11_review_issues: Optional[List[Dict]]  # What issues were found?
+    step11_retry_count: Optional[int]           # How many implementation attempts so far?
+    step11_retry_messages: Optional[List[str]]  # Messages from each retry
     step11_execution_time_ms: Optional[float]
     step11_error: Optional[str]
 
