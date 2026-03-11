@@ -41,16 +41,21 @@ class Level3RemainingSteps:
     def step2_plan_execution(
         self,
         toon: Dict[str, Any],
-        user_requirement: str
+        user_requirement: str,
+        project_root: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Execute detailed planning phase using OPUS.
+        Execute detailed planning phase with code exploration.
 
         Only runs if Step 1 returned plan_required=True.
+
+        WORKFLOW.md SPEC: Use OPUS + exploration tools (Read, Grep, Search)
+        This implementation grounds plans in actual codebase analysis.
 
         Args:
             toon: TOON object from Level 1
             user_requirement: Original user requirement
+            project_root: Root directory for code exploration (optional)
 
         Returns:
             {
@@ -58,35 +63,48 @@ class Level3RemainingSteps:
                 "files_affected": List[str],
                 "phases": List[Dict],
                 "risks": Dict,
+                "code_context": str,  # Code snippets used for planning
                 "success": bool
             }
         """
         logger.info("=" * 60)
-        logger.info("LEVEL 3 - STEP 2: PLAN EXECUTION")
+        logger.info("LEVEL 3 - STEP 2: PLAN EXECUTION (with code exploration)")
         logger.info("=" * 60)
 
         step_start = time.time()
 
         try:
-            prompt = f"""Create a detailed implementation plan for this requirement:
+            # EXPLORATION PHASE: Analyze codebase before planning
+            logger.info("→ Analyzing codebase structure...")
+            code_context = self._explore_codebase(user_requirement, project_root)
+
+            # Build enriched prompt with code analysis
+            prompt = f"""Create a detailed implementation plan grounded in the actual codebase.
 
 USER REQUIREMENT:
 {user_requirement}
 
-PROJECT CONTEXT:
+PROJECT ANALYSIS:
 - Complexity: {toon.get('complexity_score')}/10
-- Files: {toon.get('files_loaded_count')}
+- Files loaded: {toon.get('files_loaded_count')}
+- Project type: {toon.get('project_type', 'unknown')}
+
+CODEBASE CONTEXT (from exploration):
+{code_context}
 
 Generate a comprehensive plan that includes:
-1. High-level strategy
-2. Specific implementation phases
-3. Files that need to be modified
-4. Dependencies between tasks
-5. Risk assessment and mitigation
-6. Testing approach
+1. High-level strategy aligned with existing patterns
+2. Specific implementation phases with file references
+3. Which existing files need modification (based on code analysis)
+4. New files needed (if any)
+5. Dependencies between tasks (respect existing architecture)
+6. Risk assessment with specific concerns based on code patterns
+7. Testing approach using existing test patterns
 
-Be very specific and actionable."""
+IMPORTANT: Reference actual files and code patterns found in the analysis.
+Be very specific and actionable - mention actual file paths and existing functions/classes."""
 
+            logger.info("→ Generating plan with LLM...")
             response = self.ollama.chat(
                 messages=[{"role": "user", "content": prompt}],
                 model="complex_reasoning",  # Use 14B for deep planning
@@ -116,6 +134,7 @@ Be very specific and actionable."""
                 "files_affected": files_affected,
                 "phases": phases,
                 "risks": risks,
+                "code_context": code_context,  # Store exploration results
                 "execution_time_ms": (time.time() - step_start) * 1000,
                 "timestamp": datetime.now().isoformat()
             }
@@ -187,6 +206,217 @@ Be very specific and actionable."""
             "factors": factors,
             "mitigation": mitigation
         }
+
+    def _explore_codebase(self, user_requirement: str, project_root: Optional[str] = None) -> str:
+        """
+        Explore codebase to ground planning in actual code.
+
+        WORKFLOW.md SPEC: Use exploration tools (Read, Grep, Search)
+        This method analyzes the codebase structure and finds relevant code.
+
+        Args:
+            user_requirement: User's requirement to search for related code
+            project_root: Root directory to explore (defaults to session_dir)
+
+        Returns:
+            String containing analysis of codebase structure and relevant code snippets
+        """
+        if project_root is None:
+            project_root = str(self.session_dir)
+
+        try:
+            analysis_parts = []
+
+            # 1. Analyze directory structure
+            analysis_parts.append("=== PROJECT STRUCTURE ===")
+            structure = self._analyze_directory_structure(project_root)
+            analysis_parts.append(structure)
+
+            # 2. Find relevant files based on requirement keywords
+            analysis_parts.append("\n=== RELEVANT FILES FOR THIS REQUIREMENT ===")
+            relevant_files = self._find_relevant_files(user_requirement, project_root)
+            if relevant_files:
+                for file_path in relevant_files[:5]:  # Limit to top 5
+                    analysis_parts.append(f"- {file_path}")
+            else:
+                analysis_parts.append("(No specific matches found)")
+
+            # 3. Analyze project patterns
+            analysis_parts.append("\n=== PROJECT PATTERNS ===")
+            patterns = self._detect_project_patterns(project_root)
+            analysis_parts.append(patterns)
+
+            # 4. Find key architectural files
+            analysis_parts.append("\n=== KEY ARCHITECTURAL FILES ===")
+            key_files = self._find_key_files(project_root)
+            for file_type, files in key_files.items():
+                if files:
+                    analysis_parts.append(f"{file_type}: {', '.join(files[:3])}")
+
+            # 5. Extract code snippets from relevant files
+            analysis_parts.append("\n=== CODE CONTEXT FROM RELEVANT FILES ===")
+            code_snippets = self._extract_code_snippets(relevant_files, max_files=3)
+            analysis_parts.append(code_snippets)
+
+            return "\n".join(analysis_parts)
+
+        except Exception as e:
+            logger.warning(f"Codebase exploration partial: {e}")
+            return f"Could not fully explore codebase: {str(e)}"
+
+    def _analyze_directory_structure(self, root: str, max_depth: int = 2) -> str:
+        """Analyze directory structure."""
+        try:
+            root_path = Path(root)
+            if not root_path.exists():
+                return f"Directory not found: {root}"
+
+            lines = []
+            lines.append(f"Root: {root_path.name}/")
+
+            # List key directories
+            for item in sorted(root_path.iterdir()):
+                if item.is_dir() and not item.name.startswith('.'):
+                    lines.append(f"  📁 {item.name}/")
+                    # Count files in this dir
+                    file_count = len(list(item.glob("*.*")))
+                    if file_count > 0:
+                        lines.append(f"      ({file_count} files)")
+
+            return "\n".join(lines[:20])  # Limit output
+        except Exception as e:
+            return f"Structure analysis failed: {e}"
+
+    def _find_relevant_files(self, requirement: str, root: str) -> List[str]:
+        """Find files related to the requirement using keyword matching."""
+        try:
+            root_path = Path(root)
+            if not root_path.exists():
+                return []
+
+            relevant = []
+            keywords = requirement.lower().split()[:5]  # Get first 5 keywords
+
+            # Search for Python files with matching names or content
+            for pattern in ["*.py", "*.java", "*.js", "*.ts", "*.go"]:
+                for file_path in root_path.rglob(pattern):
+                    if file_path.is_file() and ".git" not in str(file_path):
+                        # Check filename for keywords
+                        filename_lower = file_path.name.lower()
+                        for keyword in keywords:
+                            if keyword in filename_lower and len(keyword) > 2:
+                                relevant.append(str(file_path.relative_to(root_path)))
+                                break
+
+            return list(set(relevant))[:10]
+        except Exception as e:
+            logger.debug(f"File search failed: {e}")
+            return []
+
+    def _detect_project_patterns(self, root: str) -> str:
+        """Detect programming language and architectural patterns."""
+        try:
+            root_path = Path(root)
+            patterns = []
+
+            # Check file extensions
+            extensions = {}
+            for file_path in root_path.rglob("*.*"):
+                if ".git" not in str(file_path):
+                    ext = file_path.suffix
+                    extensions[ext] = extensions.get(ext, 0) + 1
+
+            # Identify primary language
+            language_map = {
+                ".py": "Python",
+                ".java": "Java",
+                ".js": "JavaScript",
+                ".ts": "TypeScript",
+                ".go": "Go",
+                ".rs": "Rust",
+            }
+
+            primary_lang = None
+            max_count = 0
+            for ext, lang in language_map.items():
+                if extensions.get(ext, 0) > max_count:
+                    max_count = extensions[ext]
+                    primary_lang = lang
+
+            if primary_lang:
+                patterns.append(f"Primary Language: {primary_lang} ({max_count} files)")
+
+            # Check for common frameworks/tools
+            for name in ["requirements.txt", "package.json", "go.mod", "Cargo.toml", "pom.xml"]:
+                if (root_path / name).exists():
+                    patterns.append(f"Found: {name} (dependency manifest)")
+
+            for name in [".git", "docker-compose.yml", "Dockerfile", ".github"]:
+                if (root_path / name).exists():
+                    patterns.append(f"Found: {name}")
+
+            return "\n".join(patterns) if patterns else "No specific patterns detected"
+
+        except Exception as e:
+            return f"Pattern detection incomplete: {e}"
+
+    def _find_key_files(self, root: str) -> Dict[str, List[str]]:
+        """Find key architectural files (config, main, test, etc)."""
+        try:
+            root_path = Path(root)
+            key_files = {
+                "Config": [],
+                "Main/Entry": [],
+                "Tests": [],
+                "Documentation": []
+            }
+
+            config_patterns = ["config.py", "settings.py", "requirements.txt", ".env"]
+            main_patterns = ["main.py", "app.py", "index.py", "main.java", "app.js"]
+            test_patterns = ["test_*.py", "*_test.py", "*.test.js", "*Test.java"]
+            doc_patterns = ["README.md", "ARCHITECTURE.md", "DESIGN.md"]
+
+            for pattern in config_patterns:
+                files = list(root_path.rglob(pattern))
+                key_files["Config"].extend([f.relative_to(root_path).as_posix() for f in files])
+
+            for pattern in main_patterns:
+                files = list(root_path.rglob(pattern))
+                key_files["Main/Entry"].extend([f.relative_to(root_path).as_posix() for f in files])
+
+            for pattern in test_patterns:
+                files = list(root_path.rglob(pattern))
+                key_files["Tests"].extend([f.relative_to(root_path).as_posix() for f in files])
+
+            for pattern in doc_patterns:
+                files = list(root_path.rglob(pattern))
+                key_files["Documentation"].extend([f.relative_to(root_path).as_posix() for f in files])
+
+            return key_files
+        except Exception:
+            return {k: [] for k in ["Config", "Main/Entry", "Tests", "Documentation"]}
+
+    def _extract_code_snippets(self, file_paths: List[str], max_files: int = 3) -> str:
+        """Extract relevant code snippets from files."""
+        try:
+            snippets = []
+            for file_path in file_paths[:max_files]:
+                try:
+                    full_path = self.session_dir / file_path
+                    if full_path.exists() and full_path.is_file():
+                        with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            lines = f.readlines()
+                            # Get first 15 lines (imports, class/function defs)
+                            snippet = "".join(lines[:15])
+                            if len(snippet) > 200:
+                                snippet = snippet[:200] + "..."
+                            snippets.append(f"\n### {file_path}:\n{snippet}")
+                except Exception:
+                    pass
+
+            return "".join(snippets) if snippets else "(No code snippets available)"
+        except Exception as e:
+            return f"Code extraction failed: {e}"
 
     # ===== STEP 3: TASK BREAKDOWN =====
 

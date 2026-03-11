@@ -97,7 +97,8 @@ def step2_plan_execution_node(state: FlowState) -> Dict[str, Any]:
         toon = state.get("level1_context_toon", {})
 
         steps = Level3RemainingSteps(session_dir)
-        plan_result = steps.step2_plan_execution(toon, user_requirement)
+        # WORKFLOW.md SPEC: Use exploration tools to ground plan in actual code
+        plan_result = steps.step2_plan_execution(toon, user_requirement, project_root=session_dir)
 
         execution_time_ms = (time.time() - step_start) * 1000
 
@@ -108,6 +109,7 @@ def step2_plan_execution_node(state: FlowState) -> Dict[str, Any]:
                 "step2_files_affected": plan_result.get("files_affected", []),
                 "step2_phases": plan_result.get("phases", []),
                 "step2_risks": plan_result.get("risks", {}),
+                "step2_code_context": plan_result.get("code_context", ""),
                 "step2_execution_time_ms": execution_time_ms
             }
         else:
@@ -520,9 +522,16 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
         session_dir = state.get("session_dir", ".")
         issue_number = state.get("step8_issue_number", 0)
         branch_name = state.get("step9_branch_name", "")
+        selected_skills = state.get("step5_skills", [])
+        selected_agents = state.get("step5_agents", [])
 
         workflow = Level3GitHubWorkflow(session_dir)
-        pr_result = workflow.step11_create_pull_request(issue_number, branch_name)
+        pr_result = workflow.step11_create_pull_request(
+            issue_number,
+            branch_name,
+            selected_skills=selected_skills,
+            selected_agents=selected_agents
+        )
 
         execution_time_ms = (time.time() - step_start) * 1000
 

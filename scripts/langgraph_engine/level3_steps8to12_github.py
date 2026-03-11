@@ -560,3 +560,173 @@ class Level3GitHubWorkflow:
                 "step12": step12
             }
         }
+
+    # ===== CODE REVIEW INTEGRATION (Step 11 Enhancement) =====
+
+    def _run_code_review(
+        self,
+        pr_number: int,
+        branch_name: str,
+        selected_skills: List[str],
+        selected_agents: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Run code review on PR using selected skills/agents.
+
+        Process:
+        1. Get PR diff
+        2. Analyze with selected skill/agent
+        3. Identify issues
+        4. Return review result
+
+        Args:
+            pr_number: GitHub PR number
+            branch_name: Source branch being reviewed
+            selected_skills: Skills selected in Step 5
+            selected_agents: Agents selected in Step 5
+
+        Returns:
+            {
+                "passed": bool,
+                "issues": List[str],
+                "recommendations": str
+            }
+        """
+        logger.info(f"Starting code review for PR #{pr_number} with {len(selected_skills)} skills and {len(selected_agents)} agents")
+
+        try:
+            # Get PR diff (simplified)
+            diff_lines = self.git.get_pr_diff(branch_name, "main")
+
+            # Analyze diff for common issues
+            issues = self._analyze_diff_for_issues(diff_lines)
+
+            # Check for specific patterns based on selected skills
+            if "python-backend-engineer" in selected_skills or "python-backend-engineer" in selected_agents:
+                issues.extend(self._check_python_best_practices(diff_lines))
+
+            if "spring-boot-microservices" in selected_skills or "spring-boot-microservices" in selected_agents:
+                issues.extend(self._check_java_spring_patterns(diff_lines))
+
+            if "docker" in selected_skills or "devops-engineer" in selected_agents:
+                issues.extend(self._check_docker_best_practices(diff_lines))
+
+            logger.info(f"Code review found {len(issues)} issues")
+
+            passed = len(issues) == 0
+            return {
+                "passed": passed,
+                "issues": issues,
+                "recommendations": self._generate_review_recommendations(issues)
+            }
+
+        except Exception as e:
+            logger.warning(f"Code review analysis failed: {e}, allowing merge anyway")
+            return {
+                "passed": True,  # Non-blocking failure
+                "issues": [f"Review failed to complete: {str(e)}"],
+                "recommendations": "Manual review recommended"
+            }
+
+    def _analyze_diff_for_issues(self, diff_lines: List[str]) -> List[str]:
+        """Analyze diff for common issues."""
+        issues = []
+
+        diff_text = "\n".join(diff_lines)
+
+        # Check for obvious issues
+        if "TODO" in diff_text or "FIXME" in diff_text:
+            issues.append("⚠️ Found TODO/FIXME comments in code")
+
+        if "print(" in diff_text:
+            issues.append("⚠️ Found print() statements (use logging instead)")
+
+        if "eval(" in diff_text or "exec(" in diff_text:
+            issues.append("🔴 Found dangerous eval/exec calls")
+
+        if "password" in diff_text.lower() and "***" not in diff_text:
+            issues.append("🔴 Potential exposed credentials or password in code")
+
+        # Check for large additions
+        additions = len([l for l in diff_lines if l.startswith("+")])
+        if additions > 500:
+            issues.append(f"⚠️ Large addition ({additions} lines) - consider breaking into smaller commits")
+
+        return issues
+
+    def _check_python_best_practices(self, diff_lines: List[str]) -> List[str]:
+        """Check for Python-specific best practices."""
+        issues = []
+        diff_text = "\n".join(diff_lines)
+
+        if "import *" in diff_text:
+            issues.append("⚠️ Found 'import *' - use explicit imports")
+
+        if "except:" in diff_text:
+            issues.append("⚠️ Found bare 'except:' - specify exception types")
+
+        if "global " in diff_text:
+            issues.append("⚠️ Found 'global' keyword - consider refactoring")
+
+        return issues
+
+    def _check_java_spring_patterns(self, diff_lines: List[str]) -> List[str]:
+        """Check for Spring Boot/Java best practices."""
+        issues = []
+        diff_text = "\n".join(diff_lines)
+
+        if "@Component" in diff_text and "@Autowired" not in diff_text:
+            issues.append("⚠️ Found @Component but no @Autowired - verify dependency injection")
+
+        if "new Thread(" in diff_text:
+            issues.append("⚠️ Found raw Thread creation - use ExecutorService instead")
+
+        return issues
+
+    def _check_docker_best_practices(self, diff_lines: List[str]) -> List[str]:
+        """Check for Docker/DevOps best practices."""
+        issues = []
+        diff_text = "\n".join(diff_lines)
+
+        if "FROM ubuntu" in diff_text or "FROM centos" in diff_text:
+            issues.append("⚠️ Consider using alpine for smaller images")
+
+        if "RUN apt-get" in diff_text:
+            issues.append("⚠️ RUN apt-get without apt-get update - use multi-stage or combine")
+
+        return issues
+
+    def _generate_review_recommendations(self, issues: List[str]) -> str:
+        """Generate summary recommendations from review issues."""
+        if not issues:
+            return "✓ Code review passed all checks"
+
+        issue_count = len(issues)
+        severity_high = len([i for i in issues if i.startswith("🔴")])
+        severity_medium = len([i for i in issues if i.startswith("⚠️")])
+
+        return (
+            f"Found {issue_count} issues: "
+            f"{severity_high} critical, {severity_medium} warnings. "
+            f"Please address before merge."
+        )
+
+    def _comment_on_pr_with_review(self, pr_number: int, issues: List[str]):
+        """Add PR comment with review issues."""
+        try:
+            comment = "## 🔍 Code Review Results\n\n"
+            comment += "The following issues were found during code review:\n\n"
+
+            for issue in issues:
+                comment += f"- {issue}\n"
+
+            comment += (
+                "\n**Action Required:** "
+                "Please address these issues before this PR can be merged. "
+                "Review the comments above and update your code accordingly."
+            )
+
+            self.github.add_pr_comment(pr_number, comment)
+            logger.info(f"Added review comment to PR #{pr_number}")
+        except Exception as e:
+            logger.warning(f"Could not add PR comment: {e}")

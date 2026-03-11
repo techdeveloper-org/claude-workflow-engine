@@ -234,6 +234,7 @@ class FlowState(TypedDict, total=False):
     step2_files_affected: Optional[List[str]]
     step2_phases: Optional[List[Dict]]
     step2_risks: Optional[Dict]
+    step2_code_context: Optional[str]        # Code analysis from exploration tools
     step2_execution_time_ms: Optional[float]
     step2_error: Optional[str]
 
