@@ -233,17 +233,27 @@ Output:
 
 ```
 Model Selection:
-  - Planning: OPUS (deep reasoning)
-  - Exploration: HAIKU (fast, cheap)
+  - Planning: INTELLIGENT (Haiku/Sonnet/Opus based on complexity)
+    * Complexity 1-3: Haiku (fast, cheap, simple planning)
+    * Complexity 4-7: Sonnet (balanced reasoning and speed)
+    * Complexity 8-10: Opus (deep reasoning for complex architecture)
 
-Exploration Tools:
-  - Read (with offset/limit for large files)
-  - Grep (with head_limit)
-  - Search (with optimization)
+  - Exploration: ALWAYS HAIKU (fast and cost-effective)
+    * File reading, code search, pattern matching
+    * NEVER use heavy models for exploration
+
+Tool Optimization (MANDATORY):
+  - Read: offset/limit (max 500 lines per file)
+  - Grep: head_limit (max 50 matches)
+  - Search: max_results (max 10 results)
+
+  ✅ Policy Reference: policies/03-execution-system/06-tool-optimization/
+  ✅ Script Reference: ~/.claude/memory/tool-usage-optimizer.py
 
 Output:
-  - Detailed implementation plan
-  - Analysis of affected files
+  - Detailed implementation plan (from planning model)
+  - Analysis of affected files (from exploration)
+  - Code context from tool-optimized searches
   - Recommended approach
 ```
 
