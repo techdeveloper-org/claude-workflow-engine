@@ -103,13 +103,15 @@ def step2_plan_execution_node(state: FlowState) -> Dict[str, Any]:
         execution_time_ms = (time.time() - step_start) * 1000
 
         if plan_result.get("success"):
-            logger.info(f"✓ Step 2 completed ({execution_time_ms:.0f}ms)")
+            selected_model = plan_result.get("selected_model", "sonnet")
+            logger.info(f"✓ Step 2 completed with {selected_model} model ({execution_time_ms:.0f}ms)")
             return {
                 "step2_plan": plan_result.get("plan", ""),
                 "step2_files_affected": plan_result.get("files_affected", []),
                 "step2_phases": plan_result.get("phases", []),
                 "step2_risks": plan_result.get("risks", {}),
                 "step2_code_context": plan_result.get("code_context", ""),
+                "step2_selected_model": selected_model,  # Track selected model
                 "step2_execution_time_ms": execution_time_ms
             }
         else:

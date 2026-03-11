@@ -36,6 +36,73 @@ class Level3RemainingSteps:
         self.session_manager = SessionManager(str(self.session_dir))
         self.ollama = get_ollama_service()
 
+    # ===== INTELLIGENT MODEL SELECTION =====
+
+    def _select_planning_model(self, toon: Dict[str, Any]) -> str:
+        """Intelligently select planning model based on TOON factors.
+
+        WORKFLOW.md SPEC: Use OPUS for deep reasoning, but this function
+        applies intelligence to choose appropriate model based on complexity.
+
+        Available models:
+        - haiku: Fast and cheap, good for simple planning (complexity 1-3)
+        - sonnet: Balanced reasoning, good for medium complexity (4-7)
+        - opus: Deep reasoning, best for complex architecture (8-10)
+
+        Args:
+            toon: TOON object with complexity_score, files_affected, etc.
+
+        Returns:
+            Model name: "haiku" | "sonnet" | "opus"
+        """
+        complexity_score = toon.get("complexity_score", 5)
+        files_affected = len(toon.get("files_affected", []))
+        project_type = toon.get("project_type", "unknown")
+
+        # Build decision prompt for LLM
+        decision_prompt = f"""Analyze this planning requirement and select the best LLM model:
+
+FACTORS:
+- Complexity score: {complexity_score}/10
+- Files affected: {files_affected}
+- Project type: {project_type}
+
+AVAILABLE MODELS:
+- haiku: Fast and cheap, good for simple/straightforward planning
+- sonnet: Balanced reasoning and speed, good for medium complexity
+- opus: Deep reasoning, best for complex architecture or intricate requirements
+
+DECISION LOGIC:
+- Complexity 1-3: haiku is usually sufficient and cost-effective
+- Complexity 4-7: sonnet provides good balance of reasoning and speed
+- Complexity 8-10: opus provides deep reasoning needed for complex tasks
+
+Based on these factors and the DECISION LOGIC above, which model would be BEST for this planning task?
+
+Respond with ONLY the model name (haiku, sonnet, or opus). No explanation needed."""
+
+        try:
+            logger.info("→ Selecting planning model based on TOON factors...")
+            response = self.ollama.chat(
+                messages=[{"role": "user", "content": decision_prompt}],
+                model="fast_classification",  # Use fast model for decision-making
+                temperature=0.3  # Low temperature for deterministic choice
+            )
+
+            model_choice = response.get("message", {}).get("content", "sonnet").strip().lower()
+
+            # Validate choice
+            if model_choice not in ["haiku", "sonnet", "opus"]:
+                logger.warning(f"Invalid model choice '{model_choice}', defaulting to sonnet")
+                model_choice = "sonnet"
+
+            logger.info(f"✓ Selected model: {model_choice} (complexity: {complexity_score}/10, files: {files_affected})")
+            return model_choice
+
+        except Exception as e:
+            logger.warning(f"Model selection failed, defaulting to sonnet: {e}")
+            return "sonnet"
+
     # ===== STEP 2: PLAN EXECUTION =====
 
     def step2_plan_execution(
@@ -104,10 +171,14 @@ Generate a comprehensive plan that includes:
 IMPORTANT: Reference actual files and code patterns found in the analysis.
 Be very specific and actionable - mention actual file paths and existing functions/classes."""
 
-            logger.info("→ Generating plan with LLM...")
+            # INTELLIGENT MODEL SELECTION (WORKFLOW.md: choose appropriate model)
+            logger.info("→ Selecting appropriate model for planning...")
+            selected_model = self._select_planning_model(toon)
+
+            logger.info(f"→ Generating plan with {selected_model} model...")
             response = self.ollama.chat(
                 messages=[{"role": "user", "content": prompt}],
-                model="complex_reasoning",  # Use 14B for deep planning
+                model=selected_model,  # Use intelligently selected model
                 temperature=0.5
             )
 
@@ -135,6 +206,7 @@ Be very specific and actionable - mention actual file paths and existing functio
                 "phases": phases,
                 "risks": risks,
                 "code_context": code_context,  # Store exploration results
+                "selected_model": selected_model,  # Track which model was used
                 "execution_time_ms": (time.time() - step_start) * 1000,
                 "timestamp": datetime.now().isoformat()
             }
