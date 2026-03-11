@@ -623,11 +623,20 @@ class Level3GitHubWorkflow:
             }
 
         except Exception as e:
-            logger.warning(f"Code review analysis failed: {e}, allowing merge anyway")
+            logger.error(f"Code review analysis failed (FAIL-SAFE): {e}")
+            logger.error(f"Blocking merge to prevent broken code - manual review required")
             return {
-                "passed": True,  # Non-blocking failure
-                "issues": [f"Review failed to complete: {str(e)}"],
-                "recommendations": "Manual review recommended"
+                "passed": False,  # FAIL-SAFE: Block merge on error
+                "issues": [
+                    f"🔴 CRITICAL: Code review process crashed",
+                    f"Error: {str(e)}",
+                    f"Action: Merge blocked for safety. Manual review required."
+                ],
+                "recommendations": (
+                    "⚠️ Code review automation failed. "
+                    "This is a SAFETY block - do not force merge. "
+                    "Please investigate the error and retry or manually review."
+                )
             }
 
     def _analyze_diff_for_issues(self, diff_lines: List[str]) -> List[str]:
