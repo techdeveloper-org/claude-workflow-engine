@@ -489,6 +489,8 @@ def step4_toon_refinement(state: FlowState) -> dict:
 def step5_skill_agent_selection(state: FlowState) -> dict:
     """Step 5: Skill & Agent Selection - Select perfect skill/agent with FULL context + definitions.
 
+    PHASE 2 ENHANCED: Includes DeepSeek reasoning for intelligent MCP selection.
+
     Uses COMPLETE context INCLUDING FULL SKILL DEFINITIONS to make informed skill/agent selection:
     - User message (what they're asking)
     - Task type & complexity (what kind of work)
@@ -498,6 +500,7 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
     - TOON refinement (enriched overview)
     - **ALL SKILL DEFINITIONS** (what each skill can do - CRITICAL)
     - **ALL AGENT DEFINITIONS** (what each agent can orchestrate - CRITICAL)
+    - **DeepSeek REASONING** (which MCPs are needed - Phase 2 NEW)
 
     Post-selection: ConflictResolver checks for incompatible skill/agent pairs.
     Any conflicts are resolved via priority-based rules before the result is stored.
@@ -506,6 +509,7 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
     Timeout: enforced at 60s by the v2 _run_step wrapper.
     """
     from ..skill_agent_loader import get_skill_agent_loader
+    from ..deepseek_reasoning import get_deepseek_reasoning
 
     # Gather ALL context for best skill selection
     user_message = state.get("user_message", "")
@@ -529,6 +533,30 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
     available_mcps = state.get("mcp_servers_available", [])
     mcp_filesystem_enabled = state.get("mcp_filesystem_enabled", False)
 
+    # PHASE 2 NEW: Get DeepSeek reasoning about MCP requirements
+    deepseek_mcp_reasoning = None
+    deepseek_skill_eval = None
+    try:
+        reasoner = get_deepseek_reasoning()
+        deepseek_mcp_reasoning = reasoner.analyze_mcp_requirements(
+            user_message=user_message,
+            task_type=task_type,
+            complexity=complexity,
+            available_mcps=available_mcps,
+            validated_tasks=validated_tasks,
+            patterns=patterns,
+        )
+
+        # Also get skill/agent evaluation
+        deepseek_skill_eval = reasoner.evaluate_skill_agent_fit(
+            user_message=user_message,
+            candidate_skills=list(all_skills.keys()),
+            candidate_agents=list(all_agents.keys()),
+        )
+    except Exception as e:
+        # Non-blocking: DeepSeek reasoning failure
+        pass
+
     context_data = {
         "user_message": user_message,
         "task_type": task_type,
@@ -549,6 +577,11 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
         # NEW: Include available MCPs for context-aware skill selection
         "available_mcps": available_mcps,  # List of discovered MCPs
         "mcp_filesystem_enabled": mcp_filesystem_enabled,  # True if Filesystem MCP available
+        # PHASE 2 NEW: Include DeepSeek reasoning if available
+        "deepseek_mcp_reasoning": (
+            deepseek_mcp_reasoning.to_dict() if deepseek_mcp_reasoning else None
+        ),
+        "deepseek_skill_eval": deepseek_skill_eval,
     }
 
     # Pass complete context INCLUDING skill definitions to get perfect skill match

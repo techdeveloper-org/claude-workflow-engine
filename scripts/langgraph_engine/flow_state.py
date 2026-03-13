@@ -207,12 +207,18 @@ class FlowState(TypedDict, total=False):
     step4_reasoning: str               # Why this model was chosen
     step4_error: Optional[str]
 
-    # Step 5: Skill & Agent Selection
+    # Step 5: Skill & Agent Selection (with Phase 2 DeepSeek reasoning)
     step5_skill: str                   # Selected skill name (if any)
     step5_agent: str                   # Selected agent name (if any)
     step5_reasoning: str               # Why this skill/agent was chosen
     step5_error: Optional[str]
     step5_llm_query_needed: bool       # True if LLM needed to decide
+    # Phase 2: DeepSeek Enhanced Selection
+    step5_deepseek_mcp_reasoning: Optional[Dict]  # DeepSeek MCP analysis result
+    step5_deepseek_skill_eval: Optional[Dict]    # DeepSeek skill/agent evaluation
+    step5_deepseek_used: Optional[bool]          # True if DeepSeek was called
+    step5_mcp_selected: Optional[List[str]]      # MCPs selected based on reasoning
+    step5_mcp_reasoning: Optional[str]           # Why these MCPs were selected
 
     # Step 6: Tool Optimization
     step6_tool_hints: List[str]        # Optimization hints for tools
