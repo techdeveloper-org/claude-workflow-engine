@@ -24,6 +24,38 @@ from .toon_models import ToonAnalysis
 from .plan_decision_rules import build_fallback_decision, evaluate_from_toon
 from .step_validator import StepValidator
 from .token_manager import TokenBudget
+from .timeout_wrapper import run_with_timeout, fallback_step1, STEP_TIMEOUTS
+
+# Import LLM retry helper (lazy to avoid circular imports)
+def _get_llm_retry():
+    try:
+        from .level3_remaining_steps import _llm_call_with_retry
+        return _llm_call_with_retry
+    except ImportError:
+        import time as _time
+        _delays = [1.0, 2.0, 4.0, 8.0]
+        def _fallback_retry(call_fn, step_name="LLM", max_retries=3):
+            last_exc = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return call_fn()
+                except Exception as exc:
+                    last_exc = exc
+                    err_lower = str(exc).lower()
+                    is_retryable = any(
+                        kw in err_lower for kw in
+                        ("timeout", "connection", "rate_limit", "503", "overloaded")
+                    )
+                    if not is_retryable or attempt >= max_retries:
+                        raise
+                    delay = _delays[min(attempt, len(_delays) - 1)]
+                    logger.warning(
+                        f"[{step_name}] LLM retry {attempt+1}/{max_retries} in {delay}s: {exc}"
+                    )
+                    _time.sleep(delay)
+            if last_exc:
+                raise last_exc
+        return _fallback_retry
 
 
 class Level3Step1Planner:
@@ -52,6 +84,9 @@ class Level3Step1Planner:
         All decisions are logged via ErrorLogger pattern (logger.log_decision
         equivalent through loguru).
 
+        Timeout: enforced at {STEP_TIMEOUTS[1]}s via timeout_wrapper.
+        On timeout, returns fallback_step1() with plan_required=True for safety.
+
         Args:
             toon: TOON object from Level 1 (ToonAnalysis)
             user_requirement: Original user requirement text
@@ -59,7 +94,7 @@ class Level3Step1Planner:
                               e.g. "feature", "bug_fix", "refactoring", "architecture"
 
         Returns:
-            {
+            {{
                 "plan_required": bool,
                 "reasoning": str,
                 "risk_level": "low" | "medium" | "high",
@@ -67,7 +102,7 @@ class Level3Step1Planner:
                 "execution_time_ms": float,
                 "source": str - "llm" | "claude_api" | "rules",
                 "fallback": bool - True if LLM was unavailable
-            }
+            }}
         """
         logger.info("=" * 60)
         logger.info("LEVEL 3 - STEP 1: PLAN MODE DECISION")
@@ -89,27 +124,41 @@ class Level3Step1Planner:
             logger.debug(f"Files loaded: {toon.get('files_loaded_count')}")
             logger.debug(f"User requirement: {user_requirement[:100]}...")
 
-            # --- Primary path: Ollama LLM ---
+            # --- Primary path: Ollama LLM (with exponential backoff retry) ---
             logger.info("Calling Ollama (qwen2.5:7b) for plan mode decision...")
+            _llm_call_with_retry = _get_llm_retry()
             try:
-                decision = self.ollama.step1_plan_mode_decision(toon, user_requirement)
+                def _ollama_step1_call():
+                    return self.ollama.step1_plan_mode_decision(toon, user_requirement)
+
+                decision = _llm_call_with_retry(
+                    _ollama_step1_call, "Step 1 Plan Mode Decision"
+                )
                 decision["source"] = "llm"
                 decision["fallback"] = False
             except Exception as ollama_err:
-                logger.warning(f"Ollama failed for Step 1: {ollama_err}")
+                logger.warning(f"Ollama failed for Step 1 (after retries): {ollama_err}")
 
-                # --- Secondary path: Claude API fallback ---
+                # --- Secondary path: Claude API fallback (with retry) ---
                 try:
                     logger.info("Falling back to Claude API for plan mode decision...")
                     claude_client = getattr(self.ollama, "claude_client", None)
                     if claude_client:
-                        decision = claude_client.step1_plan_mode_decision(toon, user_requirement)
+                        def _claude_step1_call():
+                            return claude_client.step1_plan_mode_decision(
+                                toon, user_requirement
+                            )
+                        decision = _llm_call_with_retry(
+                            _claude_step1_call, "Step 1 Claude API Fallback"
+                        )
                         decision["source"] = "claude_api"
                         decision["fallback"] = True
                     else:
                         raise RuntimeError("Claude API client not available")
                 except Exception as claude_err:
-                    logger.warning(f"Claude API fallback also failed: {claude_err}")
+                    logger.warning(
+                        f"Claude API fallback also failed (after retries): {claude_err}"
+                    )
 
                     # --- Tertiary path: deterministic rule-based decision ---
                     logger.info("Falling back to rule-based plan decision (plan_decision_rules)...")
@@ -213,8 +262,11 @@ def step1_plan_mode_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     Updates state with:
     - step1_decision
     - step1_plan_required
+
+    Timeout: {STEP_TIMEOUTS[1]}s enforced via run_with_timeout().
+    On timeout, defaults to plan_required=True (safest assumption).
     """
-    logger.info("\n🔄 Executing STEP 1: Plan Mode Decision...")
+    logger.info("\nExecuting STEP 1: Plan Mode Decision...")
 
     try:
         # Extract from state
@@ -235,15 +287,20 @@ def step1_plan_mode_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
             logger.error("Missing level1_context_toon in state")
             toon = {}
 
-        # Execute Step 1
+        # Execute Step 1 with timeout enforcement
         planner = Level3Step1Planner(session_dir)
-        decision = planner.execute(toon, user_requirement)
+        decision = run_with_timeout(
+            fn=planner.execute,
+            step_number=1,
+            args=(toon, user_requirement),
+            fallback=fallback_step1(),
+        )
 
         # Update state
         state["step1_decision"] = decision
         state["step1_plan_required"] = decision.get("plan_required", True)
 
-        logger.info(f"✓ STEP 1 completed in {decision.get('execution_time_ms', 0):.0f}ms")
+        logger.info(f"STEP 1 completed in {decision.get('execution_time_ms', 0):.0f}ms")
 
         return state
 

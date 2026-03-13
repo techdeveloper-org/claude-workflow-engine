@@ -22,6 +22,15 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+# Lazy import: avoid import-time side effects from timeout_wrapper
+def _get_timeout_wrapper():
+    """Lazy-load timeout_wrapper to avoid import-time side effects."""
+    try:
+        from ..timeout_wrapper import STEP_TIMEOUTS, StepTimeout
+        return STEP_TIMEOUTS, StepTimeout
+    except Exception as _e:
+        return {}, None
+
 try:
     from langgraph.graph import StateGraph, START, END
     _LANGGRAPH_AVAILABLE = True
@@ -146,9 +155,12 @@ def _run_step(
     Responsibilities:
     1. Log step entry.
     2. Update RecoveryHandler with current step (for Ctrl+C).
-    3. Execute step_fn(state) inside try/except.
+    3. Execute step_fn(state) inside a timeout-enforced wrapper.
     4. On success: record metric, save checkpoint.
-    5. On failure: log error, record metric, return fallback_result.
+    5. On timeout/failure: log error, record metric, return fallback_result.
+
+    Timeouts are loaded from timeout_wrapper.STEP_TIMEOUTS (lazy import).
+    Steps without a configured timeout run without a time limit.
 
     Args:
         step_number:    Numeric step (0-14), used for checkpoint naming.
@@ -158,7 +170,7 @@ def _run_step(
         fallback_result: Dict to return on unrecoverable error.
 
     Returns:
-        Result dict from step_fn, or fallback_result on failure.
+        Result dict from step_fn, or fallback_result on timeout/failure.
     """
     infra = _get_infra(state)
     cp = infra["checkpoint"]
@@ -176,8 +188,51 @@ def _run_step(
     logger.info(f"\n[STEP {step_number:02d}] {step_label} - START")
     step_start = time.time()
 
+    # --- Timeout enforcement ---
+    # Load timeout table; gracefully degrade if module unavailable
+    _timeouts, _StepTimeout = _get_timeout_wrapper()
+    timeout_s = _timeouts.get(step_number) if _timeouts else None
+
     try:
-        result = step_fn(state)
+        if timeout_s is not None and _StepTimeout is not None:
+            tw = _StepTimeout(timeout_seconds=timeout_s)
+            result = tw.run(
+                fn=step_fn,
+                args=(state,),
+                fallback=fallback_result or {},
+                step_label=f"STEP {step_number:02d}: {step_label}",
+            )
+            # Check if timeout_wrapper returned its own error result
+            if result.get("timed_out"):
+                logger.warning(
+                    f"[STEP {step_number:02d}] {step_label} - TIMED OUT after {timeout_s}s"
+                )
+                duration = time.time() - step_start
+                if metrics:
+                    try:
+                        metrics.record_step(step=step_number, duration=duration, status="TIMEOUT")
+                    except Exception:
+                        pass
+                if error_logger:
+                    try:
+                        error_logger.log_error(
+                            step=f"Step {step_number}",
+                            error_message=f"Timeout after {timeout_s}s",
+                            severity="ERROR",
+                            error_type="TimeoutError",
+                            recovery_action="Returning fallback result",
+                        )
+                    except Exception:
+                        pass
+                # Build full fallback with timing info
+                base = {
+                    f"step{step_number}_error": f"Timeout after {timeout_s}s",
+                    f"step{step_number}_execution_time_ms": duration * 1000,
+                }
+                return {**(fallback_result or {}), **base}
+        else:
+            result = step_fn(state)
+
         duration = time.time() - step_start
 
         # Record SUCCESS metric
@@ -191,11 +246,15 @@ def _run_step(
             except Exception as me:
                 logger.warning(f"[v2] Metrics record failed: {me}")
 
-        # Checkpoint: merge state + result then save
+        # Checkpoint: merge state + result then save (success_status=True)
         if cp:
             try:
                 merged = {**dict(state), **(result or {})}
-                cp.save_checkpoint(step_number, merged)
+                cp.save_checkpoint(
+                    step_number,
+                    merged,
+                    success_status=True,
+                )
             except Exception as ce:
                 logger.warning(f"[v2] Checkpoint save failed: {ce}")
 
@@ -242,6 +301,19 @@ def _run_step(
                 )
             except Exception:
                 pass
+
+        # Save failed checkpoint (success_status=False, include error message)
+        if cp:
+            try:
+                merged = {**dict(state), **(fallback_result or {})}
+                cp.save_checkpoint(
+                    step_number,
+                    merged,
+                    success_status=False,
+                    error_message=f"{type(exc).__name__}: {str(exc)[:200]}",
+                )
+            except Exception as ce:
+                logger.warning(f"[v2] Failed checkpoint save after error: {ce}")
 
         logger.error(f"[STEP {step_number:02d}] {step_label} - FAILED: {exc}")
 
@@ -498,13 +570,27 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
 
     def _with_llm_fallback(st):
         """
-        Wrap step10 with explicit LLM error -> Claude API fallback pattern.
+        Wrap step10 with explicit LLM error -> Claude API fallback pattern
+        and file modification tracking.
         The underlying step10_implementation_execution already handles
         hybrid_inference internally, but we add a second layer here for
         any uncaught LLM-related exceptions bubbling up.
         """
         try:
-            return step10_implementation_execution(st)
+            result = step10_implementation_execution(st)
+            # Track files modified by implementation step
+            if result and result.get("step10_modified_files"):
+                infra = _get_infra(st)
+                if infra["metrics"]:
+                    try:
+                        infra["metrics"].record_files_modified(
+                            step=10,
+                            files=result["step10_modified_files"],
+                            operation="modified",
+                        )
+                    except Exception:
+                        pass
+            return result
         except Exception as llm_exc:
             # Check if this looks like an LLM connectivity issue
             err_msg = str(llm_exc).lower()
@@ -578,7 +664,22 @@ def step13_docs_update_node(state: FlowState) -> Dict[str, Any]:
 
     def _with_file_error_handling(st):
         try:
-            return step13_project_documentation_update(st)
+            result = step13_project_documentation_update(st)
+            # Track documentation files updated
+            if result and result.get("step13_updates_prepared"):
+                updated = result.get("step13_updated_files") or []
+                if updated:
+                    infra = _get_infra(st)
+                    if infra["metrics"]:
+                        try:
+                            infra["metrics"].record_files_modified(
+                                step=13,
+                                files=updated,
+                                operation="modified",
+                            )
+                        except Exception:
+                            pass
+            return result
         except IOError as io_err:
             infra = _get_infra(st)
             if infra["error_logger"]:
@@ -615,6 +716,18 @@ def step14_final_summary_node(state: FlowState) -> Dict[str, Any]:
         infra = _get_infra(st)
         if infra["metrics"]:
             try:
+                # Record any files modified from state
+                modified_files = (
+                    st.get("step10_modified_files") or
+                    st.get("step13_updated_files") or
+                    []
+                )
+                if modified_files:
+                    infra["metrics"].record_files_modified(
+                        step=14,
+                        files=modified_files,
+                        operation="modified",
+                    )
                 infra["metrics"].print_summary()
             except Exception:
                 pass

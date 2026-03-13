@@ -321,19 +321,34 @@ class MetricsCollector:
     # ------------------------------------------------------------------
 
     def _save(self) -> None:
-        """Write current metrics to disk (atomic-style via write + rename)."""
+        """Write current metrics to disk (atomic via temp-file + os.replace)."""
         payload = {
             "session_id": self.session_id,
             "saved_at": datetime.now().isoformat(),
             "step_metrics": self._step_metrics,
             "error_records": self._error_records,
+            "all_files_modified": sorted(self._all_files_modified),
         }
-        tmp = self.metrics_file.with_suffix(".json.tmp")
+        content = json.dumps(payload, indent=2)
+        dir_path = self.metrics_file.parent
         try:
-            tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-            tmp.replace(self.metrics_file)
-        except IOError as e:
-            logger.error(f"[Metrics] Failed to save metrics: {e}")
+            fd, tmp_path = tempfile.mkstemp(dir=str(dir_path), suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(content)
+                os.replace(tmp_path, str(self.metrics_file))
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except (IOError, OSError, PermissionError) as e:
+            # Fallback: direct write
+            try:
+                self.metrics_file.write_text(content, encoding="utf-8")
+            except Exception as fallback_err:
+                logger.error(f"[Metrics] Failed to save metrics: {e} / {fallback_err}")
 
     def _load(self) -> None:
         """Load persisted metrics from disk (used when resuming)."""
@@ -343,6 +358,9 @@ class MetricsCollector:
             data = json.loads(self.metrics_file.read_text(encoding="utf-8"))
             self._step_metrics = data.get("step_metrics", {})
             self._error_records = data.get("error_records", [])
+            # Restore aggregate files set
+            saved_files = data.get("all_files_modified", [])
+            self._all_files_modified = set(saved_files)
             logger.debug(f"[Metrics] Loaded existing metrics from {self.metrics_file}")
         except (json.JSONDecodeError, IOError) as e:
             logger.warning(f"[Metrics] Could not load existing metrics: {e}")

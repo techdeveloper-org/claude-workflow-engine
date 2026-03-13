@@ -21,6 +21,52 @@ from .github_integration import GitHubIntegration
 from .git_operations import GitOperations
 from .ollama_service import OllamaService
 
+# Lazy import helpers - avoids circular dependencies at module level
+def _get_review_criteria(project_root: Optional[str] = None):
+    """Lazy-load ReviewCriteria to avoid import-time side effects."""
+    try:
+        from .review_criteria import ReviewCriteria
+        return ReviewCriteria(project_root=project_root)
+    except Exception as _e:
+        logger.warning(f"[GitHubWorkflow] ReviewCriteria unavailable: {_e}")
+        return None
+
+
+def _get_conflict_resolver(session_dir: str):
+    """Lazy-load ConflictResolver."""
+    try:
+        from .conflict_resolver import ConflictResolver
+        return ConflictResolver(session_dir=session_dir)
+    except Exception as _e:
+        logger.warning(f"[GitHubWorkflow] ConflictResolver unavailable: {_e}")
+        return None
+
+# Import retry helper from remaining steps module (shared utility)
+try:
+    from .level3_remaining_steps import _llm_call_with_retry
+except ImportError:
+    # Fallback: define inline if import fails
+    def _llm_call_with_retry(call_fn, step_name="LLM", max_retries=3):  # type: ignore
+        last_exc = None
+        delays = [1.0, 2.0, 4.0, 8.0]
+        for attempt in range(max_retries + 1):
+            try:
+                return call_fn()
+            except Exception as exc:
+                last_exc = exc
+                err_lower = str(exc).lower()
+                is_retryable = any(
+                    kw in err_lower for kw in
+                    ("timeout", "connection", "rate_limit", "503", "overloaded")
+                )
+                if not is_retryable or attempt >= max_retries:
+                    raise
+                delay = delays[min(attempt, len(delays) - 1)]
+                logger.warning(f"[{step_name}] LLM retry {attempt+1}/{max_retries} in {delay}s: {exc}")
+                time.sleep(delay)
+        if last_exc:
+            raise last_exc
+
 
 class Level3GitHubWorkflow:
     """Manages GitHub workflow for Steps 8-12."""
@@ -184,16 +230,20 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
 
         try:
             messages = [{"role": "user", "content": prompt}]
-            response = self.ollama.chat(
-                messages=messages,
-                model="fast_classification",
-                temperature=0.3,  # Lower temperature for consistent classification
-                system_prompt=system_prompt
-            )
 
-            if "error" in response:
-                logger.warning(f"LLM error: {response['error']}")
-                return None
+            def _call_ollama():
+                resp = self.ollama.chat(
+                    messages=messages,
+                    model="fast_classification",
+                    temperature=0.3,
+                    system_prompt=system_prompt
+                )
+                if "error" in resp:
+                    raise RuntimeError(resp["error"])
+                return resp
+
+            # Use retry with exponential backoff for transient LLM errors
+            response = _llm_call_with_retry(_call_ollama, "Step 8 Label Classification")
 
             label = response.get("message", {}).get("content", "").strip().lower()
 
@@ -259,19 +309,32 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
 
     # ===== STEP 9: BRANCH CREATION =====
 
-    def step9_create_branch(self, issue_number: int, label: str = "feature") -> Dict[str, Any]:
+    def step9_create_branch(
+        self,
+        issue_number: int,
+        label: str = "feature",
+        session_dir: str = "",
+    ) -> Dict[str, Any]:
         """
         Create and checkout new branch for issue.
 
+        Branch conflict detection via ConflictResolver:
+        - If the desired branch already exists (local or remote), an auto-suffixed
+          name is used (e.g. issue-42-feature-03141200).
+        - Uncommitted change warnings are logged but do not block creation.
+
         Args:
             issue_number: GitHub issue number
-            label: Issue label (used in branch name)
+            label:        Issue label (used in branch name)
+            session_dir:  Session directory (for ConflictResolver log file)
 
         Returns:
             {
                 "success": bool,
                 "branch_name": str,
-                "branch_created": bool
+                "branch_created": bool,
+                "conflict_detected": bool,
+                "original_branch": str,
             }
         """
         logger.info("=" * 60)
@@ -281,8 +344,36 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
         step_start = time.time()
 
         try:
-            # Create branch name: issue-{number}-{label}
-            branch_name = f"issue-{issue_number}-{label}"
+            # Build desired branch name
+            desired_branch = f"issue-{issue_number}-{label}"
+
+            # --- Conflict detection & resolution ---
+            repo_path = getattr(self.git, "repo_path", ".")
+            conflict_resolver = _get_conflict_resolver(session_dir or ".")
+            branch_name = desired_branch
+            conflict_detected = False
+
+            if conflict_resolver is not None:
+                branch_resolution = conflict_resolver.resolve_branch_conflict(
+                    desired_branch=desired_branch,
+                    repo_path=repo_path,
+                )
+                branch_name = branch_resolution.get("resolved_branch", desired_branch)
+                conflict_detected = branch_resolution.get("conflict_detected", False)
+
+                if conflict_detected:
+                    logger.warning(
+                        f"[Step 9] Branch conflict resolved: "
+                        f"'{desired_branch}' -> '{branch_name}'"
+                    )
+                    # Persist conflict log
+                    try:
+                        conflict_resolver.save_conflict_log()
+                    except Exception:
+                        pass
+            else:
+                logger.debug("[Step 9] ConflictResolver unavailable - skipping branch conflict check")
+
             logger.info(f"Creating branch: {branch_name}")
 
             # Create branch from main
@@ -296,14 +387,16 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
                     "execution_time_ms": (time.time() - step_start) * 1000
                 }
 
-            logger.info(f"✓ Branch created and pushed: {branch_name}")
+            logger.info(f"Branch created and pushed: {branch_name}")
 
             execution_time_ms = (time.time() - step_start) * 1000
 
             return {
                 "success": True,
                 "branch_name": branch_name,
+                "original_branch": desired_branch,
                 "issue_number": issue_number,
+                "conflict_detected": conflict_detected,
                 "execution_time_ms": execution_time_ms,
                 "timestamp": datetime.now().isoformat()
             }
@@ -699,37 +792,52 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
         pr_number: int,
         branch_name: str,
         selected_skills: List[str],
-        selected_agents: List[str]
+        selected_agents: List[str],
+        files_changed: Optional[List[str]] = None,
+        pr_body: str = "",
     ) -> Dict[str, Any]:
         """
-        Run code review on PR using selected skills/agents.
+        Run code review on PR using selected skills/agents AND ReviewCriteria checklist.
 
         Process:
         1. Get PR diff
-        2. Analyze with selected skill/agent
-        3. Identify issues
-        4. Return review result
+        2. Run structured ReviewCriteria evaluation (code quality, tests, docs)
+        3. Run skill-specific pattern checks (Python, Java Spring, Docker)
+        4. Combine results and determine pass/fail
+
+        The ReviewCriteria evaluation adds structured checks for:
+        - Code quality rules (bare except, type hints, secrets, function length)
+        - Test coverage ratio (70% of source files need test counterpart)
+        - Documentation requirements (docstrings, PR description length)
 
         Args:
-            pr_number: GitHub PR number
-            branch_name: Source branch being reviewed
+            pr_number:       GitHub PR number
+            branch_name:     Source branch being reviewed
             selected_skills: Skills selected in Step 5
             selected_agents: Agents selected in Step 5
+            files_changed:   Optional list of files changed in PR (for ReviewCriteria)
+            pr_body:         PR description text (for ReviewCriteria DC003 check)
 
         Returns:
             {
                 "passed": bool,
                 "issues": List[str],
-                "recommendations": str
+                "recommendations": str,
+                "criteria_result": Dict,  # Full ReviewCriteria evaluation (if available)
+                "criteria_score": float,  # 0.0 - 1.0
             }
         """
-        logger.info(f"Starting code review for PR #{pr_number} with {len(selected_skills)} skills and {len(selected_agents)} agents")
+        logger.info(
+            f"Starting code review for PR #{pr_number} with "
+            f"{len(selected_skills)} skills and {len(selected_agents)} agents"
+        )
 
         try:
             # Get PR diff (simplified)
             diff_lines = self.git.get_pr_diff(branch_name, "main")
+            diff_text = "\n".join(diff_lines)
 
-            # Analyze diff for common issues
+            # Analyze diff for common issues (existing logic)
             issues = self._analyze_diff_for_issues(diff_lines)
 
             # Check for specific patterns based on selected skills
@@ -742,30 +850,76 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
             if "docker" in selected_skills or "devops-engineer" in selected_agents:
                 issues.extend(self._check_docker_best_practices(diff_lines))
 
+            # --- ReviewCriteria structured evaluation ---
+            criteria_result: Dict[str, Any] = {}
+            criteria_score: float = 1.0
+
+            review_criteria = _get_review_criteria(project_root=self.git.repo_path if hasattr(self.git, "repo_path") else None)
+            if review_criteria is not None:
+                logger.info("[CodeReview] Running structured ReviewCriteria evaluation...")
+                try:
+                    evaluated_files = files_changed or []
+                    eval_result = review_criteria.evaluate(
+                        files_changed=evaluated_files,
+                        pr_title=f"PR #{pr_number} - {branch_name}",
+                        pr_body=pr_body,
+                        diff_text=diff_text,
+                    )
+                    criteria_result = eval_result.to_dict()
+                    criteria_score = eval_result.score
+
+                    logger.info(
+                        f"[CodeReview] ReviewCriteria: "
+                        f"passed={eval_result.passed}, score={eval_result.score:.2f}, "
+                        f"blocking_issues={len([i for i in eval_result.issues if i.get('severity') == 'blocking'])}"
+                    )
+
+                    # Append blocking issues to the main issues list
+                    for issue in eval_result.issues:
+                        if issue.get("severity") == "blocking":
+                            msg = (
+                                f"[{issue['rule_id']}] {issue['message']}"
+                                + (f" in {issue['file_path']}" if issue.get('file_path') else "")
+                            )
+                            issues.append(msg)
+
+                    # If ReviewCriteria failed, mark overall review as failed
+                    if not eval_result.passed:
+                        logger.warning(
+                            f"[CodeReview] ReviewCriteria FAILED - merge will be blocked"
+                        )
+
+                except Exception as criteria_err:
+                    logger.warning(f"[CodeReview] ReviewCriteria evaluation error (non-fatal): {criteria_err}")
+
             logger.info(f"Code review found {len(issues)} issues")
 
             passed = len(issues) == 0
             return {
                 "passed": passed,
                 "issues": issues,
-                "recommendations": self._generate_review_recommendations(issues)
+                "recommendations": self._generate_review_recommendations(issues),
+                "criteria_result": criteria_result,
+                "criteria_score": criteria_score,
             }
 
         except Exception as e:
             logger.error(f"Code review analysis failed (FAIL-SAFE): {e}")
-            logger.error(f"Blocking merge to prevent broken code - manual review required")
+            logger.error("Blocking merge to prevent broken code - manual review required")
             return {
                 "passed": False,  # FAIL-SAFE: Block merge on error
                 "issues": [
-                    f"🔴 CRITICAL: Code review process crashed",
+                    "CRITICAL: Code review process crashed",
                     f"Error: {str(e)}",
-                    f"Action: Merge blocked for safety. Manual review required."
+                    "Action: Merge blocked for safety. Manual review required."
                 ],
                 "recommendations": (
-                    "⚠️ Code review automation failed. "
+                    "Code review automation failed. "
                     "This is a SAFETY block - do not force merge. "
                     "Please investigate the error and retry or manually review."
-                )
+                ),
+                "criteria_result": {},
+                "criteria_score": 0.0,
             }
 
     def _analyze_diff_for_issues(self, diff_lines: List[str]) -> List[str]:
