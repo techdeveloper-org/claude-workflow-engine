@@ -32,12 +32,19 @@ class OllamaService:
 
         self.available_models = self._check_available_models()
 
-        # Model routing
+        # Model routing - use available models
         self.models = {
             "fast_classification": "qwen2.5:7b",      # Fast, lightweight (7B params)
-            "complex_reasoning": "qwen2.5:14b",       # Medium depth analysis
-            "synthesis": "qwen2.5:14b"                # For prompt generation
+            "complex_reasoning": "granite4:3b",       # Medium depth analysis (alternate model)
+            "synthesis": "qwen2.5:7b"                 # For prompt generation (use available model)
         }
+
+        # Fallback to first available model if configured models not found
+        if self.available_models:
+            for key in self.models:
+                if self.models[key] not in self.available_models:
+                    self.models[key] = self.available_models[0]
+                    logger.warning(f"Model {self.models[key]} not available, using {self.available_models[0]} instead")
 
         logger.info(f"Ollama service initialized at {endpoint}")
         logger.info(f"Available models: {self.available_models}")
@@ -85,25 +92,22 @@ class OllamaService:
             )
 
     def _check_available_models(self) -> List[str]:
-        """Check which models are installed locally."""
+        """Check which models are installed locally via HTTP API."""
         try:
-            result = subprocess.run(
-                ["ollama", "list"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode != 0:
-                logger.warning("Cannot list ollama models, assuming empty")
+            # Use HTTP API instead of subprocess (ollama CLI might not be in PATH)
+            response = requests.get(f"{self.endpoint}/api/tags", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                for model_info in data.get("models", []):
+                    model_name = model_info.get("name")
+                    if model_name:
+                        models.append(model_name)
+                logger.info(f"✓ Found {len(models)} models on Ollama server")
+                return models
+            else:
+                logger.warning(f"Cannot list ollama models (status {response.status_code})")
                 return []
-
-            # Parse ollama list output
-            models = []
-            for line in result.stdout.split('\n')[1:]:  # Skip header
-                if line.strip():
-                    model_name = line.split()[0]
-                    models.append(model_name)
-            return models
         except Exception as e:
             logger.error(f"Error checking ollama models: {e}")
             return []
@@ -156,24 +160,24 @@ class OllamaService:
         try:
             logger.debug(f"Calling Ollama: {model_name} with {len(messages)} messages")
 
-            result = subprocess.run(
-                ["ollama", "chat"],
-                input=json.dumps(request_body),
-                capture_output=True,
-                text=True,
+            # Use HTTP API instead of subprocess (ollama CLI might not be in PATH)
+            response = requests.post(
+                f"{self.endpoint}/api/chat",
+                json=request_body,
                 timeout=120  # 2 minute timeout for complex reasoning
             )
 
-            if result.returncode != 0:
-                logger.error(f"Ollama error: {result.stderr}")
-                return {"error": result.stderr}
+            if response.status_code != 200:
+                error_msg = f"Ollama error: {response.status_code} - {response.text}"
+                logger.error(error_msg)
+                return {"error": error_msg}
 
-            response = json.loads(result.stdout)
-            logger.debug(f"Ollama response received ({len(response.get('message', {}).get('content', ''))} chars)")
+            result = response.json()
+            logger.debug(f"Ollama response received ({len(result.get('message', {}).get('content', ''))} chars)")
 
-            return response
+            return result
 
-        except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception) as e:
+        except (requests.Timeout, json.JSONDecodeError, Exception) as e:
             # Try Claude API fallback
             logger.warning(f"Ollama failed, attempting Claude API fallback: {e}")
             try:
