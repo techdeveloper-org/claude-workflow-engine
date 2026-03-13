@@ -95,8 +95,9 @@ def call_execution_script(script_name: str, args: list = None) -> dict:
 
 
 def step0_prompt_generation(state: FlowState) -> dict:
-    """Step 0: Call prompt-generator.py with actual user message"""
+    """Step 0: Call prompt-generator.py with user message + full context from Level 1"""
     import os
+    import json
 
     DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
     if DEBUG:
@@ -108,12 +109,35 @@ def step0_prompt_generation(state: FlowState) -> dict:
     if not user_message:
         user_message = os.environ.get("CURRENT_USER_MESSAGE", "")
 
+    # GATHER FULL CONTEXT FROM LEVEL 1
+    context_data = {
+        "user_message": user_message,
+        "loaded_context": {
+            "files_loaded": state.get("context_metadata", {}).get("files_loaded_count", 0),
+            "context_percentage": state.get("context_percentage", 0),
+            "context_threshold_exceeded": state.get("context_threshold_exceeded", False),
+        },
+        "session_info": {
+            "session_chain_loaded": state.get("session_chain_loaded", False),
+            "previous_sessions": len(state.get("session_history", [])),
+        },
+        "patterns": {
+            "patterns_detected": state.get("patterns_detected", []),
+        },
+        "project": {
+            "project_root": state.get("project_root", ""),
+            "is_java_project": state.get("is_java_project", False),
+        }
+    }
+
     if DEBUG:
         print(f"[L3-DEBUG] State keys: {list(state.keys())[:5]}", file=sys.stderr)
         print(f"[L3] -> Step 0 user_message: {user_message[:50] if user_message else 'EMPTY'}...", file=sys.stderr)
+        print(f"[L3] -> Step 0 context: {json.dumps(context_data, indent=2)}", file=sys.stderr)
 
-    # Pass user message as argument to script
+    # Pass user message + context to script
     args = [user_message] if user_message else []
+    args.append(f"--context={json.dumps(context_data)}")
     result = call_execution_script("prompt-generator", args)
 
     if DEBUG:
