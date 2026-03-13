@@ -150,8 +150,16 @@ def node_context_loader(state: FlowState) -> dict:
     Saves to session folder.
     """
     try:
+        import os
         project_root = Path(state.get("project_root", "."))
         session_path = Path(state.get("session_path", ""))
+
+        # DEBUG: Log what project_root we got
+        DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
+        if DEBUG:
+            print(f"\n[LEVEL 1 CONTEXT LOADER]", file=__import__('sys').stderr)
+            print(f"  project_root from state: {project_root}", file=__import__('sys').stderr)
+            print(f"  project_root exists: {project_root.exists()}", file=__import__('sys').stderr)
 
         context_data = {
             "srs": None,
@@ -162,33 +170,48 @@ def node_context_loader(state: FlowState) -> dict:
 
         # Try to load SRS
         srs_paths = list(project_root.glob("**/[Ss][Rr][Ss].*"))
+        if DEBUG:
+            print(f"  SRS found: {len(srs_paths)} files", file=__import__('sys').stderr)
         if srs_paths:
             try:
                 content = srs_paths[0].read_text(encoding='utf-8', errors='ignore')
                 context_data["srs"] = content[:5000]  # First 5000 chars
                 context_data["files_loaded"].append("SRS")
-            except:
-                pass
+                if DEBUG:
+                    print(f"    ✓ Loaded: {srs_paths[0].name} ({len(content)} bytes)", file=__import__('sys').stderr)
+            except Exception as e:
+                if DEBUG:
+                    print(f"    ✗ Failed: {e}", file=__import__('sys').stderr)
 
         # Try to load README
         readme_paths = list(project_root.glob("**/[Rr][Ee][Aa][Dd][Mm][Ee].*"))
+        if DEBUG:
+            print(f"  README found: {len(readme_paths)} files", file=__import__('sys').stderr)
         if readme_paths:
             try:
                 content = readme_paths[0].read_text(encoding='utf-8', errors='ignore')
                 context_data["readme"] = content[:5000]
                 context_data["files_loaded"].append("README")
-            except:
-                pass
+                if DEBUG:
+                    print(f"    ✓ Loaded: {readme_paths[0].name} ({len(content)} bytes)", file=__import__('sys').stderr)
+            except Exception as e:
+                if DEBUG:
+                    print(f"    ✗ Failed: {e}", file=__import__('sys').stderr)
 
         # Try to load CLAUDE.md
         claude_paths = list(project_root.glob("**/[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]"))
+        if DEBUG:
+            print(f"  CLAUDE.md found: {len(claude_paths)} files", file=__import__('sys').stderr)
         if claude_paths:
             try:
                 content = claude_paths[0].read_text(encoding='utf-8', errors='ignore')
                 context_data["claude_md"] = content[:5000]
                 context_data["files_loaded"].append("CLAUDE.md")
-            except:
-                pass
+                if DEBUG:
+                    print(f"    ✓ Loaded: {claude_paths[0].name} ({len(content)} bytes)", file=__import__('sys').stderr)
+            except Exception as e:
+                if DEBUG:
+                    print(f"    ✗ Failed: {e}", file=__import__('sys').stderr)
 
         # Save context to session folder
         if session_path:
