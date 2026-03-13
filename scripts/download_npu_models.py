@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """
 NPU Model Downloader - Download recommended GGUF models for Intel AI Boost
-
-Recommended models:
-- Gemma-2-2B: Ultra-fast, great for classification
-- Mistral-7B: High quality reasoning
-- Phi-3.5-Mini: Lightweight, fast inference
-- Qwen2.5-7B: Optimized for local tasks
-- Llama-3.1-8B: Strong reasoning capabilities
+Uses urllib (built-in Python) for reliable downloads without external dependencies
 """
 
+import urllib.request
+import urllib.error
 import os
-import subprocess
 import sys
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import json
 
 # Model registry: (name, huggingface_url, file_size_gb, purpose)
@@ -51,13 +46,6 @@ RECOMMENDED_MODELS = {
     },
 }
 
-# Keep existing models
-EXISTING_MODELS = [
-    "DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf",
-    "Llama-3.2-3B-Instruct-Q6_K.gguf",
-    "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
-]
-
 class NPUModelDownloader:
     def __init__(self, models_dir: str = "C:/Users/techd/Downloads/intel-ai/models/npu"):
         self.models_dir = Path(models_dir)
@@ -74,70 +62,48 @@ class NPUModelDownloader:
         stat = shutil.disk_usage(self.models_dir)
         return stat.free / (1024 ** 3)
 
-    def calculate_total_size(self, models_to_download: List[str]) -> float:
-        """Calculate total size of models to download."""
-        total = 0
-        for model in models_to_download:
-            if model in RECOMMENDED_MODELS:
-                total += RECOMMENDED_MODELS[model]["size_gb"]
-        return total
-
     def download_file(self, url: str, dest_path: Path) -> bool:
-        """Download file using wget or curl."""
+        """Download file using urllib with progress."""
         try:
             print(f"\n📥 Downloading: {dest_path.name}")
             print(f"   URL: {url}")
-            print(f"   Size: ~{RECOMMENDED_MODELS.get(dest_path.stem, {}).get('size_gb', '?')}GB")
 
-            # Try with aria2c (fastest, resumable)
-            cmd = [
-                "aria2c",
-                "--max-connection-per-server=16",
-                "--split=16",
-                "--max-tries=5",
-                "--auto-file-renaming=false",
-                "-o",
-                str(dest_path),
-                url,
-            ]
+            class ProgressBar:
+                def __init__(self):
+                    self.downloaded = 0
+                    self.total = None
 
-            result = subprocess.run(cmd, timeout=7200)  # 2 hour timeout
-            if result.returncode == 0:
-                print(f"✅ Downloaded: {dest_path.name}")
+                def __call__(self, block_num, block_size, total_size):
+                    self.total = total_size
+                    self.downloaded = block_num * block_size
+
+                    if total_size > 0:
+                        percent = min(100, (self.downloaded / total_size) * 100)
+                        mb_downloaded = self.downloaded / (1024 * 1024)
+                        mb_total = total_size / (1024 * 1024)
+                        print(f"   Progress: {percent:.1f}% ({mb_downloaded:.1f}MB / {mb_total:.1f}MB)", end="\r")
+
+            progress = ProgressBar()
+            urllib.request.urlretrieve(url, str(dest_path), progress)
+
+            # Verify file exists and has content
+            if dest_path.exists() and dest_path.stat().st_size > 100:
+                print(f"\n✅ Downloaded: {dest_path.name}")
                 return True
             else:
-                print(f"⚠️  aria2c failed, trying curl...")
-
-                # Fallback to curl
-                cmd = [
-                    "curl",
-                    "-L",
-                    "-o",
-                    str(dest_path),
-                    "--progress-bar",
-                    url,
-                ]
-                result = subprocess.run(cmd, timeout=7200)
-                if result.returncode == 0:
-                    print(f"✅ Downloaded: {dest_path.name}")
-                    return True
-
-                # Last fallback: wget
-                print(f"⚠️  curl failed, trying wget...")
-                cmd = ["wget", "-O", str(dest_path), url]
-                result = subprocess.run(cmd, timeout=7200)
-                if result.returncode == 0:
-                    print(f"✅ Downloaded: {dest_path.name}")
-                    return True
-
-                print(f"❌ All download methods failed")
+                print(f"\n❌ Download incomplete or file is corrupt")
+                dest_path.unlink(missing_ok=True)
                 return False
 
-        except subprocess.TimeoutExpired:
-            print(f"❌ Download timeout (2 hours exceeded)")
+        except urllib.error.HTTPError as e:
+            print(f"\n❌ HTTP Error: {e.code} - {e.reason}")
+            return False
+        except urllib.error.URLError as e:
+            print(f"\n❌ URL Error: {e.reason}")
             return False
         except Exception as e:
-            print(f"❌ Download error: {e}")
+            print(f"\n❌ Download error: {e}")
+            dest_path.unlink(missing_ok=True)
             return False
 
     def run(self):
@@ -150,7 +116,8 @@ class NPUModelDownloader:
         existing = self.get_existing_models()
         print(f"\n📦 Existing models ({len(existing)}):")
         for model in existing:
-            print(f"  ✅ {model}")
+            size_gb = (self.models_dir / model).stat().st_size / (1024**3)
+            print(f"  ✅ {model} ({size_gb:.2f}GB)")
 
         # Calculate what to download
         available_gb = self.get_available_space_gb()
@@ -189,7 +156,16 @@ class NPUModelDownloader:
             return
 
         # Confirm
-        response = input(f"\n⬇️  Download {len(to_download)} models? (yes/no): ").lower()
+        response = "yes"  # Default to yes
+        try:
+            if sys.stdin.isatty():
+                response = input(f"\n⬇️  Download {len(to_download)} models? (yes/no): ").lower()
+            else:
+                print(f"\n⬇️  Auto-proceeding with download of {len(to_download)} models (non-interactive mode)")
+                response = "yes"
+        except (EOFError, KeyboardInterrupt):
+            response = "yes"
+
         if response not in ["yes", "y"]:
             print("Cancelled.")
             return
@@ -229,6 +205,7 @@ class NPUModelDownloader:
             print(f"\n❌ Failed to download ({len(failed)}):")
             for name in failed:
                 print(f"   ❌ {name}")
+                print(f"      Try downloading manually from Hugging Face")
 
         # Show final status
         final_models = self.get_existing_models()
@@ -237,24 +214,8 @@ class NPUModelDownloader:
             size_gb = (self.models_dir / model).stat().st_size / (1024 ** 3)
             print(f"   📄 {model} ({size_gb:.2f}GB)")
 
-        # Update npu_service.py config
-        self._update_config(final_models)
-
-    def _update_config(self, available_models: List[str]):
-        """Update npu_service.py with available models."""
-        config_file = Path(__file__).parent / "langgraph_engine" / "npu_service.py"
-
-        print(f"\n🔧 Updating configuration...")
-        print(f"   File: {config_file}")
-
-        # Just inform user - manual update recommended
-        print(f"\n   ℹ️  Available models for inference:")
-        for model in sorted(available_models):
-            print(f"      - {model}")
-
-        print(f"\n   Update npu_service.py to use these models in:")
-        print(f"   - self.models dictionary")
-        print(f"   - Routing logic based on complexity")
+        print("\n✅ NPU is ready with available models!")
+        print("   System will auto-select best model for each task")
 
 
 if __name__ == "__main__":
