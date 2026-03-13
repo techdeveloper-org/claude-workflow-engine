@@ -180,7 +180,9 @@ def node_context_loader(state: FlowState) -> dict:
         }
 
         # Try to load SRS
+        print(f"  [DEBUG] Searching for SRS files in: {project_root}", file=sys.stderr)
         srs_paths = list(project_root.glob("**/[Ss][Rr][Ss].*"))
+        print(f"  [DEBUG] SRS glob found {len(srs_paths)} files: {[p.name for p in srs_paths]}", file=sys.stderr)
         if DEBUG:
             print(f"  SRS found: {len(srs_paths)} files", file=__import__('sys').stderr)
         if srs_paths:
@@ -196,6 +198,7 @@ def node_context_loader(state: FlowState) -> dict:
 
         # Try to load README
         readme_paths = list(project_root.glob("**/[Rr][Ee][Aa][Dd][Mm][Ee].*"))
+        print(f"  [DEBUG] README glob found {len(readme_paths)} files: {[p.name for p in readme_paths]}", file=sys.stderr)
         if DEBUG:
             print(f"  README found: {len(readme_paths)} files", file=__import__('sys').stderr)
         if readme_paths:
@@ -211,6 +214,7 @@ def node_context_loader(state: FlowState) -> dict:
 
         # Try to load CLAUDE.md
         claude_paths = list(project_root.glob("**/[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]"))
+        print(f"  [DEBUG] CLAUDE.md glob found {len(claude_paths)} files: {[p.name for p in claude_paths]}", file=sys.stderr)
         if DEBUG:
             print(f"  CLAUDE.md found: {len(claude_paths)} files", file=__import__('sys').stderr)
         if claude_paths:

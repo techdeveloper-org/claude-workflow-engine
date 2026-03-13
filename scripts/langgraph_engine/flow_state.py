@@ -33,7 +33,7 @@ class FlowState(TypedDict, total=False):
     # ===========================================================================
     session_id: Annotated[str, _keep_first_value]  # Immutable - never changes after init
     timestamp: Annotated[str, _keep_first_value]   # Immutable - set at session start
-    project_root: Annotated[str, _keep_first_value]  # Immutable - project being analyzed
+    project_root: str  # MUTABLE: Changed from Annotated[str, _keep_first_value] because reducer was clearing it
     is_java_project: Annotated[bool, _keep_first_value]  # Immutable - detected once
     is_fresh_project: Annotated[bool, _keep_first_value]  # Immutable - detected once
 

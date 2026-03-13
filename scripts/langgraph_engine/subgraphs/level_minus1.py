@@ -43,6 +43,8 @@ def node_unicode_fix(state: FlowState) -> dict:
     """
     # NOTE: session_id is immutable (Annotated with _keep_first_value reducer)
     # Nodes should NOT return it - let LangGraph manage it
+    import sys
+    print(f"[L-1 UNICODE FIX] state['project_root'] at entry: '{state.get('project_root', 'MISSING')}'", file=sys.stderr)
     updates = {}
     try:
         if sys.platform != "win32":
@@ -77,11 +79,13 @@ def node_unicode_fix(state: FlowState) -> dict:
         if applied:
             existing = state.get("auto_fix_applied") or []
             updates["auto_fix_applied"] = list(existing) + ["Unicode UTF-8 encoding"]
+        print(f"[L-1 UNICODE FIX] Returning: {list(updates.keys())}", file=sys.stderr)
         return updates
 
     except Exception as e:
         updates["unicode_check"] = False
         updates["unicode_check_error"] = str(e)
+        print(f"[L-1 UNICODE FIX] Returning (exception): {list(updates.keys())}", file=sys.stderr)
         return updates
 
 
@@ -400,6 +404,8 @@ def level_minus1_merge_node(state: FlowState) -> dict:
     Returns:
         Updated state with level_minus1_status
     """
+    import sys
+    print(f"[L-1 MERGE] state['project_root'] at entry: '{state.get('project_root', 'MISSING')}'", file=sys.stderr)
     unicode_ok = state.get("unicode_check", False)
     encoding_ok = state.get("encoding_check", False)
     windows_path_ok = state.get("windows_path_check", False)
@@ -421,6 +427,7 @@ def level_minus1_merge_node(state: FlowState) -> dict:
             errors = list(errors) + [f"Windows path check failed: {state.get('windows_path_check_error')}"]
         updates["errors"] = errors
 
+    print(f"[L-1 MERGE] Returning: {list(updates.keys())}", file=sys.stderr)
     return updates
 
 
