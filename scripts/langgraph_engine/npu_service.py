@@ -1,14 +1,23 @@
 """
-Intel AI Boost NPU Service - Local inference on Neural Processing Unit
+Intel AI Boost NPU Service - Enhanced Multi-Model Support
 
-Provides interface to Intel AI Boost NPU for:
+Provides interface to Intel AI Boost NPU for fast local inference on:
 - Step 1: Plan mode decision (super fast classification)
 - Step 3: Task breakdown (lightweight reasoning)
 - Step 5: Skill selection (pattern matching)
 
+Supported Models (GGUF format):
+- Gemma-2-2B: Ultra-fast (1.6GB) - classification, simple tasks
+- Phi-3.5-Mini: Fast (2.4GB) - quick reasoning, fast analysis
+- Llama-3.2-3B: Balanced (2.5GB) - good reasoning
+- DeepSeek-R1-Distill-Qwen-1.5B: Very fast (1.4GB) - lightweight tasks
+- Mistral-7B: High quality (4.3GB) - complex reasoning
+- Qwen2.5-7B: Coding optimized (4.7GB) - agentic tasks, coding
+- Llama-3.1-8B: Strong (5.2GB) - complex tasks, deep reasoning
+- DeepSeek-R1-Distill-Qwen-7B: Powerful (4.4GB) - best quality
+
 Configuration:
 - Endpoint: C:\Users\techd\Downloads\intel-ai\npu\llama-cli-npu.exe
-- Models: DeepSeek-R1-Distill-Qwen-1.5B (fastest), Llama-3.2-3B, DeepSeek-7B
 - Speed: 2-3x faster than GPU for simple tasks
 - Latency: <500ms for classification tasks
 """
@@ -17,12 +26,12 @@ import subprocess
 import json
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Literal
 from loguru import logger
 
 
 class NPUService:
-    """Manages Intel AI Boost NPU inference for fast local LLM."""
+    """Manages Intel AI Boost NPU inference with multiple models."""
 
     def __init__(self, npu_path: str = "C:/Users/techd/Downloads/intel-ai/npu"):
         """
@@ -45,19 +54,67 @@ class NPUService:
         if not self.models_path.exists():
             raise RuntimeError(f"NPU models directory not found at {self.models_path}")
 
-        # Model routing - fast models for NPU
-        self.models = {
-            "fast_classification": "DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf",  # Fastest
-            "medium_reasoning": "Llama-3.2-3B-Instruct-Q6_K.gguf",  # Medium
-            "deep_reasoning": "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",  # Best quality but slower
+        # Model catalog - maps model type to filename patterns
+        self.model_catalog = {
+            # Ultra-fast models (2B)
+            "ultra_fast": {
+                "Gemma-2-2B-Q6_K.gguf": "Gemma 2 2B (ultra-fast, classification)",
+                "DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf": "DeepSeek-R1 1.5B (fast, lightweight)",
+            },
+            # Fast models (3-4B)
+            "fast": {
+                "Phi-3.5-Mini-Q6_K.gguf": "Phi 3.5 Mini (fast, good quality)",
+                "Llama-3.2-3B-Instruct-Q6_K.gguf": "Llama 3.2 3B (balanced, reasoning)",
+            },
+            # Medium models (7-8B)
+            "medium": {
+                "Mistral-7B-Instruct-v0.2-Q4_K_M.gguf": "Mistral 7B (quality reasoning)",
+                "Qwen2.5-7B-Instruct-Q4_K_M.gguf": "Qwen 2.5 7B (coding, agentic)",
+                "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf": "DeepSeek-R1 7B (powerful, reasoning)",
+            },
+            # Large models (8B+)
+            "large": {
+                "Llama-3.1-8B-Instruct-Q4_K_M.gguf": "Llama 3.1 8B (strong reasoning, coding)",
+            },
         }
 
-        # Available models on disk
+        # Task-optimized routing
+        self.task_models = {
+            # Fast classification → ultra-fast models
+            "classification": "ultra_fast",
+            "plan_decision": "ultra_fast",
+            "simple_analysis": "fast",
+            "pattern_matching": "ultra_fast",
+
+            # Task breakdown → fast models
+            "task_breakdown": "fast",
+            "simple_reasoning": "fast",
+
+            # Complex tasks → medium models
+            "reasoning": "medium",
+            "agentic_coding": "medium",
+            "skill_selection": "medium",
+            "code_analysis": "medium",
+
+            # Deep reasoning → large models
+            "deep_reasoning": "large",
+            "complex_architecture": "large",
+            "synthesis": "large",
+        }
+
+        # Check available models
         self.available_models = self._check_available_models()
+        self.available_categories = self._categorize_models()
 
         logger.info(f"✓ NPU service initialized at {self.npu_path}")
         logger.info(f"  Available models: {len(self.available_models)}")
-        logger.info(f"  Models: {', '.join([m.stem for m in self.available_models])}")
+        logger.info(f"  Categories: {list(self.available_categories.keys())}")
+
+        for category, models in self.available_categories.items():
+            if models:
+                logger.debug(f"    [{category}] {len(models)} model(s)")
+                for model in models:
+                    logger.debug(f"       - {model.name}")
 
     def _check_available_models(self) -> List[Path]:
         """Check which GGUF models are available locally."""
@@ -68,27 +125,72 @@ class NPUService:
             logger.error(f"Error checking NPU models: {e}")
             return []
 
-    def _get_model_path(self, model_type: str = "fast_classification") -> Optional[Path]:
-        """Get full path to a model file."""
-        model_file = self.models.get(model_type, self.models["fast_classification"])
-        model_path = self.models_path / model_file
+    def _categorize_models(self) -> Dict[str, List[Path]]:
+        """Categorize available models by size/capability."""
+        categorized = {
+            "ultra_fast": [],
+            "fast": [],
+            "medium": [],
+            "large": [],
+        }
 
-        if not model_path.exists():
-            logger.warning(
-                f"Model {model_file} not found. Available: "
-                f"{[m.name for m in self.available_models]}"
-            )
-            # Fallback to first available model
-            if self.available_models:
-                return self.available_models[0]
-            return None
+        for model_path in self.available_models:
+            model_name = model_path.name
+            for category, patterns in self.model_catalog.items():
+                for pattern in patterns.keys():
+                    if pattern in model_name:
+                        categorized[category].append(model_path)
+                        break
 
-        return model_path
+        return categorized
+
+    def select_model(
+        self, task_type: str = "simple_analysis", complexity: int = 5
+    ) -> Optional[Path]:
+        """
+        Intelligently select best model for task.
+
+        Args:
+            task_type: Type of task (see task_models dict)
+            complexity: 1-10 complexity score
+
+        Returns:
+            Path to best available model, or None if none available
+        """
+        # Determine optimal category
+        category = self.task_models.get(task_type, "fast")
+
+        # Override based on complexity if not specified
+        if task_type == "auto" or task_type not in self.task_models:
+            if complexity <= 2:
+                category = "ultra_fast"
+            elif complexity <= 4:
+                category = "fast"
+            elif complexity <= 7:
+                category = "medium"
+            else:
+                category = "large"
+
+        # Get models in category
+        models_in_category = self.available_categories.get(category, [])
+
+        if models_in_category:
+            # Prefer first available
+            return models_in_category[0]
+
+        # Fallback: find any available model
+        if self.available_models:
+            logger.warning(f"No models in {category} category, using {self.available_models[0].name}")
+            return self.available_models[0]
+
+        return None
 
     def chat(
         self,
         messages: List[Dict[str, str]],
         model: str = "fast_classification",
+        task_type: str = "simple_analysis",
+        complexity: int = 5,
         temperature: float = 0.3,
         max_tokens: int = 200,
     ) -> Dict[str, Any]:
@@ -97,7 +199,9 @@ class NPUService:
 
         Args:
             messages: Chat messages (role, content)
-            model: Model type (fast_classification, medium_reasoning, deep_reasoning)
+            model: Legacy parameter (ignored, uses task_type instead)
+            task_type: Type of task for smart model selection
+            complexity: Task complexity 1-10
             temperature: Generation temperature (0-1)
             max_tokens: Max response tokens
 
@@ -119,12 +223,12 @@ class NPUService:
 
             prompt += "Assistant:"
 
-            # Get model path
-            model_path = self._get_model_path(model)
+            # Select best model for task
+            model_path = self.select_model(task_type, complexity)
             if not model_path:
                 return {"error": "No models available"}
 
-            logger.debug(f"NPU inference: {model_path.name} (tokens: {max_tokens})")
+            logger.debug(f"NPU inference: {model_path.name} (task: {task_type}, complexity: {complexity}/10)")
 
             # Run NPU inference
             cmd = [
@@ -157,7 +261,7 @@ class NPUService:
             output = result.stdout.strip()
             response_text = output.split("Assistant:")[-1].strip() if "Assistant:" in output else output
 
-            logger.debug(f"NPU response: {len(response_text)} chars")
+            logger.debug(f"NPU response: {len(response_text)} chars from {model_path.name}")
 
             return {
                 "message": {
@@ -177,7 +281,7 @@ class NPUService:
             return {"error": str(e)}
 
     def step1_plan_mode_decision(self, toon: Dict[str, Any], user_requirement: str) -> Dict[str, Any]:
-        """Fast plan decision on NPU."""
+        """Fast plan decision on NPU (ultra-fast model)."""
         prompt = f"""Analyze project TOON and user requirement.
 Determine if PLAN MODE is required (complexity {toon.get('complexity_score', 0)}/10).
 
@@ -186,7 +290,8 @@ Respond with ONLY valid JSON:
 
         response = self.chat(
             messages=[{"role": "user", "content": prompt}],
-            model="fast_classification",
+            task_type="classification",
+            complexity=2,
             max_tokens=100,
         )
 
@@ -219,7 +324,8 @@ Return tasks as JSON array: [{{"id": "Task-1", "description": "...", "files": [.
 
         response = self.chat(
             messages=[{"role": "user", "content": prompt}],
-            model="fast_classification" if complexity < 6 else "medium_reasoning",
+            task_type="task_breakdown",
+            complexity=complexity,
             max_tokens=300,
         )
 
@@ -232,6 +338,13 @@ Return tasks as JSON array: [{{"id": "Task-1", "description": "...", "files": [.
             return {"success": True, "tasks": tasks}
         except json.JSONDecodeError:
             return {"success": False, "error": "Failed to parse task breakdown"}
+
+    def list_models(self) -> Dict[str, List[str]]:
+        """List all available models by category."""
+        result = {}
+        for category, models in self.available_categories.items():
+            result[category] = [m.name for m in models]
+        return result
 
 
 def get_npu_service(npu_path: str = "C:/Users/techd/Downloads/intel-ai/npu") -> Optional[NPUService]:
