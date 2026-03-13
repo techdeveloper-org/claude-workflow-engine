@@ -179,10 +179,21 @@ def node_context_loader(state: FlowState) -> dict:
             "files_loaded": [],
         }
 
-        # Try to load SRS
-        print(f"  [DEBUG] Searching for SRS files in: {project_root}", file=sys.stderr)
-        srs_paths = list(project_root.glob("**/[Ss][Rr][Ss].*"))
-        print(f"  [DEBUG] SRS glob found {len(srs_paths)} files: {[p.name for p in srs_paths]}", file=sys.stderr)
+        # Try to load SRS - search ROOT ONLY (no recursive glob for speed)
+        print(f"[CONTEXT] About to search for SRS", file=sys.stderr)
+        sys.stderr.flush()
+        try:
+            print(f"  [DEBUG] Searching for SRS files in root: {project_root}", file=sys.stderr)
+            sys.stderr.flush()
+            srs_paths = list(project_root.glob("[Ss][Rr][Ss].*"))  # No ** - root only
+            print(f"  [DEBUG] SRS glob found {len(srs_paths)} files: {[p.name for p in srs_paths]}", file=sys.stderr)
+            sys.stderr.flush()
+            print(f"[CONTEXT] SRS search completed, result: {len(srs_paths)} files", file=sys.stderr)
+            sys.stderr.flush()
+        except Exception as e:
+            print(f"  [ERROR] SRS search failed: {e}", file=sys.stderr)
+            sys.stderr.flush()
+            srs_paths = []
         if DEBUG:
             print(f"  SRS found: {len(srs_paths)} files", file=__import__('sys').stderr)
         if srs_paths:
@@ -196,9 +207,21 @@ def node_context_loader(state: FlowState) -> dict:
                 if DEBUG:
                     print(f"    ✗ Failed: {e}", file=__import__('sys').stderr)
 
-        # Try to load README
-        readme_paths = list(project_root.glob("**/[Rr][Ee][Aa][Dd][Mm][Ee].*"))
-        print(f"  [DEBUG] README glob found {len(readme_paths)} files: {[p.name for p in readme_paths]}", file=sys.stderr)
+        # Try to load README - search ROOT ONLY (no recursive glob for speed)
+        print(f"[CONTEXT] About to search for README", file=sys.stderr)
+        sys.stderr.flush()
+        try:
+            print(f"  [DEBUG] Searching for README in root", file=sys.stderr)
+            sys.stderr.flush()
+            readme_paths = list(project_root.glob("[Rr][Ee][Aa][Dd][Mm][Ee].*"))  # No ** - root only
+            print(f"  [DEBUG] README glob found {len(readme_paths)} files: {[p.name for p in readme_paths]}", file=sys.stderr)
+            sys.stderr.flush()
+            print(f"[CONTEXT] README search completed, result: {len(readme_paths)} files", file=sys.stderr)
+            sys.stderr.flush()
+        except Exception as e:
+            print(f"  [ERROR] README search failed: {e}", file=sys.stderr)
+            sys.stderr.flush()
+            readme_paths = []
         if DEBUG:
             print(f"  README found: {len(readme_paths)} files", file=__import__('sys').stderr)
         if readme_paths:
@@ -212,9 +235,17 @@ def node_context_loader(state: FlowState) -> dict:
                 if DEBUG:
                     print(f"    ✗ Failed: {e}", file=__import__('sys').stderr)
 
-        # Try to load CLAUDE.md
-        claude_paths = list(project_root.glob("**/[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]"))
-        print(f"  [DEBUG] CLAUDE.md glob found {len(claude_paths)} files: {[p.name for p in claude_paths]}", file=sys.stderr)
+        # Try to load CLAUDE.md - search ROOT ONLY (no recursive glob for speed)
+        try:
+            print(f"  [DEBUG] Searching for CLAUDE.md in root", file=sys.stderr)
+            sys.stderr.flush()
+            claude_paths = list(project_root.glob("[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]"))  # No ** - root only
+            print(f"  [DEBUG] CLAUDE.md glob found {len(claude_paths)} files: {[p.name for p in claude_paths]}", file=sys.stderr)
+            sys.stderr.flush()
+        except Exception as e:
+            print(f"  [ERROR] CLAUDE.md search failed: {e}", file=sys.stderr)
+            sys.stderr.flush()
+            claude_paths = []
         if DEBUG:
             print(f"  CLAUDE.md found: {len(claude_paths)} files", file=__import__('sys').stderr)
         if claude_paths:
