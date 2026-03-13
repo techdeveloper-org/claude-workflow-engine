@@ -792,7 +792,13 @@ def create_initial_state(session_id: str = "", project_root: str = "", user_mess
 
     if not project_root:
         # Smart detection: try to find claude-insight directory
+        import os
+        DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
+
         cwd = Path.cwd()
+        if DEBUG:
+            print(f"[CREATE_INITIAL_STATE] Project root detection:", file=__import__('sys').stderr)
+            print(f"  cwd: {cwd}", file=__import__('sys').stderr)
 
         # Check if we're already in claude-insight or a subdirectory
         if "claude-insight" in str(cwd):
@@ -801,6 +807,8 @@ def create_initial_state(session_id: str = "", project_root: str = "", user_mess
             while current != current.parent:
                 if current.name == "claude-insight" and (current / "CLAUDE.md").exists():
                     project_root = str(current)
+                    if DEBUG:
+                        print(f"  ✓ Found claude-insight in cwd path: {project_root}", file=__import__('sys').stderr)
                     break
                 current = current.parent
 
@@ -812,14 +820,25 @@ def create_initial_state(session_id: str = "", project_root: str = "", user_mess
                 cwd,  # Fallback to cwd
             ]
 
+            if DEBUG:
+                print(f"  Checking {len(possible_paths)} possible paths...", file=__import__('sys').stderr)
+
             for path in possible_paths:
+                if DEBUG:
+                    print(f"    - {path}", file=__import__('sys').stderr)
+                    print(f"      CLAUDE.md: {(path / 'CLAUDE.md').exists()}", file=__import__('sys').stderr)
+                    print(f"      README.md: {(path / 'README.md').exists()}", file=__import__('sys').stderr)
                 if (path / "CLAUDE.md").exists() and (path / "README.md").exists():
                     project_root = str(path)
+                    if DEBUG:
+                        print(f"      ✓ Found!", file=__import__('sys').stderr)
                     break
 
         # Final fallback
         if not project_root:
             project_root = str(cwd)
+            if DEBUG:
+                print(f"  Using fallback cwd: {project_root}", file=__import__('sys').stderr)
 
     # ONLY initialize immutable fields (with _keep_first_value reducer)
     # All other fields will be created/updated by nodes
