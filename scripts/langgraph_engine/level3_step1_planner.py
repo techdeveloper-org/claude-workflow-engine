@@ -6,7 +6,12 @@ Determines if a detailed execution plan is required based on:
 - User requirement analysis
 - Risk assessment
 
-Uses Ollama locally for fast classification (qwen2.5:7b).
+Primary path: Ollama local LLM (qwen2.5:7b) for fast classification.
+Fallback path: Claude API -> deterministic rule-based evaluation
+  (plan_decision_rules.py) when both LLM backends are unavailable.
+
+Decision is also validated through StepValidator before returning.
+Token usage is reported to a TokenBudget if one is provided.
 """
 
 import time
@@ -16,26 +21,42 @@ from datetime import datetime
 from loguru import logger
 from .ollama_service import get_ollama_service
 from .toon_models import ToonAnalysis
+from .plan_decision_rules import build_fallback_decision, evaluate_from_toon
+from .step_validator import StepValidator
+from .token_manager import TokenBudget
 
 
 class Level3Step1Planner:
     """Step 1: Plan Mode Decision Logic."""
 
-    def __init__(self, session_dir_path: str):
+    def __init__(self, session_dir_path: str, token_budget: Optional[TokenBudget] = None):
         self.session_dir = session_dir_path
         self.ollama = get_ollama_service()
+        self.validator = StepValidator()
+        self.token_budget = token_budget
 
     def execute(
         self,
         toon: Dict[str, Any],
-        user_requirement: str
+        user_requirement: str,
+        requirement_type: str = "feature",
     ) -> Dict[str, Any]:
         """
         Execute Step 1: Determine if plan mode is required.
 
+        Primary decision comes from the Ollama LLM (qwen2.5:7b).
+        If Ollama fails, falls back to Claude API.
+        If Claude API also fails, falls back to deterministic rule evaluation
+        via plan_decision_rules.build_fallback_decision().
+
+        All decisions are logged via ErrorLogger pattern (logger.log_decision
+        equivalent through loguru).
+
         Args:
             toon: TOON object from Level 1 (ToonAnalysis)
             user_requirement: Original user requirement text
+            requirement_type: Category of the requirement (used for rule fallback).
+                              e.g. "feature", "bug_fix", "refactoring", "architecture"
 
         Returns:
             {
@@ -43,7 +64,9 @@ class Level3Step1Planner:
                 "reasoning": str,
                 "risk_level": "low" | "medium" | "high",
                 "decision_reasoning": str,
-                "execution_time_ms": float
+                "execution_time_ms": float,
+                "source": str - "llm" | "claude_api" | "rules",
+                "fallback": bool - True if LLM was unavailable
             }
         """
         logger.info("=" * 60)
@@ -52,22 +75,73 @@ class Level3Step1Planner:
 
         step_start = time.time()
 
+        # --- Input validation ---
+        valid, errors = self.validator.validate_step_1_input({
+            "level1_context_toon": toon,
+            "user_requirement": user_requirement,
+        })
+        if not valid:
+            logger.warning(f"Step 1 input validation issues: {errors}")
+
         try:
             # Log inputs
             logger.debug(f"TOON complexity: {toon.get('complexity_score')}/10")
             logger.debug(f"Files loaded: {toon.get('files_loaded_count')}")
             logger.debug(f"User requirement: {user_requirement[:100]}...")
 
-            # Call Ollama for decision
+            # --- Primary path: Ollama LLM ---
             logger.info("Calling Ollama (qwen2.5:7b) for plan mode decision...")
-            decision = self.ollama.step1_plan_mode_decision(toon, user_requirement)
+            try:
+                decision = self.ollama.step1_plan_mode_decision(toon, user_requirement)
+                decision["source"] = "llm"
+                decision["fallback"] = False
+            except Exception as ollama_err:
+                logger.warning(f"Ollama failed for Step 1: {ollama_err}")
+
+                # --- Secondary path: Claude API fallback ---
+                try:
+                    logger.info("Falling back to Claude API for plan mode decision...")
+                    claude_client = getattr(self.ollama, "claude_client", None)
+                    if claude_client:
+                        decision = claude_client.step1_plan_mode_decision(toon, user_requirement)
+                        decision["source"] = "claude_api"
+                        decision["fallback"] = True
+                    else:
+                        raise RuntimeError("Claude API client not available")
+                except Exception as claude_err:
+                    logger.warning(f"Claude API fallback also failed: {claude_err}")
+
+                    # --- Tertiary path: deterministic rule-based decision ---
+                    logger.info("Falling back to rule-based plan decision (plan_decision_rules)...")
+                    decision = build_fallback_decision(
+                        toon=toon,
+                        requirement=user_requirement,
+                        requirement_type=requirement_type,
+                        error_msg=str(ollama_err),
+                    )
 
             # Extract decision
             plan_required = decision.get("plan_required", True)
             reasoning = decision.get("reasoning", "Unknown")
             risk_level = decision.get("risk_level", "medium")
+            source = decision.get("source", "unknown")
 
             execution_time_ms = (time.time() - step_start) * 1000
+
+            # --- Log the decision (mirrors ErrorLogger.log_decision pattern) ---
+            logger.info(
+                f"[Step 1] DECISION: {'Plan REQUIRED' if plan_required else 'Plan NOT required'} | "
+                f"source={source} | risk={risk_level}"
+            )
+            logger.info(f"[Step 1] Reasoning: {reasoning}")
+
+            # --- Token budget accounting ---
+            if self.token_budget is not None:
+                estimated_tokens = TokenBudget.estimate_tokens(reasoning)
+                try:
+                    self.token_budget.record_usage("step_1", estimated_tokens)
+                except Exception as budget_err:
+                    logger.warning(f"[Step 1] Token budget error: {budget_err}")
 
             # Build result
             result = {
@@ -76,19 +150,18 @@ class Level3Step1Planner:
                 "risk_level": risk_level,
                 "decision_reasoning": self._format_decision(plan_required, risk_level, reasoning),
                 "execution_time_ms": execution_time_ms,
+                "source": source,
+                "fallback": decision.get("fallback", False),
                 "timestamp": datetime.now().isoformat()
             }
 
-            # Log result
-            if plan_required:
-                logger.info(f"✓ Plan mode REQUIRED (Risk: {risk_level})")
-                logger.info(f"  Reason: {reasoning}")
-            else:
-                logger.info(f"✓ Plan mode NOT required (Risk: {risk_level})")
-                logger.info(f"  Reason: {reasoning}")
+            # --- Output validation ---
+            out_valid, out_errors = self.validator.validate_step_1_output(result)
+            if not out_valid:
+                logger.warning(f"Step 1 output validation issues: {out_errors}")
+                result["validation_errors"] = out_errors
 
             logger.info(f"Step 1 execution time: {execution_time_ms:.0f}ms")
-
             return result
 
         except Exception as e:
@@ -102,6 +175,8 @@ class Level3Step1Planner:
                 "risk_level": "high",  # Mark as high risk due to error
                 "decision_reasoning": "Error occurred, defaulting to plan mode",
                 "execution_time_ms": execution_time_ms,
+                "source": "error_default",
+                "fallback": True,
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }

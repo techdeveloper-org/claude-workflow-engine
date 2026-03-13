@@ -27,18 +27,23 @@ from loguru import logger
 from .toon_models import ExecutionBlueprint, ToonWithSkills
 from .session_manager import SessionManager
 from .inference_router import get_inference_router
+from .plan_convergence import run_planning_loop, assess_plan_quality, DEFAULT_MAX_ITERATIONS
+from .task_validator import validate_breakdown
+from .token_manager import TokenBudget
 
 
 class Level3RemainingSteps:
     """Implements steps 2-7, 13-14 for Level 3 execution with GPU/NPU routing."""
 
-    def __init__(self, session_dir: str):
+    def __init__(self, session_dir: str, token_budget: Optional[TokenBudget] = None):
         self.session_dir = Path(session_dir)
         self.session_manager = SessionManager(str(self.session_dir))
         # Use InferenceRouter for smart GPU/NPU backend selection
         self.inference = get_inference_router()
         # Keep reference to ollama for compatibility (routes through inference_router)
         self.ollama = self.inference.ollama
+        # Optional token budget shared across the pipeline
+        self.token_budget = token_budget
 
     # ===== INTELLIGENT MODEL SELECTION =====
 
@@ -163,32 +168,58 @@ Be very specific and actionable - mention actual file paths and existing functio
             logger.info("→ Selecting appropriate model for planning...")
             selected_model = self._select_planning_model(toon)
 
-            logger.info(f"→ Generating plan with {selected_model} model...")
-            # Route to appropriate backend (GPU for planning)
-            response = self.inference.chat(
-                messages=[{"role": "user", "content": prompt}],
-                task_type="planning",  # Complex task → GPU
-                complexity=toon.get("complexity_score", 5),
-                model=selected_model,
-                temperature=0.5
-            )
+            logger.info(f"→ Generating plan with {selected_model} model (convergence loop)...")
 
-            if "error" in response:
-                logger.error(f"Plan execution failed: {response['error']}")
+            # ---- CONVERGENCE LOOP via plan_convergence.run_planning_loop ----
+            # Each iteration calls the LLM and checks quality; exits when
+            # quality >= 0.85 OR max_iterations reached.
+
+            def _generate_one_plan() -> Dict[str, Any]:
+                """Single plan generation attempt - called by the convergence loop."""
+                resp = self.inference.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    task_type="planning",
+                    complexity=toon.get("complexity_score", 5),
+                    model=selected_model,
+                    temperature=0.5,
+                )
+                if "error" in resp:
+                    raise RuntimeError(resp["error"])
+                plan_text_inner = resp.get("message", {}).get("content", "")
                 return {
-                    "success": False,
-                    "error": response["error"],
-                    "execution_time_ms": (time.time() - step_start) * 1000
+                    "plan": plan_text_inner,
+                    "files_affected": self._extract_files(plan_text_inner),
+                    "phases": self._extract_phases(plan_text_inner),
+                    "risks": self._extract_risks(plan_text_inner),
                 }
 
-            plan_text = response.get("message", {}).get("content", "")
+            convergence_result = run_planning_loop(
+                generate_plan_fn=_generate_one_plan,
+                requirement=user_requirement,
+                toon=toon,
+                max_iterations=DEFAULT_MAX_ITERATIONS,
+            )
 
-            # Parse plan to extract key components
-            files_affected = self._extract_files(plan_text)
-            phases = self._extract_phases(plan_text)
-            risks = self._extract_risks(plan_text)
+            best_plan_dict = convergence_result["plan"]
+            plan_text = best_plan_dict.get("plan", "")
+            files_affected = best_plan_dict.get("files_affected", [])
+            phases = best_plan_dict.get("phases", [])
+            risks = best_plan_dict.get("risks", {})
 
-            logger.info(f"✓ Plan created: {len(files_affected)} files, {len(phases)} phases")
+            logger.info(
+                f"✓ Plan created: {len(files_affected)} files, {len(phases)} phases "
+                f"(quality={convergence_result['quality']:.2f}, "
+                f"iterations={convergence_result['iterations']}, "
+                f"converged={convergence_result['converged']})"
+            )
+
+            # Token budget accounting for Step 2
+            if self.token_budget is not None:
+                estimated_tokens = TokenBudget.estimate_tokens(plan_text)
+                try:
+                    self.token_budget.record_usage("step_2", estimated_tokens)
+                except Exception as budget_err:
+                    logger.warning(f"[Step 2] Token budget error: {budget_err}")
 
             return {
                 "success": True,
@@ -196,8 +227,11 @@ Be very specific and actionable - mention actual file paths and existing functio
                 "files_affected": files_affected,
                 "phases": phases,
                 "risks": risks,
-                "code_context": code_context,  # Store exploration results
-                "selected_model": selected_model,  # Track which model was used
+                "code_context": code_context,
+                "selected_model": selected_model,
+                "plan_quality": convergence_result["quality"],
+                "plan_iterations": convergence_result["iterations"],
+                "plan_converged": convergence_result["converged"],
                 "execution_time_ms": (time.time() - step_start) * 1000,
                 "timestamp": datetime.now().isoformat()
             }
@@ -669,6 +703,24 @@ Be very specific and actionable - mention actual file paths and existing functio
                 })
                 task_id += 1
 
+            # ---- TASK VALIDATION (task_validator.validate_breakdown) ----
+            user_req = plan if isinstance(plan, str) else ""
+            valid, validation_errors = validate_breakdown(tasks, requirement=user_req)
+            if not valid:
+                logger.warning(
+                    f"[Step 3] Task breakdown validation found issues: {validation_errors}"
+                )
+            else:
+                logger.info("[Step 3] Task breakdown validation passed")
+
+            # Token budget accounting for Step 3
+            if self.token_budget is not None:
+                estimated_tokens = TokenBudget.estimate_tokens(str(tasks))
+                try:
+                    self.token_budget.record_usage("step_3", estimated_tokens)
+                except Exception as budget_err:
+                    logger.warning(f"[Step 3] Token budget error: {budget_err}")
+
             logger.info(f"✓ Task breakdown: {len(tasks)} tasks")
 
             return {
@@ -676,6 +728,8 @@ Be very specific and actionable - mention actual file paths and existing functio
                 "tasks": tasks,
                 "task_count": len(tasks),
                 "dependencies": self._build_dependencies(tasks),
+                "validation_passed": valid,
+                "validation_errors": validation_errors,
                 "execution_time_ms": (time.time() - step_start) * 1000,
                 "timestamp": datetime.now().isoformat()
             }

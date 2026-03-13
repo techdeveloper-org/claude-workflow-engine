@@ -17,12 +17,36 @@ Task dict schema expected:
         "dependencies": List[id],   # list of task ids this task depends on
         "type": str,                # optional category
         "estimated_effort": str,    # optional: "small" | "medium" | "large"
+        "estimated_tokens": int,    # optional: estimated token cost for execution
     }
+
+Token feasibility:
+    validate_feasibility(task, available_tokens) checks whether a single task
+    can be executed within the remaining token budget by consulting the
+    task's "estimated_tokens" field or a per-effort heuristic.
+
+Public API additions (acceptance criteria):
+    cycle_detect(tasks) -> Tuple[bool, List[Any]]
+        Alias for the DFS cycle detector; also returns the first cycle path found.
+    validate_feasibility(task, available_tokens) -> Tuple[bool, str]
+        Check whether a single task fits within the token budget.
 """
 
 from typing import List, Dict, Any, Tuple, Set, Optional
 from collections import defaultdict, deque
 from loguru import logger
+
+# ---------------------------------------------------------------------------
+# Token cost heuristics per estimated_effort level
+# ---------------------------------------------------------------------------
+_EFFORT_TOKEN_COST: Dict[str, int] = {
+    "trivial": 100,
+    "small":   300,
+    "medium":  700,
+    "large":  1500,
+    "complex": 2500,
+    "":        500,   # unknown effort - use conservative middle estimate
+}
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +237,118 @@ def all_tasks_feasible(tasks: List[Dict[str, Any]]) -> bool:
             logger.debug(f"[TaskValidator] Task missing name/title: id={task.get('id')}")
             return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# Public aliases and extended checks (acceptance-criteria API)
+# ---------------------------------------------------------------------------
+
+def cycle_detect(tasks: List[Dict[str, Any]]) -> Tuple[bool, List[Any]]:
+    """
+    Detect whether the task dependency graph contains a cycle.
+
+    This is the acceptance-criteria public API.  It wraps the internal
+    has_cycle() function and also returns the first cycle path found so
+    callers can report which task ids are involved.
+
+    Args:
+        tasks: List of task dicts (each with "id" and optional "dependencies").
+
+    Returns:
+        Tuple (cycle_found: bool, cycle_path: List[Any]).
+        cycle_path is the list of task ids forming the cycle, or [] if none.
+
+    Example:
+        >>> tasks = [
+        ...     {"id": 1, "name": "A", "dependencies": [2]},
+        ...     {"id": 2, "name": "B", "dependencies": [1]},
+        ... ]
+        >>> cycle_detect(tasks)
+        (True, [1, 2])
+    """
+    graph = build_dependency_graph(tasks)
+    WHITE, GRAY, BLACK = 0, 1, 2
+    colour: Dict[Any, int] = defaultdict(int)
+    path_stack: List[Any] = []
+
+    def _dfs(node: Any) -> Optional[List[Any]]:
+        colour[node] = GRAY
+        path_stack.append(node)
+        for neighbour in graph.get(node, []):
+            if colour[neighbour] == GRAY:
+                # Found cycle: extract the cycle portion of the stack
+                idx = path_stack.index(neighbour)
+                return path_stack[idx:]
+            if colour[neighbour] == WHITE:
+                result = _dfs(neighbour)
+                if result is not None:
+                    return result
+        path_stack.pop()
+        colour[node] = BLACK
+        return None
+
+    for node in list(graph.keys()):
+        if colour[node] == WHITE:
+            cycle_path = _dfs(node)
+            if cycle_path is not None:
+                logger.error(
+                    f"[TaskValidator] Cycle detected in dependency graph: {cycle_path}"
+                )
+                return True, list(cycle_path)
+
+    logger.debug("[TaskValidator] No cycle detected in task dependency graph")
+    return False, []
+
+
+def validate_feasibility(
+    task: Dict[str, Any],
+    available_tokens: int,
+) -> Tuple[bool, str]:
+    """
+    Check whether a single task can be executed within the available token budget.
+
+    Decision logic:
+    1. If the task has an explicit "estimated_tokens" field, use that value.
+    2. Otherwise derive a cost estimate from the "estimated_effort" field
+       using the _EFFORT_TOKEN_COST heuristic table.
+    3. Compare the estimated cost against available_tokens.
+
+    Args:
+        task: Task dict.  May contain "estimated_tokens" (int) and/or
+              "estimated_effort" (str: trivial|small|medium|large|complex).
+        available_tokens: Remaining token budget for this execution.
+
+    Returns:
+        Tuple (feasible: bool, reason: str).
+
+    Examples:
+        >>> validate_feasibility({"name": "Setup DB", "estimated_effort": "small"}, 500)
+        (True, "Estimated cost 300 <= available 500 (effort=small)")
+        >>> validate_feasibility({"name": "Refactor", "estimated_tokens": 2000}, 500)
+        (False, "Estimated cost 2000 > available 500 (explicit estimate)")
+    """
+    task_name = task.get("name") or task.get("title") or str(task.get("id", "?"))
+
+    # 1. Explicit token estimate wins
+    explicit = task.get("estimated_tokens")
+    if isinstance(explicit, int) and explicit > 0:
+        cost = explicit
+        source = "explicit estimate"
+    else:
+        # 2. Derive from effort level
+        effort = (task.get("estimated_effort") or "").strip().lower()
+        cost = _EFFORT_TOKEN_COST.get(effort, _EFFORT_TOKEN_COST[""])
+        source = f"effort={effort or 'unknown'}"
+
+    feasible = cost <= available_tokens
+    if feasible:
+        reason = f"Estimated cost {cost} <= available {available_tokens} ({source})"
+        logger.debug(f"[TaskValidator] Feasible '{task_name}': {reason}")
+    else:
+        reason = f"Estimated cost {cost} > available {available_tokens} ({source})"
+        logger.warning(f"[TaskValidator] NOT feasible '{task_name}': {reason}")
+
+    return feasible, reason
 
 
 # ---------------------------------------------------------------------------
