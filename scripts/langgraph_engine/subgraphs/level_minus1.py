@@ -200,6 +200,9 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
     - "auto-fix": Attempt to fix issues, retry (max 3 times)
     - "skip": Continue anyway (not recommended)
 
+    IMPORTANT: When running in hook context (no stdin), automatically defaults
+    to "auto-fix" for a seamless experience without hanging.
+
     Args:
         state: FlowState with failed checks
 
@@ -232,9 +235,28 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
     message += "  1. auto-fix   → Attempt repair + retry (max 3 times)\n"
     message += "  2. skip       → Continue anyway (⚠️  NOT RECOMMENDED)\n"
 
-    # Get user choice
-    print(message, file=sys.stderr)
-    user_choice = input("\nYour choice [auto-fix/skip]: ").strip().lower()
+    # Print message to stdout so it reaches user through hook
+    print(message)
+
+    # Get user choice - with fallback for hook environment
+    user_choice = "auto-fix"  # Default
+    try:
+        # Try to get input only if stdin is a TTY (interactive terminal)
+        if sys.stdin.isatty():
+            user_choice = input("\nYour choice [auto-fix/skip]: ").strip().lower()
+        else:
+            # Hook context: stdin not available, auto-default to auto-fix
+            print("\n[LEVEL -1] Running in hook context (non-interactive)")
+            print("[LEVEL -1] Automatically attempting auto-fix...")
+            user_choice = "auto-fix"
+    except (EOFError, KeyboardInterrupt):
+        # stdin closed or interrupted, use default
+        print("\n[LEVEL -1] No input available, using auto-fix")
+        user_choice = "auto-fix"
+    except Exception as e:
+        # Any other error, use default
+        print(f"\n[LEVEL -1] Could not read input ({e}), using auto-fix")
+        user_choice = "auto-fix"
 
     # Validate choice
     if user_choice not in ["auto-fix", "skip"]:
