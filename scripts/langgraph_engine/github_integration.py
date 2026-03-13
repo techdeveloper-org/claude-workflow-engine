@@ -1,5 +1,5 @@
 """
-GitHub Integration - PyGithub wrapper for Level 3 automation.
+GitHub Integration - gh CLI wrapper for Level 3 automation.
 
 Provides:
 - Issue creation with labels and description
@@ -7,79 +7,70 @@ Provides:
 - Issue closure with comments
 - GitHub metadata tracking
 
-Uses: PyGithub library (python-github)
+Uses: gh CLI (GitHub CLI) - already authenticated via keyring
+No need for GITHUB_TOKEN environment variable!
 """
 
-import os
+import subprocess
+import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from pathlib import Path
 
 from loguru import logger
 
-try:
-    from github import Github
-    _GITHUB_AVAILABLE = True
-except ImportError:
-    _GITHUB_AVAILABLE = False
-    logger.warning("PyGithub not installed. GitHub integration disabled.")
-
 
 class GitHubIntegration:
-    """Manages GitHub operations for Level 3 automation."""
+    """Manages GitHub operations for Level 3 automation using gh CLI."""
 
     def __init__(self, token: Optional[str] = None, repo_path: str = "."):
         """
         Initialize GitHub integration.
 
         Args:
-            token: GitHub personal access token (from GITHUB_TOKEN env var if None)
-            repo_path: Local repository path (used for detecting repo info from git remote)
+            token: (Ignored) gh CLI uses keyring authentication automatically
+            repo_path: Local repository path (for git operations)
         """
-        if not _GITHUB_AVAILABLE:
-            raise RuntimeError("PyGithub not installed. Install with: pip install PyGithub")
+        self.repo_path = Path(repo_path)
 
-        # Get token from environment
-        self.token = token or os.getenv("GITHUB_TOKEN")
-        if not self.token:
-            raise RuntimeError("GITHUB_TOKEN environment variable not set")
-
-        # Initialize GitHub client
-        self.gh = Github(self.token)
-        self.repo = self._get_repo(repo_path)
-
-        if self.repo:
-            logger.info(f"GitHub integration initialized: {self.repo.full_name}")
-        else:
-            logger.warning("Could not determine GitHub repository")
-
-    def _get_repo(self, repo_path: str):
-        """Detect repository from local git remote."""
+        # Verify gh CLI is available
         try:
-            import subprocess
-            from pathlib import Path
+            result = subprocess.run(
+                ["gh", "auth", "status"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                raise RuntimeError("gh CLI not authenticated. Run: gh auth login")
+            logger.info("✓ gh CLI authenticated and ready")
+        except FileNotFoundError:
+            raise RuntimeError("gh CLI not installed. Install from: https://cli.github.com")
+        except Exception as e:
+            raise RuntimeError(f"gh CLI error: {e}")
 
-            repo_dir = Path(repo_path)
+        # Get repo info from git remote
+        self.owner, self.repo_name = self._get_repo_info()
 
-            # Get remote URL
+    def _get_repo_info(self) -> tuple:
+        """Get owner and repo name from git remote."""
+        try:
             result = subprocess.run(
                 ["git", "remote", "get-url", "origin"],
-                cwd=str(repo_dir),
+                cwd=str(self.repo_path),
                 capture_output=True,
                 text=True,
                 timeout=5
             )
 
             if result.returncode != 0:
-                logger.error("Cannot get git remote URL")
-                return None
+                raise RuntimeError("Cannot get git remote URL")
 
             remote_url = result.stdout.strip()
 
             # Parse owner/repo from URL
-            # Supports: https://github.com/owner/repo.git or git@github.com:owner/repo.git
             if "github.com" not in remote_url:
-                logger.error(f"Not a GitHub repository: {remote_url}")
-                return None
+                raise RuntimeError(f"Not a GitHub repository: {remote_url}")
 
             if remote_url.startswith("git@"):
                 # git@github.com:owner/repo.git
@@ -89,17 +80,12 @@ class GitHubIntegration:
                 parts = remote_url.rstrip("/").replace(".git", "").split("/")[-2:]
 
             owner, repo_name = parts[0], parts[1]
-
-            # Get repo object
-            user = self.gh.get_user(owner)
-            repo = user.get_repo(repo_name)
-
-            logger.info(f"Detected repository: {owner}/{repo_name}")
-            return repo
+            logger.info(f"✓ Repository detected: {owner}/{repo_name}")
+            return owner, repo_name
 
         except Exception as e:
             logger.error(f"Cannot detect repository: {e}")
-            return None
+            return None, None
 
     # ===== ISSUE OPERATIONS =====
 
@@ -111,47 +97,75 @@ class GitHubIntegration:
         assignee: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Create a GitHub issue.
+        Create a GitHub issue using gh CLI.
 
         Args:
             title: Issue title
             body: Issue description (markdown supported)
             labels: List of label names (e.g., ["bug", "critical"])
-            assignee: Username to assign to
+            assignee: Username to assign to (optional)
 
         Returns:
             {
                 "success": bool,
                 "issue_number": int,
                 "issue_url": str,
-                "issue_id": int,
                 "created_at": str
             }
         """
-        if not self.repo:
+        if not self.owner or not self.repo_name:
             logger.error("No repository configured")
             return {"success": False, "error": "No repository"}
 
         logger.info(f"Creating issue: {title[:50]}...")
 
         try:
-            issue = self.repo.create_issue(
-                title=title,
-                body=body,
-                labels=labels or [],
-                assignee=assignee
+            cmd = [
+                "gh", "issue", "create",
+                "--repo", f"{self.owner}/{self.repo_name}",
+                "--title", title,
+                "--body", body,
+                "--json", "number,url,createdAt"
+            ]
+
+            # Add labels if provided
+            if labels:
+                for label in labels:
+                    cmd.extend(["--label", label])
+
+            # Add assignee if provided
+            if assignee:
+                cmd.extend(["--assignee", assignee])
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
             )
 
-            logger.info(f"✓ Issue created: #{issue.number}")
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                logger.error(f"Issue creation failed: {error_msg}")
+                return {"success": False, "error": error_msg}
+
+            # Parse JSON response
+            issue_data = json.loads(result.stdout)
+            issue_number = issue_data.get("number")
+            issue_url = issue_data.get("url")
+
+            logger.info(f"✓ Issue created: #{issue_number}")
 
             return {
                 "success": True,
-                "issue_number": issue.number,
-                "issue_url": issue.html_url,
-                "issue_id": issue.id,
-                "created_at": issue.created_at.isoformat()
+                "issue_number": issue_number,
+                "issue_url": issue_url,
+                "created_at": issue_data.get("createdAt", datetime.now().isoformat())
             }
 
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse gh response: {result.stdout}")
+            return {"success": False, "error": "Failed to parse response"}
         except Exception as e:
             logger.error(f"Issue creation failed: {e}")
             return {"success": False, "error": str(e)}
@@ -162,30 +176,45 @@ class GitHubIntegration:
         comment: str
     ) -> Dict[str, Any]:
         """
-        Add a comment to an issue.
+        Add a comment to an issue using gh CLI.
 
         Args:
             issue_number: GitHub issue number
             comment: Comment text (markdown supported)
 
         Returns:
-            {"success": bool, "comment_id": int, "comment_url": str}
+            {"success": bool, "comment_url": str}
         """
-        if not self.repo:
+        if not self.owner or not self.repo_name:
             return {"success": False, "error": "No repository"}
 
         logger.info(f"Adding comment to issue #{issue_number}")
 
         try:
-            issue = self.repo.get_issue(issue_number)
-            comment_obj = issue.create_comment(comment)
+            cmd = [
+                "gh", "issue", "comment",
+                str(issue_number),
+                "--repo", f"{self.owner}/{self.repo_name}",
+                "--body", comment
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                logger.error(f"Comment failed: {error_msg}")
+                return {"success": False, "error": error_msg}
 
             logger.info(f"✓ Comment added to issue #{issue_number}")
 
             return {
                 "success": True,
-                "comment_id": comment_obj.id,
-                "comment_url": comment_obj.html_url
+                "comment_url": f"https://github.com/{self.owner}/{self.repo_name}/issues/{issue_number}"
             }
 
         except Exception as e:
@@ -194,7 +223,7 @@ class GitHubIntegration:
 
     def close_issue(self, issue_number: int, closing_comment: Optional[str] = None) -> Dict[str, Any]:
         """
-        Close a GitHub issue.
+        Close a GitHub issue using gh CLI.
 
         Args:
             issue_number: GitHub issue number
@@ -203,14 +232,12 @@ class GitHubIntegration:
         Returns:
             {"success": bool, "closed_at": str}
         """
-        if not self.repo:
+        if not self.owner or not self.repo_name:
             return {"success": False, "error": "No repository"}
 
         logger.info(f"Closing issue #{issue_number}")
 
         try:
-            issue = self.repo.get_issue(issue_number)
-
             # Add closing comment if provided
             if closing_comment:
                 comment_result = self.add_issue_comment(issue_number, closing_comment)
@@ -218,7 +245,23 @@ class GitHubIntegration:
                     logger.warning(f"Could not add closing comment: {comment_result.get('error')}")
 
             # Close the issue
-            issue.edit(state="closed")
+            cmd = [
+                "gh", "issue", "close",
+                str(issue_number),
+                "--repo", f"{self.owner}/{self.repo_name}"
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                logger.error(f"Issue closure failed: {error_msg}")
+                return {"success": False, "error": error_msg}
 
             logger.info(f"✓ Issue #{issue_number} closed")
 
@@ -243,7 +286,7 @@ class GitHubIntegration:
         labels: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Create a pull request.
+        Create a pull request using gh CLI.
 
         Args:
             title: PR title
@@ -256,11 +299,10 @@ class GitHubIntegration:
             {
                 "success": bool,
                 "pr_number": int,
-                "pr_url": str,
-                "pr_id": int
+                "pr_url": str
             }
         """
-        if not self.repo:
+        if not self.owner or not self.repo_name:
             return {"success": False, "error": "No repository"}
 
         if not head_branch:
@@ -270,31 +312,50 @@ class GitHubIntegration:
         logger.info(f"Creating PR: {title[:50]}...")
 
         try:
-            pr = self.repo.create_pull(
-                title=title,
-                body=body,
-                head=head_branch,
-                base=base_branch
-            )
+            cmd = [
+                "gh", "pr", "create",
+                "--repo", f"{self.owner}/{self.repo_name}",
+                "--head", head_branch,
+                "--base", base_branch,
+                "--title", title,
+                "--body", body,
+                "--json", "number,url"
+            ]
 
             # Add labels if provided
             if labels:
-                try:
-                    pr.add_to_labels(*labels)
-                    logger.debug(f"Added labels to PR: {labels}")
-                except Exception as e:
-                    logger.warning(f"Could not add labels: {e}")
+                for label in labels:
+                    cmd.extend(["--label", label])
 
-            logger.info(f"✓ PR created: #{pr.number}")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                logger.error(f"PR creation failed: {error_msg}")
+                return {"success": False, "error": error_msg}
+
+            # Parse JSON response
+            pr_data = json.loads(result.stdout)
+            pr_number = pr_data.get("number")
+            pr_url = pr_data.get("url")
+
+            logger.info(f"✓ PR created: #{pr_number}")
 
             return {
                 "success": True,
-                "pr_number": pr.number,
-                "pr_url": pr.html_url,
-                "pr_id": pr.id,
-                "created_at": pr.created_at.isoformat()
+                "pr_number": pr_number,
+                "pr_url": pr_url,
+                "created_at": datetime.now().isoformat()
             }
 
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse gh response: {result.stdout}")
+            return {"success": False, "error": "Failed to parse response"}
         except Exception as e:
             logger.error(f"PR creation failed: {e}")
             return {"success": False, "error": str(e)}
@@ -306,7 +367,7 @@ class GitHubIntegration:
         delete_branch: bool = True
     ) -> Dict[str, Any]:
         """
-        Merge a pull request.
+        Merge a pull request using gh CLI.
 
         Args:
             pr_number: PR number
@@ -314,135 +375,82 @@ class GitHubIntegration:
             delete_branch: Delete source branch after merge
 
         Returns:
-            {"success": bool, "merged": bool, "merge_commit_sha": str}
+            {"success": bool, "merged": bool}
         """
-        if not self.repo:
+        if not self.owner or not self.repo_name:
             return {"success": False, "error": "No repository"}
 
         logger.info(f"Merging PR #{pr_number}")
 
         try:
-            pr = self.repo.get_pull(pr_number)
+            cmd = [
+                "gh", "pr", "merge",
+                str(pr_number),
+                "--repo", f"{self.owner}/{self.repo_name}",
+                "--squash"  # Squash commits
+            ]
 
-            # Check if mergeable
-            if not pr.mergeable:
-                logger.error(f"PR #{pr_number} has conflicts")
-                return {"success": False, "error": "PR has merge conflicts"}
+            if commit_message:
+                cmd.extend(["--body", commit_message])
 
-            # Merge the PR
-            result = pr.merge(
-                commit_message=commit_message or f"Merge pull request #{pr_number}",
-                merge_method="squash"  # Squash commits
+            if delete_branch:
+                cmd.append("--delete-branch")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
             )
 
-            if result.merged:
-                logger.info(f"✓ PR #{pr_number} merged")
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                logger.error(f"PR merge failed: {error_msg}")
+                return {"success": False, "error": error_msg}
 
-                # Delete head branch if requested
-                if delete_branch and pr.head.ref:
-                    try:
-                        ref = self.repo.get_git_ref(f"heads/{pr.head.ref}")
-                        ref.delete()
-                        logger.info(f"Deleted branch: {pr.head.ref}")
-                    except Exception as e:
-                        logger.warning(f"Could not delete branch: {e}")
+            logger.info(f"✓ PR #{pr_number} merged")
 
-                return {
-                    "success": True,
-                    "merged": True,
-                    "merge_commit_sha": result.sha
-                }
-            else:
-                logger.error(f"PR merge returned false")
-                return {"success": False, "error": "Merge failed"}
+            return {
+                "success": True,
+                "merged": True
+            }
 
         except Exception as e:
             logger.error(f"PR merge failed: {e}")
             return {"success": False, "error": str(e)}
 
     def add_pr_comment(self, pr_number: int, comment: str) -> Dict[str, Any]:
-        """Add a comment to a pull request."""
-        if not self.repo:
+        """Add a comment to a pull request using gh CLI."""
+        if not self.owner or not self.repo_name:
             return {"success": False, "error": "No repository"}
 
         logger.info(f"Adding comment to PR #{pr_number}")
 
         try:
-            pr = self.repo.get_pull(pr_number)
-            comment_obj = pr.create_issue_comment(comment)
+            cmd = [
+                "gh", "pr", "comment",
+                str(pr_number),
+                "--repo", f"{self.owner}/{self.repo_name}",
+                "--body", comment
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                logger.error(f"PR comment failed: {error_msg}")
+                return {"success": False, "error": error_msg}
 
             return {
                 "success": True,
-                "comment_id": comment_obj.id,
-                "comment_url": comment_obj.html_url
+                "comment_url": f"https://github.com/{self.owner}/{self.repo_name}/pull/{pr_number}"
             }
 
         except Exception as e:
             logger.error(f"PR comment failed: {e}")
             return {"success": False, "error": str(e)}
-
-    # ===== LABEL OPERATIONS =====
-
-    def get_available_labels(self) -> List[str]:
-        """Get list of available labels in repository."""
-        if not self.repo:
-            return []
-
-        try:
-            labels = [label.name for label in self.repo.get_labels()]
-            logger.debug(f"Available labels: {labels[:5]}...")
-            return labels
-        except Exception as e:
-            logger.error(f"Could not fetch labels: {e}")
-            return []
-
-    # ===== CONVENIENCE METHODS =====
-
-    def create_issue_and_pr(
-        self,
-        title: str,
-        issue_body: str,
-        pr_body: str,
-        head_branch: str,
-        labels: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
-        """
-        Create both issue and pull request.
-
-        Returns:
-            {
-                "success": bool,
-                "issue": {"number": int, "url": str},
-                "pr": {"number": int, "url": str}
-            }
-        """
-        logger.info(f"Creating issue and PR for: {title[:40]}...")
-
-        # Create issue
-        issue_result = self.create_issue(title, issue_body, labels)
-        if not issue_result.get("success"):
-            return issue_result
-
-        issue_number = issue_result.get("issue_number")
-
-        # Create PR
-        pr_result = self.create_pull_request(title, pr_body, head_branch)
-        if not pr_result.get("success"):
-            logger.warning(f"PR creation failed: {pr_result.get('error')}")
-            return {
-                "success": False,
-                "error": "PR creation failed",
-                "issue": issue_result
-            }
-
-        return {
-            "success": True,
-            "issue": {
-                "number": issue_number,
-                "url": issue_result.get("issue_url")
-            },
-            "pr": {
-                "number": pr_result.get("pr_number"),
-                "url": pr_result.get("pr_url")
-            }
-        }
