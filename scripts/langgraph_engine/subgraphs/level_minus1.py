@@ -22,6 +22,8 @@ except ImportError:
     _LANGGRAPH_AVAILABLE = False
 
 from ..flow_state import FlowState
+from ..error_logger import ErrorLogger
+from ..backup_manager import BackupManager
 
 
 # ============================================================================
@@ -51,12 +53,17 @@ def node_unicode_fix(state: FlowState) -> dict:
     # NOTE: session_id is immutable (Annotated with _keep_first_value reducer)
     # Nodes should NOT return it - let LangGraph manage it
     import sys
+
+    session_id = state.get("session_id")
+    logger = ErrorLogger(session_id) if session_id else None
+
     print(f"[L-1 UNICODE FIX] state['project_root'] at entry: '{state.get('project_root', 'MISSING')}'", file=sys.stderr)
     updates = {}
     try:
         if sys.platform != "win32":
             # Non-Windows - skip check
             updates["unicode_check"] = True
+            logger and logger.log_validation_result("Level -1", "Unicode UTF-8 Fix", True, "Not Windows platform")
             return updates
 
         # Windows - apply UTF-8 reconfiguration
@@ -86,12 +93,16 @@ def node_unicode_fix(state: FlowState) -> dict:
         if applied:
             existing = state.get("auto_fix_applied") or []
             updates["auto_fix_applied"] = list(existing) + ["Unicode UTF-8 encoding"]
+            logger and logger.log_validation_result("Level -1", "Unicode UTF-8 Fix", True, "UTF-8 encoding applied")
+        else:
+            logger and logger.log_validation_result("Level -1", "Unicode UTF-8 Fix", True, "Already UTF-8 configured")
         print(f"[L-1 UNICODE FIX] Returning: {list(updates.keys())}", file=sys.stderr)
         return updates
 
     except Exception as e:
         updates["unicode_check"] = False
         updates["unicode_check_error"] = str(e)
+        logger and logger.log_error("Level -1", str(e), severity="ERROR", error_type="UnicodeError", recovery_action="Will retry with auto-fix")
         print(f"[L-1 UNICODE FIX] Returning (exception): {list(updates.keys())}", file=sys.stderr)
         return updates
 
@@ -226,12 +237,27 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
 
     # Check if we've exceeded max attempts
     if attempt > MAX_LEVEL_MINUS1_ATTEMPTS:
-        print("\n[LEVEL -1] ⚠️  MAX ATTEMPTS REACHED (3/3)")
+        session_id = state.get("session_id")
+        logger = ErrorLogger(session_id) if session_id else None
+
+        print("\n[LEVEL -1] 🔴 FATAL: MAX ATTEMPTS REACHED (3/3)")
         print("[LEVEL -1] Continuing to Level 1 despite unresolved checks...")
+
+        # Log FATAL_FAILURE state
+        logger and logger.log_error(
+            "Level -1",
+            f"Max {MAX_LEVEL_MINUS1_ATTEMPTS} retry attempts exceeded",
+            severity="CRITICAL",
+            error_type="FatalError",
+            recovery_action="Force continue to Level 1"
+        )
+        logger and logger.save_audit_trail()
+
         return {
             "level_minus1_user_choice": "force_continue",
             "level_minus1_attempt": attempt,
             "level_minus1_max_attempts_reached": True,
+            "level_minus1_fatal_failure": True,
         }
 
     # Build list of specific failures
@@ -293,12 +319,14 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
 
 
 def fix_level_minus1_issues(state: FlowState) -> dict:
-    """Auto-fix Level -1 issues.
+    """Auto-fix Level -1 issues with backup & validation.
 
     Attempts to fix:
     1. Unicode UTF-8 encoding (Windows)
     2. Non-ASCII Python files (convert or report)
     3. Windows path handling (convert backslashes)
+
+    All fixes are backed up before modification and validated after.
 
     Args:
         state: FlowState with failed checks
@@ -307,6 +335,10 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
         Updated state with fixes applied
     """
     import io
+
+    session_id = state.get("session_id")
+    logger = ErrorLogger(session_id) if session_id else None
+    backup = BackupManager(session_id) if session_id else None
 
     fixed_issues = []
     fix_errors = []
@@ -329,8 +361,11 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
                 )
 
             fixed_issues.append("✓ Unicode UTF-8 encoding reconfigured")
+            logger and logger.log_validation_result("Level -1", "Unicode UTF-8 Fix", True)
         except Exception as e:
-            fix_errors.append(f"Could not fix Unicode: {e}")
+            error_msg = f"Could not fix Unicode: {e}"
+            fix_errors.append(error_msg)
+            logger and logger.log_error("Level -1", str(e), severity="ERROR", error_type="UnicodeError")
 
     # Fix 2: Non-ASCII Python files (report for user to fix)
     if not state.get("encoding_check"):
@@ -366,6 +401,9 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
 
             for py_file in list(project_root.glob("**/*.py"))[:50]:
                 try:
+                    # Step 1: Backup file before modification
+                    backup and backup.backup_file(str(py_file), "Level -1", "Before path fix")
+
                     content = py_file.read_text(encoding="utf-8", errors="ignore")
                     if "\\" in content and ":\\" in content:
                         # Original content to compare
@@ -396,12 +434,29 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
                         # Only write back if content changed
                         if content != original_content:
                             py_file.write_text(content, encoding="utf-8")
-                            fixed_files.append(str(py_file.relative_to(project_root)))
+
+                            # Step 2: Validate file integrity after modification
+                            if backup and backup.validate_file_integrity(str(py_file), "Level -1"):
+                                fixed_files.append(str(py_file.relative_to(project_root)))
+                                logger and logger.log_validation_result("Level -1", f"Path fix: {py_file.name}", True)
+
+                                # Step 3: Generate diff for audit trail
+                                diff_path = backup.generate_diff(str(py_file), "Level -1", "path_fix")
+                                logger and logger.log_decision("Level -1", "File modified and validated", f"Path fix applied to {py_file.name}", chosen_option=f"Diff saved: {diff_path}")
+                            else:
+                                # Restore file if validation failed
+                                backup and backup.restore_file(str(py_file), "Level -1")
+                                fix_errors.append(f"Validation failed for {py_file.name}, file restored")
+                                logger and logger.log_error("Level -1", f"Validation failed for {py_file.name}", severity="ERROR", recovery_action="File restored from backup")
                         else:
                             # File had backslashes but they were all escape sequences
                             issues.append(str(py_file.relative_to(project_root)))
                 except Exception as e:
-                    fix_errors.append(f"Could not fix {py_file.name}: {e}")
+                    # Restore file on any error
+                    backup and backup.restore_file(str(py_file), "Level -1")
+                    error_msg = f"Could not fix {py_file.name}: {e}"
+                    fix_errors.append(error_msg)
+                    logger and logger.log_error("Level -1", str(e), severity="ERROR", recovery_action=f"File restored: {py_file.name}")
 
             if fixed_files:
                 fixed_issues.append(
@@ -417,7 +472,9 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
                 fixed_issues.append("✓ All paths already use forward slashes")
 
         except Exception as e:
-            fix_errors.append(f"Could not fix paths: {e}")
+            error_msg = f"Could not fix paths: {e}"
+            fix_errors.append(error_msg)
+            logger and logger.log_error("Level -1", str(e), severity="ERROR", error_type="PathFixError")
 
     return {
         "level_minus1_fixes_applied": fixed_issues,
@@ -432,13 +489,14 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
 
 
 def level_minus1_merge_node(state: FlowState) -> dict:
-    """Merge results from all Level -1 checks.
+    """Merge results from all Level -1 checks with comprehensive logging.
 
     Determines overall Level -1 status based on individual checks:
     - All passed: OK (GO TO LEVEL 1)
     - Any failed: Check if user chose auto-fix
       ├─ If auto-fix: GO TO RETRY (with max 3 attempts)
       └─ If skip: GO TO LEVEL 1 anyway (⚠️ not recommended)
+    - Fatal failure: Exceeded max attempts, force continue with warning
 
     Args:
         state: FlowState with all checks complete
@@ -447,7 +505,12 @@ def level_minus1_merge_node(state: FlowState) -> dict:
         Updated state with level_minus1_status
     """
     import sys
+
+    session_id = state.get("session_id")
+    logger = ErrorLogger(session_id) if session_id else None
+
     print(f"[L-1 MERGE] state['project_root'] at entry: '{state.get('project_root', 'MISSING')}'", file=sys.stderr)
+
     unicode_ok = state.get("unicode_check", False)
     encoding_ok = state.get("encoding_check", False)
     windows_path_ok = state.get("windows_path_check", False)
@@ -457,16 +520,28 @@ def level_minus1_merge_node(state: FlowState) -> dict:
     # All checks must pass for Level -1 to be OK
     if unicode_ok and encoding_ok and windows_path_ok:
         updates["level_minus1_status"] = "OK"
+        logger and logger.log_validation_result("Level -1", "All checks passed", True)
     else:
         # Any check failed - need recovery
         updates["level_minus1_status"] = "FAILED"
         errors = state.get("errors") or []  # Handle None case
+
+        # Log individual failures
         if not unicode_ok:
-            errors = list(errors) + [f"Unicode check failed: {state.get('unicode_check_error')}"]
+            error_msg = state.get('unicode_check_error', 'Unknown error')
+            errors = list(errors) + [f"Unicode check failed: {error_msg}"]
+            logger and logger.log_validation_result("Level -1", "Unicode UTF-8 Fix", False, error_msg)
+
         if not encoding_ok:
-            errors = list(errors) + [f"Encoding check failed: {state.get('encoding_check_error')}"]
+            error_msg = state.get('encoding_check_error', 'Unknown error')
+            errors = list(errors) + [f"Encoding check failed: {error_msg}"]
+            logger and logger.log_validation_result("Level -1", "ASCII-only Python files", False, error_msg)
+
         if not windows_path_ok:
-            errors = list(errors) + [f"Windows path check failed: {state.get('windows_path_check_error')}"]
+            error_msg = state.get('windows_path_check_error', 'Unknown error')
+            errors = list(errors) + [f"Windows path check failed: {error_msg}"]
+            logger and logger.log_validation_result("Level -1", "Windows path handling", False, error_msg)
+
         updates["errors"] = errors
 
     print(f"[L-1 MERGE] Returning: {list(updates.keys())}", file=sys.stderr)

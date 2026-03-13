@@ -77,6 +77,17 @@ class FlowState(TypedDict, total=False):
     context_error: Optional[str]
     context_metadata: Dict[str, Any]   # Additional context metadata
 
+    # Context loader detail fields (Subtasks 3, 5, 6, 7, 8)
+    context_skipped_files: Optional[List[str]]   # Files skipped due to size/timeout
+    context_load_warnings: Optional[List[str]]   # Warnings from loader
+    context_total_bytes: Optional[int]           # Total bytes loaded into memory
+    context_cache_hit: Optional[bool]            # True if cache was used
+    context_cache_age_hours: Optional[float]     # Age of cache entry used
+    context_cache_key: Optional[str]             # Cache key (MD5 of project path)
+
+    # Toon compression integrity
+    toon_integrity_ok: Optional[bool]            # True if compression integrity verified
+
     # Session Management
     session_chain_loaded: bool         # Session chain initialized
     session_history: List[Dict]        # Previous session data
@@ -96,6 +107,21 @@ class FlowState(TypedDict, total=False):
     # Level 1 merge result
     level1_status: str                 # OK / PARTIAL / FAILED
     level1_context_toon: Optional[Dict]  # TOON-formatted context from Level 1 (for Level 3)
+
+    # Level 1 TOON schema validation result
+    toon_schema_valid: Optional[bool]       # True if TOON passed validate_toon()
+    toon_schema_errors: Optional[List[str]] # Validation error messages (empty list = valid)
+    toon_version: Optional[str]             # TOON schema version used ("1.0.0")
+
+    # Level 1 complexity (also stored inside TOON but kept in state for quick access)
+    complexity_score: Optional[int]         # 1-10 score from complexity_calculator
+    complexity_calculated: Optional[bool]   # Whether calculation succeeded
+    complexity_error: Optional[str]         # Error if calculation failed
+
+    # Level 1 caching
+    context_cache_hit: Optional[bool]       # True if cache was valid and used
+    context_cache_age_hours: Optional[float]  # How old the cached context is
+    context_cache_key: Optional[str]        # Cache key (hash of project path)
 
     # ===========================================================================
     # LEVEL 2: STANDARDS SYSTEM

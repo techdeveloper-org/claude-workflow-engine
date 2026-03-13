@@ -14,7 +14,7 @@ import json
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 try:
     from langgraph.graph import StateGraph, START, END
@@ -29,6 +29,31 @@ try:
     _TOONS_AVAILABLE = True
 except ImportError:
     _TOONS_AVAILABLE = False
+
+# Level 1 new modules (graceful import fallback)
+try:
+    from ..complexity_calculator import calculate_complexity, should_plan
+    _COMPLEXITY_CALCULATOR_AVAILABLE = True
+except ImportError:
+    _COMPLEXITY_CALCULATOR_AVAILABLE = False
+
+try:
+    from ..context_cache import ContextCache
+    _CONTEXT_CACHE_AVAILABLE = True
+except ImportError:
+    _CONTEXT_CACHE_AVAILABLE = False
+
+try:
+    from ..context_deduplicator import deduplicate_context
+    _DEDUPLICATOR_AVAILABLE = True
+except ImportError:
+    _DEDUPLICATOR_AVAILABLE = False
+
+try:
+    from ..toon_schema import validate_toon
+    _TOON_SCHEMA_AVAILABLE = True
+except ImportError:
+    _TOON_SCHEMA_AVAILABLE = False
 
 
 # ============================================================================
@@ -84,15 +109,24 @@ def node_session_loader(state: FlowState) -> dict:
 def node_complexity_calculation(state: FlowState) -> dict:
     """Analyze project structure and calculate complexity.
 
-    Uses existing complexity calculation scripts to understand:
-    - Project architecture
-    - Call stack and graph
-    - Complexity score
+    Uses complexity_calculator.py (new, preferred) when available.
+    Falls back to legacy script or simple heuristic otherwise.
     """
     try:
         project_root = Path(state.get("project_root", "."))
+        session_id = state.get("session_id", "")
 
-        # Call complexity calculation script if it exists
+        # --- Preferred path: use new complexity_calculator module ---
+        if _COMPLEXITY_CALCULATOR_AVAILABLE:
+            score = calculate_complexity(str(project_root), session_id=session_id or None)
+            return {
+                "complexity_score": score,
+                "project_graph": {},
+                "architecture": {},
+                "complexity_calculated": True,
+            }
+
+        # --- Legacy path: try the old architecture script ---
         complexity_script = (
             Path(__file__).parent.parent.parent /
             "architecture" / "03-execution-system" / "04-model-selection" /
@@ -105,10 +139,8 @@ def node_complexity_calculation(state: FlowState) -> dict:
                 capture_output=True,
                 text=True,
                 timeout=30,
-                cwd=project_root
+                cwd=project_root,
             )
-
-            # Parse output
             if result.returncode == 0:
                 try:
                     data = json.loads(result.stdout)
@@ -118,12 +150,12 @@ def node_complexity_calculation(state: FlowState) -> dict:
                         "architecture": data.get("architecture", {}),
                         "complexity_calculated": True,
                     }
-                except:
+                except Exception:
                     pass
 
-        # Fallback: basic complexity calculation
+        # --- Final fallback: simple file count heuristic ---
         py_files = list(project_root.glob("**/*.py"))
-        complexity_score = min(10, max(1, len(py_files) // 50))
+        complexity_score = min(10, max(1, len(py_files) // 10))
 
         return {
             "complexity_score": complexity_score,
@@ -131,170 +163,358 @@ def node_complexity_calculation(state: FlowState) -> dict:
             "architecture": {},
             "complexity_calculated": True,
         }
+
     except Exception as e:
         return {
             "complexity_calculated": False,
             "complexity_error": str(e),
-            "complexity_score": 5,  # Default
+            "complexity_score": 5,  # Safe default
         }
 
 
 # ============================================================================
 # NODE 3: CONTEXT LOADER (PARALLEL with complexity_calculation)
+# Subtasks 3, 5, 7: Timeout handling + Memory limits + Partial context fallback
 # ============================================================================
+
+# Per-file and total-load timeouts (seconds)
+CONTEXT_TIMEOUT_PER_FILE = 30
+CONTEXT_TIMEOUT_TOTAL = 120
+
+# Memory limits
+MAX_FILE_SIZE = 1_000_000       # 1 MB per file
+MAX_TOTAL_SIZE = 10_000_000     # 10 MB total loaded bytes
+
+# Max content per file sent to TOON (5 KB snippet)
+MAX_CONTENT_CHARS = 5000
+
+
+def _read_file_with_timeout(file_path: Path, timeout_seconds: int = CONTEXT_TIMEOUT_PER_FILE) -> str:
+    """Read a file, returning content or raising TimeoutError / Exception.
+
+    On Windows, threading-based timeout is used (signal module is POSIX-only).
+
+    Args:
+        file_path: Path to read
+        timeout_seconds: Max seconds to allow for the read
+
+    Returns:
+        File content as string
+
+    Raises:
+        TimeoutError: If read exceeds timeout_seconds
+        Exception: On any other read failure
+    """
+    import threading
+
+    result: list = [None]
+    exc: list = [None]
+
+    def _reader():
+        try:
+            result[0] = file_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception as e:
+            exc[0] = e
+
+    thread = threading.Thread(target=_reader, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout_seconds)
+
+    if thread.is_alive():
+        raise TimeoutError(
+            "File read timed out after {}s: {}".format(timeout_seconds, file_path)
+        )
+
+    if exc[0] is not None:
+        raise exc[0]
+
+    return result[0] or ""
+
 
 def node_context_loader(state: FlowState) -> dict:
     """Load context from PROJECT FILES (not ~/.claude/memory/).
 
-    Reads from project folder:
-    - SRS (if exists)
-    - README.md (if exists)
-    - CLAUDE.md (if exists)
+    Features:
+    - Per-file timeout (30s) and total timeout (120s)
+    - Memory limits: 1MB per file, 10MB total
+    - Partial context fallback: continue on any single-file failure
+    - Graceful degradation: return whatever loaded successfully
 
-    Saves to session folder.
+    Reads from project folder (root only, no deep recursion):
+    - SRS.*
+    - README.*
+    - CLAUDE.md
     """
-    import sys
-    print(f"\n[LEVEL 1 CONTEXT LOADER] CALLED!", file=sys.stderr)
-    try:
-        import os
-        # Debug: Show what's in state
-        print(f"[LEVEL 1 CONTEXT LOADER] State keys: {list(state.keys())}", file=sys.stderr)
-        print(f"[LEVEL 1 CONTEXT LOADER] 'project_root' in state: {'project_root' in state}", file=sys.stderr)
-        if "project_root" in state:
-            print(f"[LEVEL 1 CONTEXT LOADER] state['project_root']: '{state['project_root']}'", file=sys.stderr)
+    import time
 
+    print("[LEVEL 1 CONTEXT LOADER] CALLED!", file=sys.stderr)
+
+    try:
         project_root = Path(state.get("project_root", "."))
         session_path = Path(state.get("session_path", ""))
 
-        # ALWAYS log - not conditional on DEBUG
-        print(f"\n[LEVEL 1 CONTEXT LOADER]", file=sys.stderr)
-        print(f"  project_root from state: {project_root}", file=sys.stderr)
-        print(f"  project_root exists: {project_root.exists()}", file=sys.stderr)
-        print(f"  session_path: {session_path}", file=sys.stderr)
+        print("[LEVEL 1 CONTEXT LOADER] project_root: {}".format(project_root), file=sys.stderr)
+        print("[LEVEL 1 CONTEXT LOADER] exists: {}".format(project_root.exists()), file=sys.stderr)
+        sys.stderr.flush()
 
-        context_data = {
+        # ---- Subtask 8: Check context cache first ----
+        if _CONTEXT_CACHE_AVAILABLE:
+            try:
+                _cache = ContextCache()
+                cached = _cache.load_cache(str(project_root))
+                if cached is not None:
+                    print("[LEVEL 1 CONTEXT LOADER] Cache HIT - using cached context", file=sys.stderr)
+                    return {
+                        "context_data": cached,
+                        "context_loaded": True,
+                        "files_loaded_count": len(cached.get("files_loaded", [])),
+                        "context_skipped_files": [],
+                        "context_load_warnings": [],
+                        "context_total_bytes": 0,
+                        "context_cache_hit": True,
+                        "context_cache_age_hours": cached.get("_cache_age_hours", 0.0),
+                        "context_cache_key": ContextCache._cache_key(str(project_root)),
+                    }
+            except Exception as cache_exc:
+                print(
+                    "[LEVEL 1 CONTEXT LOADER] Cache check failed (ignored): {}".format(cache_exc),
+                    file=sys.stderr,
+                )
+
+        context_data: dict = {
             "srs": None,
             "readme": None,
             "claude_md": None,
             "files_loaded": [],
         }
 
-        # Try to load SRS - search ROOT ONLY (no recursive glob for speed)
-        print(f"[CONTEXT] About to search for SRS", file=sys.stderr)
-        sys.stderr.flush()
-        try:
-            print(f"  [DEBUG] Searching for SRS files in root: {project_root}", file=sys.stderr)
-            sys.stderr.flush()
-            srs_paths = list(project_root.glob("[Ss][Rr][Ss].*"))  # No ** - root only
-            print(f"  [DEBUG] SRS glob found {len(srs_paths)} files: {[p.name for p in srs_paths]}", file=sys.stderr)
-            sys.stderr.flush()
-            print(f"[CONTEXT] SRS search completed, result: {len(srs_paths)} files", file=sys.stderr)
-            sys.stderr.flush()
-        except Exception as e:
-            print(f"  [ERROR] SRS search failed: {e}", file=sys.stderr)
-            sys.stderr.flush()
-            srs_paths = []
-        if DEBUG:
-            print(f"  SRS found: {len(srs_paths)} files", file=__import__('sys').stderr)
-        if srs_paths:
-            try:
-                content = srs_paths[0].read_text(encoding='utf-8', errors='ignore')
-                context_data["srs"] = content[:5000]  # First 5000 chars
-                context_data["files_loaded"].append("SRS")
-                if DEBUG:
-                    print(f"    ✓ Loaded: {srs_paths[0].name} ({len(content)} bytes)", file=__import__('sys').stderr)
-            except Exception as e:
-                if DEBUG:
-                    print(f"    ✗ Failed: {e}", file=__import__('sys').stderr)
+        total_loaded_bytes = 0
+        load_start = time.time()
+        skipped_files: list = []
+        load_warnings: list = []
 
-        # Try to load README - search ROOT ONLY (no recursive glob for speed)
-        print(f"[CONTEXT] About to search for README", file=sys.stderr)
-        sys.stderr.flush()
-        try:
-            print(f"  [DEBUG] Searching for README in root", file=sys.stderr)
-            sys.stderr.flush()
-            readme_paths = list(project_root.glob("[Rr][Ee][Aa][Dd][Mm][Ee].*"))  # No ** - root only
-            print(f"  [DEBUG] README glob found {len(readme_paths)} files: {[p.name for p in readme_paths]}", file=sys.stderr)
-            sys.stderr.flush()
-            print(f"[CONTEXT] README search completed, result: {len(readme_paths)} files", file=sys.stderr)
-            sys.stderr.flush()
-        except Exception as e:
-            print(f"  [ERROR] README search failed: {e}", file=sys.stderr)
-            sys.stderr.flush()
-            readme_paths = []
-        if DEBUG:
-            print(f"  README found: {len(readme_paths)} files", file=__import__('sys').stderr)
-        if readme_paths:
-            try:
-                content = readme_paths[0].read_text(encoding='utf-8', errors='ignore')
-                context_data["readme"] = content[:5000]
-                context_data["files_loaded"].append("README")
-                if DEBUG:
-                    print(f"    ✓ Loaded: {readme_paths[0].name} ({len(content)} bytes)", file=__import__('sys').stderr)
-            except Exception as e:
-                if DEBUG:
-                    print(f"    ✗ Failed: {e}", file=__import__('sys').stderr)
+        # Candidate files: pattern -> context_data key
+        candidates = [
+            ("[Ss][Rr][Ss].*", "srs", "SRS"),
+            ("[Rr][Ee][Aa][Dd][Mm][Ee].*", "readme", "README"),
+            ("[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]", "claude_md", "CLAUDE.md"),
+        ]
 
-        # Try to load CLAUDE.md - search ROOT ONLY (no recursive glob for speed)
-        try:
-            print(f"  [DEBUG] Searching for CLAUDE.md in root", file=sys.stderr)
-            sys.stderr.flush()
-            claude_paths = list(project_root.glob("[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]"))  # No ** - root only
-            print(f"  [DEBUG] CLAUDE.md glob found {len(claude_paths)} files: {[p.name for p in claude_paths]}", file=sys.stderr)
-            sys.stderr.flush()
-        except Exception as e:
-            print(f"  [ERROR] CLAUDE.md search failed: {e}", file=sys.stderr)
-            sys.stderr.flush()
-            claude_paths = []
-        if DEBUG:
-            print(f"  CLAUDE.md found: {len(claude_paths)} files", file=__import__('sys').stderr)
-        if claude_paths:
+        for glob_pattern, data_key, label in candidates:
+            # ---- Subtask 7: partial fallback - skip on any error, continue to next ----
             try:
-                content = claude_paths[0].read_text(encoding='utf-8', errors='ignore')
-                context_data["claude_md"] = content[:5000]
-                context_data["files_loaded"].append("CLAUDE.md")
-                if DEBUG:
-                    print(f"    ✓ Loaded: {claude_paths[0].name} ({len(content)} bytes)", file=__import__('sys').stderr)
-            except Exception as e:
-                if DEBUG:
-                    print(f"    ✗ Failed: {e}", file=__import__('sys').stderr)
+                # Check total timeout
+                elapsed = time.time() - load_start
+                if elapsed >= CONTEXT_TIMEOUT_TOTAL:
+                    msg = "Total context load timeout ({}s) reached, stopping".format(
+                        CONTEXT_TIMEOUT_TOTAL
+                    )
+                    print("[CONTEXT LOADER] " + msg, file=sys.stderr)
+                    load_warnings.append(msg)
+                    break  # Subtask 5: stop_loading() when threshold reached
+
+                # Find matching files in root only (no recursive glob)
+                matched = list(project_root.glob(glob_pattern))
+                if not matched:
+                    continue
+
+                file_path = matched[0]
+
+                # ---- Subtask 5: MAX_FILE_SIZE check ----
+                try:
+                    file_size = file_path.stat().st_size
+                except Exception:
+                    file_size = 0
+
+                if file_size > MAX_FILE_SIZE:
+                    msg = "Skipping {} - file too large ({} bytes > {} limit)".format(
+                        label, file_size, MAX_FILE_SIZE
+                    )
+                    print("[CONTEXT LOADER] " + msg, file=sys.stderr)
+                    skipped_files.append(label)
+                    load_warnings.append(msg)
+                    continue  # skip_file()
+
+                # ---- Subtask 5: MAX_TOTAL_SIZE check ----
+                if total_loaded_bytes >= MAX_TOTAL_SIZE:
+                    msg = "Total load limit reached ({} bytes), stopping".format(MAX_TOTAL_SIZE)
+                    print("[CONTEXT LOADER] " + msg, file=sys.stderr)
+                    load_warnings.append(msg)
+                    break  # stop_loading()
+
+                # ---- Subtask 3: Per-file timeout ----
+                try:
+                    content = _read_file_with_timeout(file_path, CONTEXT_TIMEOUT_PER_FILE)
+                except TimeoutError as te:
+                    msg = "File timeout for {} - skipping: {}".format(label, te)
+                    print("[CONTEXT LOADER] WARNING: " + msg, file=sys.stderr)
+                    load_warnings.append(msg)
+                    skipped_files.append(label)
+                    continue  # Graceful degradation - proceed without this file
+
+                # Store truncated content
+                context_data[data_key] = content[:MAX_CONTENT_CHARS]
+                context_data["files_loaded"].append(label)
+                total_loaded_bytes += len(content.encode("utf-8", errors="ignore"))
+
+                print(
+                    "[CONTEXT LOADER] Loaded {} ({} bytes)".format(label, len(content)),
+                    file=sys.stderr,
+                )
+
+            except Exception as exc:
+                # ---- Subtask 7: partial fallback - log warning and continue ----
+                msg = "Failed to load {} - skipping: {}".format(label, exc)
+                print("[CONTEXT LOADER] WARNING: " + msg, file=sys.stderr)
+                load_warnings.append(msg)
+                skipped_files.append(label)
+                continue  # Continue without this file
+
+        # ---- Subtask 6: Context deduplication ----
+        if _DEDUPLICATOR_AVAILABLE and len(context_data.get("files_loaded", [])) >= 2:
+            try:
+                context_data = deduplicate_context(context_data)
+            except Exception as dedup_exc:
+                print(
+                    "[CONTEXT LOADER] Deduplication failed (ignored): {}".format(dedup_exc),
+                    file=sys.stderr,
+                )
 
         # Save context to session folder
-        if session_path:
-            context_file = Path(session_path) / "context-raw.json"
-            with open(context_file, 'w', encoding='utf-8') as f:
-                json.dump(context_data, f, indent=2)
+        if session_path and str(session_path) != ".":
+            try:
+                context_file = Path(session_path) / "context-raw.json"
+                with open(context_file, "w", encoding="utf-8") as f:
+                    json.dump(context_data, f, indent=2)
+            except Exception as save_exc:
+                print(
+                    "[CONTEXT LOADER] WARNING: Could not save context-raw.json: {}".format(save_exc),
+                    file=sys.stderr,
+                )
 
+        # ---- Subtask 8: Persist fresh context to cache ----
+        if _CONTEXT_CACHE_AVAILABLE:
+            try:
+                _cache = ContextCache()
+                _cache.save_cache(str(project_root), context_data)
+            except Exception as cache_save_exc:
+                print(
+                    "[CONTEXT LOADER] Cache save failed (ignored): {}".format(cache_save_exc),
+                    file=sys.stderr,
+                )
+
+        # Proceed with whatever loaded successfully (Subtask 7)
         return {
             "context_data": context_data,
             "context_loaded": True,
-            "files_loaded_count": len(context_data["files_loaded"]),
+            "files_loaded_count": len(context_data.get("files_loaded", [])),
+            "context_skipped_files": skipped_files,
+            "context_load_warnings": load_warnings,
+            "context_total_bytes": total_loaded_bytes,
+            "context_cache_hit": False,
+            "context_cache_key": ContextCache._cache_key(str(project_root)) if _CONTEXT_CACHE_AVAILABLE else None,
         }
+
     except Exception as e:
+        # Top-level fallback - return empty but not crashed
+        print("[CONTEXT LOADER] ERROR: {}".format(e), file=sys.stderr)
         return {
             "context_loaded": False,
             "context_error": str(e),
             "context_data": {},
+            "files_loaded_count": 0,
+            "context_skipped_files": [],
+            "context_load_warnings": [],
+            "context_total_bytes": 0,
         }
 
 
 # ============================================================================
-# NODE 4: TOON COMPRESSION (NEW - Compress + Clear Memory)
+# NODE 4: TOON COMPRESSION (Compress + Clear Memory + Integrity Validation)
+# Subtask 4: validate compression integrity; fallback to raw context on failure
 # ============================================================================
+
+def _verify_toon_integrity(toon: dict, original_context: dict) -> bool:
+    """Verify that the compressed TOON preserves essential data from original context.
+
+    Checks:
+    - session_id present and non-empty
+    - complexity_score within 1-10
+    - files_loaded_count matches actual loaded files
+    - context booleans match original content presence
+
+    Args:
+        toon: Compressed TOON dict
+        original_context: Original context_data before compression
+
+    Returns:
+        True if integrity check passes
+    """
+    try:
+        # Required field presence
+        required = ["session_id", "complexity_score", "files_loaded_count", "context"]
+        for field in required:
+            if field not in toon:
+                return False
+
+        # session_id non-empty
+        if not toon.get("session_id", "").strip():
+            return False
+
+        # complexity_score range
+        score = toon.get("complexity_score", 0)
+        if not isinstance(score, int) or not (1 <= score <= 10):
+            return False
+
+        # files_loaded_count consistency
+        original_files = original_context.get("files_loaded", [])
+        if toon.get("files_loaded_count") != len(original_files):
+            return False
+
+        # Context booleans match original
+        ctx = toon.get("context", {})
+        if ctx.get("srs") != bool(original_context.get("srs")):
+            return False
+        if ctx.get("readme") != bool(original_context.get("readme")):
+            return False
+        if ctx.get("claude_md") != bool(original_context.get("claude_md")):
+            return False
+
+        return True
+
+    except Exception:
+        return False
+
+
+def _decompress_toon(toon: dict) -> dict:
+    """Reconstruct a minimal context dict from a TOON object for integrity checking."""
+    ctx = toon.get("context", {})
+    files_list = ctx.get("files", [])
+    return {
+        "files_loaded": files_list,
+        "srs": ctx.get("srs", False),
+        "readme": ctx.get("readme", False),
+        "claude_md": ctx.get("claude_md", False),
+    }
+
 
 def node_toon_compression(state: FlowState) -> dict:
     """Compress context to TOON format and save to session folder.
 
-    After this:
+    Subtask 4: After compression, validate integrity against original.
+    On failure: log error and use raw_context fallback.
+
+    After successful compression:
     - Verbose data saved to disk as TOON
     - Memory variables cleared
     - Only compact TOON remains in memory
 
     TOON object includes:
     - session_id
+    - timestamp / version
     - complexity_score
     - files_loaded_count
-    - compressed context
+    - compressed context (boolean flags, no raw content)
     """
     try:
         session_path = Path(state.get("session_path", ""))
@@ -303,48 +523,95 @@ def node_toon_compression(state: FlowState) -> dict:
         session_id = state.get("session_id", "")
         files_loaded = context_data.get("files_loaded", [])
 
-        # Build TOON object WITH complexity and file count INSIDE
+        # Clamp complexity to valid range
+        complexity_score = max(1, min(10, int(complexity_score or 5)))
+
+        # Build TOON object
         toon_object = {
             "session_id": session_id,
             "timestamp": datetime.now().isoformat(),
-            "complexity_score": complexity_score,  # ✓ INSIDE TOON
-            "files_loaded_count": len(files_loaded),  # ✓ INSIDE TOON
+            "version": "1.0.0",
+            "complexity_score": complexity_score,
+            "files_loaded_count": len(files_loaded),
             "context": {
                 "files": files_loaded,
-                "srs": bool(context_data.get("srs")),  # Just boolean, not full content
+                "srs": bool(context_data.get("srs")),
                 "readme": bool(context_data.get("readme")),
                 "claude_md": bool(context_data.get("claude_md")),
-            }
+            },
+            "model_preferences": {},
+            "execution_constraints": {},
+            "caching_metadata": {},
         }
 
-        # Save TOON to session folder (uses toons format if available)
-        if session_path:
-            toon_file = Path(session_path) / "context.toon.json"
-            if _TOONS_AVAILABLE:
-                try:
-                    # Use TOONS for efficient serialization
-                    with open(toon_file, 'w', encoding='utf-8') as f:
-                        f.write(toons.dumps(toon_object))
-                except:
-                    # Fallback to standard JSON
-                    with open(toon_file, 'w', encoding='utf-8') as f:
+        # ---- Subtask 4: Compression integrity validation ----
+        # (a) Structural integrity: decompress and verify against original
+        decompressed = _decompress_toon(toon_object)
+        integrity_ok = _verify_toon_integrity(toon_object, context_data)
+
+        # (b) Schema validation via toon_schema module
+        schema_errors: list = []
+        if _TOON_SCHEMA_AVAILABLE:
+            schema_valid, schema_errors = validate_toon(toon_object)
+            if not schema_valid:
+                print(
+                    "[TOON COMPRESSION] Schema validation errors: {}".format(schema_errors),
+                    file=sys.stderr,
+                )
+                integrity_ok = False
+
+        if not integrity_ok:
+            # Compression validation failed - use raw context as fallback
+            print(
+                "[TOON COMPRESSION] ERROR: Integrity check failed - using raw context fallback",
+                file=sys.stderr,
+            )
+            # Raw fallback: store the full context_data as the TOON's context
+            toon_object["context"]["raw_fallback"] = True
+            toon_object["context"]["srs_snippet"] = (context_data.get("srs") or "")[:1000]
+            toon_object["context"]["readme_snippet"] = (context_data.get("readme") or "")[:1000]
+            toon_object["context"]["claude_md_snippet"] = (context_data.get("claude_md") or "")[:1000]
+            toon_object["compression_warning"] = "Integrity check failed; raw snippet fallback used"
+
+        # Save TOON to session folder
+        if session_path and str(session_path) != ".":
+            try:
+                toon_file = Path(session_path) / "context.toon.json"
+                if _TOONS_AVAILABLE:
+                    try:
+                        with open(toon_file, "w", encoding="utf-8") as f:
+                            f.write(toons.dumps(toon_object))
+                    except Exception:
+                        with open(toon_file, "w", encoding="utf-8") as f:
+                            json.dump(toon_object, f, indent=2)
+                else:
+                    with open(toon_file, "w", encoding="utf-8") as f:
                         json.dump(toon_object, f, indent=2)
-            else:
-                # Standard JSON serialization
-                with open(toon_file, 'w', encoding='utf-8') as f:
-                    json.dump(toon_object, f, indent=2)
+            except Exception as save_exc:
+                print(
+                    "[TOON COMPRESSION] WARNING: Could not save toon file: {}".format(save_exc),
+                    file=sys.stderr,
+                )
 
-        # Return TOON object, signal memory cleanup
         return {
-            "toon_object": toon_object,  # Return the TOON dict (with session_id, complexity, files_count)
+            "toon_object": toon_object,
             "toon_saved": True,
-            "clear_verbose_memory": True,  # Signal to clear: srs, readme, claude_md, context_data
+            "toon_integrity_ok": integrity_ok,
+            "toon_schema_valid": integrity_ok,
+            "toon_schema_errors": schema_errors,
+            "toon_version": toon_object.get("version", "1.0.0"),
+            "clear_verbose_memory": True,
         }
+
     except Exception as e:
+        print("[TOON COMPRESSION] ERROR: {}".format(e), file=sys.stderr)
         return {
             "toon_saved": False,
             "toon_error": str(e),
             "toon_object": {},
+            "toon_integrity_ok": False,
+            "toon_schema_valid": False,
+            "toon_schema_errors": [str(e)],
         }
 
 

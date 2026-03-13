@@ -54,6 +54,9 @@ from .subgraphs.level2_standards import (
     detect_project_type,
 )
 
+from .standards_integration import apply_standards_at_step, STANDARDS_INTEGRATION_POINTS
+from .standard_selector import select_standards, detect_project_type as selector_detect_project_type
+
 from .subgraphs.level3_execution_v2 import (
     level3_init_node,
     step1_plan_mode_decision_node,
@@ -419,6 +422,96 @@ def save_workflow_memory(state: FlowState) -> dict:
     return {}
 
 
+# ============================================================================
+# LEVEL 2: STANDARDS SELECTOR NODE
+# Runs after common/Java standards are loaded, before context optimization.
+# Uses standard_selector.py to auto-detect project type + framework and load
+# all applicable standards (custom > team > framework > language priority).
+# ============================================================================
+
+
+def level2_select_standards_node(state: FlowState) -> dict:
+    """Level 2 node: auto-select and load all applicable project standards.
+
+    Runs select_standards() which detects project type/framework and loads
+    standards from all sources in priority order, resolving conflicts.
+
+    Integration points are stored in state for downstream steps to consume.
+    """
+    updates: dict = {}
+
+    try:
+        project_root = state.get("project_root", ".")
+        session_id = state.get("session_id", "unknown")
+
+        selection = select_standards(project_root, session_id)
+
+        updates["standards_selection"] = {
+            "project_type": selection["project_type"],
+            "framework": selection["framework"],
+            "total_loaded": selection["total_loaded"],
+            "conflicts_detected": len(selection["conflicts"]),
+            "merged_rules": selection["merged_rules"],
+        }
+
+        # Make merged rules available at top-level for quick access
+        merged = selection.get("merged_rules", {})
+        if merged:
+            updates["standards_merged_rules"] = merged
+
+        # Expose detected framework for downstream nodes
+        updates["detected_framework"] = selection["framework"]
+
+        existing_pipeline = state.get("pipeline") or []
+        updates["pipeline"] = list(existing_pipeline) + [{
+            "node": "level2_select_standards",
+            "project_type": selection["project_type"],
+            "framework": selection["framework"],
+            "standards_loaded": selection["total_loaded"],
+            "conflicts": len(selection["conflicts"]),
+        }]
+
+    except Exception as exc:
+        updates["standards_selection_error"] = str(exc)
+        existing_pipeline = state.get("pipeline") or []
+        updates["pipeline"] = list(existing_pipeline) + [{
+            "node": "level2_select_standards",
+            "error": str(exc),
+        }]
+
+    return updates
+
+
+def apply_integration_step1(state: FlowState) -> dict:
+    """Apply standards integration point at Step 1 (plan mode decision)."""
+    updated = apply_standards_at_step(1, dict(state))
+    return {k: updated[k] for k in updated if k not in state or updated[k] != state.get(k)}
+
+
+def apply_integration_step2(state: FlowState) -> dict:
+    """Apply standards integration point at Step 2 (plan execution)."""
+    updated = apply_standards_at_step(2, dict(state))
+    return {k: updated[k] for k in updated if k not in state or updated[k] != state.get(k)}
+
+
+def apply_integration_step5(state: FlowState) -> dict:
+    """Apply standards integration point at Step 5 (skill selection)."""
+    updated = apply_standards_at_step(5, dict(state))
+    return {k: updated[k] for k in updated if k not in state or updated[k] != state.get(k)}
+
+
+def apply_integration_step10(state: FlowState) -> dict:
+    """Apply standards integration point at Step 10 (code review)."""
+    updated = apply_standards_at_step(10, dict(state))
+    return {k: updated[k] for k in updated if k not in state or updated[k] != state.get(k)}
+
+
+def apply_integration_step13(state: FlowState) -> dict:
+    """Apply standards integration point at Step 13 (documentation)."""
+    updated = apply_standards_at_step(13, dict(state))
+    return {k: updated[k] for k in updated if k not in state or updated[k] != state.get(k)}
+
+
 def verify_prompt_integrity(state: FlowState) -> bool:
     """Verify that original user prompt was never modified during flow.
 
@@ -689,9 +782,13 @@ def create_flow_graph():
     # Java standards merge
     graph.add_edge("level2_java_standards", "level2_merge")
 
+    # Standards selector: auto-detect project type + framework, load all standards
+    graph.add_node("level2_select_standards", level2_select_standards_node)
+    graph.add_edge("level2_merge", "level2_select_standards")
+
     # Optimize context after Level 2 (compress for Level 3 consumption)
     graph.add_node("optimize_after_level2", optimize_context_after_level2)
-    graph.add_edge("level2_merge", "optimize_after_level2")
+    graph.add_edge("level2_select_standards", "optimize_after_level2")
 
     # ========================================================================
     # LEVEL 3: EXECUTION SYSTEM - 14-STEP PIPELINE (v2 WORKFLOW.MD COMPLIANT)
@@ -701,9 +798,13 @@ def create_flow_graph():
     graph.add_node("level3_init", level3_init_node)
     graph.add_edge("optimize_after_level2", "level3_init")
 
+    # Standards integration hook: Step 1 - before plan mode decision
+    graph.add_node("standards_hook_step1", apply_integration_step1)
+    graph.add_edge("level3_init", "standards_hook_step1")
+
     # Step 1: Plan Mode Decision (LOCAL LLM - Ollama)
     graph.add_node("level3_step1", step1_plan_mode_decision_node)
-    graph.add_edge("level3_init", "level3_step1")
+    graph.add_edge("standards_hook_step1", "level3_step1")
 
     # CONDITIONAL: plan_required → step2 | direct → step3
     graph.add_conditional_edges(
@@ -715,9 +816,13 @@ def create_flow_graph():
         }
     )
 
+    # Standards integration hook: Step 2 - during plan execution
+    graph.add_node("standards_hook_step2", apply_integration_step2)
+
     # Step 2: Plan Execution (only when plan_required=True)
     graph.add_node("level3_step2", step2_plan_execution_node)
-    graph.add_edge("level3_step2", "level3_step3")
+    graph.add_edge("level3_step2", "standards_hook_step2")
+    graph.add_edge("standards_hook_step2", "level3_step3")
 
     # Step 3: Task Breakdown
     graph.add_node("level3_step3", step3_task_breakdown_node)
@@ -730,9 +835,13 @@ def create_flow_graph():
     graph.add_node("level3_step5", step5_skill_selection_node)
     graph.add_edge("level3_step4", "level3_step5")
 
+    # Standards integration hook: Step 5 - after skill selection (validates skill vs project)
+    graph.add_node("standards_hook_step5", apply_integration_step5)
+    graph.add_edge("level3_step5", "standards_hook_step5")
+
     # Step 6: Skill Validation & Download (RESTORED)
     graph.add_node("level3_step6", step6_skill_validation_node)
-    graph.add_edge("level3_step5", "level3_step6")
+    graph.add_edge("standards_hook_step5", "level3_step6")
 
     # Step 7: Final Prompt Generation (LOCAL LLM)
     graph.add_node("level3_step7", step7_final_prompt_node)
@@ -750,9 +859,14 @@ def create_flow_graph():
     graph.add_node("level3_step10", step10_implementation_note)
     graph.add_edge("level3_step9", "level3_step10")
 
+    # Standards integration hook: Step 10 (code review) - builds compliance checklist
+    # Runs after step10, before step11, so PR review has the checklist available
+    graph.add_node("standards_hook_step10", apply_integration_step10)
+    graph.add_edge("level3_step10", "standards_hook_step10")
+
     # Step 11: PR Creation & Merge
     graph.add_node("level3_step11", step11_pull_request_node)
-    graph.add_edge("level3_step10", "level3_step11")
+    graph.add_edge("standards_hook_step10", "level3_step11")
 
     # Step 11 → Conditional Routing (retry loop or continue to closure)
     graph.add_conditional_edges(
@@ -771,9 +885,13 @@ def create_flow_graph():
     graph.add_node("level3_step13", step13_docs_update_node)
     graph.add_edge("level3_step12", "level3_step13")
 
+    # Standards integration hook: Step 13 - documentation requirements from standards
+    graph.add_node("standards_hook_step13", apply_integration_step13)
+    graph.add_edge("level3_step13", "standards_hook_step13")
+
     # Step 14: Final Summary + Voice Notification
     graph.add_node("level3_step14", step14_final_summary_node)
-    graph.add_edge("level3_step13", "level3_step14")
+    graph.add_edge("standards_hook_step13", "level3_step14")
 
     # Merge node
     graph.add_node("level3_merge", level3_v2_merge_node)
