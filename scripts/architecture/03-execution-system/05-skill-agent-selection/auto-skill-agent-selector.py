@@ -365,6 +365,87 @@ class AutoSkillAgentSelector:
         return plan
 
 
+def load_skill_definitions() -> dict:
+    """Load skill definitions from ~/.claude/skills/"""
+    import os
+    skills = {}
+    skills_dir = Path.home() / ".claude" / "skills"
+
+    if not skills_dir.exists():
+        return {}
+
+    # Load each skill's metadata
+    for skill_dir in skills_dir.iterdir():
+        if skill_dir.is_dir():
+            skill_md = skill_dir / "skill.md"
+            if skill_md.exists():
+                try:
+                    content = skill_md.read_text(encoding='utf-8', errors='ignore')
+                    # Extract key info from markdown
+                    lines = content.split('\n')
+                    name = skill_dir.name
+                    description = ""
+
+                    # Try to extract description from first few lines
+                    for i, line in enumerate(lines[:20]):
+                        if line.startswith('#') and 'description' in line.lower():
+                            if i+1 < len(lines):
+                                description = lines[i+1].strip()
+                            break
+                        elif not line.startswith('#') and line.strip() and not description:
+                            description = line.strip()[:200]
+
+                    skills[name] = {
+                        'name': name,
+                        'description': description or 'Skill module',
+                        'has_definition': True
+                    }
+                except Exception:
+                    pass
+
+    return skills
+
+
+def load_agent_definitions() -> dict:
+    """Load agent definitions from ~/.claude/agents/"""
+    import os
+    agents = {}
+    agents_dir = Path.home() / ".claude" / "agents"
+
+    if not agents_dir.exists():
+        return {}
+
+    # Load each agent's metadata
+    for agent_dir in agents_dir.iterdir():
+        if agent_dir.is_dir():
+            agent_md = agent_dir / "agent.md"
+            if agent_md.exists():
+                try:
+                    content = agent_md.read_text(encoding='utf-8', errors='ignore')
+                    lines = content.split('\n')
+                    name = agent_dir.name
+                    description = ""
+
+                    # Try to extract description
+                    for i, line in enumerate(lines[:20]):
+                        if line.startswith('#') and 'purpose' in line.lower():
+                            if i+1 < len(lines):
+                                description = lines[i+1].strip()
+                            break
+                        elif not line.startswith('#') and line.strip() and not description:
+                            description = line.strip()[:200]
+
+                    agents[name] = {
+                        'name': name,
+                        'description': description or 'Agent module',
+                        'has_definition': True
+                    }
+                except Exception:
+                    pass
+
+    return agents
+
+
 def main():
     """CLI interface - simplified for LangGraph"""
     import sys
@@ -381,32 +462,69 @@ def main():
 
         # Default task type for LangGraph
         task_type = "General"
+        complexity = 5
 
-        # Look for task type in arguments
+        # Parse arguments
         for i, arg in enumerate(sys.argv[1:], 1):
-            if not arg.startswith('--'):
+            if arg == "--analyze":
+                continue
+            elif arg.startswith("--task-type="):
+                task_type = arg.replace("--task-type=", "")
+            elif arg.startswith("--complexity="):
+                try:
+                    complexity = int(arg.replace("--complexity=", ""))
+                except ValueError:
+                    complexity = 5
+            elif not arg.startswith('--'):
                 task_type = arg
-                break
 
-        # Use Ollama to suggest skills/agents
-        available_skills = "docker, java-spring-boot, python-backend, angular-frontend, kubernetes, jenkins, database, security"
-        available_agents = "orchestrator-agent, spring-boot-microservices, python-backend-engineer, angular-engineer"
+        # Load actual skill and agent definitions
+        available_skills = load_skill_definitions()
+        available_agents = load_agent_definitions()
 
-        prompt = f"""What skill and agent would best help with this task? Respond ONLY with JSON (no markdown):
+        # Build skill list with descriptions
+        skills_text = ""
+        if available_skills:
+            skills_text = "Available Skills:\n"
+            for name, info in list(available_skills.items())[:15]:  # Limit to 15 for token efficiency
+                desc = info.get('description', '')[:100]
+                skills_text += f"  - {name}: {desc}\n"
+        else:
+            skills_text = "Available Skills: None loaded\n"
+
+        # Build agent list with descriptions
+        agents_text = ""
+        if available_agents:
+            agents_text = "Available Agents:\n"
+            for name, info in list(available_agents.items())[:10]:  # Limit to 10 for token efficiency
+                desc = info.get('description', '')[:100]
+                agents_text += f"  - {name}: {desc}\n"
+        else:
+            agents_text = "Available Agents: None loaded\n"
+
+        # Build prompt with actual definitions
+        prompt = f"""You are a task-to-skill matcher. Based on the task type and complexity, suggest the BEST skill and agent.
 
 Task Type: {task_type}
-Available Skills: {available_skills}
-Available Agents: {available_agents}
+Complexity: {complexity}/10
 
-JSON format (no markdown):
+{skills_text}
+{agents_text}
+
+Choose the skill and agent that BEST match this task. Consider:
+- Task complexity and nature
+- Skill/agent capabilities and specialization
+- Technology alignment
+
+Respond ONLY with JSON (no markdown, no explanation):
 {{
-  "selected_skill": "skill name or empty string",
-  "selected_agent": "agent name or empty string",
-  "confidence": 0.0 to 1.0,
-  "reasoning": "why these choices"
+  "selected_skill": "skill name or empty string if none needed",
+  "selected_agent": "agent name or empty string if none needed",
+  "confidence": 0.5 to 1.0,
+  "reasoning": "brief explanation of choices"
 }}
 
-JSON only:"""
+JSON only, no markdown:"""
 
         try:
             payload = {

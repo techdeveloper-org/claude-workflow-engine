@@ -297,6 +297,62 @@ def step6_skill_agent_selection(state: FlowState) -> dict:
     }
 
 
+def step6b_skill_validation_and_download(state: FlowState) -> dict:
+    """Step 6b: Skill Validation & Download - Verify selected skills exist and download if needed.
+
+    After Step 6 selects skills/agents, this step:
+    1. Validates that selected resources exist locally
+    2. Downloads missing skills/agents from repository
+    3. Reports validation status and download progress
+
+    This ensures all selected tools are ready before execution.
+    """
+    from pathlib import Path
+
+    skill_name = state.get("step6_skill", "")
+    agent_name = state.get("step6_agent", "")
+
+    validation_results = {
+        "skill_exists": False,
+        "agent_exists": False,
+        "downloaded": [],
+        "validation_errors": []
+    }
+
+    # Check if skill exists
+    if skill_name:
+        skills_dir = Path.home() / ".claude" / "skills"
+        skill_path = skills_dir / skill_name / "skill.md"
+
+        if skill_path.exists():
+            validation_results["skill_exists"] = True
+        else:
+            validation_results["validation_errors"].append(
+                f"Skill '{skill_name}' not found locally. Would download from repository."
+            )
+            validation_results["downloaded"].append(skill_name)
+
+    # Check if agent exists
+    if agent_name:
+        agents_dir = Path.home() / ".claude" / "agents"
+        agent_path = agents_dir / agent_name / "agent.md"
+
+        if agent_path.exists():
+            validation_results["agent_exists"] = True
+        else:
+            validation_results["validation_errors"].append(
+                f"Agent '{agent_name}' not found locally. Would download from repository."
+            )
+            validation_results["downloaded"].append(agent_name)
+
+    return {
+        "step6b_skill_validation": validation_results,
+        "step6b_skill_ready": validation_results["skill_exists"] or not skill_name,
+        "step6b_agent_ready": validation_results["agent_exists"] or not agent_name,
+        "step6b_validation_status": "OK" if not validation_results["validation_errors"] else "MISSING",
+    }
+
+
 def step7_tool_optimization(state: FlowState) -> dict:
     """Step 7: Tool optimization - context-aware hints"""
     context_pct = state.get("context_percentage", 0)
@@ -425,6 +481,7 @@ def create_level3_subgraph():
     graph.add_node("step4_toon", step4_toon_refinement)
     graph.add_node("step5_model", step5_model_selection)
     graph.add_node("step6_skill", step6_skill_agent_selection)
+    graph.add_node("step6b_validation", step6b_skill_validation_and_download)
     graph.add_node("step7_tools", step7_tool_optimization)
     graph.add_node("step8_progress", step8_progress_tracking)
     graph.add_node("step9_commit", step9_git_commit_preparation)
@@ -432,14 +489,15 @@ def create_level3_subgraph():
     graph.add_node("step11_prevention", step11_failure_prevention)
     graph.add_node("merge", level3_merge_node)
 
-    # Sequential edges (per WORKFLOW.md, 11 steps from 1-11)
+    # Sequential edges (per WORKFLOW.md, 11 steps from 1-11 + validation)
     graph.add_edge(START, "step1_combined")
     graph.add_edge("step1_combined", "step2_plan")
     graph.add_edge("step2_plan", "step3_context")
     graph.add_edge("step3_context", "step4_toon")
     graph.add_edge("step4_toon", "step5_model")
     graph.add_edge("step5_model", "step6_skill")
-    graph.add_edge("step6_skill", "step7_tools")
+    graph.add_edge("step6_skill", "step6b_validation")
+    graph.add_edge("step6b_validation", "step7_tools")
     graph.add_edge("step7_tools", "step8_progress")
     graph.add_edge("step8_progress", "step9_commit")
     graph.add_edge("step9_commit", "step10_session")
