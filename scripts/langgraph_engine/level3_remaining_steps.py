@@ -20,7 +20,7 @@ import json
 import subprocess
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable, TypeVar
 from datetime import datetime
 
 from loguru import logger
@@ -30,6 +30,114 @@ from .inference_router import get_inference_router
 from .plan_convergence import run_planning_loop, assess_plan_quality, DEFAULT_MAX_ITERATIONS
 from .task_validator import validate_breakdown
 from .token_manager import TokenBudget
+
+# Optional performance modules
+try:
+    from .parallel_executor import run_parallel_step2_exploration
+    from .cache_system import get_pipeline_cache, cached_llm_call
+    _PERF_AVAILABLE = True
+except ImportError:
+    _PERF_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# LLM Error Handling Utilities
+# ---------------------------------------------------------------------------
+
+# Exponential backoff delays: 1s, 2s, 4s, 8s
+_LLM_BACKOFF_DELAYS: List[float] = [1.0, 2.0, 4.0, 8.0]
+_LLM_MAX_RETRIES: int = 3
+
+T = TypeVar("T")
+
+
+def _is_llm_retryable(exc: Exception) -> bool:
+    """
+    Determine if an LLM exception is transient and worth retrying.
+
+    Retryable: network timeouts, connection errors, server overload,
+               rate limiting, 5xx HTTP errors.
+    Non-retryable: authentication errors, invalid model names,
+                   malformed requests, programming errors.
+    """
+    err_lower = str(exc).lower()
+    # Check for anthropic-specific error types
+    exc_class = type(exc).__name__.lower()
+    transient_keywords = (
+        "timeout", "connection", "rate_limit", "ratelimit", "overloaded",
+        "503", "502", "500", "too many requests", "retry", "network",
+        "unavailable", "refused", "apiconnectionerror", "apitimeouterror",
+        "internalservererror",
+    )
+    return any(kw in err_lower or kw in exc_class for kw in transient_keywords)
+
+
+def _llm_call_with_retry(
+    call_fn: Callable[[], T],
+    step_name: str,
+    max_retries: int = _LLM_MAX_RETRIES,
+) -> T:
+    """
+    Execute an LLM call with exponential backoff retry on transient failures.
+
+    On anthropic.APIError or connection errors: retry up to max_retries times
+    with delays: 1s, 2s, 4s, 8s.
+
+    On permanent errors (auth, invalid input): raise immediately.
+
+    Args:
+        call_fn:    No-arg callable that performs the LLM request and returns result.
+        step_name:  Human-readable step name for logging (e.g. "Step 2 Plan").
+        max_retries: Maximum retry attempts before re-raising.
+
+    Returns:
+        Result of call_fn() on success.
+
+    Raises:
+        Last exception if all retries are exhausted.
+    """
+    last_exc: Optional[Exception] = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return call_fn()
+
+        except Exception as exc:
+            last_exc = exc
+            exc_name = type(exc).__name__
+
+            # Try to import anthropic for specific error detection
+            try:
+                import anthropic as _anthropic
+                is_anthropic_err = isinstance(exc, _anthropic.APIError)
+            except ImportError:
+                is_anthropic_err = False
+
+            is_retryable = is_anthropic_err or _is_llm_retryable(exc)
+
+            if not is_retryable:
+                logger.error(
+                    f"[{step_name}] Non-retryable LLM error ({exc_name}): {exc}"
+                )
+                raise
+
+            if attempt < max_retries:
+                delay = _LLM_BACKOFF_DELAYS[min(attempt, len(_LLM_BACKOFF_DELAYS) - 1)]
+                logger.warning(
+                    f"[{step_name}] LLM error attempt {attempt + 1}/{max_retries} "
+                    f"({exc_name}) - retrying in {delay:.0f}s: {exc}"
+                )
+                time.sleep(delay)
+            else:
+                logger.error(
+                    f"[{step_name}] LLM call failed after {max_retries} retries "
+                    f"({exc_name}): {exc}"
+                )
+
+    # All retries exhausted
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError(f"[{step_name}] LLM call failed with no recorded exception")
 
 
 class Level3RemainingSteps:
@@ -175,16 +283,45 @@ Be very specific and actionable - mention actual file paths and existing functio
             # quality >= 0.85 OR max_iterations reached.
 
             def _generate_one_plan() -> Dict[str, Any]:
-                """Single plan generation attempt - called by the convergence loop."""
-                resp = self.inference.chat(
-                    messages=[{"role": "user", "content": prompt}],
-                    task_type="planning",
-                    complexity=toon.get("complexity_score", 5),
-                    model=selected_model,
-                    temperature=0.5,
-                )
-                if "error" in resp:
-                    raise RuntimeError(resp["error"])
+                """Single plan generation attempt with LLM caching + retry."""
+                messages = [{"role": "user", "content": prompt}]
+
+                def _call_inference() -> Dict[str, Any]:
+                    # Try LLM response cache (1h TTL) before hitting inference backend
+                    if _PERF_AVAILABLE:
+                        try:
+                            _cache = get_pipeline_cache()
+                            _key = _cache.llm.make_llm_key(selected_model, messages)
+                            _cached = _cache.llm.get(_key)
+                            if _cached is not None:
+                                logger.info("Step 2: LLM cache HIT (key={}...)".format(_key[:8]))
+                                return _cached
+                        except Exception:
+                            pass  # Cache errors are non-fatal
+
+                    resp = self.inference.chat(
+                        messages=messages,
+                        task_type="planning",
+                        complexity=toon.get("complexity_score", 5),
+                        model=selected_model,
+                        temperature=0.5,
+                    )
+                    if "error" in resp:
+                        raise RuntimeError(resp["error"])
+
+                    # Persist successful response to cache
+                    if _PERF_AVAILABLE:
+                        try:
+                            _cache = get_pipeline_cache()
+                            _key = _cache.llm.make_llm_key(selected_model, messages)
+                            _cache.llm.set(_key, resp)
+                        except Exception:
+                            pass
+
+                    return resp
+
+                # Use retry wrapper for transient LLM/network failures
+                resp = _llm_call_with_retry(_call_inference, "Step 2 Plan Generation")
                 plan_text_inner = resp.get("message", {}).get("content", "")
                 return {
                     "plan": plan_text_inner,
@@ -444,8 +581,10 @@ Be very specific and actionable - mention actual file paths and existing functio
         """
         Explore codebase using tool-optimized methods (Read, Grep, Search).
 
+        When parallel_executor is available, runs 3+ exploration tasks concurrently
+        for ~50% speedup over sequential execution.
+
         WORKFLOW.md SPEC: Use exploration tools (Read, Grep, Search)
-        This method uses tool-like calls with optimization rules:
         - Read: offset/limit (max 500 lines per file)
         - Grep: head_limit (max 50 matches)
         - Search: max_results optimization
@@ -460,17 +599,38 @@ Be very specific and actionable - mention actual file paths and existing functio
         if project_root is None:
             project_root = str(self.session_dir)
 
+        # --- Parallel path (preferred) ---
+        if _PERF_AVAILABLE:
+            try:
+                key_files = self._find_key_files(project_root)
+                result = run_parallel_step2_exploration(
+                    user_requirement=user_requirement,
+                    project_root=project_root,
+                    search_fn=self._tool_search,
+                    grep_fn=self._tool_grep,
+                    read_fn=self._tool_read,
+                    key_files=key_files,
+                    max_workers=3,
+                )
+                structure = self._analyze_directory_structure(project_root)
+                result += "\n\n=== PROJECT STRUCTURE ===\n" + structure
+                logger.info("Codebase exploration completed (parallel mode)")
+                return result
+            except Exception as par_err:
+                logger.warning(f"Parallel exploration failed ({par_err}), falling back to sequential")
+
+        # --- Sequential fallback ---
         try:
             analysis_parts = []
 
             # 1. Search for relevant files (TOOL: Search)
-            logger.info("→ Searching for relevant files...")
+            logger.info("-> Searching for relevant files...")
             analysis_parts.append("=== SEARCH RESULTS ===")
             search_result = self._tool_search(user_requirement, max_results=10)
             analysis_parts.append(search_result)
 
             # 2. Grep for keyword matches (TOOL: Grep with head_limit)
-            logger.info("→ Finding code patterns...")
+            logger.info("-> Finding code patterns...")
             analysis_parts.append("\n=== CODE PATTERNS (Grep with head_limit=20) ===")
             keywords = user_requirement.lower().split()[:3]
             if keywords:
@@ -481,7 +641,7 @@ Be very specific and actionable - mention actual file paths and existing functio
                 analysis_parts.append("(No keywords to search)")
 
             # 3. Read key files (TOOL: Read with offset/limit)
-            logger.info("→ Reading key file contents...")
+            logger.info("-> Reading key file contents...")
             analysis_parts.append("\n=== KEY FILE CONTENTS (Read with limit=500) ===")
             key_files = self._find_key_files(project_root)
             for file_type, files in key_files.items():
@@ -498,7 +658,7 @@ Be very specific and actionable - mention actual file paths and existing functio
             structure = self._analyze_directory_structure(project_root)
             analysis_parts.append(structure)
 
-            logger.info("✓ Codebase exploration completed with tool-optimized methods")
+            logger.info("Codebase exploration completed (sequential mode)")
             return "\n".join(analysis_parts)
 
         except Exception as e:
