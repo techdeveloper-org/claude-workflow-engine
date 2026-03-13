@@ -377,6 +377,8 @@ class FlowState(TypedDict, total=False):
     step5_confidence: float                    # Confidence score
     step5_alternatives: List[Dict]             # Alternative selections
     step5_llm_query_needed: bool               # Whether LLM was needed
+    step5_conflicts_detected: Optional[int]    # Number of skill/agent conflicts found
+    step5_conflicts_removed: Optional[List[str]]  # Names removed due to conflicts
     step5_execution_time_ms: Optional[float]
     step5_error: Optional[str]
 
@@ -405,8 +407,10 @@ class FlowState(TypedDict, total=False):
     step8_error: Optional[str]
 
     # Step 9: Branch Creation (NEW - PHASE 2B)
-    step9_branch_name: str                     # Created branch name
+    step9_branch_name: str                     # Created branch name (may differ if conflict resolved)
+    step9_original_branch: Optional[str]       # Originally requested branch name
     step9_branch_created: bool                 # Branch successfully created
+    step9_conflict_detected: Optional[bool]    # True if branch name collision was found & auto-resolved
     step9_status: Optional[str]                # Creation status (OK/ERROR)
     step9_execution_time_ms: Optional[float]
     step9_error: Optional[str]
@@ -425,6 +429,8 @@ class FlowState(TypedDict, total=False):
     step11_review_passed: bool                 # Code review passed
     step11_review_issues: List[str]            # Issues found in review
     step11_retry_count: int                    # Number of retry attempts
+    step11_criteria_result: Optional[Dict]     # Full ReviewCriteria evaluation result
+    step11_criteria_score: Optional[float]     # ReviewCriteria score (0.0-1.0)
     step11_status: Optional[str]               # PR status (OK/ERROR)
     step11_execution_time_ms: Optional[float]
     step11_error: Optional[str]

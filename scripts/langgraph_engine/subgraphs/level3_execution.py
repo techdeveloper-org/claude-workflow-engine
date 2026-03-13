@@ -499,7 +499,11 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
     - **ALL SKILL DEFINITIONS** (what each skill can do - CRITICAL)
     - **ALL AGENT DEFINITIONS** (what each agent can orchestrate - CRITICAL)
 
-    This is CRITICAL - LLM now KNOWS what each skill can do before selecting!
+    Post-selection: ConflictResolver checks for incompatible skill/agent pairs.
+    Any conflicts are resolved via priority-based rules before the result is stored.
+    A conflict log is saved to the session directory if conflicts are found.
+
+    Timeout: enforced at 60s by the v2 _run_step wrapper.
     """
     from ..skill_agent_loader import get_skill_agent_loader
 
@@ -547,9 +551,75 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
     ]
     result = call_execution_script("auto-skill-agent-selector", args)
 
+    selected_skill_name = result.get("selected_skill", "")
+    selected_agent_name = result.get("selected_agent", "")
+
+    # --- Post-selection conflict resolution ---
+    # Build minimal skill/agent dicts for ConflictResolver
+    skill_conflicts_detected = 0
+    skill_conflicts_removed: list = []
+
+    try:
+        from ..conflict_resolver import ConflictResolver
+        session_dir = state.get("session_dir", ".")
+        conflict_resolver = ConflictResolver(session_dir=session_dir)
+
+        # Build list representation for conflict checks
+        candidate_items = []
+        if selected_skill_name:
+            candidate_items.append({
+                "name": selected_skill_name,
+                "capabilities": [],
+                "domain": "general",
+                "exclusive": False,
+                "conflicts_with": [],
+            })
+        if selected_agent_name:
+            candidate_items.append({
+                "name": selected_agent_name,
+                "capabilities": [],
+                "domain": "general",
+                "exclusive": False,
+                "conflicts_with": [],
+            })
+
+        # Resolve conflicts in the selected pair
+        if candidate_items:
+            task_context = {
+                "required_capabilities": [],
+                "domain": context_data.get("task_type", "general"),
+            }
+            resolution = conflict_resolver.resolve_skill_conflicts(candidate_items, task=task_context)
+            skill_conflicts_detected = resolution.get("conflicts_detected", 0)
+            skill_conflicts_removed = resolution.get("removed", [])
+
+            if skill_conflicts_detected > 0:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    f"[Step5] Skill conflicts detected: {skill_conflicts_detected}. "
+                    f"Removed: {skill_conflicts_removed}"
+                )
+                # Persist conflict log
+                try:
+                    conflict_resolver.save_conflict_log()
+                except Exception:
+                    pass
+
+                # Clear removed items from selection
+                if selected_skill_name in skill_conflicts_removed:
+                    selected_skill_name = ""
+                if selected_agent_name in skill_conflicts_removed:
+                    selected_agent_name = ""
+
+    except Exception as _conflict_err:
+        import logging as _logging
+        _logging.getLogger(__name__).debug(
+            f"[Step5] ConflictResolver unavailable (non-fatal): {_conflict_err}"
+        )
+
     return {
-        "step5_skill": result.get("selected_skill", ""),
-        "step5_agent": result.get("selected_agent", ""),
+        "step5_skill": selected_skill_name,
+        "step5_agent": selected_agent_name,
         "step5_skill_definition": result.get("skill_definition", ""),
         "step5_agent_definition": result.get("agent_definition", ""),
         "step5_reasoning": result.get("reasoning", ""),
@@ -560,6 +630,8 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
         "step5_task_count": len(validated_tasks),
         "step5_skills_available": len(all_skills),  # For verification
         "step5_agents_available": len(all_agents),  # For verification
+        "step5_conflicts_detected": skill_conflicts_detected,
+        "step5_conflicts_removed": skill_conflicts_removed,
     }
 
 
