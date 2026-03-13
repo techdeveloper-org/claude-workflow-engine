@@ -522,6 +522,125 @@ def step11_failure_prevention(state: FlowState) -> dict:
     }
 
 
+def step12_final_prompt_generation(state: FlowState) -> dict:
+    """Step 12: Generate Final Prompt & Save to Session Folder.
+
+    Composes the complete execution prompt from all previous steps:
+    - Task analysis (type, complexity)
+    - Task breakdown (subtasks)
+    - Execution plan (phases if applicable)
+    - Skill/agent selection
+    - Tool optimization hints
+    - Model selection
+
+    Saves to: ~/.claude/logs/sessions/{session_id}/prompt.txt
+    """
+    from pathlib import Path
+
+    try:
+        session_id = state.get("session_id", "")
+        session_path = state.get("session_path", "")
+        user_message = state.get("user_message", "")
+
+        # Build prompt content
+        prompt_lines = []
+
+        prompt_lines.append("=" * 80)
+        prompt_lines.append("FINAL EXECUTION PROMPT")
+        prompt_lines.append(f"Session ID: {session_id}")
+        prompt_lines.append("=" * 80)
+        prompt_lines.append("")
+
+        # 1. Original task
+        prompt_lines.append("## ORIGINAL TASK")
+        prompt_lines.append(user_message[:500] if user_message else "[No user message]")
+        prompt_lines.append("")
+
+        # 2. Task analysis
+        prompt_lines.append("## TASK ANALYSIS")
+        task_type = state.get("step1_task_type", "Unknown")
+        complexity = state.get("step1_complexity", 5)
+        prompt_lines.append(f"- Type: {task_type}")
+        prompt_lines.append(f"- Complexity: {complexity}/10")
+        prompt_lines.append(f"- Reasoning: {state.get('step1_reasoning', 'N/A')}")
+        prompt_lines.append("")
+
+        # 3. Task breakdown
+        prompt_lines.append("## TASK BREAKDOWN")
+        tasks = state.get("step1_tasks", {}).get("tasks", [])
+        prompt_lines.append(f"- Task Count: {len(tasks)}")
+        if tasks:
+            for i, task in enumerate(tasks[:5], 1):  # Show first 5
+                if isinstance(task, dict):
+                    prompt_lines.append(f"  {i}. {task.get('description', task.get('id', 'Task'))}")
+                else:
+                    prompt_lines.append(f"  {i}. {str(task)}")
+        prompt_lines.append("")
+
+        # 4. Execution plan (if available)
+        if state.get("step2b_plan_execution"):
+            prompt_lines.append("## EXECUTION PLAN")
+            plan = state.get("step2b_plan_execution", {})
+            for phase in plan.get("phases", []):
+                prompt_lines.append(f"- {phase['name']}: {phase['task_count']} tasks")
+            prompt_lines.append("")
+
+        # 5. Skill & Agent selection
+        prompt_lines.append("## SELECTED RESOURCES")
+        skill = state.get("step6_skill", "")
+        agent = state.get("step6_agent", "")
+        if skill:
+            prompt_lines.append(f"- Skill: {skill}")
+        if agent:
+            prompt_lines.append(f"- Agent: {agent}")
+        if not skill and not agent:
+            prompt_lines.append("- No special skills/agents selected")
+        prompt_lines.append("")
+
+        # 6. Tool optimization hints
+        prompt_lines.append("## TOOL OPTIMIZATION HINTS")
+        hints = state.get("step7_tool_hints", [])
+        if hints:
+            for hint in hints[:5]:
+                prompt_lines.append(f"- {hint}")
+        else:
+            prompt_lines.append("- Use default tool parameters")
+        prompt_lines.append("")
+
+        # 7. Model selection
+        prompt_lines.append("## MODEL SELECTION")
+        model = state.get("step5_model", "Unknown")
+        prompt_lines.append(f"- Selected Model: {model}")
+        prompt_lines.append(f"- Reasoning: {state.get('step5_reasoning', 'N/A')}")
+        prompt_lines.append("")
+
+        # Compose final prompt
+        final_prompt = "\n".join(prompt_lines)
+
+        # Save to session folder
+        if session_path:
+            prompt_file = Path(session_path) / "prompt.txt"
+            with open(prompt_file, 'w', encoding='utf-8') as f:
+                f.write(final_prompt)
+
+            return {
+                "step12_prompt_saved": True,
+                "step12_prompt_file": str(prompt_file),
+                "step12_prompt_size": len(final_prompt)
+            }
+        else:
+            return {
+                "step12_prompt_saved": False,
+                "step12_error": "No session_path available"
+            }
+
+    except Exception as e:
+        return {
+            "step12_prompt_saved": False,
+            "step12_error": str(e)
+        }
+
+
 # ============================================================================
 # ROUTING FUNCTIONS
 # ============================================================================
@@ -603,6 +722,7 @@ def create_level3_subgraph():
     graph.add_node("step9_commit", step9_git_commit_preparation)
     graph.add_node("step10_session", step10_session_save)
     graph.add_node("step11_prevention", step11_failure_prevention)
+    graph.add_node("step12_prompt", step12_final_prompt_generation)
     graph.add_node("merge", level3_merge_node)
 
     # Sequential edges with conditional routing for plan execution
@@ -632,7 +752,8 @@ def create_level3_subgraph():
     graph.add_edge("step8_progress", "step9_commit")
     graph.add_edge("step9_commit", "step10_session")
     graph.add_edge("step10_session", "step11_prevention")
-    graph.add_edge("step11_prevention", "merge")
+    graph.add_edge("step11_prevention", "step12_prompt")
+    graph.add_edge("step12_prompt", "merge")
     graph.add_edge("merge", END)
 
     return graph.compile()
