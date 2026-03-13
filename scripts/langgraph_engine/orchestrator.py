@@ -791,7 +791,35 @@ def create_initial_state(session_id: str = "", project_root: str = "", user_mess
         session_id = f"flow-{uuid.uuid4().hex[:8]}"
 
     if not project_root:
-        project_root = str(Path.cwd())
+        # Smart detection: try to find claude-insight directory
+        cwd = Path.cwd()
+
+        # Check if we're already in claude-insight or a subdirectory
+        if "claude-insight" in str(cwd):
+            # Walk up to find the claude-insight root
+            current = cwd
+            while current != current.parent:
+                if current.name == "claude-insight" and (current / "CLAUDE.md").exists():
+                    project_root = str(current)
+                    break
+                current = current.parent
+
+        # If not found, check common locations
+        if not project_root:
+            possible_paths = [
+                Path.home() / "Documents" / "workspace-spring-tool-suite-4-4.27.0-new" / "claude-insight",
+                Path.home() / "claude-insight",
+                cwd,  # Fallback to cwd
+            ]
+
+            for path in possible_paths:
+                if (path / "CLAUDE.md").exists() and (path / "README.md").exists():
+                    project_root = str(path)
+                    break
+
+        # Final fallback
+        if not project_root:
+            project_root = str(cwd)
 
     # ONLY initialize immutable fields (with _keep_first_value reducer)
     # All other fields will be created/updated by nodes
