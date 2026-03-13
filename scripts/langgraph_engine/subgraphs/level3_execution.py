@@ -487,18 +487,22 @@ def step4_toon_refinement(state: FlowState) -> dict:
 # ===== STEP 5: SKILL & AGENT SELECTION =====
 
 def step5_skill_agent_selection(state: FlowState) -> dict:
-    """Step 5: Skill & Agent Selection - Select perfect skill/agent with FULL context.
+    """Step 5: Skill & Agent Selection - Select perfect skill/agent with FULL context + definitions.
 
-    Uses COMPLETE context to make informed skill/agent selection:
+    Uses COMPLETE context INCLUDING FULL SKILL DEFINITIONS to make informed skill/agent selection:
     - User message (what they're asking)
     - Task type & complexity (what kind of work)
     - Validated tasks (specific work items)
     - Project info (Java/Python/etc)
     - Patterns detected (tech stack)
     - TOON refinement (enriched overview)
+    - **ALL SKILL DEFINITIONS** (what each skill can do - CRITICAL)
+    - **ALL AGENT DEFINITIONS** (what each agent can orchestrate - CRITICAL)
 
-    This is CRITICAL - wrong skill selection breaks everything downstream!
+    This is CRITICAL - LLM now KNOWS what each skill can do before selecting!
     """
+    from ..skill_agent_loader import get_skill_agent_loader
+
     # Gather ALL context for best skill selection
     user_message = state.get("user_message", "")
     task_type = state.get("step0_task_type", "General Task")
@@ -512,6 +516,11 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
     # Build complete context for skill selection
     task_descriptions = [t.get("description", "") for t in validated_tasks]
 
+    # ENHANCEMENT: Load ALL skill and agent definitions for LLM to see
+    loader = get_skill_agent_loader()
+    all_skills = loader.list_all_skills()  # Dict[skill_name: full_definition]
+    all_agents = loader.list_all_agents()  # Dict[agent_name: full_definition]
+
     context_data = {
         "user_message": user_message,
         "task_type": task_type,
@@ -524,12 +533,17 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
             "is_java_project": is_java,
         },
         "toon_refinement": refined_toon,
+        # NEW: Include full skill/agent definitions for informed selection
+        "available_skills": list(all_skills.keys()),
+        "available_agents": list(all_agents.keys()),
+        "skill_definitions": all_skills,  # Full markdown content for all skills
+        "agent_definitions": all_agents,  # Full markdown content for all agents
     }
 
-    # Pass complete context to get perfect skill match
+    # Pass complete context INCLUDING skill definitions to get perfect skill match
     args = [
         "--analyze",
-        f"--context={json.dumps(context_data)}"
+        f"--context={json.dumps(context_data, default=str)}"
     ]
     result = call_execution_script("auto-skill-agent-selector", args)
 
@@ -544,6 +558,8 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
         "step5_llm_query_needed": result.get("llm_needed", False),
         "step5_context_provided": True,  # Mark that full context was passed
         "step5_task_count": len(validated_tasks),
+        "step5_skills_available": len(all_skills),  # For verification
+        "step5_agents_available": len(all_agents),  # For verification
     }
 
 
@@ -608,143 +624,206 @@ def step6_skill_validation_download(state: FlowState) -> dict:
 # ===== STEP 7: FINAL PROMPT GENERATION =====
 
 def step7_final_prompt_generation(state: FlowState) -> dict:
-    """Step 7: Final Prompt Generation - Compose COMPLETE execution prompt.
+    """Step 7: Final Prompt Generation - Compose COMPLETE execution prompt with SYSTEM PROMPT.
 
-    Generates comprehensive execution prompt with FULL context from all steps:
+    Generates comprehensive execution blueprint with SEPARATE system prompt and user message:
+
+    SYSTEM PROMPT (context foundation - sent as system message):
     - Original user message (what they're asking)
     - Task type & complexity (scope analysis)
     - Validated task breakdown (specific work items)
     - Execution plan with phases (if planning enabled)
     - TOON enrichment (context from previous sessions)
-    - Selected skill/agent definitions (tools to use)
+    - Selected skill/agent FULL DEFINITIONS (tools to use)
     - Patterns detected (tech stack hints)
     - Project information (Java/Python/etc)
 
+    USER MESSAGE (execution task - sent as user message):
+    - "Execute the tasks above using the selected skill/agent..."
+
+    This SYSTEM PROMPT + USER MESSAGE format provides:
+    1. LLM has complete context before seeing the task
+    2. LLM understands skill capabilities
+    3. Reduces confusion about what to do
+    4. Enables better execution decisions
+
     This is the MOST IMPORTANT prompt - it determines execution quality!
-    Saves comprehensive prompt.txt to session folder.
+    Saves both system_prompt.txt and user_message.txt to session folder.
     """
     try:
         import os
 
         session_path = state.get("session_dir") or os.environ.get("CLAUDE_SESSION_PATH")
 
-        # Build COMPREHENSIVE prompt with all context
-        prompt_lines = []
+        # =====================================================================
+        # BUILD SYSTEM PROMPT (comprehensive context foundation)
+        # =====================================================================
+        system_prompt_lines = []
+
+        system_prompt_lines.append("# TASK EXECUTION CONTEXT")
+        system_prompt_lines.append("")
 
         # 1. User message (original request)
-        prompt_lines.append("# EXECUTION PROMPT")
-        prompt_lines.append("")
         user_msg = state.get("user_message", "").strip()
         if user_msg:
-            prompt_lines.append(f"## ORIGINAL TASK\n\n{user_msg}\n")
+            system_prompt_lines.append("## ORIGINAL REQUEST")
+            system_prompt_lines.append(user_msg)
+            system_prompt_lines.append("")
 
         # 2. Task analysis
-        prompt_lines.append("## ANALYSIS")
+        system_prompt_lines.append("## ANALYSIS")
         task_type = state.get("step0_task_type", "General")
         complexity = state.get("step0_complexity", 5)
-        prompt_lines.append(f"- Task Type: {task_type}")
-        prompt_lines.append(f"- Complexity: {complexity}/10")
-        prompt_lines.append(f"- Reasoning: {state.get('step0_reasoning', 'N/A')[:100]}")
-        prompt_lines.append("")
+        reasoning = state.get('step0_reasoning', 'N/A')[:200]
+        system_prompt_lines.append(f"- Type: {task_type}")
+        system_prompt_lines.append(f"- Complexity: {complexity}/10")
+        system_prompt_lines.append(f"- Reasoning: {reasoning}")
+        system_prompt_lines.append("")
 
         # 3. VALIDATED Task breakdown (from Step 3, not Step 0)
-        prompt_lines.append("## DETAILED TASK BREAKDOWN")
+        system_prompt_lines.append("## DETAILED BREAKDOWN")
         validated_tasks = state.get("step3_tasks_validated", [])
         raw_tasks = state.get("step0_tasks", {}).get("tasks", [])
         tasks_to_show = validated_tasks if validated_tasks else raw_tasks
 
-        prompt_lines.append(f"- Total Tasks: {len(tasks_to_show)}")
+        system_prompt_lines.append(f"Total Tasks: {len(tasks_to_show)}")
         if tasks_to_show:
             for i, task in enumerate(tasks_to_show[:10], 1):  # Show all 10 tasks
                 if isinstance(task, dict):
                     desc = task.get('description', task.get('id', 'Task'))
                     effort = task.get('estimated_effort', 'medium')
                     files = task.get('files', [])
-                    prompt_lines.append(f"  {i}. {desc} [{effort}]")
+                    system_prompt_lines.append(f"\n  {i}. {desc}")
+                    system_prompt_lines.append(f"     Effort: {effort}")
                     if files:
-                        prompt_lines.append(f"     Files: {', '.join(files[:3])}")
+                        system_prompt_lines.append(f"     Files: {', '.join(files[:3])}")
                 else:
-                    prompt_lines.append(f"  {i}. {str(task)}")
-        prompt_lines.append("")
+                    system_prompt_lines.append(f"  {i}. {str(task)}")
+        system_prompt_lines.append("")
 
         # 4. Execution plan (if available)
         plan_exec = state.get("step2_plan_execution", {})
         if plan_exec and plan_exec.get("phases"):
-            prompt_lines.append("## EXECUTION PLAN")
+            system_prompt_lines.append("## EXECUTION PLAN")
             phases = plan_exec.get("phases", [])
             for phase in phases:
-                prompt_lines.append(f"### Phase: {phase.get('name', 'Phase')}")
-                prompt_lines.append(f"- Tasks: {phase.get('task_count', 0)}")
-                prompt_lines.append(f"- Task IDs: {', '.join([str(t) for t in phase.get('tasks', [])])}")
-            prompt_lines.append("")
+                system_prompt_lines.append(f"### {phase.get('name', 'Phase')}")
+                system_prompt_lines.append(f"Tasks: {phase.get('task_count', 0)}")
+                system_prompt_lines.append(f"IDs: {', '.join([str(t) for t in phase.get('tasks', [])])}")
+            system_prompt_lines.append("")
 
         # 5. TOON Enrichment
         toon = state.get("step4_toon_refined", {})
         if toon:
-            prompt_lines.append("## CONTEXT & INSIGHTS")
+            system_prompt_lines.append("## CONTEXT & INSIGHTS")
             if toon.get("task_descriptions"):
-                prompt_lines.append("- Task Descriptions Provided: Yes")
+                system_prompt_lines.append("- Task Descriptions: Available")
             if toon.get("detected_patterns"):
-                prompt_lines.append(f"- Detected Patterns: {', '.join(toon.get('detected_patterns', []))}")
+                system_prompt_lines.append(f"- Patterns: {', '.join(toon.get('detected_patterns', []))}")
             if toon.get("planned_phases"):
-                prompt_lines.append(f"- Planned Phases: {toon.get('planned_phases')}")
-            if toon.get("has_dependencies"):
-                prompt_lines.append("- Task Dependencies: Yes")
-            prompt_lines.append("")
+                system_prompt_lines.append(f"- Planned Phases: {toon.get('planned_phases')}")
+            system_prompt_lines.append("")
 
-        # 6. Selected Skill & Agent definitions
-        prompt_lines.append("## SELECTED RESOURCES")
+        # 6. FULL Selected Skill & Agent definitions
+        system_prompt_lines.append("## TOOLS & RESOURCES")
         skill = state.get("step5_skill", "")
         agent = state.get("step5_agent", "")
         skill_def = state.get("step5_skill_definition", "")
         agent_def = state.get("step5_agent_definition", "")
 
         if skill:
-            prompt_lines.append(f"### Skill: {skill}")
+            system_prompt_lines.append(f"\n### Skill: {skill}")
             if skill_def:
-                prompt_lines.append(f"Definition:\n{skill_def[:200]}")
+                # Include FULL skill definition (not truncated)
+                system_prompt_lines.append("Definition:")
+                system_prompt_lines.append(skill_def)
+            system_prompt_lines.append("")
+
         if agent:
-            prompt_lines.append(f"### Agent: {agent}")
+            system_prompt_lines.append(f"\n### Agent: {agent}")
             if agent_def:
-                prompt_lines.append(f"Definition:\n{agent_def[:200]}")
+                # Include FULL agent definition (not truncated)
+                system_prompt_lines.append("Definition:")
+                system_prompt_lines.append(agent_def)
+            system_prompt_lines.append("")
+
         if not skill and not agent:
-            prompt_lines.append("- No special skills/agents needed")
-        prompt_lines.append("")
+            system_prompt_lines.append("- No special skills/agents needed")
+            system_prompt_lines.append("")
 
         # 7. Project context
-        prompt_lines.append("## PROJECT CONTEXT")
+        system_prompt_lines.append("## PROJECT CONTEXT")
         project_root = state.get("project_root", "")
         is_java = state.get("is_java_project", False)
         patterns = state.get("patterns_detected", [])
 
         if project_root:
-            prompt_lines.append(f"- Project Root: {project_root}")
-        prompt_lines.append(f"- Project Type: {'Java/Spring' if is_java else 'Python/Node/Other'}")
+            system_prompt_lines.append(f"- Root: {project_root}")
+        system_prompt_lines.append(f"- Type: {'Java/Spring' if is_java else 'Python/Node/Other'}")
         if patterns:
-            prompt_lines.append(f"- Detected Stack: {', '.join(patterns[:5])}")
-        prompt_lines.append("")
+            system_prompt_lines.append(f"- Stack: {', '.join(patterns[:5])}")
+        system_prompt_lines.append("")
 
-        # 8. Execution notes
-        prompt_lines.append("## EXECUTION GUIDELINES")
-        prompt_lines.append("1. Follow the task breakdown order")
-        prompt_lines.append("2. Use the selected skill/agent for implementation")
-        prompt_lines.append("3. Report progress after each task")
-        prompt_lines.append("4. Update file modifications as you go")
-        prompt_lines.append("")
+        system_prompt = "\n".join(system_prompt_lines)
 
-        # Compose final prompt
-        final_prompt = "\n".join(prompt_lines)
+        # =====================================================================
+        # BUILD USER MESSAGE (what to do)
+        # =====================================================================
+        user_message_lines = []
+        user_message_lines.append("# EXECUTION TASK")
+        user_message_lines.append("")
+        user_message_lines.append(f"Execute the {task_type} using the breakdown and tools above.")
+        user_message_lines.append("")
+        user_message_lines.append("## GUIDELINES")
+        user_message_lines.append("1. Follow the task breakdown in order")
+        user_message_lines.append("2. Use the selected skill/agent for implementation")
+        user_message_lines.append("3. Report progress after each task")
+        user_message_lines.append("4. Track file modifications")
+        user_message_lines.append("5. Validate outputs match requirements")
+        user_message_lines.append("")
+
+        user_message = "\n".join(user_message_lines)
+
+        # =====================================================================
+        # BUILD COMBINED PROMPT (for tools that don't support system prompt)
+        # =====================================================================
+        combined_prompt_lines = [
+            "SYSTEM PROMPT:",
+            "=" * 60,
+            system_prompt,
+            "",
+            "=" * 60,
+            "USER MESSAGE:",
+            "=" * 60,
+            user_message,
+            "=" * 60,
+        ]
+        combined_prompt = "\n".join(combined_prompt_lines)
 
         # Save to session folder
         if session_path:
-            prompt_file = Path(session_path) / "prompt.txt"
-            with open(prompt_file, 'w', encoding='utf-8') as f:
-                f.write(final_prompt)
+            # Save all three versions
+            system_prompt_file = Path(session_path) / "system_prompt.txt"
+            user_message_file = Path(session_path) / "user_message.txt"
+            combined_prompt_file = Path(session_path) / "prompt.txt"
+
+            with open(system_prompt_file, 'w', encoding='utf-8') as f:
+                f.write(system_prompt)
+
+            with open(user_message_file, 'w', encoding='utf-8') as f:
+                f.write(user_message)
+
+            with open(combined_prompt_file, 'w', encoding='utf-8') as f:
+                f.write(combined_prompt)
 
             return {
                 "step7_prompt_saved": True,
-                "step7_prompt_file": str(prompt_file),
-                "step7_prompt_size": len(final_prompt),
+                "step7_system_prompt_file": str(system_prompt_file),
+                "step7_user_message_file": str(user_message_file),
+                "step7_combined_prompt_file": str(combined_prompt_file),
+                "step7_system_prompt_size": len(system_prompt),
+                "step7_user_message_size": len(user_message),
+                "step7_combined_prompt_size": len(combined_prompt),
                 "step7_context_included": {
                     "user_message": bool(user_msg),
                     "task_analysis": True,
@@ -754,7 +833,8 @@ def step7_final_prompt_generation(state: FlowState) -> dict:
                     "skill_definition": bool(skill_def),
                     "agent_definition": bool(agent_def),
                     "project_context": bool(project_root or patterns),
-                }
+                    "system_prompt_format": True,  # NEW: using system prompt format
+                },
             }
         else:
             return {
