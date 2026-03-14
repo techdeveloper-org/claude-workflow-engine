@@ -794,6 +794,119 @@ def step6_skill_validation_download(state: FlowState) -> dict:
     }
 
 
+# ===== HELPERS: PROJECT CONTEXT DETECTION =====
+
+def _detect_project_type_from_files(project_root: str) -> str:
+    """Detect project type from marker files in project root.
+
+    Checks for common framework markers to determine the actual project type
+    instead of returning a generic "Python/Node/Other".
+    """
+    from pathlib import Path
+    root = Path(project_root) if project_root else Path(".")
+    if not root.exists():
+        return "Unknown"
+
+    # Check for framework markers (order: most specific first)
+    markers = [
+        (["angular.json", "angular.cli.json"], "Angular"),
+        (["next.config.js", "next.config.mjs", "next.config.ts"], "Next.js"),
+        (["nuxt.config.js", "nuxt.config.ts"], "Nuxt.js"),
+        (["svelte.config.js"], "SvelteKit"),
+        (["vite.config.ts", "vite.config.js"], "Vite"),
+        (["package.json"], None),  # Check later for React/Vue
+        (["pom.xml", "build.gradle", "build.gradle.kts"], "Java/Spring"),
+        (["Cargo.toml"], "Rust"),
+        (["go.mod"], "Go"),
+        (["Gemfile"], "Ruby"),
+        (["composer.json"], "PHP"),
+        (["requirements.txt", "setup.py", "pyproject.toml"], None),  # Check later for Flask/Django
+        (["Dockerfile", "docker-compose.yml"], None),  # Not primary type
+    ]
+
+    for files, framework in markers:
+        for f in files:
+            if (root / f).exists():
+                if framework:
+                    return framework
+                # Special handling for package.json
+                if f == "package.json":
+                    try:
+                        import json as _json
+                        pkg = _json.loads((root / f).read_text(encoding='utf-8'))
+                        deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+                        if "react" in deps:
+                            return "React"
+                        if "vue" in deps:
+                            return "Vue.js"
+                        if "svelte" in deps:
+                            return "Svelte"
+                        return "Node.js"
+                    except Exception:
+                        return "Node.js"
+                # Special handling for Python
+                if f in ("requirements.txt", "setup.py", "pyproject.toml"):
+                    try:
+                        req_text = ""
+                        if (root / "requirements.txt").exists():
+                            req_text = (root / "requirements.txt").read_text(encoding='utf-8').lower()
+                        if "flask" in req_text:
+                            return "Python/Flask"
+                        if "django" in req_text:
+                            return "Python/Django"
+                        if "fastapi" in req_text:
+                            return "Python/FastAPI"
+                        if "langgraph" in req_text or "langchain" in req_text:
+                            return "Python/LangGraph"
+                        return "Python"
+                    except Exception:
+                        return "Python"
+
+    return "Unknown"
+
+
+def _read_project_context_snippets(project_root: str, max_chars: int = 1500) -> tuple:
+    """Read README and SRS file snippets for project context.
+
+    Returns (readme_snippet, srs_snippet) - each max_chars long.
+    """
+    from pathlib import Path
+    root = Path(project_root) if project_root else Path(".")
+    readme_snippet = ""
+    srs_snippet = ""
+
+    if not root.exists():
+        return "", ""
+
+    # Read README
+    for readme_name in ["README.md", "readme.md", "README.txt", "README"]:
+        readme_file = root / readme_name
+        if readme_file.exists():
+            try:
+                content = readme_file.read_text(encoding='utf-8', errors='ignore')
+                readme_snippet = content[:max_chars]
+                if len(content) > max_chars:
+                    readme_snippet += "\n... (truncated)"
+            except Exception:
+                pass
+            break
+
+    # Read SRS
+    for srs_name in ["SRS.md", "srs.md", "SRS.txt", "SRS.doc"]:
+        srs_file = root / srs_name
+        if srs_file.exists():
+            try:
+                content = srs_file.read_text(encoding='utf-8', errors='ignore')
+                srs_snippet = content[:max_chars]
+                if len(content) > max_chars:
+                    srs_snippet += "\n... (truncated)"
+            except Exception:
+                pass
+            break
+
+    return readme_snippet, srs_snippet
+
+
 # ===== STEP 7: FINAL PROMPT GENERATION =====
 
 def step7_final_prompt_generation(state: FlowState) -> dict:
@@ -924,17 +1037,38 @@ def step7_final_prompt_generation(state: FlowState) -> dict:
             system_prompt_lines.append("- No special skills/agents needed")
             system_prompt_lines.append("")
 
-        # 7. Project context
+        # 7. Project context - RICH context from README/SRS + detected framework
         system_prompt_lines.append("## PROJECT CONTEXT")
         project_root = state.get("project_root", "")
         is_java = state.get("is_java_project", False)
+        detected_fw = state.get("detected_framework", "")
         patterns = state.get("patterns_detected", [])
 
         if project_root:
             system_prompt_lines.append(f"- Root: {project_root}")
-        system_prompt_lines.append(f"- Type: {'Java/Spring' if is_java else 'Python/Node/Other'}")
+
+        # Use detected_framework from Level 2 (not hardcoded binary)
+        if detected_fw:
+            system_prompt_lines.append(f"- Type: {detected_fw}")
+        elif is_java:
+            system_prompt_lines.append(f"- Type: Java/Spring")
+        else:
+            # Auto-detect from project files
+            proj_type = _detect_project_type_from_files(project_root)
+            system_prompt_lines.append(f"- Type: {proj_type}")
+
         if patterns:
             system_prompt_lines.append(f"- Stack: {', '.join(patterns[:5])}")
+
+        # Read README/SRS snippets for project understanding
+        readme_snippet, srs_snippet = _read_project_context_snippets(project_root)
+        if readme_snippet:
+            system_prompt_lines.append(f"\n### README Summary")
+            system_prompt_lines.append(readme_snippet)
+        if srs_snippet:
+            system_prompt_lines.append(f"\n### SRS Summary")
+            system_prompt_lines.append(srs_snippet)
+
         system_prompt_lines.append("")
 
         system_prompt = "\n".join(system_prompt_lines)
