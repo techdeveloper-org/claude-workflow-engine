@@ -746,14 +746,14 @@ def run_post_merge_version_update(tool_name, tool_input, is_error):
                     output = json.loads(result.stdout.decode())
                     if output.get('status') == 'OK':
                         new_version = output.get('new_version', 'unknown')
-                        sys.stdout.write(
+                        sys.stderr.write(
                             f'[POST-MERGE] Version auto-updated to {new_version}\n'
                             f'  - VERSION file updated\n'
                             f'  - README.md updated\n'
                             f'  - SYSTEM_REQUIREMENTS_SPECIFICATION.md updated\n'
                             f'  - Auto-commit created\n'
                         )
-                        sys.stdout.flush()
+                        sys.stderr.flush()
                 except Exception:
                     pass  # Could not parse output
     except Exception:
@@ -791,8 +791,8 @@ def close_github_issues_on_completion(tool_name, tool_input, tool_response, is_e
             if closed_task_id:
                 closed = gim.close_github_issue(closed_task_id)
                 if closed:
-                    sys.stdout.write('[GH L3.12] Issue closed for task ' + str(closed_task_id) + '\n')
-                    sys.stdout.flush()
+                    sys.stderr.write('[GH L3.12] Issue closed for task ' + str(closed_task_id) + '\n')
+                    sys.stderr.flush()
     except Exception:
         pass  # Non-blocking: GitHub errors never fail the hook
     return False, ''
@@ -863,15 +863,15 @@ def main():
                         _prog_ok = True
                         break
                     if _attempt < 3:
-                        sys.stdout.write('[RETRY ' + str(_attempt) + '/3] check-incomplete-work failed, retrying...\n')
-                        sys.stdout.flush()
+                        sys.stderr.write('[RETRY ' + str(_attempt) + '/3] check-incomplete-work failed, retrying...\n')
+                        sys.stderr.flush()
                 except Exception:
                     if _attempt < 3:
-                        sys.stdout.write('[RETRY ' + str(_attempt) + '/3] check-incomplete-work error, retrying...\n')
-                        sys.stdout.flush()
+                        sys.stderr.write('[RETRY ' + str(_attempt) + '/3] check-incomplete-work error, retrying...\n')
+                        sys.stderr.flush()
             if not _prog_ok:
-                sys.stdout.write('[POLICY-WARN] check-incomplete-work failed after 3 retries\n')
-                sys.stdout.flush()
+                sys.stderr.write('[POLICY-WARN] check-incomplete-work failed after 3 retries\n')
+                sys.stderr.flush()
     except:
         pass
 
@@ -881,14 +881,14 @@ def main():
         if not raw or not raw.strip():
             # Empty stdin - hook was called but no data provided
             # This is OK - just output success and exit
-            sys.stdout.write('[L3.9] Post-tool tracking complete (no stdin)\n')
-            sys.stdout.flush()
+            sys.stderr.write('[L3.9] Post-tool tracking complete (no stdin)\n')
+            sys.stderr.flush()
             sys.exit(0)
         data = json.loads(raw)
     except Exception as e:
         # Failed to read/parse stdin - still output success
-        sys.stdout.write(f'[L3.9] Post-tool tracking complete (read error: {str(e)[:30]})\n')
-        sys.stdout.flush()
+        sys.stderr.write(f'[L3.9] Post-tool tracking complete (read error: {str(e)[:30]})\n')
+        sys.stderr.flush()
         sys.exit(0)
 
     tool_name = data.get('tool_name', '')
@@ -1152,14 +1152,14 @@ def main():
                 if tools_since > 5 and tool_name in ('Write', 'Edit', 'Bash', 'NotebookEdit'):
                     complexity = flow_ctx.get('complexity', 0)
                     if complexity >= 3:
-                        sys.stdout.write(
+                        sys.stderr.write(
                             '[POLICY] task-progress-tracking: ' + str(tools_since)
                             + ' tool calls since last TaskUpdate!\n'
                             '  Policy says: Update every 2-3 tool calls (max 5).\n'
                             '  ACTION: Call TaskUpdate with metadata to track progress.\n'
                             '  Example: TaskUpdate(id, metadata={"progress": "step X/Y complete"})\n'
                         )
-                        sys.stdout.flush()
+                        sys.stderr.flush()
                         debug_log(f"  [GRANULAR] Step 3.1.12: ? Wrote task-progress-tracking policy warning")
         except Exception as e:
             debug_log(f"  [GRANULAR] Step 3.1.12: ? EXCEPTION in task-progress-tracking policy: {type(e).__name__}: {str(e)[:200]}")
@@ -1175,13 +1175,13 @@ def main():
             complexity = flow_ctx.get('complexity', 0)
             tasks_created = state.get('tasks_created', 0)
             if complexity >= 6 and tasks_created == 0 and tool_name in ('Write', 'Edit', 'NotebookEdit'):
-                sys.stdout.write(
+                sys.stderr.write(
                     '[POLICY] task-phase-enforcement: Complexity=' + str(complexity)
                     + ' but 0 tasks created!\n'
                     '  Policy says: Complexity >= 6 REQUIRES phased execution.\n'
                     '  ACTION: Call TaskCreate to define tasks BEFORE writing code.\n'
                 )
-                sys.stdout.flush()
+                sys.stderr.flush()
                 debug_log(f"  [GRANULAR] Step 3.1.13: ? Wrote phase-enforcement policy warning")
             else:
                 debug_log(f"  [GRANULAR] Step 3.1.13: ? No phase-enforcement warning needed (complexity={complexity}, tasks_created={tasks_created})")
@@ -1221,12 +1221,12 @@ def main():
                         reasons.append('subject too short (' + str(len(tc_subject)) + ' chars, need 3+)')
                     if len(tc_desc) < 3:
                         reasons.append('description too short (' + str(len(tc_desc)) + ' chars, need 3+)')
-                    sys.stdout.write(
+                    sys.stderr.write(
                         '[POST-TOOL WARN] TaskCreate validation FAILED - task-breakdown flag NOT cleared!\n'
                         '  Reason: ' + ', '.join(reasons) + '\n'
                         '  Fix: Call TaskCreate again with a meaningful subject (10+ chars) and description (10+ chars).\n'
                     )
-                    sys.stdout.flush()
+                    sys.stderr.flush()
             except Exception:
                 pass
 
@@ -1238,8 +1238,8 @@ def main():
                 if not gim:
                     # LOGGING: Why github_issue_manager failed to load
                     debug_log(f"  [GH-GRANULAR] github_issue_manager is None, skipping")
-                    sys.stdout.write('[GH-WORKFLOW] ?? GitHub issue manager not available\n')
-                    sys.stdout.flush()
+                    sys.stderr.write('[GH-WORKFLOW] ?? GitHub issue manager not available\n')
+                    sys.stderr.flush()
                 else:
                     debug_log(f"  [GH-GRANULAR] github_issue_manager loaded successfully, proceeding")
                     # Use task ID from response first, fallback to sequential count
@@ -1256,36 +1256,36 @@ def main():
 
                     if not tc_subject:
                         debug_log(f"  [GH-GRANULAR] No subject, skipping issue creation")
-                        sys.stdout.write('[GH-WORKFLOW] ?? No task subject - skipping GitHub issue\n')
-                        sys.stdout.flush()
+                        sys.stderr.write('[GH-WORKFLOW] ?? No task subject - skipping GitHub issue\n')
+                        sys.stderr.flush()
                     elif len(tc_subject) < 5:
                         debug_log(f"  [GH-GRANULAR] Subject too short ({len(tc_subject)} chars), skipping")
-                        sys.stdout.write(f'[GH-WORKFLOW] ?? Subject too short ({len(tc_subject)} chars, need 5+)\n')
-                        sys.stdout.flush()
+                        sys.stderr.write(f'[GH-WORKFLOW] ?? Subject too short ({len(tc_subject)} chars, need 5+)\n')
+                        sys.stderr.flush()
                     else:
                         # CREATE GITHUB ISSUE
                         debug_log(f"  [GH-GRANULAR] About to call create_github_issue(task_id={task_id}, subject='{tc_subject[:30]}')")
-                        sys.stdout.write(f'[GH-WORKFLOW] Creating GitHub issue for task "{tc_subject[:50]}"...\n')
-                        sys.stdout.flush()
+                        sys.stderr.write(f'[GH-WORKFLOW] Creating GitHub issue for task "{tc_subject[:50]}"...\n')
+                        sys.stderr.flush()
 
                         debug_log(f"  [GH-GRANULAR] Calling gim.create_github_issue()...")
                         issue_num = gim.create_github_issue(task_id, tc_subject, tc_desc)
                         debug_log(f"  [GH-GRANULAR] create_github_issue() returned: {issue_num}")
 
                         if issue_num:
-                            sys.stdout.write(f'[GH-WORKFLOW] ? Issue #{issue_num} created (branch created automatically)\n')
-                            sys.stdout.flush()
+                            sys.stderr.write(f'[GH-WORKFLOW] ? Issue #{issue_num} created (branch created automatically)\n')
+                            sys.stderr.flush()
                             debug_log(f"  [GH-GRANULAR] ? Issue #{issue_num} creation reported success")
                             # Branch is now created atomically inside create_github_issue()
                         else:
-                            sys.stdout.write(f'[GH-WORKFLOW] ? Issue creation returned None - check logs\n')
-                            sys.stdout.flush()
+                            sys.stderr.write(f'[GH-WORKFLOW] ? Issue creation returned None - check logs\n')
+                            sys.stderr.flush()
                             debug_log(f"  [GH-GRANULAR] ? Issue creation returned None")
             except Exception as e:
                 # LOG THE ACTUAL ERROR instead of silent failure
                 debug_log(f"  [GH-GRANULAR] ? EXCEPTION in GitHub block: {type(e).__name__}: {str(e)[:150]}")
-                sys.stdout.write(f'[GH-WORKFLOW] ? EXCEPTION: {type(e).__name__}: {str(e)[:150]}\n')
-                sys.stdout.flush()
+                sys.stderr.write(f'[GH-WORKFLOW] ? EXCEPTION: {type(e).__name__}: {str(e)[:150]}\n')
+                sys.stderr.flush()
                 # Also log to file
                 try:
                     log_file = Path.home() / '.claude' / 'memory' / 'logs' / 'github-workflow-errors.log'
@@ -1344,14 +1344,14 @@ def main():
         if tool_name == 'Task' and not is_error:
             try:
                 subagent_type = (tool_input or {}).get('subagent_type', 'unknown')
-                sys.stdout.write(
+                sys.stderr.write(
                     '[POST-TOOL L6.2] Subagent returned! (type: '
                     + subagent_type + ')\n'
                     '  REMINDER: Subagent cannot call TaskUpdate - YOU must do it.\n'
                     '  ACTION: Review subagent result -> TaskUpdate(completed) if task is done.\n'
                     '  RULE: Parent = Orchestrator. Only parent mutates task state.\n'
                 )
-                sys.stdout.flush()
+                sys.stderr.flush()
             except Exception:
                 pass
 
@@ -1369,7 +1369,7 @@ def main():
                     # Reset modified files tracker after task completion (git commit expected)
                     state['modified_files_since_commit'] = []
                     save_session_progress(state)
-                    sys.stdout.write(
+                    sys.stderr.write(
                         '[POST-TOOL L3.11] Task marked COMPLETED (#'
                         + str(completed_count) + ')!\n'
                         '  PHASE GUARD: Check ALL tasks in current phase.\n'
@@ -1382,12 +1382,12 @@ def main():
                         '  RULE: Phase completion = ALL tasks done, not just this one.\n'
                         '  RULE: DO NOT skip git commit on phase completion.\n'
                     )
-                    sys.stdout.flush()
+                    sys.stderr.flush()
 
                     # AUTO WORK-DONE VOICE (v2.2.0):
                     # After each task completion, print strong reminder to Claude.
                     # Claude must check TaskList and write .session-work-done if all done.
-                    sys.stdout.write(
+                    sys.stderr.write(
                         '[POST-TOOL VOICE] Task #' + str(completed_count) + ' completed.\n'
                         '  CHECK: Are ALL tasks now completed?\n'
                         '  IF YES -> Write ~/.claude/.session-work-done with session summary.\n'
@@ -1395,7 +1395,7 @@ def main():
                         'Path.home().joinpath(\'.claude\',\'.session-work-done\')'
                         '.write_text(\'Sir, all tasks completed. [YOUR SUMMARY HERE]\', encoding=\'utf-8\')"\n'
                     )
-                    sys.stdout.flush()
+                    sys.stderr.flush()
 
                     # GitHub Issues: Close issue for completed task
                     try:
@@ -1405,8 +1405,8 @@ def main():
                             if closed_task_id:
                                 closed = gim.close_github_issue(closed_task_id)
                                 if closed:
-                                    sys.stdout.write('[GH] Issue closed for task ' + str(closed_task_id) + '\n')
-                                    sys.stdout.flush()
+                                    sys.stderr.write('[GH] Issue closed for task ' + str(closed_task_id) + '\n')
+                                    sys.stderr.flush()
 
                             # SESSION-ISSUE-BASED WORK_DONE: Check if ALL session issues are now closed
                             # This is a secondary trigger that works even when task counts are out of sync
@@ -1429,12 +1429,12 @@ def main():
                                                 + '. Auto-written by post-tool-tracker (issue-based).',
                                                 encoding='utf-8'
                                             )
-                                            sys.stdout.write(
+                                            sys.stderr.write(
                                                 '[AUTO] .session-work-done written (all '
                                                 + str(issue_count) + ' issues closed on ' + branch
                                                 + ') -> PR workflow will trigger on Stop hook\n'
                                             )
-                                            sys.stdout.flush()
+                                            sys.stderr.flush()
                             except Exception:
                                 pass  # Never block on work-done check
                     except Exception:
@@ -1451,10 +1451,10 @@ def main():
                                 timeout=60, capture_output=True
                             )
                             if _cr.returncode == 0:
-                                sys.stdout.write('[POST-TOOL L3.11] Auto-commit enforcer executed successfully\n')
+                                sys.stderr.write('[POST-TOOL L3.11] Auto-commit enforcer executed successfully\n')
                             else:
-                                sys.stdout.write('[POST-TOOL L3.11] Auto-commit: no changes to commit or skipped\n')
-                            sys.stdout.flush()
+                                sys.stderr.write('[POST-TOOL L3.11] Auto-commit: no changes to commit or skipped\n')
+                            sys.stderr.flush()
                     except Exception:
                         pass  # Never block on auto-commit
 
@@ -1473,10 +1473,10 @@ def main():
                             state['last_build_failed'] = False
                             state['last_build_failed_label'] = ''
                             save_session_progress(state)
-                            sys.stdout.write(
+                            sys.stderr.write(
                                 '[BUILD] ' + build_result['summary'] + '\n'
                             )
-                            sys.stdout.flush()
+                            sys.stderr.flush()
                         else:
                             # BUILD FAILED - persist flag for Level 3.9 blocking check
                             failed_labels = [r['label'] for r in build_result.get('results', []) if not r.get('passed')]
@@ -1484,7 +1484,7 @@ def main():
                             state['last_build_failed_label'] = ', '.join(failed_labels) if failed_labels else build_result.get('summary', 'unknown')
                             save_session_progress(state)
                             # Tell Claude to fix it
-                            sys.stdout.write(
+                            sys.stderr.write(
                                 '[BUILD FAILED] ' + build_result['summary'] + '\n'
                                 '  ACTION: FIX the build errors below BEFORE moving to next task!\n'
                                 '  DO NOT mark this task complete until build passes.\n'
@@ -1492,11 +1492,11 @@ def main():
                             )
                             for r in build_result['results']:
                                 if not r['passed']:
-                                    sys.stdout.write(
+                                    sys.stderr.write(
                                         '  --- ' + r['label'] + ' ---\n'
                                         + r.get('output', '')[:1500] + '\n'
                                     )
-                            sys.stdout.flush()
+                            sys.stderr.flush()
                     except Exception:
                         pass  # Never block on build validation failures
 
@@ -1513,12 +1513,12 @@ def main():
                             summary_text = 'All ' + str(tasks_completed_now) + ' tasks completed successfully.'
                             work_done_flag.write_text(summary_text, encoding='utf-8')
 
-                            sys.stdout.write(
+                            sys.stderr.write(
                                 '[AUTO] .session-work-done written ('
                                 + str(tasks_completed_now) + '/' + str(tasks_created)
                                 + ' tasks done)\n'
                             )
-                            sys.stdout.flush()
+                            sys.stderr.flush()
 
                             # NEW: Call stop-notifier.py immediately with summary context
                             # This triggers voice notification WITHOUT waiting for Stop hook
@@ -1535,13 +1535,13 @@ def main():
                                         timeout=90, capture_output=True, env=_env
                                     )
                                     if _sr.returncode == 0:
-                                        sys.stdout.write('[VOICE] Voice notification triggered with task summary\n')
+                                        sys.stderr.write('[VOICE] Voice notification triggered with task summary\n')
                                     else:
-                                        sys.stdout.write('[VOICE] Voice trigger sent (result: ' + str(_sr.returncode) + ')\n')
-                                    sys.stdout.flush()
+                                        sys.stderr.write('[VOICE] Voice trigger sent (result: ' + str(_sr.returncode) + ')\n')
+                                    sys.stderr.flush()
                             except Exception as _e:
-                                sys.stdout.write('[VOICE] Voice notification attempt made (may be async)\n')
-                                sys.stdout.flush()
+                                sys.stderr.write('[VOICE] Voice notification attempt made (may be async)\n')
+                                sys.stderr.flush()
                     except Exception:
                         pass  # Never block on work-done flag
 
@@ -1576,12 +1576,12 @@ def main():
         # GIT REMINDER: When 10+ files modified without commit
         modified_count = len(state.get('modified_files_since_commit', []))
         if modified_count >= 10 and tool_name in ('Write', 'Edit', 'NotebookEdit'):
-            sys.stdout.write(
+            sys.stderr.write(
                 '[POST-TOOL GIT] WARNING: ' + str(modified_count) + ' files modified since last commit!\n'
                 '  ACTION: Consider running git add + git commit + git push.\n'
                 '  FILES: ' + ', '.join(state.get('modified_files_since_commit', [])[-5:]) + '...\n'
             )
-            sys.stdout.flush()
+            sys.stderr.flush()
 
         # Also write to .context-usage so it stays fresh (context-monitor fallback path)
         try:
@@ -1678,8 +1678,8 @@ def main():
     # ===================================================================
     if _BLOCKING_RESULT is not None:
         exit_code, block_msg = _BLOCKING_RESULT
-        sys.stdout.write(block_msg + '\n')
-        sys.stdout.flush()
+        sys.stderr.write(block_msg + '\n')
+        sys.stderr.flush()
         # Update metrics with blocking exit code before exiting
         try:
             _sid_blk = _get_session_id_from_progress() or ''
@@ -1692,8 +1692,8 @@ def main():
         sys.exit(exit_code)
 
     # Success: minimal output so hook system knows script ran
-    sys.stdout.write('[L3.9] Post-tool tracking complete\n')
-    sys.stdout.flush()
+    sys.stderr.write('[L3.9] Post-tool tracking complete\n')
+    sys.stderr.flush()
     sys.exit(0)
 
 

@@ -640,15 +640,22 @@ def output_node(state: FlowState) -> dict:
     # Save workflow memory before finishing
     save_workflow_memory(state)
 
-    # Determine final status based on execution results
+    # Determine final status based on actual step results (not just errors list)
+    # errors list may contain non-fatal warnings from hooks_decorator
     if state.get("level_minus1_status") == "BLOCKED":
         final_status = "BLOCKED"
-    elif state.get("errors"):
-        final_status = "FAILED"
-    elif state.get("warnings"):
-        final_status = "PARTIAL"
     else:
-        final_status = "OK"
+        # Check actual step statuses - if any step explicitly FAILED, mark FAILED
+        step_failures = []
+        for key, val in state.items():
+            if key.endswith("_status") and isinstance(val, str) and val == "ERROR":
+                step_failures.append(key)
+        if step_failures:
+            final_status = "FAILED"
+        elif state.get("warnings"):
+            final_status = "PARTIAL"
+        else:
+            final_status = "OK"
 
     # Return synthesis result with proper status
     return {
