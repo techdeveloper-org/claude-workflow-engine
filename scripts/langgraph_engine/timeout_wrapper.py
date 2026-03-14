@@ -34,14 +34,15 @@ from loguru import logger
 # ---------------------------------------------------------------------------
 
 STEP_TIMEOUTS: Dict[int, int] = {
-    1:  30,   # Plan Mode Decision (fast LLM classification)
+    0:  60,   # Task Analysis (Ollama LLM call with 16K context)
+    1:  45,   # Plan Mode Decision (Ollama classification)
     2: 120,   # Plan Execution (convergence loop with LLM)
     3:  60,   # Task Breakdown (parsing + validation)
     4:  30,   # TOON Refinement (local computation)
-    5:  60,   # Skill & Agent Selection (filesystem scan + Ollama)
+    5:  90,   # Skill & Agent Selection (filesystem scan + Ollama 16K ctx)
     6:  45,   # Skill Validation & Download (network I/O possible)
     7:  30,   # Final Prompt Generation (local formatting)
-    8:  30,   # GitHub Issue Creation (network I/O)
+    8:  60,   # GitHub Issue Creation (Ollama title gen + network I/O)
     9:  30,   # Branch Creation (git operations)
     10: 300,  # Implementation Execution (Claude does heavy lifting)
     11: 60,   # Pull Request & Code Review (network + LLM)

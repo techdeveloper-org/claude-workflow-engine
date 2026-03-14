@@ -591,10 +591,17 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
     import tempfile
     import os
 
+    # Detect project type for skill matching
+    detected_fw = state.get("detected_framework", "")
+    if not detected_fw:
+        detected_fw = _detect_project_type_from_files(project_root)
+
     slim_context = {
         "user_message": user_message[:500],
         "task_type": task_type,
         "complexity": complexity,
+        "project_type": detected_fw,
+        "project_root": project_root,
         "available_skills": list(all_skills.keys()),
         "available_agents": list(all_agents.keys()),
         "patterns_detected": patterns,

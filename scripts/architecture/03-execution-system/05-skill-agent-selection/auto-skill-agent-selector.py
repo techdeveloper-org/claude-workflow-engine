@@ -467,6 +467,7 @@ def main():
         complexity = 5
         user_message = ""
         context_skills = []
+        project_type = ""
 
         # Parse arguments
         for i, arg in enumerate(sys.argv[1:], 1):
@@ -486,6 +487,7 @@ def main():
                     complexity = ctx.get("complexity", complexity)
                     user_message = ctx.get("user_message", "")
                     context_skills = ctx.get("available_skills", [])
+                    project_type = ctx.get("project_type", "")
                 except (json.JSONDecodeError, TypeError):
                     pass
             elif arg.startswith("--context-file="):
@@ -497,6 +499,7 @@ def main():
                     complexity = ctx.get("complexity", complexity)
                     user_message = ctx.get("user_message", "")
                     context_skills = ctx.get("available_skills", [])
+                    project_type = ctx.get("project_type", "")
                 except Exception:
                     pass
             elif not arg.startswith('--'):
@@ -533,12 +536,16 @@ def main():
         if user_message:
             user_msg_text = f"User Request: {user_message[:500]}\n"
 
+        # Include project type for accurate matching
+        project_type_text = f"Project Type: {project_type}\n" if project_type else ""
+
         # Build prompt - select MULTIPLE skills and agent
         prompt = f"""You are a task-to-skill matcher. Select ALL relevant skills and the best agent for this task.
 
 {user_msg_text}
 Task Type: {task_type}
 Complexity: {complexity}/10
+{project_type_text}
 
 {skills_text}
 {agents_text}
@@ -546,9 +553,11 @@ Complexity: {complexity}/10
 RULES:
 1. Select 1-4 skills that are RELEVANT to this task (multiple allowed)
 2. Select 1 agent that best orchestrates the work
-3. Match by technology: HTML=html5-core, CSS/SCSS=css-core, JS=javascript-core, React=react-core, Angular=angular-core, Python=python-core, Java=java-spring-boot-microservices, etc.
-4. Include testing-core if complexity >= 7
-5. Include ui-ux-core for any design/UI task
+3. CRITICAL: Match skills to PROJECT TYPE - do NOT select Java skills for Python projects or vice versa
+4. Match by technology: HTML=html5-core, CSS/SCSS=css-core, JS=javascript-core, React=react-core, Angular=angular-core, Python=python-core, Java=java-spring-boot-microservices
+5. Include testing-core if complexity >= 7
+6. Include ui-ux-core for any design/UI task
+7. Agent must match project language (python-backend-engineer for Python, spring-boot-microservices for Java)
 
 Respond ONLY with JSON (no markdown):
 {{
