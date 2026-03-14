@@ -506,13 +506,15 @@ def main():
         available_skills = load_skill_definitions()
         available_agents = load_agent_definitions()
 
-        # Build skill list with descriptions
+        # Build skill list with descriptions (show ALL skills for best match)
         skills_text = ""
-        if available_skills:
+        all_skill_names = list(available_skills.keys()) if available_skills else context_skills
+        if all_skill_names:
             skills_text = "Available Skills:\n"
-            for name, info in list(available_skills.items())[:15]:  # Limit to 15 for token efficiency
-                desc = info.get('description', '')[:100]
-                skills_text += f"  - {name}: {desc}\n"
+            for name in all_skill_names[:30]:
+                info = available_skills.get(name, {})
+                desc = info.get('description', '')[:80] if isinstance(info, dict) else ""
+                skills_text += f"  - {name}: {desc}\n" if desc else f"  - {name}\n"
         else:
             skills_text = "Available Skills: None loaded\n"
 
@@ -520,8 +522,8 @@ def main():
         agents_text = ""
         if available_agents:
             agents_text = "Available Agents:\n"
-            for name, info in list(available_agents.items())[:10]:  # Limit to 10 for token efficiency
-                desc = info.get('description', '')[:100]
+            for name, info in list(available_agents.items())[:15]:
+                desc = info.get('description', '')[:80]
                 agents_text += f"  - {name}: {desc}\n"
         else:
             agents_text = "Available Agents: None loaded\n"
@@ -529,38 +531,34 @@ def main():
         # Include user message for context-aware selection
         user_msg_text = ""
         if user_message:
-            user_msg_text = f"\nUser Request: {user_message[:300]}\n"
+            user_msg_text = f"User Request: {user_message[:500]}\n"
 
-        # If context provided skill names, use those instead of filesystem scan
-        if context_skills and not available_skills:
-            skills_text = "Available Skills:\n"
-            for name in context_skills[:20]:
-                skills_text += f"  - {name}\n"
+        # Build prompt - select MULTIPLE skills and agent
+        prompt = f"""You are a task-to-skill matcher. Select ALL relevant skills and the best agent for this task.
 
-        # Build prompt with actual definitions
-        prompt = f"""You are a task-to-skill matcher. Based on the task details, suggest the BEST skill and agent.
-
+{user_msg_text}
 Task Type: {task_type}
 Complexity: {complexity}/10
-{user_msg_text}
+
 {skills_text}
 {agents_text}
 
-Choose the skill and agent that BEST match this task. Consider:
-- The user's actual request and what technologies are involved
-- Task complexity and nature
-- Skill/agent capabilities and specialization
-- Technology alignment (CSS/SCSS = css-core, React = react-core, etc.)
+RULES:
+1. Select 1-4 skills that are RELEVANT to this task (multiple allowed)
+2. Select 1 agent that best orchestrates the work
+3. Match by technology: HTML=html5-core, CSS/SCSS=css-core, JS=javascript-core, React=react-core, Angular=angular-core, Python=python-core, Java=java-spring-boot-microservices, etc.
+4. Include testing-core if complexity >= 7
+5. Include ui-ux-core for any design/UI task
 
-Respond ONLY with JSON (no markdown, no explanation):
+Respond ONLY with JSON (no markdown):
 {{
-  "selected_skill": "exact skill name from list above, or empty string if none match",
-  "selected_agent": "exact agent name from list above, or empty string if none match",
+  "selected_skills": ["skill1", "skill2"],
+  "selected_agents": ["agent1"],
   "confidence": 0.5 to 1.0,
-  "reasoning": "brief explanation of why these were chosen"
+  "reasoning": "why these were chosen"
 }}
 
-JSON only, no markdown:"""
+JSON only:"""
 
         try:
             payload = {
@@ -586,12 +584,29 @@ JSON only, no markdown:"""
             else:
                 llm_result = json.loads(llm_response)
 
+            # Support both old format (selected_skill) and new (selected_skills list)
+            skills_list = llm_result.get('selected_skills', [])
+            agents_list = llm_result.get('selected_agents', [])
+
+            # Backward compat: also check old single-value keys
+            if not skills_list and llm_result.get('selected_skill'):
+                skills_list = [llm_result['selected_skill']]
+            if not agents_list and llm_result.get('selected_agent'):
+                agents_list = [llm_result['selected_agent']]
+
+            # Filter empty strings
+            skills_list = [s for s in skills_list if s and s.strip()]
+            agents_list = [a for a in agents_list if a and a.strip()]
+
             output = {
-                'selected_skill': llm_result.get('selected_skill', ''),
-                'selected_agent': llm_result.get('selected_agent', ''),
+                'selected_skill': skills_list[0] if skills_list else '',
+                'selected_agent': agents_list[0] if agents_list else '',
+                'selected_skills': skills_list,
+                'selected_agents': agents_list,
                 'confidence': float(llm_result.get('confidence', 0.7)),
+                'reasoning': llm_result.get('reasoning', ''),
                 'alternatives': [],
-                'llm_needed': False,
+                'llm_needed': True,
                 'status': 'OK'
             }
 
@@ -600,7 +615,10 @@ JSON only, no markdown:"""
             output = {
                 'selected_skill': '',
                 'selected_agent': '',
+                'selected_skills': [],
+                'selected_agents': [],
                 'confidence': 0.0,
+                'reasoning': f'Error: {str(e)}',
                 'alternatives': [],
                 'llm_needed': False,
                 'status': 'error',

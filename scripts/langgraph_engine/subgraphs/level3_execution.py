@@ -627,8 +627,22 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
         except Exception:
             pass
 
+    # Support multiple skills/agents from LLM
+    selected_skills = result.get("selected_skills", [])
+    selected_agents = result.get("selected_agents", [])
+
+    # Backward compat: also check single-value keys
     selected_skill_name = result.get("selected_skill", "")
     selected_agent_name = result.get("selected_agent", "")
+
+    if not selected_skills and selected_skill_name:
+        selected_skills = [selected_skill_name]
+    if not selected_agents and selected_agent_name:
+        selected_agents = [selected_agent_name]
+
+    # Primary skill/agent (first in list) for backward compat
+    selected_skill_name = selected_skills[0] if selected_skills else ""
+    selected_agent_name = selected_agents[0] if selected_agents else ""
 
     # --- Post-selection conflict resolution ---
     # Build minimal skill/agent dicts for ConflictResolver
@@ -693,19 +707,34 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
             f"[Step5] ConflictResolver unavailable (non-fatal): {_conflict_err}"
         )
 
+    # Load full definitions for ALL selected skills/agents
+    all_skill_defs = []
+    for sk in selected_skills:
+        sk_def = all_skills.get(sk, "")
+        if sk_def:
+            all_skill_defs.append(f"### Skill: {sk}\n{sk_def[:2000]}")
+
+    all_agent_defs = []
+    for ag in selected_agents:
+        ag_def = all_agents.get(ag, "")
+        if ag_def:
+            all_agent_defs.append(f"### Agent: {ag}\n{ag_def[:2000]}")
+
     return {
         "step5_skill": selected_skill_name,
         "step5_agent": selected_agent_name,
-        "step5_skill_definition": result.get("skill_definition", ""),
-        "step5_agent_definition": result.get("agent_definition", ""),
+        "step5_skills": selected_skills,
+        "step5_agents": selected_agents,
+        "step5_skill_definition": "\n\n".join(all_skill_defs) if all_skill_defs else "",
+        "step5_agent_definition": "\n\n".join(all_agent_defs) if all_agent_defs else "",
         "step5_reasoning": result.get("reasoning", ""),
         "step5_confidence": result.get("confidence", 0.5),
         "step5_alternatives": result.get("alternatives", []),
         "step5_llm_query_needed": result.get("llm_needed", False),
-        "step5_context_provided": True,  # Mark that full context was passed
+        "step5_context_provided": True,
         "step5_task_count": len(validated_tasks),
-        "step5_skills_available": len(all_skills),  # For verification
-        "step5_agents_available": len(all_agents),  # For verification
+        "step5_skills_available": len(all_skills),
+        "step5_agents_available": len(all_agents),
         "step5_conflicts_detected": skill_conflicts_detected,
         "step5_conflicts_removed": skill_conflicts_removed,
     }
@@ -1010,31 +1039,50 @@ def step7_final_prompt_generation(state: FlowState) -> dict:
                 system_prompt_lines.append(f"- Planned Phases: {toon.get('planned_phases')}")
             system_prompt_lines.append("")
 
-        # 6. FULL Selected Skill & Agent definitions
+        # 6. ALL Selected Skills & Agents (multiple supported)
         system_prompt_lines.append("## TOOLS & RESOURCES")
-        skill = state.get("step5_skill", "")
-        agent = state.get("step5_agent", "")
+
+        # Get all selected skills/agents (lists)
+        selected_skills = state.get("step5_skills", [])
+        selected_agents = state.get("step5_agents", [])
         skill_def = state.get("step5_skill_definition", "")
         agent_def = state.get("step5_agent_definition", "")
+        skill_reasoning = state.get("step5_reasoning", "")
 
-        if skill:
-            system_prompt_lines.append(f"\n### Skill: {skill}")
+        # Backward compat: if lists empty, check single values
+        if not selected_skills:
+            single_skill = state.get("step5_skill", "")
+            if single_skill:
+                selected_skills = [single_skill]
+        if not selected_agents:
+            single_agent = state.get("step5_agent", "")
+            if single_agent:
+                selected_agents = [single_agent]
+
+        if selected_skills:
+            system_prompt_lines.append(f"\n### Selected Skills ({len(selected_skills)}):")
+            for sk in selected_skills:
+                system_prompt_lines.append(f"  - /{sk}")
             if skill_def:
-                # Include FULL skill definition (not truncated)
-                system_prompt_lines.append("Definition:")
+                system_prompt_lines.append("\nSkill Definitions:")
                 system_prompt_lines.append(skill_def)
             system_prompt_lines.append("")
 
-        if agent:
-            system_prompt_lines.append(f"\n### Agent: {agent}")
+        if selected_agents:
+            system_prompt_lines.append(f"\n### Selected Agents ({len(selected_agents)}):")
+            for ag in selected_agents:
+                system_prompt_lines.append(f"  - {ag}")
             if agent_def:
-                # Include FULL agent definition (not truncated)
-                system_prompt_lines.append("Definition:")
+                system_prompt_lines.append("\nAgent Definitions:")
                 system_prompt_lines.append(agent_def)
             system_prompt_lines.append("")
 
-        if not skill and not agent:
-            system_prompt_lines.append("- No special skills/agents needed")
+        if skill_reasoning:
+            system_prompt_lines.append(f"Selection reasoning: {skill_reasoning}")
+            system_prompt_lines.append("")
+
+        if not selected_skills and not selected_agents:
+            system_prompt_lines.append("- No special skills/agents selected")
             system_prompt_lines.append("")
 
         # 7. Project context - RICH context from README/SRS + detected framework
