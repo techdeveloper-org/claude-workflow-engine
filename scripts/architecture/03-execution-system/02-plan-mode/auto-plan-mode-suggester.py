@@ -550,11 +550,13 @@ JSON format (no markdown):
 JSON only:"""
 
     try:
+        num_ctx = 8192 if "14b" in ollama_model else 16384
         payload = {
             "model": ollama_model,
             "prompt": prompt,
             "stream": False,
-            "temperature": 0.3
+            "temperature": 0.3,
+            "options": {"num_ctx": num_ctx, "num_predict": 2048}
         }
         req = urllib.request.Request(
             ollama_endpoint,

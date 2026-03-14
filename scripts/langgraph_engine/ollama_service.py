@@ -165,7 +165,13 @@ class OllamaService:
             "messages": messages,
             "temperature": temperature,
             "stream": False,
-            "num_ctx": 8192  # CRITICAL: Increase context window from default 2048 to 8192
+            "options": {
+                # Context window: maximize for quality (16GB RAM, 8GB shared GPU)
+                # qwen2.5:7b supports 32K, 14b supports 32K, llama3.2:3b supports 128K
+                # 16K is safe sweet spot for 16GB RAM with 7b models
+                "num_ctx": 16384 if "7b" in model_name or "3b" in model_name else 8192,
+                "num_predict": 2048,  # Allow longer responses
+            }
         }
 
         if format:

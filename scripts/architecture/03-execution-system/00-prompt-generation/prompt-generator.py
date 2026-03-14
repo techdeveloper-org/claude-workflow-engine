@@ -34,11 +34,13 @@ class OllamaTaskAnalyzer:
     def call_ollama(self, prompt: str) -> str:
         """Call local Ollama LLM with prompt."""
         try:
+            num_ctx = 8192 if "14b" in self.model else 16384
             payload = {
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
-                "temperature": 0.3  # Lower temp for consistency
+                "temperature": 0.3,  # Lower temp for consistency
+                "options": {"num_ctx": num_ctx, "num_predict": 2048}
             }
 
             req = urllib.request.Request(

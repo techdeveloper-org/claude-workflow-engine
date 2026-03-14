@@ -132,11 +132,13 @@ Return ONLY the JSON object, no other text."""
         """Call local Ollama API and return response."""
 
         # Request payload for Ollama
+        num_ctx = 8192 if "14b" in self.model else 16384
         payload = {
             "model": self.model,
             "prompt": f"{self.system_prompt}\n\nUser request: {user_message}",
             "stream": False,  # Wait for complete response
-            "temperature": 0.2  # Low temp for consistent classification
+            "temperature": 0.2,  # Low temp for consistent classification
+            "options": {"num_ctx": num_ctx, "num_predict": 2048}
         }
 
         request = urllib.request.Request(

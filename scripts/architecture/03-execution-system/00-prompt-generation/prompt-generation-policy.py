@@ -157,13 +157,25 @@ class PromptGenerator:
         if level3.get('reasoning'):
             context_parts.append(f"  - Analysis: {level3['reasoning'][:200]}")
 
-        # Selected skill/agent
-        if level3.get('selected_skill') or level3.get('selected_agent'):
+        # Selected skills/agents (multiple supported)
+        selected_skills = level3.get('selected_skills', [])
+        selected_agents = level3.get('selected_agents', [])
+        # Backward compat
+        if not selected_skills and level3.get('selected_skill'):
+            selected_skills = [level3['selected_skill']]
+        if not selected_agents and level3.get('selected_agent'):
+            selected_agents = [level3['selected_agent']]
+
+        if selected_skills or selected_agents:
             context_parts.append(f"\nSELECTED TOOLS:")
-            if level3.get('selected_skill'):
-                context_parts.append(f"  - Skill: {level3['selected_skill']}")
-            if level3.get('selected_agent'):
-                context_parts.append(f"  - Agent: {level3['selected_agent']}")
+            if selected_skills:
+                context_parts.append(f"  Skills ({len(selected_skills)}):")
+                for sk in selected_skills:
+                    context_parts.append(f"    - /{sk}")
+            if selected_agents:
+                context_parts.append(f"  Agents ({len(selected_agents)}):")
+                for ag in selected_agents:
+                    context_parts.append(f"    - {ag}")
 
         # Task breakdown
         tasks = level3.get('tasks', [])
