@@ -1,12 +1,12 @@
 """
-Setup configuration for Claude Insight
+Setup configuration for Claude Workflow Engine
 """
 
 from setuptools import setup, find_packages
 from pathlib import Path
 
 # Read README
-readme_file = Path(__file__).parent / 'docs' / 'README.md'
+readme_file = Path(__file__).parent / 'README.md'
 long_description = readme_file.read_text(encoding='utf-8') if readme_file.exists() else ''
 
 # Read requirements
@@ -20,14 +20,14 @@ if requirements_file.exists():
     ]
 
 setup(
-    name='claude-insight',
-    version='1.0.0',
-    description='Advanced real-time analytics and performance insights for Claude AI memory system',
+    name='claude-workflow-engine',
+    version='5.6.0',
+    description='3-Level LangGraph orchestration pipeline for Claude Code workflows',
     long_description=long_description,
     long_description_content_type='text/markdown',
     author='TechDeveloper',
     author_email='',
-    url='https://github.com/yourusername/claude-insight',
+    url='https://github.com/techdeveloper-org/claude-workflow-engine',
     license='MIT',
 
     # Package configuration
@@ -42,7 +42,7 @@ setup(
     # Entry points
     entry_points={
         'console_scripts': [
-            'claude-insight=run:main',
+            'claude-workflow=scripts.3-level-flow:main',
         ],
     },
 
@@ -56,16 +56,14 @@ setup(
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
-        'Framework :: Flask',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-        'Topic :: System :: Monitoring',
+        'Topic :: Software Development :: Quality Assurance',
+        'Topic :: Software Development :: Build Tools',
     ],
 
-    # Additional metadata
-    keywords='claude ai monitoring dashboard analytics flask insight performance',
+    keywords='claude ai workflow langgraph orchestration pipeline automation',
     project_urls={
-        'Documentation': 'https://github.com/yourusername/claude-insight/docs',
-        'Source': 'https://github.com/yourusername/claude-insight',
-        'Tracker': 'https://github.com/yourusername/claude-insight/issues',
+        'Documentation': 'https://github.com/techdeveloper-org/claude-workflow-engine/docs',
+        'Source': 'https://github.com/techdeveloper-org/claude-workflow-engine',
+        'Tracker': 'https://github.com/techdeveloper-org/claude-workflow-engine/issues',
     },
 )

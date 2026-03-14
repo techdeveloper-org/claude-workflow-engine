@@ -1,9 +1,0 @@
-{
-  "installed": [
-    "alert-feed",
-    "health-score-meter",
-    "context-monitor"
-  ],
-  "custom": [],
-  "custom_advanced": []
-}

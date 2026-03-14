@@ -1,21 +1,24 @@
-# 
+# Claude Workflow Engine
 
-**Version:** # Version Information
+**Version:** 5.6.0
 **Status:** Active Development
-**Last Updated:** 2026-03-13
+**Last Updated:** 2026-03-14
 
 ---
 
 ## Overview
 
- is a Django, FastAPI, Flask project providing core functionality.
+Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session management, coding standards enforcement, and end-to-end task execution with GitHub integration.
 
 ### Key Features
 
-- Comprehensive project management
-- Automated workflow execution
-- Real-time monitoring and tracking
-- Enterprise-grade standards compliance
+- **3-Level Architecture** - Sync, Standards, and Execution pipelines
+- **LangGraph Orchestration** - StateGraph-based parallel and conditional execution
+- **14-Step Execution Pipeline** - From task breakdown to PR creation
+- **Policy System** - 40+ policies for sync, standards, and execution
+- **Hybrid Inference** - Ollama (local) + Claude API (cloud) routing
+- **GitHub Integration** - MCP + gh CLI hybrid with automatic fallback
+- **Hook System** - Pre/post tool enforcement with auto-fix
 
 ---
 
@@ -24,70 +27,93 @@
 ### Prerequisites
 
 - Python 3.8+
-- # Claude Insight v4.4.4 - Complete Requirements
-- # All production and development dependencies in one file
-- # ============================================================================
-- # CORE FLASK & WEB FRAMEWORK
-- # ============================================================================
+- Ollama (optional, for local inference)
+- GitHub CLI (`gh`) installed and authenticated
 
 ### Installation
 
 ```bash
-git clone https://github.com/piyushmakhija28/.git
-cd 
+git clone https://github.com/techdeveloper-org/claude-workflow-engine.git
+cd claude-workflow-engine
 pip install -r requirements.txt
 ```
 
-### Running the Project
+### Running the Pipeline
 
 ```bash
-python -m flask run
+# Full 3-level flow
+python scripts/3-level-flow.py --task "your task description"
+
+# Quick mode (skip Level 2 standards)
+python scripts/3-level-flow-quick.py --task "your task description"
 ```
 
 ---
 
 ## Architecture
 
-### Overview
+### 3-Level Pipeline
 
- is a Django, FastAPI, Flask project providing core functionality. The system is built with JavaScript, Python using Django, FastAPI, Flask.
-
-### Components
-
-| Component | Purpose |
-|-----------|---------|
-| Core | Main logic | (To be detailed) |
+```
+Level -1: Auto-Fix (encoding, Unicode fixes)
+    |
+Level 1: Sync (session, context, TOON compression)
+    |
+Level 2: Standards (coding standards enforcement)
+    |
+Level 3: Execution (14-step task pipeline)
+    |-- Step 1:  Plan Mode Decision
+    |-- Step 2:  Plan Execution (conditional)
+    |-- Step 3:  Task Breakdown
+    |-- Step 4:  TOON Refinement
+    |-- Step 5:  Skill Selection
+    |-- Step 6:  Skill Validation & Download
+    |-- Step 7:  Implementation
+    |-- Step 8:  Git Branch Creation
+    |-- Step 9:  Git Commit
+    |-- Step 10: Implementation Notes
+    |-- Step 11: Pull Request (with code review loop)
+    |-- Step 12: Closure
+    |-- Step 13: Documentation Update
+    |-- Step 14: Summary
+```
 
 ### Directory Structure
 
 ```
 /
-├── src/ → Source code
-├── tests/ → Unit and integration tests
-├── docs/ → Documentation
-├── scripts/ → Utility scripts
-├── config/ → Configuration files
-├── static/ → Static files
-└── templates/ → HTML/View templates
++-- scripts/              # Pipeline scripts and hooks
+|   +-- langgraph_engine/ # Core LangGraph orchestration (58 modules)
+|   +-- agents/           # Automation agents
+|   +-- architecture/     # Architecture documentation
++-- policies/             # 40+ policy definitions
+|   +-- 01-sync-system/   # Level 1 policies
+|   +-- 02-standards/     # Level 2 policies
+|   +-- 03-execution/     # Level 3 policies
++-- src/                  # Shared utilities
+|   +-- mcp/              # MCP enforcement server
+|   +-- services/         # Claude API integration
+|   +-- utils/            # Path resolver, imports
++-- tests/                # Test suite
++-- docs/                 # Documentation
 ```
 
 ---
 
 ## Development
 
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make changes and commit: `git commit -am 'Add feature'`
-4. Push to branch: `git push origin feature/your-feature`
-5. Submit a pull request
-
 ### Testing
 
 ```bash
-pytest
+pytest tests/
 ```
+
+### Key Documentation
+
+- `WORKFLOW.md` - 14-step execution pipeline specification
+- `ARCHITECTURE_QUICK_SUMMARY.md` - Architecture overview
+- `LANGGRAPH-ENGINE.md` - Engine implementation details
+- `policies/` - All policy definitions
 
 ---
 
@@ -97,30 +123,12 @@ See `CLAUDE.md` for project-specific configuration and development guidelines.
 
 ---
 
-## Troubleshooting
-
-### Common Issues
-
-**Issue:** Import errors
-- **Solution:** Ensure all dependencies are installed: `pip install -r requirements.txt`
-
-**Issue:** Tests failing
-- **Solution:** Check that test environment is properly configured in pytest.ini
-
----
-
-## Contributing
-
-Please ensure all tests pass and code follows project conventions before submitting PRs.
-
----
-
 ## License
 
 MIT License - see LICENSE file for details
 
 ---
 
-**Maintainers:** Claude Insight Team
-**Repository:** https://github.com/piyushmakhija28/
-**Last Updated:** 2026-03-13
+**Maintainers:** TechDeveloper
+**Repository:** https://github.com/techdeveloper-org/claude-workflow-engine
+**Last Updated:** 2026-03-14

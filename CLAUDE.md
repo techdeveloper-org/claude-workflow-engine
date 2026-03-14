@@ -1,24 +1,24 @@
-#  - Claude-Specific Context
+# Claude Workflow Engine - Project Context
 
-**Project:** 
-**Version:** # Version Information
-**Type:** Django / FastAPI / Flask
-**Last Updated:** 2026-03-13
+**Project:** Claude Workflow Engine
+**Version:** 5.6.0
+**Type:** LangGraph Orchestration Pipeline
+**Last Updated:** 2026-03-14
 
 ---
 
 ## Project Overview
 
- is a Django, FastAPI, Flask project providing core functionality.
+Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 14-step task execution with GitHub integration.
 
 ### Quick Info
 
 | Property | Value |
 |----------|-------|
-| **Languages** | JavaScript, Python |
-| **Frameworks** | Django, FastAPI, Flask |
+| **Languages** | Python |
+| **Frameworks** | LangGraph, LangChain |
 | **Status** | Active Development |
-| **Primary Location** | src/ |
+| **Primary Location** | scripts/langgraph_engine/ |
 
 ---
 
@@ -28,20 +28,35 @@
 
 ```
 /
-├── src/ → Source code
-├── tests/ → Unit and integration tests
-├── docs/ → Documentation
-├── scripts/ → Utility scripts
-├── config/ → Configuration files
-├── static/ → Static files
-└── templates/ → HTML/View templates
++-- scripts/              # Pipeline scripts and hooks
+|   +-- langgraph_engine/ # Core LangGraph orchestration (58 modules)
+|   +-- agents/           # Automation agents
+|   +-- architecture/     # Architecture documentation
++-- policies/             # 40+ policy definitions
+|   +-- 01-sync-system/   # Level 1 policies
+|   +-- 02-standards/     # Level 2 policies
+|   +-- 03-execution/     # Level 3 policies
++-- src/                  # Shared utilities
+|   +-- mcp/              # MCP enforcement server
+|   +-- services/         # Claude API integration
+|   +-- utils/            # Path resolver, imports
++-- tests/                # Test suite
++-- docs/                 # Documentation
 ```
 
 ### Key Components
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Core | Main logic | (To be detailed) |
+| Orchestrator | scripts/langgraph_engine/orchestrator.py | Main StateGraph pipeline |
+| Flow State | scripts/langgraph_engine/flow_state.py | TypedDict state definition |
+| Level -1 | scripts/langgraph_engine/subgraphs/level_minus1.py | Auto-fix (encoding) |
+| Level 1 | scripts/langgraph_engine/subgraphs/level1_sync.py | Session/context sync |
+| Level 2 | scripts/langgraph_engine/subgraphs/level2_standards.py | Standards enforcement |
+| Level 3 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 14-step execution |
+| GitHub MCP | scripts/langgraph_engine/github_mcp.py | PyGithub wrapper |
+| GitHub Router | scripts/langgraph_engine/github_operation_router.py | MCP + CLI hybrid |
+| Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
 
 ---
 
@@ -49,95 +64,43 @@
 
 ### Code Style
 
-- **Language:** JavaScript
-- **Format:** Follow PEP 8 / standard conventions
-- **Linter:** Use project linters
+- **Language:** Python 3.8+
+- **Encoding:** UTF-8, ASCII-only (cp1252 safe for Windows)
+- **Format:** Follow PEP 8 conventions
 - **Testing:** All new code requires tests
+- **Paths:** Always use path_resolver.py for cross-platform paths
 
-### Running the Project
+### Running the Pipeline
 
 ```bash
-python -m flask run
+python scripts/3-level-flow.py --task "your task"
 ```
 
 ### Testing
 
 ```bash
-pytest
+pytest tests/
 ```
 
 ---
 
-## Important Patterns & Conventions
-
-### Code Organization
-
-- Services for business logic
-- Models for data structures
-- Controllers/Routes for request handling
-- Utils for helper functions
-- Tests parallel project structure
-
-### Naming Conventions
+## Naming Conventions
 
 - Files: snake_case.py
 - Classes: PascalCase
 - Functions/Methods: snake_case
 - Constants: UPPER_SNAKE_CASE
 
-### Common Tasks
-
-#### Adding a New Feature
-
-1. Create issue on GitHub
-2. Create feature branch: `git checkout -b feature/issue-XXX-feature-name`
-3. Implement feature with tests
-4. Update relevant documentation
-5. Submit pull request
-6. Get approval and merge
-
----
-
-## Dependencies
-
-- # Claude Insight v4.4.4 - Complete Requirements
-- # All production and development dependencies in one file
-- # ============================================================================
-- # CORE FLASK & WEB FRAMEWORK
-- # ============================================================================
-- ... and 4 more
-
 ---
 
 ## Configuration
 
 See environment variables in `.env.example`:
-- Database connection settings
-- API keys
-- Service endpoints
+- Ollama endpoint configuration
+- Claude API keys
+- GitHub token
 - Debug modes
 
 ---
 
-## Troubleshooting
-
-### Common Issues
-
-**Issue:** Module not found
-- **Solution:** Ensure virtual environment is activated and dependencies installed
-
-**Issue:** Tests failing
-- **Solution:** Run with verbose flag: `pytest -v`
-
----
-
-## Support
-
-- **GitHub Issues:** Report bugs and request features
-- **Documentation:** See README.md and SRS.md
-- **Discussion:** GitHub Discussions for general questions
-
----
-
-**Last Updated:** 2026-03-13
-**Next Review:** 2026-03-13
+**Last Updated:** 2026-03-14
