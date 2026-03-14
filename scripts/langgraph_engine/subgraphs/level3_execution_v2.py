@@ -338,13 +338,18 @@ def level3_init_node(state: FlowState) -> Dict[str, Any]:
     """
     Bridge: Map session_path (from Level 1) to session_dir (used by steps).
 
-    Also installs SIGINT recovery handler for graceful Ctrl+C handling.
+    session_path is set by node_session_loader in Level 1.
+    session_dir is what Level 3 steps use.
     """
     session_path = state.get("session_path", "")
-    session_id = state.get("session_id", "unknown")
+    session_id = state.get("session_id", "")
 
     if not session_path:
+        # Fallback: construct from session_id (should rarely happen)
+        if not session_id:
+            session_id = "unknown"
         session_path = str(Path.home() / ".claude" / "logs" / "sessions" / session_id)
+        Path(session_path).mkdir(parents=True, exist_ok=True)
 
     # Install signal handlers once per session (best-effort, main thread only)
     try:

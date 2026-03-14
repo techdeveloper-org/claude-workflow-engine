@@ -1105,6 +1105,15 @@ def step9_branch_creation(state: FlowState) -> dict:
         session_path = state.get("session_dir") or os.environ.get("CLAUDE_SESSION_PATH", ".")
         project_root = state.get("project_root", ".")
 
+        # Skip branch creation if no real issue was created (issue_id=0 means fallback)
+        if issue_id == "0" or not state.get("step8_issue_created", False):
+            logger.info("Step 9: Skipping branch creation - no GitHub issue created (issue_id=0)")
+            return {
+                "step9_branch_name": "",
+                "step9_branch_created": False,
+                "step9_status": "SKIPPED"
+            }
+
         # Use Level3GitHubWorkflow for real branch creation
         try:
             from ..level3_steps8to12_github import Level3GitHubWorkflow
@@ -1327,6 +1336,20 @@ def step11_pull_request_review(state: FlowState) -> dict:
 
         branch_name = state.get("step9_branch_name", "")
         issue_id = state.get("step8_issue_id", "0")
+
+        # Skip if no branch was created (no issue -> no branch -> no PR)
+        if not branch_name or not state.get("step9_branch_created", False):
+            logger.info("Step 11: Skipping PR creation - no branch was created")
+            return {
+                "step11_pr_id": "0",
+                "step11_pr_url": "",
+                "step11_review_passed": True,
+                "step11_review_issues": [],
+                "step11_merged": False,
+                "step11_retry_count": 0,
+                "step11_status": "SKIPPED"
+            }
+
         session_path = state.get("session_dir") or os.environ.get("CLAUDE_SESSION_PATH", ".")
         project_root = state.get("project_root", ".")
         retry_count = state.get("step11_retry_count", 0)
@@ -1414,6 +1437,14 @@ def step12_issue_closure(state: FlowState) -> dict:
     Returns closure status.
     """
     try:
+        # Skip if no issue was created
+        if not state.get("step8_issue_created", False) or state.get("step8_issue_id", "0") == "0":
+            logger.info("Step 12: Skipping issue closure - no issue was created")
+            return {
+                "step12_issue_closed": False,
+                "step12_closing_comment": "",
+                "step12_status": "SKIPPED"
+            }
         import os
 
         issue_id = state.get("step8_issue_id", "0")

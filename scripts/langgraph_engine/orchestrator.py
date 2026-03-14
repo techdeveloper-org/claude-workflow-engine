@@ -959,17 +959,15 @@ def create_initial_state(session_id: str = "", project_root: str = "", user_mess
         print(f"[CREATE_INITIAL_STATE] Set project_root from cwd: {project_root}", file=sys.stderr)
     print(f"[CREATE_INITIAL_STATE] Final project_root before state creation: {project_root}", file=sys.stderr)
 
-    if not session_id:
-        import uuid
-
-        session_id = f"flow-{uuid.uuid4().hex[:8]}"
-
+    # session_id is set by node_session_loader (Level 1) - NOT here
+    # It's immutable (_keep_first_value), so if set here it blocks Level 1 from setting it
+    # Only set here if explicitly passed (e.g., from CLI --session-id=)
 
     # ONLY initialize immutable fields (with _keep_first_value reducer)
     # All other fields will be created/updated by nodes
     initial_state = FlowState(
-        # Immutable session info
-        session_id=session_id,
+        # Immutable session info - session_id left for node_session_loader unless provided
+        **({"session_id": session_id} if session_id else {}),
         timestamp=datetime.now().isoformat(),
         project_root=project_root,
         # User input - NEVER MODIFIED - this is the original prompt for Claude
