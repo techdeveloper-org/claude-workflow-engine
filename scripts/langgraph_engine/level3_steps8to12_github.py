@@ -18,6 +18,7 @@ from datetime import datetime
 
 from loguru import logger
 from .github_integration import GitHubIntegration
+from .github_operation_router import GitHubOperationRouter
 from .git_operations import GitOperations
 from .ollama_service import OllamaService
 
@@ -73,7 +74,7 @@ class Level3GitHubWorkflow:
 
     def __init__(self, session_dir: str, repo_path: str = "."):
         self.session_dir = session_dir
-        self.github = GitHubIntegration(repo_path=repo_path)
+        self.github = GitHubOperationRouter(use_mcp=True, fallback_to_gh=True)
         self.git = GitOperations(repo_path=repo_path)
 
         # Check if we're in a git repository - this is critical for Steps 8-12
