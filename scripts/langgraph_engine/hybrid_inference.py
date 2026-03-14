@@ -1,11 +1,12 @@
 """
-Hybrid Inference Manager - NPU + GPU Optimization
+Hybrid Inference Manager - GPU-First Routing
 
-Smart routing between NPU (fast, local) and GPU/Claude (high-quality) based on step type.
+Smart routing between GPU (Ollama, fast and high-quality) and Claude (fallback).
+NPU routing has been removed as NPU is slow and produces unreadable output.
 
 Step Classification:
-- CLASSIFICATION: Step 1 (plan decision) → NPU Gemma-2-2B
-- LIGHTWEIGHT_ANALYSIS: Step 3, 5 → NPU Llama-3.2-3B or Qwen2.5-7B
+- CLASSIFICATION: Step 1 (plan decision) → GPU qwen2.5:7b (fast classification)
+- LIGHTWEIGHT_ANALYSIS: Step 3, 5 → GPU granite4:3b or qwen2.5:7b (reasoning)
 - COMPLEX_REASONING: Step 0, 2, 4, 7 → Claude CLI (subscription-based, no API costs)
 - NO_LLM: Steps 6, 8-14 → Skip LLM entirely
 
@@ -20,8 +21,8 @@ Usage:
     )
 
     # Automatic routing:
-    # Step 1 → NPU (fast: <500ms)
-    # Step 0 → Claude (quality: 2-3s, fallback if NPU unavailable)
+    # Step 1 → GPU Ollama (fast: <1s)
+    # Step 0 → Claude (quality: 2-3s, fallback if GPU unavailable)
 """
 
 import os
@@ -45,9 +46,10 @@ except ImportError:
 
 class StepType(Enum):
     """Classification of LLM step types."""
-    CLASSIFICATION = "classification"  # Fast, simple decision
-    LIGHTWEIGHT_ANALYSIS = "lightweight_analysis"  # Quick analysis
-    COMPLEX_REASONING = "complex_reasoning"  # Deep reasoning
+    CLASSIFICATION = "classification"  # Fast, simple decision (7B)
+    LIGHTWEIGHT_ANALYSIS = "lightweight_analysis"  # Quick analysis (3B-7B)
+    DEEP_LOCAL = "deep_local"  # Deep reasoning on local GPU 14B (FREE)
+    COMPLEX_REASONING = "complex_reasoning"  # Claude only (actual code implementation)
     NO_LLM = "no_llm"  # No LLM needed
 
 
@@ -55,51 +57,76 @@ class HybridInferenceManager:
     """Manages hybrid inference across NPU and GPU backends."""
 
     # Step-to-routing map
+    #
+    # DEEP_LOCAL steps: Try qwen2.5:14b (best quality, FREE)
+    #   If 14b crashes (GPU RAM) -> fallback to Claude CLI (subscription, no extra cost)
+    #   NOT 7b fallback - if 7b was enough we wouldn't need 14b
+    #
+    # CLASSIFICATION steps: qwen2.5:7b (fast, 7b is enough for yes/no)
+    # LIGHTWEIGHT steps: llama3.2:3b (fast, 3b is enough for structured breakdown)
+    # COMPLEX steps: Claude CLI only (needs tools for code implementation)
     STEP_ROUTING = {
-        # CLASSIFICATION (NPU - ultra fast)
-        "step1_plan_mode_decision": {
-            "type": StepType.CLASSIFICATION,
-            "npu_model": "Gemma-2-2B",
-            "fallback_model": "claude-opus-4-6",
-            "description": "Plan decision classification",
-        },
-        # LIGHTWEIGHT ANALYSIS (NPU - fast)
-        "step3_task_breakdown_validation": {
-            "type": StepType.LIGHTWEIGHT_ANALYSIS,
-            "npu_model": "Llama-3.2-3B",
-            "fallback_model": "claude-opus-4-6",
-            "description": "Task breakdown analysis",
-        },
-        "step5_skill_agent_selection": {
-            "type": StepType.LIGHTWEIGHT_ANALYSIS,
-            "npu_model": "Qwen2.5-7B",  # Coding optimized
-            "fallback_model": "claude-opus-4-6",
-            "description": "Skill selection pattern matching",
-        },
-        # COMPLEX REASONING (Claude - high quality)
+        # DEEP LOCAL: 14b primary -> Claude CLI fallback
         "step0_task_analysis": {
-            "type": StepType.COMPLEX_REASONING,
-            "npu_model": None,
+            "type": StepType.DEEP_LOCAL,
+            "gpu_model": "qwen2.5:14b",
+            "ollama_model_key": "deep_reasoning",
             "fallback_model": "claude-opus-4-6",
             "description": "Task analysis and classification",
         },
         "step2_plan_execution": {
-            "type": StepType.COMPLEX_REASONING,
-            "npu_model": None,
+            "type": StepType.DEEP_LOCAL,
+            "gpu_model": "qwen2.5:14b",
+            "ollama_model_key": "deep_reasoning",
             "fallback_model": "claude-opus-4-6",
-            "description": "Detailed plan execution",
+            "description": "Detailed plan creation",
         },
-        "step4_toon_refinement": {
-            "type": StepType.COMPLEX_REASONING,
-            "npu_model": None,
+        "step5_skill_agent_selection": {
+            "type": StepType.DEEP_LOCAL,
+            "gpu_model": "qwen2.5:14b",
+            "ollama_model_key": "deep_reasoning",
             "fallback_model": "claude-opus-4-6",
-            "description": "TOON context refinement",
+            "description": "Skill selection from 43 skills",
         },
         "step7_final_prompt_generation": {
-            "type": StepType.COMPLEX_REASONING,
-            "npu_model": None,
+            "type": StepType.DEEP_LOCAL,
+            "gpu_model": "qwen2.5:14b",
+            "ollama_model_key": "prompt_synthesis",
             "fallback_model": "claude-opus-4-6",
-            "description": "Final prompt generation",
+            "description": "Final prompt synthesis (quality = implementation quality)",
+        },
+        "step14_final_summary_generation": {
+            "type": StepType.DEEP_LOCAL,
+            "gpu_model": "qwen2.5:14b",
+            "ollama_model_key": "prompt_synthesis",
+            "fallback_model": "claude-opus-4-6",
+            "description": "Execution summary generation",
+        },
+        # CLASSIFICATION (GPU 7B - fast, simple yes/no)
+        "step1_plan_mode_decision": {
+            "type": StepType.CLASSIFICATION,
+            "gpu_model": "qwen2.5:7b",
+            "ollama_model_key": "fast_classification",
+            "fallback_model": "claude-opus-4-6",
+            "description": "Plan decision classification",
+        },
+        # LIGHTWEIGHT ANALYSIS (GPU 3B-7B - quick structured output)
+        "step3_task_breakdown_validation": {
+            "type": StepType.LIGHTWEIGHT_ANALYSIS,
+            "gpu_model": "llama3.2:3b",
+            "ollama_model_key": "task_breakdown",
+            "fallback_model": "claude-opus-4-6",
+            "description": "Task breakdown analysis",
+        },
+        # COMPLEX REASONING (Claude ONLY - needs tools for code implementation)
+        "step4_toon_refinement": {
+            "type": StepType.NO_LLM,
+            "description": "TOON context refinement (rule-based, no LLM)",
+        },
+        "step10_implementation_execution": {
+            "type": StepType.COMPLEX_REASONING,
+            "fallback_model": "claude-opus-4-6",
+            "description": "Code implementation (needs Claude tools: Read, Edit, Write)",
         },
         # NO LLM NEEDED
         "step6_skill_validation_download": {
@@ -114,10 +141,6 @@ class HybridInferenceManager:
             "type": StepType.NO_LLM,
             "description": "Git CLI automation",
         },
-        "step10_implementation_execution": {
-            "type": StepType.NO_LLM,
-            "description": "File operations",
-        },
         "step11_pull_request_review": {
             "type": StepType.NO_LLM,
             "description": "GitHub CLI + code checks",
@@ -129,10 +152,6 @@ class HybridInferenceManager:
         "step13_project_documentation_update": {
             "type": StepType.NO_LLM,
             "description": "File-based documentation",
-        },
-        "step14_final_summary_generation": {
-            "type": StepType.NO_LLM,
-            "description": "File-based summary",
         },
     }
 
@@ -207,6 +226,8 @@ class HybridInferenceManager:
             return self._invoke_classification(step, prompt, context, routing_info, system_prompt)
         elif step_type == StepType.LIGHTWEIGHT_ANALYSIS:
             return self._invoke_lightweight_analysis(step, prompt, context, routing_info, system_prompt)
+        elif step_type == StepType.DEEP_LOCAL:
+            return self._invoke_deep_local(step, prompt, context, routing_info, system_prompt)
         elif step_type == StepType.COMPLEX_REASONING:
             return self._invoke_complex_reasoning(step, prompt, context, routing_info, system_prompt)
 
@@ -221,31 +242,37 @@ class HybridInferenceManager:
         routing_info: Dict[str, Any],
         system_prompt: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Ultra-fast classification using NPU."""
-        npu_model = routing_info.get("npu_model")
+        """Fast classification using GPU (Ollama). Fallback chain: GPU -> Claude CLI -> Claude API."""
+        gpu_model = routing_info.get("gpu_model")
 
         logger.debug(f"Classification task: {step}")
 
-        # Try NPU first
-        if self.router and self.router.npu:
+        # Try GPU (Ollama) first
+        if self.router and self.router.ollama:
             try:
-                logger.debug(f"  Using NPU model: {npu_model}")
-                response = self.router.npu.invoke(
-                    prompt=prompt, model_type="ultra_fast", context=context
+                model_key = routing_info.get("ollama_model_key", "fast_classification")
+                logger.debug(f"  Using GPU model: {gpu_model} (key: {model_key})")
+                messages = [{"role": "user", "content": prompt}]
+                response = self.router.ollama.chat(
+                    messages=messages,
+                    model=model_key,
+                    temperature=0.3,
                 )
-                self.stats["npu_calls"] += 1
-                return {
-                    "status": "ok",
-                    "source": "npu",
-                    "model": npu_model,
-                    "response": response,
-                    "step": step,
-                    "timing": "fast",
-                }
+                content = response.get("message", {}).get("content", "")
+                if content:
+                    self.stats["npu_calls"] += 1  # reuse existing counter for local calls
+                    return {
+                        "status": "ok",
+                        "source": "gpu",
+                        "model": gpu_model,
+                        "response": content,
+                        "step": step,
+                        "timing": "fast",
+                    }
             except Exception as e:
-                logger.warning(f"NPU inference failed for {step}: {e}, fallback to Claude")
+                logger.warning(f"GPU inference failed for {step}: {e}, fallback to Claude")
 
-        # Fallback to Claude
+        # Fallback to Claude CLI -> Claude API
         return self._invoke_claude(prompt, context, step=step, system_prompt=system_prompt)
 
     def _invoke_lightweight_analysis(
@@ -256,35 +283,95 @@ class HybridInferenceManager:
         routing_info: Dict[str, Any],
         system_prompt: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Fast analysis using NPU with Claude fallback."""
-        npu_model = routing_info.get("npu_model")
+        """Fast analysis using GPU (Ollama). Fallback chain: GPU -> Claude CLI -> Claude API."""
+        gpu_model = routing_info.get("gpu_model")
 
         logger.debug(f"Lightweight analysis task: {step}")
 
-        # Try NPU first
-        if self.router and self.router.npu:
+        # Try GPU (Ollama) first
+        if self.router and self.router.ollama:
             try:
-                logger.debug(f"  Using NPU model: {npu_model}")
-                response = self.router.npu.invoke(
-                    prompt=prompt,
-                    model_type="medium" if "7B" in (npu_model or "") else "fast",
-                    context=context,
+                # Use model key from routing config (task_breakdown or complex_reasoning)
+                model_key = routing_info.get("ollama_model_key", "task_breakdown")
+                logger.debug(f"  Using GPU model: {gpu_model} (key: {model_key})")
+                messages = [{"role": "user", "content": prompt}]
+                response = self.router.ollama.chat(
+                    messages=messages,
+                    model=model_key,
+                    temperature=0.3,
                 )
-                self.stats["npu_calls"] += 1
-                return {
-                    "status": "ok",
-                    "source": "npu",
-                    "model": npu_model,
-                    "response": response,
-                    "step": step,
-                    "timing": "fast",
-                }
+                content = response.get("message", {}).get("content", "")
+                if content:
+                    self.stats["npu_calls"] += 1  # reuse existing counter for local calls
+                    return {
+                        "status": "ok",
+                        "source": "gpu",
+                        "model": gpu_model,
+                        "response": content,
+                        "step": step,
+                        "timing": "fast",
+                    }
             except Exception as e:
                 logger.warning(
-                    f"NPU inference failed for {step}: {e}, fallback to Claude"
+                    f"GPU inference failed for {step}: {e}, fallback to Claude"
                 )
 
-        # Fallback to Claude
+        # Fallback to Claude CLI -> Claude API
+        return self._invoke_claude(prompt, context, step=step, system_prompt=system_prompt)
+
+    def _invoke_deep_local(
+        self,
+        step: str,
+        prompt: str,
+        context: Optional[Dict[str, Any]],
+        routing_info: Dict[str, Any],
+        system_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Deep reasoning using local GPU 14B model (FREE). Fallback: Claude CLI -> Claude API.
+
+        Used for Steps 0, 2, 5, 7, 14 - tasks that need strong reasoning
+        but do NOT need Claude tools (Read, Edit, Write).
+        qwen2.5:14b handles these at near-Claude quality for FREE.
+        """
+        gpu_model = routing_info.get("gpu_model", "qwen2.5:14b")
+        model_key = routing_info.get("ollama_model_key", "deep_reasoning")
+
+        logger.info(f"Deep local reasoning: {step} -> {gpu_model}")
+
+        # Try GPU (Ollama 14B) first
+        if self.router and self.router.ollama:
+            try:
+                messages = [{"role": "user", "content": prompt}]
+                kwargs = {"temperature": 0.4}
+                if system_prompt:
+                    kwargs["system_prompt"] = system_prompt
+                response = self.router.ollama.chat(
+                    messages=messages,
+                    model=model_key,
+                    **kwargs,
+                )
+                content = response.get("message", {}).get("content", "")
+                if content:
+                    self.stats["npu_calls"] += 1  # reuse counter for local calls
+                    logger.info(
+                        f"  Deep local OK: {len(content)} chars from {gpu_model}"
+                    )
+                    return {
+                        "status": "ok",
+                        "source": "gpu-14b",
+                        "model": gpu_model,
+                        "response": content,
+                        "step": step,
+                        "timing": "local",
+                    }
+                else:
+                    logger.warning(f"  Empty response from {gpu_model}")
+            except Exception as e:
+                logger.warning(
+                    f"Deep local inference failed for {step}: {e}, fallback to Claude"
+                )
+
+        # Fallback to Claude CLI -> Claude API
         return self._invoke_claude(prompt, context, step=step, system_prompt=system_prompt)
 
     def _invoke_complex_reasoning(

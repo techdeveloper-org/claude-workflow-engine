@@ -1,15 +1,16 @@
 """
-Ollama Service Layer - Local LLM integration for Level 3 execution.
+Ollama Service Layer - GPU-based local LLM integration for Level 3 execution.
 
-Provides interface to local Ollama models for:
-- Step 1: Plan mode decision (complexity analysis)
-- Step 5: Skill and agent selection
-- Step 7: Final prompt generation
+Provides interface to local Ollama GPU models for:
+- Step 1: Plan mode decision (fast classification via qwen2.5:7b)
+- Step 3: Task breakdown validation (reasoning via granite4:3b)
+- Step 5: Skill and agent selection (pattern matching via qwen2.5:7b)
+- Step 7: Final prompt generation (synthesis via qwen2.5:7b)
 
 Configuration:
 - Primary endpoint: http://127.0.0.1:11434 (default Ollama)
-- Models: qwen2.5:7b (fast), claude-opus (complex reasoning)
-- Fallback: Not implemented yet (Ollama must be available)
+- Models: qwen2.5:7b (fast classification, synthesis), granite4:3b (reasoning)
+- Fallback: Claude API via ANTHROPIC_KEY environment variable
 """
 
 import json
@@ -32,11 +33,28 @@ class OllamaService:
 
         self.available_models = self._check_available_models()
 
-        # Model routing - use available models
+        # Model routing
+        # Setup: run intel-ai/models/gpu/import-models.bat
+        #
+        # Strategy:
+        #   14b steps (deep reasoning): qwen2.5:14b -> if GPU can't handle -> Claude CLI
+        #   7b steps (classification):  qwen2.5:7b (7b is enough for yes/no)
+        #   3b steps (breakdown):       llama3.2:3b (3b is enough for structured output)
+        #
+        # If 14b not available, HybridInferenceManager handles Claude CLI fallback
         self.models = {
-            "fast_classification": "qwen2.5:7b",      # Fast, lightweight (7B params)
-            "complex_reasoning": "granite4:3b",       # Medium depth analysis (alternate model)
-            "synthesis": "qwen2.5:7b"                 # For prompt generation (use available model)
+            # 14B - deep reasoning (Steps 0, 2, 5, 7, 14)
+            "deep_reasoning": "qwen2.5:14b",          # If GPU can't run -> Claude CLI fallback
+            "prompt_synthesis": "qwen2.5:14b",         # If GPU can't run -> Claude CLI fallback
+            # 7B - fast tasks (Steps 1, 8, 11)
+            "fast_classification": "qwen2.5:7b",       # Step 1: plan yes/no
+            "code_analysis": "qwen2.5:7b",             # Step 11: code review patterns
+            # 3B - lightweight (Step 3)
+            "task_breakdown": "llama3.2:3b",            # Step 3: structured task analysis
+            # Backward compatibility keys
+            "complex_reasoning": "qwen2.5:14b",        # Legacy key -> 14B
+            "synthesis": "qwen2.5:14b",                # Legacy key -> 14B
+            "pattern_matching": "qwen2.5:14b",         # Legacy key -> 14B
         }
 
         # Fallback to first available model if configured models not found

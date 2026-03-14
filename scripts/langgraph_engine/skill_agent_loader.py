@@ -160,10 +160,11 @@ class SkillAgentLoader:
 
         Returns:
             Dictionary mapping skill_name -> full_skill_content
-            Example: {"java-spring-boot-microservices": "...", "python-backend-engineer": "..."}
+            Example: {"python-backend-engineer": "...", "docker": "..."}
 
         Notes:
-            - Scans all domains: backend/, frontend/, devops/, etc.
+            - Supports flat structure: skills/{name}/SKILL.md (primary)
+            - Also supports domain-based legacy: skills/{domain}/{name}/SKILL.md
             - Handles both "SKILL.md" and "skill.md" naming conventions
             - Returns empty dict if no skills found
             - Logs count of skills loaded
@@ -179,28 +180,75 @@ class SkillAgentLoader:
             logger.info("Loaded %d total skills (parallel)", len(skills))
             return skills
 
-        # Sequential fallback
         skills: Dict[str, str] = {}
-        for domain_dir in self.skills_dir.iterdir():
-            if not domain_dir.is_dir():
+        for skill_dir in self.skills_dir.iterdir():
+            if not skill_dir.is_dir():
                 continue
-            for skill_dir in domain_dir.iterdir():
-                if not skill_dir.is_dir():
+            # Check flat structure first: skills/{name}/SKILL.md
+            skill_file = skill_dir / "SKILL.md"
+            if not skill_file.exists():
+                skill_file = skill_dir / "skill.md"
+            if skill_file.exists():
+                skill_name = skill_dir.name
+                try:
+                    content = skill_file.read_text(encoding='utf-8')
+                    skills[skill_name] = content
+                    logger.debug("Loaded skill: %s (%d bytes)", skill_name, len(content))
+                except Exception as e:
+                    logger.warning("Failed to load skill %s: %s", skill_name, e)
+                continue
+            # Also check domain-based legacy: skills/{domain}/{name}/SKILL.md
+            for sub_dir in skill_dir.iterdir():
+                if not sub_dir.is_dir():
                     continue
-                skill_file = skill_dir / "SKILL.md"
-                if not skill_file.exists():
-                    skill_file = skill_dir / "skill.md"
-                if skill_file.exists():
-                    skill_name = skill_dir.name
+                sub_skill_file = sub_dir / "SKILL.md"
+                if not sub_skill_file.exists():
+                    sub_skill_file = sub_dir / "skill.md"
+                if sub_skill_file.exists():
                     try:
-                        content = skill_file.read_text(encoding='utf-8')
-                        skills[skill_name] = content
-                        logger.debug("Loaded skill: %s (%d bytes)", skill_name, len(content))
+                        content = sub_skill_file.read_text(encoding='utf-8')
+                        skills[sub_dir.name] = content
+                        logger.debug(
+                            "Loaded skill (legacy path): %s (%d bytes)", sub_dir.name, len(content)
+                        )
                     except Exception as e:
-                        logger.warning("Failed to load skill %s: %s", skill_name, e)
+                        logger.warning("Failed to load skill %s: %s", sub_dir.name, e)
 
         logger.info("Loaded %d total skills", len(skills))
         return skills
+
+    def parse_skill_metadata(self, content: str) -> Dict[str, str]:
+        """Parse YAML frontmatter from skill or agent content.
+
+        Skills and agents may contain YAML frontmatter between --- delimiters:
+
+            ---
+            name: docker
+            version: 1.0.0
+            description: Docker expert...
+            allowed-tools: Read,Glob,Grep,Bash
+            user-invocable: true
+            ---
+
+        Args:
+            content: Raw skill or agent markdown content.
+
+        Returns:
+            Dictionary of parsed key-value metadata pairs.
+            Returns empty dict if no frontmatter is present or parsing fails.
+        """
+        if not content.startswith('---'):
+            return {}
+        end = content.find('---', 3)
+        if end == -1:
+            return {}
+        frontmatter = content[3:end].strip()
+        metadata: Dict[str, str] = {}
+        for line in frontmatter.split('\n'):
+            if ':' in line:
+                key, value = line.split(':', 1)
+                metadata[key.strip()] = value.strip()
+        return metadata
 
     def list_all_agents(self) -> Dict[str, str]:
         """Load all available agents with their full definitions.

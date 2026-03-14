@@ -47,13 +47,18 @@ class GitHubMCP:
 
         self.repo_path = Path(repo_path)
 
-        # Get token from parameter or environment
+        # Get token: parameter > env var > gh CLI keyring
         self.token = token or os.getenv('GITHUB_TOKEN')
         if not self.token:
+            self.token = self._get_token_from_gh_cli()
+        if not self.token:
             raise RuntimeError(
-                "No GitHub token provided. Set GITHUB_TOKEN environment variable "
-                "or pass token parameter"
+                "No GitHub token available. Either:\n"
+                "  1. Set GITHUB_TOKEN environment variable, or\n"
+                "  2. Login with: gh auth login"
             )
+
+        logger.info("[MCP] Token acquired successfully")
 
         # Initialize PyGithub client
         try:
@@ -77,6 +82,24 @@ class GitHubMCP:
                 self.repo = None
         else:
             self.repo = None
+
+    @staticmethod
+    def _get_token_from_gh_cli() -> Optional[str]:
+        """Get GitHub token from gh CLI keyring (zero config needed)."""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["gh", "auth", "token"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                logger.info("[MCP] Token acquired from gh CLI keyring")
+                return result.stdout.strip()
+        except Exception as e:
+            logger.debug(f"[MCP] gh auth token failed: {e}")
+        return None
 
     def _get_repo_info(self) -> tuple:
         """

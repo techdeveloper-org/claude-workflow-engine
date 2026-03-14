@@ -17,7 +17,7 @@ Supported Models (GGUF format):
 - DeepSeek-R1-Distill-Qwen-7B: Powerful (4.4GB) - best quality
 
 Configuration:
-- Endpoint: C:\Users\techd\Downloads\intel-ai\npu\llama-cli-npu.exe
+- Endpoint: C:/Users/techd/Downloads/intel-ai/npu/llama-cli-npu.exe
 - Speed: 2-3x faster than GPU for simple tasks
 - Latency: <500ms for classification tasks
 """

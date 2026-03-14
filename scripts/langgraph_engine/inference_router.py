@@ -1,9 +1,8 @@
 """
-Unified Inference Router - Smart model selection between GPU (Ollama) and NPU
+Unified Inference Router - GPU-First model selection
 
-Routes tasks to the optimal backend:
-- GPU (Ollama): Complex reasoning, planning (better quality)
-- NPU: Fast classification, simple analysis (super fast)
+Routes all tasks to GPU (Ollama) by default. NPU routing disabled as NPU is
+slow and produces unreadable output. GPU models: qwen2.5:7b, granite4:3b.
 
 Configuration via environment variables:
 - INFERENCE_MODE: "auto" (default), "gpu_only", "npu_only"
@@ -50,22 +49,22 @@ class InferenceRouter:
         logger.info(f"  NPU: {'available' if self.npu else 'unavailable'}")
 
     def _init_services(self):
-        """Initialize GPU and NPU services."""
-        # Initialize GPU (Ollama)
+        """Initialize GPU and NPU services. GPU is initialized first as primary backend."""
+        # Initialize GPU (Ollama) - primary backend
         if self.mode in ["auto", "gpu_only"]:
             try:
                 self.ollama = OllamaService(endpoint=self.ollama_endpoint)
-                logger.info("✓ GPU (Ollama) initialized")
+                logger.info("✓ GPU (Ollama) initialized as primary backend")
             except Exception as e:
                 logger.warning(f"GPU initialization failed: {e}")
                 self.ollama = None
 
-        # Initialize NPU
-        if self.mode in ["auto", "npu_only"]:
+        # Initialize NPU - optional fallback only (known to be slow)
+        if self.mode in ["npu_only"]:
             try:
                 self.npu = get_npu_service(self.npu_path)
                 if self.npu:
-                    logger.info("✓ NPU initialized")
+                    logger.info("✓ NPU initialized (optional fallback, prefer GPU)")
             except Exception as e:
                 logger.warning(f"NPU initialization failed: {e}")
                 self.npu = None
@@ -102,15 +101,15 @@ class InferenceRouter:
         if not self.ollama:
             return "npu"  # Only NPU available
 
-        # Both available: choose based on task
+        # All tasks route to GPU - faster and better quality than NPU
         task_routing = {
-            "classification": "npu",  # Fast
-            "simple_analysis": "npu",  # Fast
-            "pattern_matching": "npu",  # Fast
-            "reasoning": "gpu",  # Complex
-            "planning": "gpu",  # Complex
-            "synthesis": "gpu",  # Complex
-            "auto": "npu" if complexity <= 5 else "gpu",  # Complexity-based
+            "classification": "gpu",  # Was npu, GPU is faster and better quality
+            "simple_analysis": "gpu",
+            "pattern_matching": "gpu",
+            "reasoning": "gpu",
+            "planning": "gpu",
+            "synthesis": "gpu",
+            "auto": "gpu",  # Default to GPU
         }
 
         return task_routing.get(task_type, "gpu")
@@ -203,14 +202,14 @@ class InferenceRouter:
         )
 
     def step1_plan_mode_decision(self, toon: Dict[str, Any], user_requirement: str) -> Dict[str, Any]:
-        """Route to fast backend for plan decision."""
-        logger.info("[STEP 1] Plan mode decision (fast classification on NPU)")
-        backend = self.choose_backend("classification", toon.get("complexity_score", 5))
+        """Route to GPU (Ollama) for plan decision. GPU preferred over NPU for quality."""
+        logger.info("[STEP 1] Plan mode decision (fast classification on GPU)")
 
-        if backend == "npu" and self.npu:
-            return self.npu.step1_plan_mode_decision(toon, user_requirement)
-        elif self.ollama:
+        if self.ollama:
             return self.ollama.step1_plan_mode_decision(toon, user_requirement)
+        elif self.npu:
+            logger.warning("GPU unavailable, falling back to NPU for step1")
+            return self.npu.step1_plan_mode_decision(toon, user_requirement)
         else:
             return {"plan_required": True, "reasoning": "No backend available"}
 

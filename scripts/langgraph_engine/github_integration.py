@@ -124,8 +124,7 @@ class GitHubIntegration:
                 "gh", "issue", "create",
                 "--repo", f"{self.owner}/{self.repo_name}",
                 "--title", title,
-                "--body", body,
-                "--json", "number,url,createdAt"
+                "--body", body
             ]
 
             # Add labels if provided
@@ -149,23 +148,26 @@ class GitHubIntegration:
                 logger.error(f"Issue creation failed: {error_msg}")
                 return {"success": False, "error": error_msg}
 
-            # Parse JSON response
-            issue_data = json.loads(result.stdout)
-            issue_number = issue_data.get("number")
-            issue_url = issue_data.get("url")
+            # gh issue create outputs the issue URL on stdout
+            issue_url = result.stdout.strip()
 
-            logger.info(f"✓ Issue created: #{issue_number}")
+            # Extract issue number from URL (e.g., https://github.com/owner/repo/issues/42)
+            issue_number = None
+            if "/issues/" in issue_url:
+                try:
+                    issue_number = int(issue_url.rstrip("/").split("/")[-1])
+                except ValueError:
+                    pass
+
+            logger.info(f"Issue created: #{issue_number}")
 
             return {
                 "success": True,
                 "issue_number": issue_number,
                 "issue_url": issue_url,
-                "created_at": issue_data.get("createdAt", datetime.now().isoformat())
+                "created_at": datetime.now().isoformat()
             }
 
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse gh response: {result.stdout}")
-            return {"success": False, "error": "Failed to parse response"}
         except Exception as e:
             logger.error(f"Issue creation failed: {e}")
             return {"success": False, "error": str(e)}
@@ -318,8 +320,7 @@ class GitHubIntegration:
                 "--head", head_branch,
                 "--base", base_branch,
                 "--title", title,
-                "--body", body,
-                "--json", "number,url"
+                "--body", body
             ]
 
             # Add labels if provided
@@ -339,12 +340,18 @@ class GitHubIntegration:
                 logger.error(f"PR creation failed: {error_msg}")
                 return {"success": False, "error": error_msg}
 
-            # Parse JSON response
-            pr_data = json.loads(result.stdout)
-            pr_number = pr_data.get("number")
-            pr_url = pr_data.get("url")
+            # gh pr create outputs the PR URL on stdout
+            pr_url = result.stdout.strip()
 
-            logger.info(f"✓ PR created: #{pr_number}")
+            # Extract PR number from URL (e.g., https://github.com/owner/repo/pull/5)
+            pr_number = None
+            if "/pull/" in pr_url:
+                try:
+                    pr_number = int(pr_url.rstrip("/").split("/")[-1])
+                except ValueError:
+                    pass
+
+            logger.info(f"PR created: #{pr_number}")
 
             return {
                 "success": True,
@@ -353,9 +360,6 @@ class GitHubIntegration:
                 "created_at": datetime.now().isoformat()
             }
 
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse gh response: {result.stdout}")
-            return {"success": False, "error": "Failed to parse response"}
         except Exception as e:
             logger.error(f"PR creation failed: {e}")
             return {"success": False, "error": str(e)}

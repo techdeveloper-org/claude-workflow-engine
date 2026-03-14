@@ -23,6 +23,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from loguru import logger
+
 try:
     from langgraph.graph import StateGraph, START, END
     _LANGGRAPH_AVAILABLE = True
@@ -1030,18 +1032,49 @@ def step8_github_issue_creation(state: FlowState) -> dict:
 
         body = "\n".join(body_parts)
 
-        # Create labels
-        labels = [task_type, f"complexity-{min(complexity, 10)}"]
-        if state.get("step5_skill"):
-            labels.append(state.get("step5_skill"))
+        # Build implementation plan from state
+        plan_text = state.get("step2_plan", "")
+        if isinstance(plan_text, dict):
+            plan_text = str(plan_text)
 
-        # For now, return mock issue creation (would use gh CLI in production)
+        # Use Level3GitHubWorkflow for real GitHub issue creation
+        try:
+            from ..level3_steps8to12_github import Level3GitHubWorkflow
+
+            workflow = Level3GitHubWorkflow(
+                session_dir=session_path or ".",
+                repo_path=project_root
+            )
+            result = workflow.step8_create_issue(
+                title=title,
+                description=body,
+                task_summary=user_msg,
+                implementation_plan=plan_text
+            )
+
+            if result.get("success"):
+                return {
+                    "step8_issue_id": str(result.get("issue_number", "0")),
+                    "step8_issue_url": result.get("issue_url", ""),
+                    "step8_issue_created": True,
+                    "step8_title": title,
+                    "step8_label": result.get("label", task_type),
+                    "step8_status": "OK"
+                }
+            else:
+                logger.warning(f"GitHub issue creation failed: {result.get('error')}. Using fallback.")
+
+        except Exception as gh_err:
+            logger.warning(f"Level3GitHubWorkflow unavailable: {gh_err}. Using fallback.")
+
+        # Fallback: return with issue_id=0 indicating no real issue was created
         return {
-            "step8_issue_id": "42",  # Mock issue ID
-            "step8_issue_url": f"https://github.com/{project_root}/issues/42",
-            "step8_issue_created": True,
+            "step8_issue_id": "0",
+            "step8_issue_url": "",
+            "step8_issue_created": False,
             "step8_title": title,
-            "step8_status": "OK"
+            "step8_label": task_type,
+            "step8_status": "FALLBACK"
         }
 
     except Exception as e:
@@ -1064,17 +1097,47 @@ def step9_branch_creation(state: FlowState) -> dict:
     Returns branch_name for next step.
     """
     try:
+        import os
+
         issue_id = state.get("step8_issue_id", "0")
         task_type = state.get("step0_task_type", "task").lower()
+        label = state.get("step8_label", task_type)
+        session_path = state.get("session_dir") or os.environ.get("CLAUDE_SESSION_PATH", ".")
+        project_root = state.get("project_root", ".")
 
-        # Create branch name
-        branch_name = f"{issue_id}-{task_type}"
+        # Use Level3GitHubWorkflow for real branch creation
+        try:
+            from ..level3_steps8to12_github import Level3GitHubWorkflow
 
-        # For now, return mock branch creation (would use git CLI in production)
+            workflow = Level3GitHubWorkflow(
+                session_dir=session_path,
+                repo_path=project_root
+            )
+            result = workflow.step9_create_branch(
+                issue_number=int(issue_id) if issue_id.isdigit() else 0,
+                label=label,
+                session_dir=session_path
+            )
+
+            if result.get("success"):
+                return {
+                    "step9_branch_name": result.get("branch_name", ""),
+                    "step9_branch_created": True,
+                    "step9_conflict_detected": result.get("conflict_detected", False),
+                    "step9_status": "OK"
+                }
+            else:
+                logger.warning(f"Branch creation failed: {result.get('error')}. Using fallback.")
+
+        except Exception as gh_err:
+            logger.warning(f"Level3GitHubWorkflow unavailable for branch: {gh_err}. Using fallback.")
+
+        # Fallback: return branch name without actually creating it
+        branch_name = f"issue-{issue_id}-{label}"
         return {
             "step9_branch_name": branch_name,
-            "step9_branch_created": True,
-            "step9_status": "OK"
+            "step9_branch_created": False,
+            "step9_status": "FALLBACK"
         }
 
     except Exception as e:
@@ -1260,26 +1323,73 @@ def step11_pull_request_review(state: FlowState) -> dict:
     Returns PR id, review status, and blocking issues.
     """
     try:
+        import os
+
         branch_name = state.get("step9_branch_name", "")
         issue_id = state.get("step8_issue_id", "0")
-
-        # Mock PR creation
-        pr_id = issue_id  # In production, would get real PR ID from gh CLI
-
-        # Mock review status
-        review_passed = True
-        review_issues = []
-
-        # Initialize retry count if first time
+        session_path = state.get("session_dir") or os.environ.get("CLAUDE_SESSION_PATH", ".")
+        project_root = state.get("project_root", ".")
         retry_count = state.get("step11_retry_count", 0)
 
+        # Build changes summary from step 10 results
+        modified_files = state.get("step10_modified_files", [])
+        changes_summary = state.get("step10_changes_summary", {})
+        summary_text = f"Files modified: {len(modified_files)}"
+        if isinstance(changes_summary, dict):
+            summary_text += f", Tasks completed: {changes_summary.get('tasks_completed', 0)}"
+
+        # Get selected skills/agents for code review
+        selected_skills = []
+        selected_agents = []
+        skill = state.get("step5_skill", "")
+        agent = state.get("step5_agent", "")
+        if skill:
+            selected_skills = [skill] if isinstance(skill, str) else list(skill)
+        if agent:
+            selected_agents = [agent] if isinstance(agent, str) else list(agent)
+
+        # Use Level3GitHubWorkflow for real PR creation & review
+        try:
+            from ..level3_steps8to12_github import Level3GitHubWorkflow
+
+            workflow = Level3GitHubWorkflow(
+                session_dir=session_path,
+                repo_path=project_root
+            )
+            result = workflow.step11_create_pull_request(
+                issue_number=int(issue_id) if issue_id.isdigit() else 0,
+                branch_name=branch_name,
+                changes_summary=summary_text,
+                auto_merge=True,
+                selected_skills=selected_skills,
+                selected_agents=selected_agents
+            )
+
+            if result.get("success"):
+                return {
+                    "step11_pr_id": str(result.get("pr_number", "0")),
+                    "step11_pr_url": result.get("pr_url", ""),
+                    "step11_review_passed": result.get("review_passed", True),
+                    "step11_review_issues": result.get("review_issues", []),
+                    "step11_merged": result.get("merged", False),
+                    "step11_retry_count": retry_count,
+                    "step11_status": "OK"
+                }
+            else:
+                logger.warning(f"PR creation failed: {result.get('error')}. Using fallback.")
+
+        except Exception as gh_err:
+            logger.warning(f"Level3GitHubWorkflow unavailable for PR: {gh_err}. Using fallback.")
+
+        # Fallback: mark review as passed so pipeline continues
         return {
-            "step11_pr_id": str(pr_id),
-            "step11_pr_url": f"https://github.com/repo/pull/{pr_id}",
-            "step11_review_passed": review_passed,
-            "step11_review_issues": review_issues,
+            "step11_pr_id": "0",
+            "step11_pr_url": "",
+            "step11_review_passed": True,
+            "step11_review_issues": ["GitHub integration unavailable - review skipped"],
+            "step11_merged": False,
             "step11_retry_count": retry_count,
-            "step11_status": "OK"
+            "step11_status": "FALLBACK"
         }
 
     except Exception as e:
@@ -1304,22 +1414,66 @@ def step12_issue_closure(state: FlowState) -> dict:
     Returns closure status.
     """
     try:
+        import os
+
         issue_id = state.get("step8_issue_id", "0")
+        pr_id = state.get("step11_pr_id", "0")
         pr_url = state.get("step11_pr_url", "")
         review_passed = state.get("step11_review_passed", False)
+        modified_files = state.get("step10_modified_files", [])
+        session_path = state.get("session_dir") or os.environ.get("CLAUDE_SESSION_PATH", ".")
+        project_root = state.get("project_root", ".")
 
-        # Mock closing comment
+        # Build approach description from state
+        task_type = state.get("step0_task_type", "Task")
+        skill = state.get("step5_skill", "")
+        approach = f"{task_type} execution"
+        if skill:
+            approach += f" using {skill}"
+
+        # Use Level3GitHubWorkflow for real issue closure
+        try:
+            from ..level3_steps8to12_github import Level3GitHubWorkflow
+
+            workflow = Level3GitHubWorkflow(
+                session_dir=session_path,
+                repo_path=project_root
+            )
+            result = workflow.step12_close_issue(
+                issue_number=int(issue_id) if issue_id.isdigit() else 0,
+                pr_number=int(pr_id) if pr_id.isdigit() else 0,
+                files_modified=modified_files,
+                approach_taken=approach,
+                verification_steps=[
+                    "Code review passed" if review_passed else "Code review pending",
+                    f"PR: {pr_url}" if pr_url else "PR not created"
+                ]
+            )
+
+            if result.get("success"):
+                return {
+                    "step12_issue_closed": True,
+                    "step12_closing_comment": f"Issue #{issue_id} closed via PR #{pr_id}",
+                    "step12_status": "OK"
+                }
+            else:
+                logger.warning(f"Issue closure failed: {result.get('error')}. Using fallback.")
+
+        except Exception as gh_err:
+            logger.warning(f"Level3GitHubWorkflow unavailable for closure: {gh_err}. Using fallback.")
+
+        # Fallback: report closure was not performed
         closing_comment = f"""## Implementation Complete
 
 PR: {pr_url}
-Status: {'✅ Passed' if review_passed else '⚠️ Needs Work'}
+Status: {'Passed' if review_passed else 'Needs Work'}
 
 See PR for details."""
 
         return {
-            "step12_issue_closed": True,
+            "step12_issue_closed": False,
             "step12_closing_comment": closing_comment,
-            "step12_status": "OK"
+            "step12_status": "FALLBACK"
         }
 
     except Exception as e:

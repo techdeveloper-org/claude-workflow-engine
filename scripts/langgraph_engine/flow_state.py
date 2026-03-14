@@ -420,7 +420,8 @@ class FlowState(TypedDict, total=False):
     step8_issue_url: str                       # GitHub issue URL
     step8_issue_created: bool                  # Issue successfully created
     step8_title: Optional[str]                 # Issue title
-    step8_status: Optional[str]                # Creation status (OK/ERROR)
+    step8_label: Optional[str]                 # Issue label (bug/feature/enhancement/etc)
+    step8_status: Optional[str]                # Creation status (OK/ERROR/FALLBACK)
     step8_execution_time_ms: Optional[float]
     step8_error: Optional[str]
 
@@ -446,6 +447,7 @@ class FlowState(TypedDict, total=False):
     step11_pr_url: str                         # GitHub PR URL
     step11_review_passed: bool                 # Code review passed
     step11_review_issues: List[str]            # Issues found in review
+    step11_merged: Optional[bool]             # PR was merged
     step11_retry_count: int                    # Number of retry attempts
     step11_criteria_result: Optional[Dict]     # Full ReviewCriteria evaluation result
     step11_criteria_score: Optional[float]     # ReviewCriteria score (0.0-1.0)

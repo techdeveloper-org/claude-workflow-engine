@@ -5,7 +5,7 @@ TOON = Tokenized Object-Oriented Notation
 Lightweight schema-validated state objects for Level 3 execution.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 import orjson
@@ -13,17 +13,17 @@ import orjson
 
 class ContextData(BaseModel):
     """Project context files (SRS, README, CLAUDE.md)."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     files: List[str] = Field(default_factory=list)
     srs: bool = False
     readme: bool = False
     claude_md: bool = False
 
-    class Config:
-        json_encoder = {orjson: orjson.dumps}
-
 
 class ToonAnalysis(BaseModel):
     """Level 1 Analysis TOON - Full project understanding."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     session_id: str
     timestamp: datetime
@@ -31,9 +31,6 @@ class ToonAnalysis(BaseModel):
     files_loaded_count: int
     context: ContextData
     project_type: Optional[str] = None
-
-    class Config:
-        json_encoder = {datetime: lambda v: v.isoformat()}
 
 
 class RiskAssessment(BaseModel):
@@ -61,6 +58,7 @@ class ExecutionBlueprint(BaseModel):
 
     Enhanced with richer metadata for better planning and execution insights.
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     session_id: str
     timestamp: datetime
@@ -73,7 +71,7 @@ class ExecutionBlueprint(BaseModel):
     selected_agents: List[str] = Field(default_factory=list)
     execution_strategy: str = "sequential"
 
-    # Richer metadata fields (NEW)
+    # Richer metadata fields
     project_type: Optional[str] = Field(
         default=None,
         description="Detected project type: Java, Python, Node, Go, Rust, etc."
@@ -88,9 +86,6 @@ class ExecutionBlueprint(BaseModel):
         le=10,
         description="Effort estimate (1=minimal, 10=very high) based on scope and complexity"
     )
-
-    class Config:
-        json_encoder = {datetime: lambda v: v.isoformat()}
 
 
 class SkillMapping(BaseModel):
