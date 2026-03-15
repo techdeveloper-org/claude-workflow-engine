@@ -21,6 +21,21 @@ def _keep_first_value(current_value, update_value):
     return current_value if current_value is not None else update_value
 
 
+def _merge_lists(current_value, update_value):
+    """Reducer for list fields that receive concurrent updates from parallel nodes.
+
+    Merges lists instead of raising INVALID_CONCURRENT_GRAPH_UPDATE.
+    Used for: pipeline, errors, warnings - fields written by multiple parallel nodes.
+    """
+    if current_value is None:
+        return update_value if update_value is not None else []
+    if update_value is None:
+        return current_value
+    if isinstance(current_value, list) and isinstance(update_value, list):
+        return current_value + update_value
+    return update_value
+
+
 class FlowState(TypedDict, total=False):
     """Complete state for 3-level architecture execution.
 
@@ -277,14 +292,15 @@ class FlowState(TypedDict, total=False):
     # PIPELINE & OUTPUT
     # ===========================================================================
     # For flow-trace.json (backward compatibility)
-    pipeline: List[Dict]              # List of policy execution steps
+    # Annotated with _merge_lists to handle parallel node updates (Level 2 parallel writes)
+    pipeline: Annotated[List[Dict], _merge_lists]
 
     # Final execution status
     final_status: str                  # OK / PARTIAL / FAILED / BLOCKED
 
-    # Errors and warnings
-    errors: List[str]                  # Accumulated errors from all levels
-    warnings: List[str]                # Accumulated warnings
+    # Errors and warnings (Annotated: multiple nodes can append errors concurrently)
+    errors: Annotated[List[str], _merge_lists]
+    warnings: Annotated[List[str], _merge_lists]
 
     # Execution metadata
     execution_time_ms: int             # Total execution time in milliseconds
