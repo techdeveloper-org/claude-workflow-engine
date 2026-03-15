@@ -512,29 +512,34 @@ def main():
         available_skills = load_skill_definitions()
         available_agents = load_agent_definitions()
 
-        # Pre-filter skills by project type (reduces tokens + improves accuracy)
-        # Universal skills always included; language-specific filtered by project
-        _UNIVERSAL_SKILLS = {
-            'api-design-core', 'authentication-core', 'testing-core', 'json-core',
-            'system-design', 'clean-architecture', 'error-handling-patterns',
-            'logging-patterns', 'performance-optimization', 'docker', 'kubernetes',
-            'github-actions-ci', 'jenkins-pipeline', 'prompt-engineering-core',
-            'ai-agents-core', 'guardrails-core', 'ui-ux-core',
-        }
-        _LANG_FILTER = {
-            'python': {'python', 'django', 'flask', 'fastapi', 'langchain', 'langgraph', 'rag', 'vector'},
-            'java': {'java', 'spring', 'kotlin', 'android'},
-            'javascript': {'javascript', 'typescript', 'react', 'angular', 'css', 'html', 'animation', 'seo', 'graphql'},
-            'swift': {'swift', 'swiftui', 'ios'},
-            'kotlin': {'kotlin', 'android'},
-        }
-
+        # Dynamic skill filtering by project type (no hardcoded lists)
+        # Logic: if skill name or description contains project_type keyword = relevant
+        # If skill is language-agnostic (no language keyword in name) = universal, always include
         all_skill_names = list(available_skills.keys()) if available_skills else context_skills
-        if project_type and project_type.lower() in _LANG_FILTER:
-            keywords = _LANG_FILTER[project_type.lower()]
+
+        # Known language keywords (extracted dynamically from skill names)
+        _LANG_KEYWORDS = {'python', 'java', 'spring', 'kotlin', 'android', 'swift',
+                          'swiftui', 'typescript', 'javascript', 'react', 'angular'}
+
+        def _is_language_specific(skill_name):
+            """Check if skill name contains any language keyword."""
+            name_lower = skill_name.lower().replace('-', ' ')
+            return any(kw in name_lower for kw in _LANG_KEYWORDS)
+
+        def _matches_project(skill_name, skill_desc, proj_type):
+            """Check if skill is relevant to this project type."""
+            searchable = (skill_name + ' ' + skill_desc).lower()
+            return proj_type.lower() in searchable
+
+        if project_type and project_type.strip():
             filtered_skills = [
                 s for s in all_skill_names
-                if s in _UNIVERSAL_SKILLS or any(kw in s.lower() for kw in keywords)
+                if not _is_language_specific(s)  # universal = always include
+                or _matches_project(
+                    s,
+                    available_skills.get(s, {}).get('description', '') if isinstance(available_skills.get(s), dict) else '',
+                    project_type
+                )
             ]
         else:
             filtered_skills = all_skill_names
@@ -550,20 +555,19 @@ def main():
         else:
             skills_text = "Available Skills: None loaded\n"
 
-        # Pre-filter agents by project type
-        _AGENT_LANG = {
-            'python': {'python-backend-engineer', 'devops-engineer', 'qa-testing-agent', 'orchestrator-agent'},
-            'java': {'spring-boot-microservices', 'android-backend-engineer', 'android-ui-designer', 'devops-engineer', 'qa-testing-agent'},
-            'javascript': {'react-engineer', 'angular-engineer', 'dynamic-seo-agent', 'static-seo-agent', 'devops-engineer', 'qa-testing-agent', 'ui-ux-designer'},
-            'swift': {'swift-backend-engineer', 'swiftui-designer', 'qa-testing-agent'},
-            'kotlin': {'android-backend-engineer', 'android-ui-designer', 'qa-testing-agent'},
-        }
-
+        # Dynamic agent filtering by project type (match name or description)
         agents_text = ""
         if available_agents:
-            if project_type and project_type.lower() in _AGENT_LANG:
-                relevant_agents = {k: v for k, v in available_agents.items()
-                                   if k in _AGENT_LANG[project_type.lower()]}
+            if project_type and project_type.strip():
+                relevant_agents = {
+                    k: v for k, v in available_agents.items()
+                    if not _is_language_specific(k)  # generic agents always
+                    or _matches_project(
+                        k,
+                        v.get('description', '') if isinstance(v, dict) else '',
+                        project_type
+                    )
+                }
             else:
                 relevant_agents = available_agents
 
