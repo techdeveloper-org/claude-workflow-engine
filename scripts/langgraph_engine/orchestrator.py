@@ -50,6 +50,8 @@ from .subgraphs.level1_sync import (
 from .subgraphs.level2_standards import (
     node_common_standards,
     node_java_standards,
+    node_tool_optimization_standards,
+    node_mcp_plugin_discovery,
     level2_merge_node,
     detect_project_type,
 )
@@ -803,10 +805,16 @@ def create_flow_graph():
     graph.add_node("emergency_archive", emergency_archive)
     graph.add_node("level2_common_standards", node_common_standards)
     graph.add_node("level2_java_standards", node_java_standards)
+    graph.add_node("level2_tool_optimization", node_tool_optimization_standards)
+    graph.add_node("level2_mcp_discovery", node_mcp_plugin_discovery)
     graph.add_node("level2_merge", level2_merge_node)
 
     # Emergency archive routes to standards
     graph.add_edge("emergency_archive", "level2_common_standards")
+
+    # Tool optimization and MCP discovery run in parallel with common standards
+    graph.add_edge("level1_cleanup", "level2_tool_optimization")
+    graph.add_edge("level1_cleanup", "level2_mcp_discovery")
 
     # Common standards check for Java
     graph.add_conditional_edges(
@@ -818,8 +826,10 @@ def create_flow_graph():
         },
     )
 
-    # Java standards merge
+    # Java standards, tool optimization, and MCP discovery all merge
     graph.add_edge("level2_java_standards", "level2_merge")
+    graph.add_edge("level2_tool_optimization", "level2_merge")
+    graph.add_edge("level2_mcp_discovery", "level2_merge")
 
     # Standards selector: auto-detect project type + framework, load all standards
     graph.add_node("level2_select_standards", level2_select_standards_node)
