@@ -318,6 +318,105 @@ def complexity_report(project_path: str) -> dict:
 
 
 # ============================================================================
+# METHOD CALL STACK ANALYSIS (AST-based)
+# ============================================================================
+
+def _extract_method_call_stack(project_root: Path) -> dict:
+    """Extract method call relationships from Python files using AST.
+
+    Builds a call graph: which functions call which other functions.
+    Returns max call depth, total unique calls, and entry points.
+
+    Args:
+        project_root: Path to project root
+
+    Returns:
+        Dict with max_depth, total_calls, entry_points, or empty dict on failure.
+    """
+    import ast
+
+    try:
+        excluded = {"__pycache__", ".venv", "venv", "node_modules", ".git", "dist", "build"}
+
+        # Collect all function/method definitions and their calls
+        definitions = {}  # func_name -> file_path
+        calls = {}  # caller -> [callees]
+
+        py_files = [
+            f for f in project_root.rglob("*.py")
+            if not any(part in excluded for part in f.parts)
+        ]
+
+        for py_file in py_files[:200]:  # Limit to 200 files
+            try:
+                source = py_file.read_text(encoding='utf-8', errors='ignore')
+                tree = ast.parse(source, filename=str(py_file))
+            except (SyntaxError, ValueError):
+                continue
+
+            current_func = None
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    func_key = f"{py_file.stem}.{node.name}"
+                    definitions[func_key] = str(py_file.relative_to(project_root))
+                    current_func = func_key
+                    if func_key not in calls:
+                        calls[func_key] = []
+
+                elif isinstance(node, ast.Call) and current_func:
+                    # Extract callee name
+                    if isinstance(node.func, ast.Name):
+                        calls[current_func].append(node.func.id)
+                    elif isinstance(node.func, ast.Attribute):
+                        calls[current_func].append(node.func.attr)
+
+        if not calls:
+            return {}
+
+        # Calculate max call depth (BFS from each entry point)
+        all_callees = set()
+        for callee_list in calls.values():
+            all_callees.update(callee_list)
+
+        # Entry points: functions defined but never called by other functions
+        defined_names = {k.split('.')[-1] for k in definitions}
+        entry_points = [
+            name for name in defined_names
+            if name not in all_callees and not name.startswith('_')
+        ]
+
+        # Calculate max depth via iterative traversal
+        max_depth = 0
+        for func_key in calls:
+            visited = set()
+            stack = [(func_key, 0)]
+            while stack:
+                current, depth = stack.pop()
+                if current in visited:
+                    continue
+                visited.add(current)
+                max_depth = max(max_depth, depth)
+                for callee in calls.get(current, []):
+                    # Find matching definition
+                    for def_key in definitions:
+                        if def_key.endswith(f".{callee}"):
+                            stack.append((def_key, depth + 1))
+                            break
+
+        total_calls = sum(len(v) for v in calls.values())
+
+        return {
+            "max_depth": max_depth,
+            "total_calls": total_calls,
+            "total_functions": len(definitions),
+            "entry_points": sorted(entry_points)[:20],
+        }
+
+    except Exception:
+        return {}
+
+
+# ============================================================================
 # GRAPH-BASED COMPLEXITY (NetworkX + Lizard integration)
 # ============================================================================
 
@@ -343,7 +442,30 @@ def calculate_graph_complexity(
         graph_score=0 means graph analysis was unavailable.
     """
     try:
-        # Import the analyzer from the architecture scripts
+        project_root = Path(project_path)
+
+        # --- Check .claude-graph in project root first (fast path) ---
+        local_graph_cache = project_root / ".claude-graph" / "graph-analysis.json"
+        if local_graph_cache.exists():
+            try:
+                cached = json.loads(local_graph_cache.read_text(encoding='utf-8'))
+                if 'graph_complexity_score' in cached and 'graph_metrics' in cached:
+                    graph_score = cached['graph_complexity_score']
+                    graph_metrics = cached['graph_metrics']
+                    cyclomatic_avg = cached.get('cyclomatic_metrics', {}).get('avg_cyclomatic', 0.0)
+
+                    # Enrich with method call stack analysis
+                    call_stack = _extract_method_call_stack(project_root)
+                    if call_stack:
+                        graph_metrics['method_call_depth'] = call_stack.get('max_depth', 0)
+                        graph_metrics['method_call_count'] = call_stack.get('total_calls', 0)
+                        graph_metrics['entry_points'] = call_stack.get('entry_points', [])
+
+                    return graph_score, graph_metrics, cyclomatic_avg
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        # --- Run full analyzer via code-graph-analyzer.py ---
         analyzer_dir = (
             Path(__file__).parent.parent /
             "architecture" / "03-execution-system" / "00-code-graph-analysis"
@@ -379,6 +501,29 @@ def calculate_graph_complexity(
 
         graph_metrics = analyzer.metrics or {}
         cyclomatic_avg = (analyzer.cyclomatic or {}).get('avg_cyclomatic', 0.0)
+
+        # Also save to .claude-graph for fast future access
+        try:
+            local_graph_cache.parent.mkdir(parents=True, exist_ok=True)
+            result_data = {
+                'version': '1.2.0',
+                'analyzed_at': __import__('datetime').datetime.now().isoformat(),
+                'project_dir': str(project_root),
+                'files_analyzed': len(analyzer.files),
+                'graph_metrics': graph_metrics,
+                'cyclomatic_metrics': analyzer.cyclomatic or {},
+                'graph_complexity_score': graph_score,
+            }
+            local_graph_cache.write_text(json.dumps(result_data, indent=2, default=str), encoding='utf-8')
+        except Exception:
+            pass
+
+        # Enrich with method call stack analysis
+        call_stack = _extract_method_call_stack(project_root)
+        if call_stack:
+            graph_metrics['method_call_depth'] = call_stack.get('max_depth', 0)
+            graph_metrics['method_call_count'] = call_stack.get('total_calls', 0)
+            graph_metrics['entry_points'] = call_stack.get('entry_points', [])
 
         return graph_score, graph_metrics, cyclomatic_avg
 
