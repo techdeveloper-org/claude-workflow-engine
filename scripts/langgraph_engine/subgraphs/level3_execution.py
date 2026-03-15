@@ -1352,10 +1352,10 @@ def _slugify_title(title: str, max_len: int = 50) -> str:
 def step8_github_issue_creation(state: FlowState) -> dict:
     """Step 8: GitHub Issue Creation - Create GitHub issue for tracking.
 
-    Converts final prompt into a GitHub issue for tracking the task:
-    - Title: "[task_type] Complexity-{complexity}/10 - {summary}"
-    - Body: Full prompt.txt content + task breakdown
-    - Labels: task_type, complexity level, skill tags
+    Skips issue creation for:
+    - Empty/very short prompts (< 5 chars)
+    - System notifications (task-notification, system-reminder XML)
+    - Non-task prompts (greetings, questions)
 
     Returns issue_id and issue_url for next step.
     """
@@ -1364,6 +1364,25 @@ def step8_github_issue_creation(state: FlowState) -> dict:
 
         session_path = state.get("session_dir") or os.environ.get("CLAUDE_SESSION_PATH")
         project_root = state.get("project_root", ".")
+        user_msg = state.get("user_message", "") or os.environ.get("CURRENT_USER_MESSAGE", "")
+
+        # Skip issue creation for non-task prompts
+        skip_patterns = [
+            "<task-notification>", "<system-reminder>",
+            "test", "hello", "hi", "ok", "yes", "no", "haan", "nahi",
+            "theek hai", "chal", "hmm", "achha",
+        ]
+        msg_lower = user_msg.strip().lower()
+        if len(msg_lower) < 5 or any(msg_lower.startswith(p) for p in skip_patterns):
+            logger.info(f"Step 8: Skipping issue creation - prompt too short or non-task: '{msg_lower[:30]}'")
+            return {
+                "step8_issue_id": "0",
+                "step8_issue_url": "",
+                "step8_issue_created": False,
+                "step8_title": "",
+                "step8_label": "",
+                "step8_status": "SKIPPED"
+            }
 
         # Extract metadata from state
         task_type = state.get("step0_task_type", "General")
