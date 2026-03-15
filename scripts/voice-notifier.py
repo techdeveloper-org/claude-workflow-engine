@@ -122,6 +122,93 @@ def play_wav(wav_path):
 
 
 # =============================================================================
+# TTS ENGINE 0: EDGE TTS (Microsoft Azure Neural - Best Quality, Free)
+# =============================================================================
+
+# Edge TTS voice config (Indian English male by default)
+EDGE_TTS_VOICE = os.environ.get("CLAUDE_TTS_VOICE", "en-IN-PrabhatNeural")
+
+
+def speak_edge_tts(text):
+    """Speak text using Microsoft Edge TTS (neural voice, human quality).
+
+    Uses Microsoft Azure neural voices via edge-tts package.
+    Free, no API key needed, Python 3.13 compatible.
+    Supports 400+ voices including Indian English.
+
+    Voices: en-IN-PrabhatNeural (male), en-IN-NeerjaNeural (female),
+            en-US-AndrewNeural (male), en-US-AvaNeural (female)
+
+    Set CLAUDE_TTS_VOICE env var to change voice.
+
+    Args:
+        text: Text to speak.
+
+    Returns:
+        bool: True if spoken successfully.
+    """
+    try:
+        import edge_tts
+        import asyncio
+    except ImportError:
+        log_voice("[TTS-EDGE] edge-tts not installed (pip install edge-tts)")
+        return False
+
+    wav_path = None
+    try:
+        # Generate MP3 audio
+        wav_fd, wav_path = tempfile.mkstemp(suffix='.mp3', prefix='claude_voice_')
+        os.close(wav_fd)
+
+        async def _generate():
+            communicate = edge_tts.Communicate(text, EDGE_TTS_VOICE)
+            await communicate.save(wav_path)
+
+        asyncio.run(_generate())
+
+        if not os.path.exists(wav_path) or os.path.getsize(wav_path) < 100:
+            log_voice("[TTS-EDGE] Generated file too small or missing")
+            return False
+
+        log_voice(f"[TTS-EDGE] Generated audio: {os.path.getsize(wav_path)} bytes, voice={EDGE_TTS_VOICE}")
+
+        # Play audio
+        if sys.platform == 'win32':
+            # PowerShell MediaPlayer for MP3
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-Command',
+                 f'Add-Type -AssemblyName PresentationCore; '
+                 f'$p = New-Object System.Windows.Media.MediaPlayer; '
+                 f'$p.Open([Uri]::new(\"{wav_path}\")); '
+                 f'$p.Play(); '
+                 f'Start-Sleep -Milliseconds 500; '
+                 f'while($p.Position -lt $p.NaturalDuration.TimeSpan) {{ Start-Sleep -Milliseconds 200 }}; '
+                 f'$p.Close()'],
+                timeout=60, capture_output=True
+            )
+            played = (result.returncode == 0)
+        else:
+            played = play_wav_unix(wav_path)
+
+        if played:
+            log_voice(f"[TTS-EDGE-SUCCESS] Spoke ({EDGE_TTS_VOICE}): {text[:60]}")
+            return True
+        else:
+            log_voice("[TTS-EDGE] Audio generated but playback failed")
+            return False
+
+    except Exception as e:
+        log_voice(f"[TTS-EDGE-ERROR] {str(e)[:100]}")
+        return False
+    finally:
+        if wav_path and os.path.exists(wav_path):
+            try:
+                os.unlink(wav_path)
+            except Exception:
+                pass
+
+
+# =============================================================================
 # TTS ENGINE 1: COQUI TTS (Neural - Primary)
 # =============================================================================
 
@@ -327,7 +414,7 @@ def speak_powershell_sapi(text):
 def main():
     """Entry point - tries TTS engines in priority order.
 
-    Priority: Coqui TTS (neural) -> pyttsx3 -> PowerShell SAPI -> espeak
+    Priority: Edge TTS (neural) -> Coqui TTS -> pyttsx3 -> PowerShell SAPI -> espeak
     """
     if len(sys.argv) < 2:
         log_voice("[ERROR] No text provided")
@@ -341,7 +428,12 @@ def main():
 
     log_voice(f"[INIT] Speaking: {text[:80]}")
 
-    # ENGINE 1: Coqui TTS (neural voice - best quality)
+    # ENGINE 0: Edge TTS (Microsoft Azure neural - human quality, free, Python 3.13 compatible)
+    if speak_edge_tts(text):
+        log_voice("[OK] Voice notification completed (Edge TTS neural)")
+        sys.exit(0)
+
+    # ENGINE 1: Coqui TTS (neural voice - needs Python <3.12)
     if speak_coqui(text):
         log_voice("[OK] Voice notification completed (Coqui TTS)")
         sys.exit(0)
