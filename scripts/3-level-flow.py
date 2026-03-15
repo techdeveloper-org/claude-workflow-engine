@@ -185,7 +185,10 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "", user_mess
             print(f"[DEBUG] user_message value: {initial_state['user_message'][:50] if initial_state['user_message'] else 'EMPTY'}", file=sys.stderr)
 
     # Create and invoke graph
-    graph = create_flow_graph()
+    # hook_mode=True: Skip Steps 8-14 (GitHub workflow) for fast hook execution
+    # This reduces hook time from ~170s to ~60s (only analysis + prompt generation)
+    hook_mode = os.environ.get("CLAUDE_HOOK_MODE", "1") == "1"
+    graph = create_flow_graph(hook_mode=hook_mode)
 
     if DEBUG:
         print("[DEBUG] Starting LangGraph execution...")

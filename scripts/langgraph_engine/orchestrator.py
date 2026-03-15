@@ -692,12 +692,18 @@ def output_node(state: FlowState) -> dict:
 # ============================================================================
 
 
-def create_flow_graph():
+def create_flow_graph(hook_mode: bool = False):
     """Create and return the main StateGraph for 3-level flow.
 
     LangGraph 1.0.10: All nodes flattened into single graph.
     Parallel execution: Multiple edges from START or same source
     achieve automatic parallelization.
+
+    Args:
+        hook_mode: If True, skip Steps 8-14 (GitHub workflow) for fast
+                   UserPromptSubmit hook execution. Only runs Levels -1/1/2
+                   and Steps 0-7 (analysis + prompt generation).
+                   Steps 8-14 can be triggered separately after Claude has context.
 
     Returns:
         Compiled StateGraph instance
@@ -901,6 +907,25 @@ def create_flow_graph():
     # Step 7: Final Prompt Generation (LOCAL LLM)
     graph.add_node("level3_step7", step7_final_prompt_node)
     graph.add_edge("level3_step6", "level3_step7")
+
+    # ========================================================================
+    # HOOK MODE: Skip Steps 8-14 (GitHub workflow) for fast hook execution
+    # In hook mode, after Step 7 (prompt generated) go directly to output
+    # ========================================================================
+    if hook_mode:
+        graph.add_node("level3_merge", level3_v2_merge_node)
+        graph.add_edge("level3_step7", "level3_merge")
+
+        graph.add_node("output_node", output_node)
+        graph.add_edge("level3_merge", "output_node")
+        graph.add_edge("output_node", END)
+
+        compiled_graph = graph.compile()
+        return compiled_graph
+
+    # ========================================================================
+    # FULL MODE: Steps 8-14 (GitHub workflow + implementation)
+    # ========================================================================
 
     # Step 8: GitHub Issue Creation
     graph.add_node("level3_step8", step8_github_issue_node)
