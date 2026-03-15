@@ -32,29 +32,37 @@ class OllamaTaskAnalyzer:
         self.project_root = Path.cwd()
 
     def call_ollama(self, prompt: str) -> str:
-        """Call local Ollama LLM with prompt."""
+        """Call LLM with prompt. Tries Ollama first, then claude CLI fallback."""
+        # Try shared llm_call (Ollama -> Claude CLI fallback)
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+            from langgraph_engine.llm_call import llm_call
+            result = llm_call(prompt, model="fast", temperature=0.3)
+            if result:
+                return result
+        except ImportError:
+            pass
+
+        # Direct Ollama fallback
         try:
             num_ctx = 8192 if "14b" in self.model else 16384
             payload = {
                 "model": self.model,
                 "prompt": prompt,
                 "stream": False,
-                "temperature": 0.3,  # Lower temp for consistency
+                "temperature": 0.3,
                 "options": {"num_ctx": num_ctx, "num_predict": 2048}
             }
-
             req = urllib.request.Request(
                 self.endpoint,
                 data=json.dumps(payload).encode(),
                 headers={"Content-Type": "application/json"}
             )
-
             with urllib.request.urlopen(req, timeout=30) as response:
                 result = json.loads(response.read().decode())
                 return result.get("response", "").strip()
         except Exception as e:
-            # Fallback if Ollama not available
-            return f"Error calling Ollama: {str(e)}"
+            return f"Error calling LLM: {str(e)}"
 
     def detect_project_type(self) -> str:
         """Detect project type by looking for files."""
