@@ -295,51 +295,85 @@ def _commit_session_changes(repo_root: str, session_summary: dict,
             _log(f"git add failed: {result.stderr[:200]}")
             return False
 
-        # Build commit message from session summary + actual changed files
+        # Build commit message from LLM (preferred) or session summary fallback
         commit_title = ""
         commit_body = ""
 
-        # Get list of staged files for context
+        # Get staged file info for context
         diff_result = subprocess.run(
             ['git', 'diff', '--cached', '--name-only'],
             capture_output=True, text=True, timeout=10, cwd=repo_root
         )
         changed_files = [f for f in diff_result.stdout.strip().splitlines() if f] if diff_result.returncode == 0 else []
 
-        if session_summary:
-            # Use task types for commit type prefix
-            types = session_summary.get('task_types', [])
-            if types:
-                commit_title = ', '.join(types[:3])
+        # Try LLM-powered commit message (meaningful, context-aware)
+        try:
+            diff_stat = subprocess.run(
+                ['git', 'diff', '--cached', '--stat'],
+                capture_output=True, text=True, timeout=5, cwd=repo_root
+            )
+            diff_content = subprocess.run(
+                ['git', 'diff', '--cached'],
+                capture_output=True, text=True, timeout=5, cwd=repo_root
+            )
+            diff_text = diff_content.stdout[:3000] if diff_content.returncode == 0 else ""
+            stat_text = diff_stat.stdout.strip() if diff_stat.returncode == 0 else ""
 
-            # Build body from requests
+            if diff_text:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                if script_dir not in sys.path:
+                    sys.path.insert(0, script_dir)
+                from langgraph_engine.llm_call import llm_call
+
+                prompt = (
+                    f"Generate a git commit message for these changes.\n\n"
+                    f"Changed files:\n{stat_text}\n\n"
+                    f"Diff (truncated):\n{diff_text}\n\n"
+                    f"Rules:\n"
+                    f"- Return ONLY the commit title (one line, under 72 chars)\n"
+                    f"- Use conventional commit format: type: description\n"
+                    f"- Focus on WHAT changed and WHY, not just file names\n"
+                    f"- Be specific and meaningful\n"
+                    f"- No quotes, no explanation, just the commit title\n"
+                )
+                llm_title = llm_call(prompt, model="fast", temperature=0.1, timeout=15)
+                if llm_title:
+                    commit_title = llm_title.strip().splitlines()[0].strip().strip('"').strip("'")
+                    if len(commit_title) > 72:
+                        commit_title = commit_title[:69] + "..."
+                    _log(f"LLM commit title: {commit_title}")
+        except Exception as llm_err:
+            _log(f"LLM commit message skipped: {llm_err}")
+
+        # Fallback: session summary or file-based title
+        if not commit_title:
+            if session_summary:
+                types = session_summary.get('task_types', [])
+                if types:
+                    commit_title = ', '.join(types[:3])
+
+            if not commit_title and changed_files:
+                stems = [Path(f).stem for f in changed_files[:3]]
+                if len(changed_files) <= 3:
+                    commit_title = f"update {', '.join(stems)}"
+                else:
+                    dirs = set(str(Path(f).parent) for f in changed_files)
+                    if len(dirs) == 1:
+                        dirname = Path(list(dirs)[0]).name
+                        commit_title = f"update {len(changed_files)} {dirname} modules"
+                    else:
+                        commit_title = f"update {', '.join(stems)} and {len(changed_files) - 3} more"
+            elif not commit_title:
+                commit_title = "update implementation"
+
+        # Build body from session requests or file list
+        if session_summary:
             requests = session_summary.get('requests', [])
             if requests:
-                body_lines = []
-                for req in requests:
-                    prompt = req.get('prompt', '')[:100]
-                    if prompt:
-                        body_lines.append(f"- {prompt}")
+                body_lines = [f"- {req.get('prompt', '')[:100]}" for req in requests if req.get('prompt')]
                 if body_lines:
                     commit_body = '\n'.join(body_lines[:10])
 
-        # Generate descriptive title from changed files if no session summary
-        if not commit_title and changed_files:
-            stems = [Path(f).stem for f in changed_files[:3]]
-            if len(changed_files) <= 3:
-                commit_title = f"update {', '.join(stems)}"
-            else:
-                # Group by directory for context
-                dirs = set(str(Path(f).parent) for f in changed_files)
-                if len(dirs) == 1:
-                    dirname = Path(list(dirs)[0]).name
-                    commit_title = f"update {len(changed_files)} {dirname} modules"
-                else:
-                    commit_title = f"update {', '.join(stems)} and {len(changed_files) - 3} more"
-        elif not commit_title:
-            commit_title = "update implementation"
-
-        # Add file list to body for traceability
         if changed_files and not commit_body:
             commit_body = "Modified files ({}):\n{}".format(
                 len(changed_files),

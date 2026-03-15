@@ -4,6 +4,9 @@ Shared LLM Call Helper - Single entry point for all LLM calls in the pipeline.
 Fallback chain: Ollama -> claude CLI (user's subscription)
 All scripts should use this instead of direct urllib calls to Ollama.
 
+Performance: Ollama health is checked ONCE at import time (3s timeout).
+If Ollama is down, all calls go directly to Claude CLI — no per-call wait.
+
 Model tiers:
   fast     -> haiku  (classification, JSON, yes/no, titles)
   balanced -> sonnet (skill selection, code review, synthesis)
@@ -31,6 +34,21 @@ from typing import Optional
 OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
 OLLAMA_MODEL_FAST = os.getenv("OLLAMA_MODEL_FAST", os.getenv("OLLAMA_MODEL", "qwen2.5:7b"))
 OLLAMA_MODEL_DEEP = os.getenv("OLLAMA_MODEL_DEEP", "qwen2.5:14b")
+
+# ============================================================================
+# OLLAMA HEALTH CHECK - Run ONCE at import time, not per call
+# Saves 30s per LLM call when Ollama is down (4 calls = 120s saved)
+# ============================================================================
+_OLLAMA_AVAILABLE = False
+try:
+    import urllib.request
+    _health_url = OLLAMA_ENDPOINT.rsplit("/api/", 1)[0] + "/api/tags"
+    _health_req = urllib.request.Request(_health_url)
+    with urllib.request.urlopen(_health_req, timeout=3) as _resp:
+        if _resp.status == 200:
+            _OLLAMA_AVAILABLE = True
+except Exception:
+    pass
 
 # Claude CLI model mapping
 CLAUDE_MODEL_MAP = {
@@ -81,10 +99,11 @@ def llm_call(
     if temperature is None:
         temperature = DEFAULT_TEMPERATURES.get(model, 0.3)
 
-    # Try 1: Ollama (local, free)
-    response = _call_ollama(prompt, model, temperature, timeout, json_mode)
-    if response:
-        return response
+    # Try 1: Ollama (local, free) - skip entirely if health check failed at import
+    if _OLLAMA_AVAILABLE:
+        response = _call_ollama(prompt, model, temperature, timeout, json_mode)
+        if response:
+            return response
 
     # Try 2: claude CLI (user's subscription)
     response = _call_claude_cli(prompt, model, timeout)
@@ -117,7 +136,8 @@ def _call_ollama(prompt, model, temperature, timeout, json_mode):
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        # Cap Ollama timeout at 30s - if it takes longer, fall back to CLI
+        with urllib.request.urlopen(req, timeout=min(timeout, 30)) as resp:
             result = json.loads(resp.read().decode())
             text = result.get("response", "").strip()
             if text:

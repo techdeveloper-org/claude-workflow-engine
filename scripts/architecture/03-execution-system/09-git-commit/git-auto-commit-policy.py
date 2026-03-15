@@ -765,10 +765,85 @@ class GitAutoCommitAI:
 
         return details
 
+    def _llm_commit_message(self, changes, commit_type):
+        """Try generating commit message via LLM with diff context.
+
+        Uses llm_call (Ollama/Claude CLI) to generate a meaningful commit message
+        based on the actual diff content. Falls back gracefully on failure.
+
+        Args:
+            changes: Dict from analyze_changes().
+            commit_type: Semantic commit type (feat, fix, refactor, etc.)
+
+        Returns:
+            str or None: LLM-generated commit title, or None on failure.
+        """
+        try:
+            # Get a short diff for context (max 150 lines)
+            diff_result = subprocess.run(
+                ['git', 'diff', '--cached', '--stat'],
+                capture_output=True, text=True, timeout=5
+            )
+            diff_stat = diff_result.stdout.strip() if diff_result.returncode == 0 else ""
+
+            # Get first 100 lines of actual diff for meaning
+            diff_content = subprocess.run(
+                ['git', 'diff', '--cached'],
+                capture_output=True, text=True, timeout=5
+            )
+            diff_text = diff_content.stdout[:3000] if diff_content.returncode == 0 else ""
+
+            if not diff_stat and not diff_text:
+                return None
+
+            # Import llm_call - try project path first, then global
+            llm_call = None
+            try:
+                script_dir = Path(__file__).resolve().parent.parent.parent.parent
+                engine_dir = script_dir / "langgraph_engine"
+                if engine_dir.exists():
+                    if str(script_dir) not in sys.path:
+                        sys.path.insert(0, str(script_dir))
+                    from langgraph_engine.llm_call import llm_call
+            except ImportError:
+                pass
+
+            if llm_call is None:
+                return None
+
+            prompt = (
+                f"Generate a git commit message for these changes.\n"
+                f"Commit type: {commit_type}\n\n"
+                f"Changed files:\n{diff_stat}\n\n"
+                f"Diff (truncated):\n{diff_text}\n\n"
+                f"Rules:\n"
+                f"- Return ONLY the commit title (one line, under 72 chars)\n"
+                f"- Start with the type prefix: {commit_type}:\n"
+                f"- Focus on WHAT changed and WHY, not just file names\n"
+                f"- Be specific: 'fix stash detection using stdout+stderr' not 'fix issues'\n"
+                f"- No quotes, no explanation, just the commit title line\n"
+            )
+
+            response = llm_call(prompt, model="fast", temperature=0.1, timeout=15)
+            if response:
+                # Clean up: take first line only, strip quotes
+                title = response.strip().splitlines()[0].strip().strip('"').strip("'")
+                # Ensure it starts with commit type
+                if not title.lower().startswith(commit_type):
+                    title = f"{commit_type}: {title}"
+                # Cap at 72 chars
+                if len(title) > 72:
+                    title = title[:69] + "..."
+                return title
+        except Exception:
+            pass
+        return None
+
     def generate_commit_message(self, changes, context=None, style=None):
         """Generate complete semantic commit message.
 
-        Combines type, summary, and details into a structured message.
+        Tries LLM-powered generation first (with diff context) for meaningful
+        messages. Falls back to pattern-based generation if LLM unavailable.
 
         Args:
             changes:  Dict from analyze_changes().
@@ -784,8 +859,11 @@ class GitAutoCommitAI:
         # Determine commit type
         commit_type = self.determine_commit_type(changes, context)
 
-        # Generate summary
-        summary = self.generate_summary(changes, commit_type)
+        # Try LLM-powered message first (meaningful, context-aware)
+        llm_title = self._llm_commit_message(changes, commit_type)
+
+        # Fall back to pattern-based summary
+        summary = llm_title if llm_title else self.generate_summary(changes, commit_type)
 
         # Generate detailed description
         details = self.generate_details(changes)
