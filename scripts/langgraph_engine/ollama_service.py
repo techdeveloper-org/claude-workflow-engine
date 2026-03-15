@@ -123,11 +123,23 @@ class OllamaService:
             logger.error(f"Error checking ollama models: {e}")
             return []
 
+    # Optimal temperatures per model tier (research-backed)
+    _MODEL_TEMPERATURES = {
+        "fast_classification": 0.1,  # JSON, yes/no, classification
+        "code_analysis": 0.1,       # Code review
+        "task_breakdown": 0.1,      # Structured JSON output
+        "deep_reasoning": 0.4,      # Planning, architecture
+        "complex_reasoning": 0.4,   # Same as deep
+        "prompt_synthesis": 0.2,    # Structured generation
+        "synthesis": 0.2,           # Same
+        "pattern_matching": 0.3,    # Balanced
+    }
+
     def chat(
         self,
         messages: List[Dict[str, str]],
         model: str = "fast_classification",
-        temperature: float = 0.7,
+        temperature: float = None,
         format: Optional[str] = None,
         system_prompt: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -144,6 +156,10 @@ class OllamaService:
         Returns:
             Dict with 'message' containing response content
         """
+        # Auto-select temperature based on model tier if not specified
+        if temperature is None:
+            temperature = self._MODEL_TEMPERATURES.get(model, 0.3)
+
         # If Ollama is down, go straight to fallbacks
         if not self.ollama_available:
             return self._fallback_chain(messages, model, temperature)

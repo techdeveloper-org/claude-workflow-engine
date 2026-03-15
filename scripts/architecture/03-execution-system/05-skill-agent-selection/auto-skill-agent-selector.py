@@ -588,7 +588,7 @@ JSON only:"""
         try:
             llm_response = ""
             if _llm_call:
-                llm_response = _llm_call(prompt, model="balanced", temperature=0.3) or ""
+                llm_response = _llm_call(prompt, model="balanced") or ""
 
             if not llm_response:
                 num_ctx = 8192 if "14b" in ollama_model else 16384
