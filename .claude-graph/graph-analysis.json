@@ -1,37 +1,32 @@
 {
-  "version": "1.1.0",
-  "analyzed_at": "2026-03-07T16:38:48.533436",
-  "duration_ms": 5488,
-  "project_dir": "C:\\Users\\techd\\Documents\\workspace-spring-tool-suite-4-4.27.0-new\\claude-insight",
-  "tech_stack": [
-    "Python",
-    "Flask"
-  ],
-  "files_analyzed": 175,
+  "version": "1.2.0",
+  "analyzed_at": "2026-03-15T12:27:42.338004",
+  "project_dir": ".",
+  "files_analyzed": 211,
   "graph_metrics": {
-    "total_nodes": 175,
-    "total_edges": 450,
-    "density": 0.0148,
-    "max_degree_centrality": 0.8391,
-    "max_betweenness": 0.0203,
+    "total_nodes": 211,
+    "total_edges": 515,
+    "density": 0.0116,
+    "max_degree_centrality": 0.7952,
+    "max_betweenness": 0.0146,
     "max_pagerank": 0,
-    "avg_fan_out": 2.57,
+    "avg_fan_out": 2.44,
     "max_fan_out": 8,
     "longest_path": 2,
-    "connected_components": 15,
-    "avg_clustering": 0.626,
+    "connected_components": 20,
+    "avg_clustering": 0.5684,
     "top_bottleneck_files": [
       "scripts/architecture/01-sync-system/context-management/context-management-policy.py",
-      "scripts/post-tool-tracker.py",
       "scripts/clear-session-handler.py",
       "scripts/pre-tool-enforcer.py",
+      "scripts/post-merge-version-updater.py",
       "src/services/claude_integration.py"
     ]
   },
   "cyclomatic_metrics": {
-    "avg_cyclomatic": 4.16,
-    "max_cyclomatic": 146,
-    "total_functions": 2501
+    "avg_cyclomatic": 3.99,
+    "max_cyclomatic": 169,
+    "total_functions": 3013
   },
   "graph_complexity_score": 7
 }
