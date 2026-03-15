@@ -1,5 +1,5 @@
 """
-Comprehensive Error Logging System for Claude Insight
+Comprehensive Error Logging System for Claude Workflow Engine
 
 Provides centralized error logging with:
 - Timestamp + severity tracking

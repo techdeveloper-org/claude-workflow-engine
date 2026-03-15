@@ -411,7 +411,7 @@ class PipelineUI:
         lines = [
             "",
             "=" * width,
-            f"  Claude Insight Pipeline  |  Session: {self.session_id or 'N/A'}",
+            f"  Claude Workflow Engine Pipeline  |  Session: {self.session_id or 'N/A'}",
             f"  Steps: {self.total_steps}  |  Started: {_now_str()}",
             "=" * width,
         ]

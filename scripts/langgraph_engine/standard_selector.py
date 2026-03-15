@@ -338,7 +338,7 @@ def load_team_standards(project_path: str) -> List[Dict[str, Any]]:
 
 
 def load_framework_standards(project_type: str, framework: str) -> List[Dict[str, Any]]:
-    """Load built-in framework standards (bundled with Claude Insight).
+    """Load built-in framework standards (bundled with Claude Workflow Engine).
 
     Looks in: scripts/architecture/02-standards-system/**/<framework>-standards.md
 

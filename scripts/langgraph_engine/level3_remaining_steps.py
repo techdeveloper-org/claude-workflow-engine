@@ -1621,7 +1621,7 @@ The task has been completed and integrated into the main branch via pull request
 All changes are tested and documented.
 
 ---
-*Completed by Claude Insight Level 3 Execution Pipeline*
+*Completed by Claude Workflow Engine Level 3 Execution Pipeline*
 """
         return summary
 
@@ -1643,7 +1643,7 @@ All changes are tested and documented.
                     msg = "Task completed successfully"
                     subprocess.run(
                         ["powershell", "-Command",
-                         f'[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null; [System.Windows.Forms.MessageBox]::Show("{msg}", "Claude Insight")'],
+                         f'[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") | Out-Null; [System.Windows.Forms.MessageBox]::Show("{msg}", "Claude Workflow Engine")'],
                         timeout=5,
                         capture_output=True
                     )

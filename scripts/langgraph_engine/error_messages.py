@@ -7,7 +7,7 @@ Converts raw technical exceptions and pipeline error codes into:
 - Troubleshooting links for common error categories
 - Help command suggestions
 
-Covers all common error categories in the Claude Insight pipeline:
+Covers all common error categories in the Claude Workflow Engine pipeline:
 - Ollama connection errors
 - GitHub API errors
 - File system errors
@@ -676,7 +676,7 @@ def format_exception(
 # ---------------------------------------------------------------------------
 
 _GENERAL_HELP = """
-Claude Insight Pipeline - Help
+Claude Workflow Engine Pipeline - Help
 
 The pipeline runs in 14 steps to process your request:
   Steps  1-7:  Planning, skill selection, and prompt generation

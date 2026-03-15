@@ -662,7 +662,7 @@ def _print_csv(results: List[Dict[str, Any]]) -> None:
 def run_benchmarks(quick: bool = False) -> List[Dict[str, Any]]:
     """Execute all benchmarks and return list of result dicts."""
     print("\n" + "=" * 72)
-    print("Claude Insight - Performance Benchmarks")
+    print("Claude Workflow Engine - Performance Benchmarks")
     print("Modules available: {}".format(_MODULES_AVAILABLE))
     print("=" * 72)
 
@@ -683,7 +683,7 @@ def run_benchmarks(quick: bool = False) -> List[Dict[str, Any]]:
 
 def main() -> int:
     """CLI entry point; returns exit code (0=all passed, 1=some failed)."""
-    parser = argparse.ArgumentParser(description="Claude Insight Performance Benchmarks")
+    parser = argparse.ArgumentParser(description="Claude Workflow Engine Performance Benchmarks")
     parser.add_argument("--quick", action="store_true", help="Skip slow I/O benchmarks")
     parser.add_argument("--report", action="store_true", help="Print CSV report to stdout")
     parser.add_argument(
