@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 
 from .error_logger import ErrorLogger
+from .patterns import memoize
 
 
 # Priority constants - higher number = higher precedence (wins in conflict resolution)
@@ -84,8 +85,14 @@ def detect_project_type(project_path: str) -> str:
     return "unknown"
 
 
+@memoize(ttl_seconds=3600)
 def detect_framework(project_path: str, project_type: str) -> str:
     """Detect the primary framework used within a project type.
+
+    Results are cached per (project_path, project_type) pair for 1 hour so
+    that repeated calls during the same pipeline run do not re-scan the
+    filesystem each time.  Use detect_framework.cache_clear() to flush the
+    cache manually (e.g. after project files change in tests).
 
     Args:
         project_path: Absolute path to the project root.

@@ -47,6 +47,7 @@ from .version_selector import (
     validate_version_set,
     build_compatibility_matrix,
 )
+from .patterns import SkillRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -64,17 +65,10 @@ _GITHUB_RAW_BASE = os.environ.get(
     f"https://raw.githubusercontent.com/{_GITHUB_OWNER}/claude-global-library/main"
 )
 
-# Default domains to search when locating a skill by name
-_DEFAULT_DOMAINS = [
-    "backend",
-    "frontend",
-    "devops",
-    "data",
-    "mobile",
-    "security",
-    "testing",
-    "core",
-]
+# Default domains - kept for backward compatibility with any code that imports
+# this list directly.  New code should call SkillRegistry.all_domains_raw().
+# SkillRegistry is already seeded with these same domains on patterns.py import.
+_DEFAULT_DOMAINS: List[str] = SkillRegistry.all_domains_raw()
 
 # Timeout for HTTP requests in seconds
 _HTTP_TIMEOUT: int = 15
@@ -517,7 +511,12 @@ class SkillManager:
         urls: List[str] = []
         filenames = ["skill.md", "SKILL.md"]
 
-        for domain in _DEFAULT_DOMAINS:
+        # Use SkillRegistry for dynamic domain discovery.
+        # Falls back to the module-level _DEFAULT_DOMAINS if registry is empty,
+        # which preserves the original behaviour when no extra domains are added.
+        domains = SkillRegistry.all_domains_raw() or _DEFAULT_DOMAINS
+
+        for domain in domains:
             for filename in filenames:
                 url = f"{self.github_raw_base}/skills/{domain}/{skill_name}/{filename}"
                 urls.append(url)
