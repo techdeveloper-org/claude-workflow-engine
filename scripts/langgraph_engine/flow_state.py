@@ -118,6 +118,12 @@ class FlowState(TypedDict, total=False):
     complexity_calculated: Optional[bool]   # Whether calculation succeeded
     complexity_error: Optional[str]         # Error if calculation failed
 
+    # Level 1 graph-based complexity (NetworkX + Lizard)
+    graph_complexity_score: Optional[int]       # 1-25 graph-based score
+    graph_metrics: Optional[Dict]               # density, centrality, coupling, etc.
+    cyclomatic_complexity_avg: Optional[float]  # average cyclomatic complexity
+    combined_complexity_score: Optional[int]    # final combined 1-25 score
+
     # Level 1 caching
     context_cache_hit: Optional[bool]       # True if cache was valid and used
     context_cache_age_hours: Optional[float]  # How old the cached context is

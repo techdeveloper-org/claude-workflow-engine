@@ -189,19 +189,29 @@ class AutoSkillAgentSelector:
                 'agent_threshold': 999
             },
             'python': {
-                'skill': None,
-                'agent': None,
-                'agent_threshold': 999
+                'skill': 'python-core',
+                'agent': 'python-backend-engineer',
+                'agent_threshold': 10
             },
             'flask': {
-                'skill': None,
-                'agent': None,
-                'agent_threshold': 999
+                'skill': 'python-core',
+                'agent': 'python-backend-engineer',
+                'agent_threshold': 10
             },
             'django': {
-                'skill': None,
-                'agent': None,
-                'agent_threshold': 999
+                'skill': 'python-core',
+                'agent': 'python-backend-engineer',
+                'agent_threshold': 10
+            },
+            'langgraph': {
+                'skill': 'langgraph-core',
+                'agent': 'python-backend-engineer',
+                'agent_threshold': 8
+            },
+            'langchain': {
+                'skill': 'langchain-core',
+                'agent': 'python-backend-engineer',
+                'agent_threshold': 8
             },
             'docker': {
                 'skill': 'docker',

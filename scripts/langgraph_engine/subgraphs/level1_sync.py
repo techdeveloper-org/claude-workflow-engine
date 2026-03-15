@@ -725,6 +725,7 @@ def node_toon_compression(state: FlowState) -> dict:
     - files_loaded_count
     - compressed context (boolean flags, no raw content)
     """
+    _step_start = _time_mod.time()
     try:
         session_path = Path(state.get("session_path", ""))
         context_data = state.get("context_data", {})
@@ -802,7 +803,7 @@ def node_toon_compression(state: FlowState) -> dict:
                     file=sys.stderr,
                 )
 
-        return {
+        result = {
             "toon_object": toon_object,
             "toon_saved": True,
             "toon_integrity_ok": integrity_ok,
@@ -811,9 +812,18 @@ def node_toon_compression(state: FlowState) -> dict:
             "toon_version": toon_object.get("version", "1.0.0"),
             "clear_verbose_memory": True,
         }
+        write_level_log(state, "level1", "toon-compression", "OK",
+                        _time_mod.time() - _step_start, {
+                            "toon_saved": True,
+                            "schema_valid": integrity_ok,
+                            "compression_ratio": len(files_loaded),
+                        })
+        return result
 
     except Exception as e:
         print("[TOON COMPRESSION] ERROR: {}".format(e), file=sys.stderr)
+        write_level_log(state, "level1", "toon-compression", "FAILED",
+                        _time_mod.time() - _step_start, None, str(e))
         return {
             "toon_saved": False,
             "toon_error": str(e),
@@ -834,6 +844,7 @@ def level1_merge_node(state: FlowState) -> dict:
     OUTPUT: Only TOON object (contains session_id, complexity_score, files_loaded_count + context)
     CLEARED: All verbose variables from memory
     """
+    _step_start = _time_mod.time()
     # Build final Level 1 output
     updates = {
         "level1_complete": True,
@@ -857,6 +868,11 @@ def level1_merge_node(state: FlowState) -> dict:
 
     updates.update(cleanup_signals)
 
+    write_level_log(state, "level1", "merge", "OK", _time_mod.time() - _step_start, {
+        "level1_complete": True,
+        "toon_present": bool(state.get("toon_object")),
+        "context_percentage": state.get("context_percentage", 0),
+    })
     return updates
 
 
