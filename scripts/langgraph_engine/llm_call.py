@@ -1,24 +1,34 @@
 """
-Shared LLM Call Helper - Single entry point for all LLM calls in the pipeline.
+Shared LLM Call Module - Strategy Pattern with Provider Interface.
 
-Fallback chain: Ollama -> claude CLI (user's subscription)
-All scripts should use this instead of direct urllib calls to Ollama.
+Design Patterns:
+  - Strategy: LLMProvider ABC defines the interface, concrete classes implement it
+  - Chain of Responsibility: Fallback chain tries providers in configured order
+  - Singleton: Each provider instantiated once, reused across all calls
+  - Factory: get_providers() builds the chain from configuration
 
-Performance: Ollama health is checked ONCE at import time (3s timeout).
-If Ollama is down, all calls go directly to Claude CLI — no per-call wait.
+Configuration (env vars):
+  LLM_PROVIDER=ollama          # Primary provider: ollama, claude_cli, openai, auto (default)
+  LLM_FALLBACK=claude_cli      # Fallback provider (comma-separated for chain)
+  OLLAMA_ENDPOINT=http://localhost:11434/api/generate
+  OLLAMA_MODEL_FAST=qwen2.5:7b
+  OLLAMA_MODEL_DEEP=qwen2.5:14b
+  OPENAI_API_KEY=sk-...
+  OPENAI_MODEL_FAST=gpt-4o-mini
+  OPENAI_MODEL_DEEP=gpt-4o
 
-Model tiers:
-  fast     -> haiku  (classification, JSON, yes/no, titles)
-  balanced -> sonnet (skill selection, code review, synthesis)
-  deep     -> opus  (planning, complex reasoning, architecture)
+Model tiers (same across all providers):
+  fast     -> classification, JSON, yes/no, titles
+  balanced -> skill selection, code review, synthesis
+  deep     -> planning, complex reasoning, architecture
 
-Temperature guidelines (based on research):
+Temperature guidelines (research-backed):
   0.0-0.1: JSON output, classification, code review
   0.2-0.3: Skill selection, title generation, structured output
   0.4:     Planning, complex reasoning
   0.7+:    Creative tasks (not used in pipeline)
 
-Usage:
+Usage (unchanged - backward compatible):
     from langgraph_engine.llm_call import llm_call
     response = llm_call(prompt, model="fast", temperature=0.1)
 """
@@ -28,47 +38,261 @@ import sys
 import json
 import subprocess
 import shutil
-from typing import Optional
+from abc import ABC, abstractmethod
+from typing import Optional, List
 
-# Ollama config
-OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
-OLLAMA_MODEL_FAST = os.getenv("OLLAMA_MODEL_FAST", os.getenv("OLLAMA_MODEL", "qwen2.5:7b"))
-OLLAMA_MODEL_DEEP = os.getenv("OLLAMA_MODEL_DEEP", "qwen2.5:14b")
 
-# ============================================================================
-# OLLAMA HEALTH CHECK - Run ONCE at import time, not per call
-# Saves 30s per LLM call when Ollama is down (4 calls = 120s saved)
-# ============================================================================
-_OLLAMA_AVAILABLE = False
-try:
-    import urllib.request
-    # Extract base URL (scheme + host) from endpoint, append health check path
-    from urllib.parse import urlparse
-    _parsed = urlparse(OLLAMA_ENDPOINT)
-    _health_url = f"{_parsed.scheme}://{_parsed.netloc}/api/tags"
-    with urllib.request.urlopen(urllib.request.Request(_health_url), timeout=3) as _resp:
-        _OLLAMA_AVAILABLE = _resp.status == 200
-except Exception:
-    pass
+# =============================================================================
+# INTERFACE: LLMProvider (Strategy Pattern)
+# =============================================================================
 
-# Claude CLI model mapping
-CLAUDE_MODEL_MAP = {
-    "fast": "haiku",
-    "balanced": "sonnet",
-    "deep": "opus",
-    # Legacy keys
-    "fast_classification": "haiku",
-    "complex_reasoning": "opus",
-    "synthesis": "sonnet",
-    "planning": "opus",
-    "code_review": "sonnet",
-}
+class LLMProvider(ABC):
+    """Abstract interface for LLM providers.
+
+    All providers must implement call() and is_available().
+    Same input/output contract regardless of backend.
+    """
+
+    @abstractmethod
+    def call(
+        self,
+        prompt: str,
+        model: str = "fast",
+        temperature: float = 0.3,
+        timeout: int = 120,
+        json_mode: bool = False,
+    ) -> Optional[str]:
+        """Send prompt to LLM and return response text.
+
+        Args:
+            prompt: The prompt text to send.
+            model: Tier - "fast", "balanced", or "deep".
+            temperature: Sampling temperature (0.0-1.0).
+            timeout: Max seconds to wait for response.
+            json_mode: If True, request JSON-formatted output.
+
+        Returns:
+            Response text string, or None on failure.
+        """
+        ...
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        """Check if this provider is configured and reachable.
+
+        Called ONCE at init time. Result is cached.
+        """
+        ...
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Provider name for logging."""
+        ...
+
+
+# =============================================================================
+# IMPLEMENTATION: OllamaProvider
+# =============================================================================
+
+class OllamaProvider(LLMProvider):
+    """Local Ollama LLM provider (free, no API key needed)."""
+
+    def __init__(self):
+        self._endpoint = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
+        self._model_fast = os.getenv("OLLAMA_MODEL_FAST", os.getenv("OLLAMA_MODEL", "qwen2.5:7b"))
+        self._model_deep = os.getenv("OLLAMA_MODEL_DEEP", "qwen2.5:14b")
+        self._available = self._check_health()
+
+    @property
+    def name(self) -> str:
+        return "ollama"
+
+    def is_available(self) -> bool:
+        return self._available
+
+    def _check_health(self) -> bool:
+        """Check Ollama server health (3s timeout)."""
+        try:
+            import urllib.request
+            from urllib.parse import urlparse
+            parsed = urlparse(self._endpoint)
+            health_url = f"{parsed.scheme}://{parsed.netloc}/api/tags"
+            with urllib.request.urlopen(urllib.request.Request(health_url), timeout=3) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
+
+    def call(self, prompt, model="fast", temperature=0.3, timeout=120, json_mode=False):
+        if not self._available:
+            return None
+
+        import urllib.request
+
+        ollama_model = self._model_deep if model in ("deep", "complex_reasoning", "planning") else self._model_fast
+
+        try:
+            payload = {
+                "model": ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "temperature": temperature,
+                "options": {"num_ctx": 16384, "num_predict": 2048},
+            }
+            if json_mode:
+                payload["format"] = "json"
+
+            req = urllib.request.Request(
+                self._endpoint,
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=min(timeout, 30)) as resp:
+                result = json.loads(resp.read().decode())
+                text = result.get("response", "").strip()
+                if text:
+                    return text
+        except Exception:
+            pass
+        return None
+
+
+# =============================================================================
+# IMPLEMENTATION: ClaudeCLIProvider
+# =============================================================================
+
+class ClaudeCLIProvider(LLMProvider):
+    """Claude Code CLI provider (uses user's Anthropic subscription)."""
+
+    MODEL_MAP = {
+        "fast": "haiku",
+        "balanced": "sonnet",
+        "deep": "opus",
+        "fast_classification": "haiku",
+        "complex_reasoning": "opus",
+        "synthesis": "sonnet",
+        "planning": "opus",
+        "code_review": "sonnet",
+    }
+
+    def __init__(self):
+        self._claude_path = shutil.which("claude")
+        self._available = self._claude_path is not None
+
+    @property
+    def name(self) -> str:
+        return "claude_cli"
+
+    def is_available(self) -> bool:
+        return self._available
+
+    def call(self, prompt, model="fast", temperature=0.3, timeout=120, json_mode=False):
+        if not self._available:
+            return None
+
+        cli_model = self.MODEL_MAP.get(model, "haiku")
+
+        if len(prompt) > 10000:
+            prompt = prompt[:10000] + "\n[truncated]"
+
+        env = os.environ.copy()
+        env["CLAUDE_WORKFLOW_RUNNING"] = "1"
+
+        try:
+            result = subprocess.run(
+                [self._claude_path, "-p", "--model", cli_model, prompt],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+                encoding="utf-8",
+                errors="replace",
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return None
+
+
+# =============================================================================
+# IMPLEMENTATION: OpenAIProvider
+# =============================================================================
+
+class OpenAIProvider(LLMProvider):
+    """OpenAI API provider (requires OPENAI_API_KEY)."""
+
+    MODEL_MAP = {
+        "fast": "gpt-4o-mini",
+        "balanced": "gpt-4o",
+        "deep": "gpt-4o",
+        "fast_classification": "gpt-4o-mini",
+        "complex_reasoning": "gpt-4o",
+        "synthesis": "gpt-4o",
+        "planning": "gpt-4o",
+        "code_review": "gpt-4o",
+    }
+
+    def __init__(self):
+        self._api_key = os.getenv("OPENAI_API_KEY", "")
+        self._base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1/chat/completions")
+        # Allow model override via env
+        self._model_fast = os.getenv("OPENAI_MODEL_FAST", self.MODEL_MAP["fast"])
+        self._model_deep = os.getenv("OPENAI_MODEL_DEEP", self.MODEL_MAP["deep"])
+        self._available = bool(self._api_key)
+
+    @property
+    def name(self) -> str:
+        return "openai"
+
+    def is_available(self) -> bool:
+        return self._available
+
+    def call(self, prompt, model="fast", temperature=0.3, timeout=120, json_mode=False):
+        if not self._available:
+            return None
+
+        import urllib.request
+
+        openai_model = self._model_deep if model in ("deep", "complex_reasoning", "planning") else self._model_fast
+
+        try:
+            payload = {
+                "model": openai_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
+                "max_tokens": 2048,
+            }
+            if json_mode:
+                payload["response_format"] = {"type": "json_object"}
+
+            req = urllib.request.Request(
+                self._base_url,
+                data=json.dumps(payload).encode(),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self._api_key}",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=min(timeout, 60)) as resp:
+                result = json.loads(resp.read().decode())
+                text = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                if text:
+                    return text
+        except Exception:
+            pass
+        return None
+
+
+# =============================================================================
+# PROVIDER CHAIN (Chain of Responsibility + Factory)
+# =============================================================================
 
 # Default temperature per model tier (research-backed)
 DEFAULT_TEMPERATURES = {
-    "fast": 0.1,       # Classification, JSON, yes/no -> near-deterministic
-    "balanced": 0.3,   # Skill selection, synthesis -> slight flexibility
-    "deep": 0.4,       # Planning, complex reasoning -> quality exploration
+    "fast": 0.1,
+    "balanced": 0.3,
+    "deep": 0.4,
     "fast_classification": 0.1,
     "complex_reasoning": 0.4,
     "synthesis": 0.2,
@@ -76,6 +300,59 @@ DEFAULT_TEMPERATURES = {
     "code_review": 0.1,
 }
 
+# Provider registry (Singleton instances)
+_PROVIDER_REGISTRY = {
+    "ollama": OllamaProvider,
+    "claude_cli": ClaudeCLIProvider,
+    "openai": OpenAIProvider,
+}
+
+_provider_chain: List[LLMProvider] = []
+
+
+def _build_provider_chain() -> List[LLMProvider]:
+    """Build the provider chain from configuration (Factory Pattern).
+
+    Configuration via env vars:
+      LLM_PROVIDER=auto       -> try all available providers (default)
+      LLM_PROVIDER=ollama     -> use only Ollama
+      LLM_PROVIDER=claude_cli -> use only Claude CLI
+      LLM_PROVIDER=openai     -> use only OpenAI
+      LLM_FALLBACK=claude_cli,openai -> fallback chain (comma-separated)
+
+    Returns:
+        List of instantiated, available providers in priority order.
+    """
+    primary = os.getenv("LLM_PROVIDER", "auto").strip().lower()
+    fallback_str = os.getenv("LLM_FALLBACK", "").strip()
+
+    chain = []
+
+    if primary == "auto":
+        # Auto mode: try Ollama -> Claude CLI -> OpenAI
+        order = ["ollama", "claude_cli", "openai"]
+    else:
+        order = [primary]
+        if fallback_str:
+            order.extend(f.strip() for f in fallback_str.split(",") if f.strip())
+
+    for provider_name in order:
+        cls = _PROVIDER_REGISTRY.get(provider_name)
+        if cls:
+            instance = cls()
+            if instance.is_available():
+                chain.append(instance)
+
+    return chain
+
+
+# Build chain once at import time (Singleton)
+_provider_chain = _build_provider_chain()
+
+
+# =============================================================================
+# PUBLIC API (Backward Compatible)
+# =============================================================================
 
 def llm_call(
     prompt: str,
@@ -86,100 +363,33 @@ def llm_call(
 ) -> Optional[str]:
     """Make an LLM call with automatic fallback chain.
 
+    Tries each configured provider in order until one succeeds.
+    Fully backward compatible - same signature as before.
+
     Args:
-        prompt: The prompt text to send
-        model: "fast" (haiku), "balanced" (sonnet), "deep" (opus)
-        temperature: Override temp (default: auto per model tier)
-        timeout: Max seconds to wait
-        json_mode: If True, request JSON format from Ollama
+        prompt: The prompt text to send.
+        model: "fast" (haiku/mini), "balanced" (sonnet/4o), "deep" (opus/4o).
+        temperature: Override temp (default: auto per model tier).
+        timeout: Max seconds to wait.
+        json_mode: If True, request JSON format.
 
     Returns:
-        Response text string, or None if all backends failed.
+        Response text string, or None if all providers failed.
     """
-    # Auto-select temperature based on model tier if not specified
     if temperature is None:
         temperature = DEFAULT_TEMPERATURES.get(model, 0.3)
 
-    # Try 1: Ollama (local, free) - skip entirely if health check failed at import
-    if _OLLAMA_AVAILABLE:
-        response = _call_ollama(prompt, model, temperature, timeout, json_mode)
+    for provider in _provider_chain:
+        response = provider.call(prompt, model, temperature, timeout, json_mode)
         if response:
             return response
 
-    # Try 2: claude CLI (user's subscription)
-    response = _call_claude_cli(prompt, model, timeout)
-    if response:
-        return response
-
     return None
 
 
-def _call_ollama(prompt, model, temperature, timeout, json_mode):
-    """Try Ollama HTTP API."""
-    import urllib.request
-    import urllib.error
-
-    ollama_model = OLLAMA_MODEL_DEEP if model in ("deep", "complex_reasoning", "planning") else OLLAMA_MODEL_FAST
-
-    try:
-        payload = {
-            "model": ollama_model,
-            "prompt": prompt,
-            "stream": False,
-            "temperature": temperature,
-            "options": {"num_ctx": 16384, "num_predict": 2048},
-        }
-        if json_mode:
-            payload["format"] = "json"
-
-        req = urllib.request.Request(
-            OLLAMA_ENDPOINT,
-            data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        # Cap Ollama timeout at 30s - if it takes longer, fall back to CLI
-        with urllib.request.urlopen(req, timeout=min(timeout, 30)) as resp:
-            result = json.loads(resp.read().decode())
-            text = result.get("response", "").strip()
-            if text:
-                return text
-    except Exception:
-        pass
-
-    return None
-
-
-def _call_claude_cli(prompt, model, timeout):
-    """Try claude CLI with user's subscription."""
-    claude_path = shutil.which("claude")
-    if not claude_path:
-        return None
-
-    cli_model = CLAUDE_MODEL_MAP.get(model, "haiku")
-
-    # Truncate to avoid pipe/arg issues
-    if len(prompt) > 10000:
-        prompt = prompt[:10000] + "\n[truncated]"
-
-    env = os.environ.copy()
-    env["CLAUDE_WORKFLOW_RUNNING"] = "1"
-
-    try:
-        result = subprocess.run(
-            [claude_path, "-p", "--model", cli_model, prompt],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-            encoding="utf-8",
-            errors="replace",
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-    except Exception:
-        pass
-
-    return None
+def get_active_providers() -> List[str]:
+    """Return names of currently active providers in chain order."""
+    return [p.name for p in _provider_chain]
 
 
 def generate_llm_commit_title(commit_type: str = None, cwd: str = None) -> Optional[str]:
