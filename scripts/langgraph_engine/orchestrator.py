@@ -1086,22 +1086,8 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_edge("level3_step6", "level3_step7")
 
     # ========================================================================
-    # HOOK MODE: Skip Steps 8-14 (GitHub workflow) for fast hook execution
-    # In hook mode, after Step 7 (prompt generated) go directly to output
-    # ========================================================================
-    if hook_mode:
-        graph.add_node("level3_merge", level3_v2_merge_node)
-        graph.add_edge("level3_step7", "level3_merge")
-
-        graph.add_node("output_node", output_node)
-        graph.add_edge("level3_merge", "output_node")
-        graph.add_edge("output_node", END)
-
-        compiled_graph = graph.compile()
-        return compiled_graph
-
-    # ========================================================================
-    # FULL MODE: Steps 8-14 (GitHub workflow + implementation)
+    # STEPS 8-9: Issue + Branch Creation (runs in BOTH hook and full mode)
+    # These create the GitHub issue and feature branch BEFORE Claude works
     # ========================================================================
 
     # Step 8: GitHub Issue Creation
@@ -1112,7 +1098,28 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_node("level3_step9", step9_branch_creation_node)
     graph.add_edge("level3_step8", "level3_step9")
 
-    # Step 10: Implementation Placeholder (writes prompt.txt)
+    # ========================================================================
+    # HOOK MODE: After Steps 8-9, go to output
+    # Step 10 = Claude Code itself (the LLM reading this prompt and working)
+    # Steps 11-14 = run in Stop hook after Claude finishes working
+    # ========================================================================
+    if hook_mode:
+        graph.add_node("level3_merge", level3_v2_merge_node)
+        graph.add_edge("level3_step9", "level3_merge")
+
+        graph.add_node("output_node", output_node)
+        graph.add_edge("level3_merge", "output_node")
+        graph.add_edge("output_node", END)
+
+        compiled_graph = graph.compile()
+        return compiled_graph
+
+    # ========================================================================
+    # FULL MODE: Steps 10-14 (implementation + PR + merge + close)
+    # Only used when running pipeline standalone (not as hook)
+    # ========================================================================
+
+    # Step 10: Implementation (in full mode, calls hybrid_inference)
     graph.add_node("level3_step10", step10_implementation_note)
     graph.add_edge("level3_step9", "level3_step10")
 
