@@ -639,7 +639,29 @@ def check_level_3_10_version_release(tool_name, tool_input, state):
     # Must be a git push command (not a push to non-remote, not --dry-run, not --delete)
     if 'git push' not in cmd or '--dry-run' in cmd or '--delete' in cmd:
         return False, ''
-    # Check if VERSION was among the files modified
+    # Check if VERSION was in the ACTUAL git commit being pushed (not stale cache)
+    import subprocess as _sp
+    try:
+        # Get files in the last commit (what's actually being pushed)
+        _diff_result = _sp.run(
+            ['git', 'diff', '--name-only', 'HEAD~1', 'HEAD'],
+            capture_output=True, text=True, timeout=5
+        )
+        committed_files = _diff_result.stdout.strip().split('\n') if _diff_result.returncode == 0 else []
+        version_in_commit = any(
+            f.strip().lower().endswith('version') or f.strip().lower().endswith('version.txt')
+            for f in committed_files if f.strip()
+        )
+        if version_in_commit:
+            return False, ''
+        # No files in commit = nothing to push
+        if not committed_files or committed_files == ['']:
+            return False, ''
+    except Exception:
+        # If git check fails, fall back to cached list
+        pass
+
+    # Fallback: check cached modified files list
     modified = state.get('modified_files_since_commit', [])
     version_modified = any(
         f.lower().endswith('version') or f.lower().endswith('version.txt')
@@ -647,7 +669,6 @@ def check_level_3_10_version_release(tool_name, tool_input, state):
     )
     if version_modified:
         return False, ''
-    # Also allow if no files have been modified (nothing to push)
     if not modified:
         return False, ''
     msg = (
