@@ -657,12 +657,12 @@ def output_node(state: FlowState) -> dict:
         pass
 
     # Write session-start voice flag so Stop hook speaks a greeting
+    # Use LEGACY flag (no PID) because pipeline runs in a separate process
+    # from Claude Code. Stop-notifier's _resolve_flag checks PID first, then legacy.
     try:
         import os
         flag_dir = Path.home() / ".claude"
-        pid = os.getpid()
-        # PID-isolated flag for multi-window support
-        start_flag = flag_dir / f".session-start-voice-{pid}"
+        start_flag = flag_dir / ".session-start-voice"
         if not start_flag.exists():
             task_type = state.get("step0_task_type", "task")
             complexity = state.get("step0_complexity", 5)
