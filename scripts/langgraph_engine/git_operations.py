@@ -162,10 +162,18 @@ class GitOperations:
 
         try:
             # Step 1: Stash ALL changes (including untracked files) to prevent data loss
-            stash_result = self._run_git(["stash", "push", "--include-untracked", "-m", f"auto-stash-before-{branch_name}"], check=False)
-            had_stash = stash_result.get("success") and "No local changes" not in stash_result.get("stdout", "")
+            stash_msg = f"auto-stash-before-{branch_name}"
+            stash_result = self._run_git(["stash", "push", "--include-untracked", "-m", stash_msg], check=False)
+
+            # Detect if stash was created: git returns 0 even with nothing to stash,
+            # but prints "No local changes to save" in stdout or stderr (varies by git version)
+            combined_output = (stash_result.get("stdout", "") + stash_result.get("stderr", "")).lower()
+            had_stash = stash_result.get("returncode") == 0 and "no local changes" not in combined_output
+
             if had_stash:
-                logger.info(f"Stashed uncommitted changes before branch creation")
+                logger.info("Stashed uncommitted changes before branch creation")
+            elif not stash_result.get("returncode") == 0:
+                logger.warning(f"Stash push failed: {stash_result.get('stderr', '')}")
 
             # Step 2: Fetch latest from origin
             logger.debug(f"Fetching latest from origin...")
