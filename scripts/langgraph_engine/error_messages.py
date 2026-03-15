@@ -35,8 +35,13 @@ Usage:
     print(msg.full_text)
 """
 
+import os
+
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
+
+# GitHub owner for help/troubleshooting links (configurable via env var)
+_GITHUB_OWNER = os.environ.get("CLAUDE_GITHUB_OWNER", "techdeveloper-org")
 
 
 # ---------------------------------------------------------------------------
@@ -392,7 +397,7 @@ class _ErrorCatalog:
                     "The pipeline will continue using general capabilities if the skill is unavailable",
                 ],
                 troubleshooting_links=[
-                    "https://github.com/piyushmakhija28/claude-global-library - Skill definitions repository",
+                    f"https://github.com/{_GITHUB_OWNER}/claude-global-library - Skill definitions repository",
                 ],
                 help_commands=[
                     "ls ~/.claude/skills/",
@@ -420,7 +425,7 @@ class _ErrorCatalog:
                     "Report the gap to the claude-global-library team if this is a common use case",
                 ],
                 troubleshooting_links=[
-                    "https://github.com/piyushmakhija28/claude-global-library/issues - Report skill gaps",
+                    f"https://github.com/{_GITHUB_OWNER}/claude-global-library/issues - Report skill gaps",
                 ],
                 severity="WARNING",
                 is_recoverable=True,
@@ -539,7 +544,7 @@ class _ErrorCatalog:
                     "Report persistent errors with your session ID to the project maintainer",
                 ],
                 troubleshooting_links=[
-                    "https://github.com/piyushmakhija28/claude-insight/issues - Report issues",
+                    f"https://github.com/{_GITHUB_OWNER}/claude-workflow-engine/issues - Report issues",
                 ],
                 help_commands=[
                     "set CLAUDE_DEBUG=1",
@@ -752,7 +757,7 @@ Common problems:
    - Organization repo: ensure token has org read/write permission
 """
 
-_SKILLS_HELP = """
+_SKILLS_HELP = f"""
 Skills Management Help
 
 Skills are Markdown files that teach the AI how to handle specific task types.
@@ -764,7 +769,7 @@ List available skills:
    ls ~/.claude/skills/
 
 Download skills from the global library:
-   Visit: https://github.com/piyushmakhija28/claude-global-library
+   Visit: https://github.com/{_GITHUB_OWNER}/claude-global-library
 
 To add a new skill manually:
    1. Create directory: mkdir -p ~/.claude/skills/backend/my-skill
