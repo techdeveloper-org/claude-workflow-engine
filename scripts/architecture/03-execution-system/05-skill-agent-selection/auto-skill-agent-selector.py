@@ -35,35 +35,25 @@ class AutoSkillAgentSelector:
         self.registry_file = Path.home() / ".claude" / "memory" / "adaptive-skill-registry.md"
 
         # Available skills (from registry)
-        self.available_skills = [
-            'java-spring-boot-microservices',
-            'spring-boot-design-patterns-core',
-            'java-design-patterns-core',
-            'docker',
-            'kubernetes',
-            'jenkins-pipeline',
-            'rdbms-core',
-            'nosql-core',
-            'css-core',
-            'animations-core',
-            'seo-keyword-research-core'
-        ]
+        # Auto-discover skills from ~/.claude/skills/ (no hardcoding)
+        _skills_dir = Path.home() / ".claude" / "skills"
+        if _skills_dir.exists():
+            self.available_skills = sorted([
+                d.name for d in _skills_dir.iterdir()
+                if d.is_dir() and (d / "SKILL.md").exists()
+            ])
+        else:
+            self.available_skills = []
 
-        # Available agents (from registry)
-        self.available_agents = [
-            'spring-boot-microservices',
-            'android-backend-engineer',
-            'android-ui-designer',
-            'angular-engineer',
-            'devops-engineer',
-            'dynamic-seo-agent',
-            'orchestrator-agent',
-            'qa-testing-agent',
-            'static-seo-agent',
-            'swift-backend-engineer',
-            'swiftui-designer',
-            'ui-ux-designer'
-        ]
+        # Auto-discover agents from ~/.claude/agents/ (no hardcoding)
+        _agents_dir = Path.home() / ".claude" / "agents"
+        if _agents_dir.exists():
+            self.available_agents = sorted([
+                d.name for d in _agents_dir.iterdir()
+                if d.is_dir() and (d / "agent.md").exists()
+            ])
+        else:
+            self.available_agents = []
 
     def select(
         self,
@@ -393,19 +383,17 @@ def load_skill_definitions() -> dict:
             if skill_md.exists():
                 try:
                     content = skill_md.read_text(encoding='utf-8', errors='ignore')
-                    # Extract key info from markdown
-                    lines = content.split('\n')
                     name = skill_dir.name
                     description = ""
 
-                    # Try to extract description from first few lines
-                    for i, line in enumerate(lines[:20]):
-                        if line.startswith('#') and 'description' in line.lower():
-                            if i+1 < len(lines):
-                                description = lines[i+1].strip()
-                            break
-                        elif not line.startswith('#') and line.strip() and not description:
-                            description = line.strip()[:200]
+                    # Parse YAML frontmatter (between --- markers)
+                    if content.startswith('---'):
+                        end = content.find('---', 3)
+                        if end > 0:
+                            for line in content[3:end].split('\n'):
+                                if line.strip().startswith('description:'):
+                                    description = line.split(':', 1)[1].strip()[:200]
+                                    break
 
                     skills[name] = {
                         'name': name,
@@ -434,18 +422,17 @@ def load_agent_definitions() -> dict:
             if agent_md.exists():
                 try:
                     content = agent_md.read_text(encoding='utf-8', errors='ignore')
-                    lines = content.split('\n')
                     name = agent_dir.name
                     description = ""
 
-                    # Try to extract description
-                    for i, line in enumerate(lines[:20]):
-                        if line.startswith('#') and 'purpose' in line.lower():
-                            if i+1 < len(lines):
-                                description = lines[i+1].strip()
-                            break
-                        elif not line.startswith('#') and line.strip() and not description:
-                            description = line.strip()[:200]
+                    # Parse YAML frontmatter (between --- markers)
+                    if content.startswith('---'):
+                        end = content.find('---', 3)
+                        if end > 0:
+                            for line in content[3:end].split('\n'):
+                                if line.strip().startswith('description:'):
+                                    description = line.split(':', 1)[1].strip()[:200]
+                                    break
 
                     agents[name] = {
                         'name': name,
