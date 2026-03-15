@@ -36,7 +36,7 @@ from loguru import logger
 STEP_TIMEOUTS: Dict[int, int] = {
     0:  60,   # Task Analysis (Ollama LLM call with 16K context)
     1:  45,   # Plan Mode Decision (Ollama classification)
-    2: 120,   # Plan Execution (convergence loop with LLM)
+    2: 300,   # Plan Execution (convergence loop: up to 10 iterations x 30-60s each)
     3:  60,   # Task Breakdown (parsing + validation)
     4:  30,   # TOON Refinement (local computation)
     5:  90,   # Skill & Agent Selection (filesystem scan + Ollama 16K ctx)

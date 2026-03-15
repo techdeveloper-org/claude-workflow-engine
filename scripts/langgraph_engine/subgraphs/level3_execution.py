@@ -832,6 +832,68 @@ def step6_skill_validation_download(state: FlowState) -> dict:
 
 # ===== HELPERS: PROJECT CONTEXT DETECTION =====
 
+def _extract_modified_files(llm_response: str, project_root: str = ".") -> list:
+    """Extract file paths mentioned in LLM response as modified/created.
+
+    Parses the LLM output for file path patterns like:
+    - File: src/main.py
+    - Modified: src/config.py
+    - Created: tests/test_new.py
+    - ```python path/to/file.py
+    - lines mentioning .py, .js, .ts, .java, .go, .rs extensions with path separators
+
+    Args:
+        llm_response: Full LLM response text
+        project_root: Project root for validation
+
+    Returns:
+        List of unique file paths found (deduplicated, max 50)
+    """
+    import re
+
+    if not llm_response:
+        return []
+
+    found = set()
+
+    # Pattern 1: Explicit file mentions (File: X, Modified: X, Created: X, Updated: X)
+    explicit_re = re.compile(
+        r'(?:^|\n)\s*(?:File|Modified|Created|Updated|Edited|Changed|Wrote)\s*[:=]\s*[`"]?([^\s`"]+\.\w{1,5})[`"]?',
+        re.IGNORECASE
+    )
+    for m in explicit_re.finditer(llm_response):
+        found.add(m.group(1))
+
+    # Pattern 2: Code block headers (```lang path/to/file.ext)
+    codeblock_re = re.compile(r'```\w*\s+([^\s`]+\.\w{1,5})')
+    for m in codeblock_re.finditer(llm_response):
+        found.add(m.group(1))
+
+    # Pattern 3: Path-like strings with common extensions
+    path_re = re.compile(
+        r'(?:^|\s|[`"\'])(\S*?/\S+\.(?:py|js|ts|jsx|tsx|java|go|rs|cpp|c|h|md|json|yaml|yml|toml|cfg|html|css|scss))\b',
+        re.IGNORECASE
+    )
+    for m in path_re.finditer(llm_response):
+        candidate = m.group(1).strip('`"\'()[]{}')
+        if '/' in candidate and len(candidate) < 200:
+            found.add(candidate)
+
+    # Filter: remove obvious non-files (URLs, imports, etc.)
+    filtered = []
+    for f in found:
+        if f.startswith('http') or f.startswith('//') or f.startswith('#'):
+            continue
+        if '..' in f and '/' not in f:
+            continue
+        # Normalize backslashes
+        f = f.replace('\\', '/')
+        filtered.append(f)
+
+    # Deduplicate and limit
+    return sorted(set(filtered))[:50]
+
+
 def _detect_project_type_from_files(project_root: str) -> str:
     """Detect project type from marker files in project root.
 
@@ -1527,11 +1589,31 @@ def step10_implementation_execution(state: FlowState) -> dict:
                     logger.warning(f"Failed to load user message: {e}")
 
         # ====================================================================
-        # Fallback: If files not found, use basic context
+        # FAIL-FAST: System prompt is REQUIRED for quality execution
+        # Without it, LLM has no context -> execution quality drops 95% to 60%
         # ====================================================================
 
+        if not system_prompt_loaded:
+            error_msg = (
+                "CRITICAL: system_prompt.txt not found in session folder. "
+                "Step 7 (Final Prompt Generation) likely failed. "
+                "Cannot execute without full context - quality would drop from 95% to 60%."
+            )
+            logger.error(f"[Step 10] {error_msg}")
+            if session_path:
+                logger.error(f"[Step 10] Expected at: {Path(session_path) / 'system_prompt.txt'}")
+            return {
+                "step10_implementation_status": "ERROR",
+                "step10_error": error_msg,
+                "step10_system_prompt_loaded": False,
+                "step10_user_message_loaded": user_message_loaded,
+                "step10_llm_invoked": False,
+                "step10_tasks_executed": 0,
+                "step10_modified_files": [],
+            }
+
         if not user_message:
-            # Build basic user message from state
+            # Build basic user message from state (system prompt present, so this is OK)
             task_type = state.get("step0_task_type", "Task")
             user_message = f"Execute the {task_type} based on the breakdown and resources provided."
 
@@ -1573,12 +1655,8 @@ def step10_implementation_execution(state: FlowState) -> dict:
         tasks = state.get("step0_tasks", {}).get("tasks", [])
         task_count = len(tasks)
 
-        # Mock modified files (in real implementation, would parse LLM response for actual files)
-        modified_files = []
-        if llm_invoked and llm_response:
-            # In real implementation: parse response to find actual file modifications
-            for i in range(min(3, task_count)):
-                modified_files.append(f"implementation_task_{i+1}.py")
+        # Parse actual modified files from LLM response
+        modified_files = _extract_modified_files(llm_response, state.get("project_root", "."))
 
         return {
             # Phase 1 & 2 Integration Status
@@ -1871,9 +1949,56 @@ def step13_project_documentation_update(state: FlowState) -> dict:
             if agent:
                 updates.append(f"- Agent: {agent}\n")
 
+        # Add modified files from Step 10
+        modified_files = state.get("step10_modified_files", [])
+        if modified_files:
+            updates.append(f"## Modified Files\n\n")
+            for f in modified_files[:20]:
+                updates.append(f"- {f}\n")
+
+        # Actually write documentation to session folder
+        updated_files = []
+        import os
+        session_path = state.get("session_dir") or state.get("session_path", "")
+        if session_path and updates:
+            try:
+                doc_file = Path(session_path) / "execution-docs.md"
+                content = f"# Execution Documentation\n\n**Generated**: {__import__('datetime').datetime.now().isoformat()}\n\n"
+                content += "\n".join(updates)
+                doc_file.write_text(content, encoding='utf-8')
+                updated_files.append(str(doc_file))
+                logger.info(f"Documentation written to {doc_file}")
+            except Exception as write_err:
+                logger.warning(f"Could not write execution docs: {write_err}")
+
+        # Also append execution insight to project CLAUDE.md (non-destructive append)
+        if claude_md.exists() and updates:
+            try:
+                existing = claude_md.read_text(encoding='utf-8', errors='replace')
+                # Only append if not already present (check by timestamp marker)
+                marker = f"<!-- execution-insight-{state.get('session_id', 'unknown')} -->"
+                if marker not in existing:
+                    insight = f"\n\n{marker}\n"
+                    insight += f"## Latest Execution Insight\n\n"
+                    insight += f"- **Task**: {task_type} (complexity {complexity}/10)\n"
+                    if skill:
+                        insight += f"- **Skill**: {skill}\n"
+                    if agent:
+                        insight += f"- **Agent**: {agent}\n"
+                    if modified_files:
+                        insight += f"- **Files Modified**: {len(modified_files)}\n"
+                    insight += f"- **Date**: {__import__('datetime').datetime.now().strftime('%Y-%m-%d')}\n"
+
+                    claude_md.write_text(existing + insight, encoding='utf-8')
+                    updated_files.append(str(claude_md))
+                    logger.info(f"Appended execution insight to {claude_md}")
+            except Exception as append_err:
+                logger.warning(f"Could not append to CLAUDE.md: {append_err}")
+
         return {
             "step13_updates_prepared": len(updates) > 0,
             "step13_update_count": len(updates),
+            "step13_updated_files": updated_files,
             "step13_documentation_status": "OK"
         }
 
@@ -1898,19 +2023,52 @@ def step14_final_summary_generation(state: FlowState) -> dict:
     - Recommendations for next execution
     """
     try:
+        task_type = state.get("step0_task_type", "Unknown")
+        complexity = state.get("step0_complexity", 5)
+        skill = state.get("step5_skill", "")
+        issue_created = state.get("step8_issue_created", False)
+        pr_url = state.get("step11_pr_url", "")
+        modified_files = state.get("step10_modified_files", [])
+
         summary = {
-            "task_type": state.get("step0_task_type", "Unknown"),
-            "complexity": state.get("step0_complexity", 5),
+            "task_type": task_type,
+            "complexity": complexity,
             "plan_used": state.get("step1_plan_required", False),
-            "skill_selected": state.get("step5_skill", ""),
+            "skill_selected": skill,
             "agent_selected": state.get("step5_agent", ""),
-            "issue_created": state.get("step8_issue_created", False),
-            "pr_created": state.get("step11_pr_url", ""),
+            "issue_created": issue_created,
+            "pr_created": pr_url,
+            "files_modified": len(modified_files),
             "status": "COMPLETED"
         }
 
+        # Voice notification: call voice-notifier.py with summary
+        voice_sent = False
+        try:
+            import subprocess
+            voice_script = Path(__file__).parent.parent.parent / "voice-notifier.py"
+            if voice_script.exists():
+                voice_msg = f"Pipeline complete. {task_type} task, complexity {complexity}."
+                if skill:
+                    voice_msg += f" Skill: {skill}."
+                if issue_created:
+                    voice_msg += f" Issue created."
+                if pr_url:
+                    voice_msg += f" PR merged."
+                voice_msg += f" {len(modified_files)} files modified."
+
+                subprocess.run(
+                    [sys.executable, str(voice_script), voice_msg],
+                    timeout=10,
+                    capture_output=True,
+                )
+                voice_sent = True
+        except Exception as voice_err:
+            logger.debug(f"Voice notification skipped: {voice_err}")
+
         return {
             "step14_summary": summary,
+            "step14_voice_sent": voice_sent,
             "step14_status": "OK"
         }
 
