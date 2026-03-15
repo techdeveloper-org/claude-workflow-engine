@@ -133,6 +133,17 @@ WORK_DONE_FLAG_PID = FLAG_DIR / f'.session-work-done-{_PID}'
 
 VOICE_SCRIPT = CURRENT_DIR / 'voice-notifier.py'
 
+# ============================================================================
+# VOICE MODE CONFIGURATION
+# Set VOICE_ENABLED=0 in env or ~/.claude/.voice-disabled to disable voice
+# Voice is optional - summary/PR workflow still runs without it
+# ============================================================================
+_voice_disabled_flag = FLAG_DIR / '.voice-disabled'
+VOICE_ENABLED = (
+    os.environ.get("VOICE_ENABLED", "1") != "0"
+    and not _voice_disabled_flag.exists()
+)
+
 # LOCAL ONLY: Ollama (IPEX-LLM on Intel Arc GPU + NPU)
 # No cloud fallback - use static messages if Ollama unavailable
 OLLAMA_URL = "http://127.0.0.1:11434/v1/chat/completions"
@@ -450,8 +461,13 @@ def speak(text):
     """
     Launch voice-notifier.py as DETACHED process (fire-and-forget).
     Non-blocking: stop-notifier exits immediately, voice plays in background.
+    Skipped entirely if VOICE_ENABLED=False (env var or flag file).
     """
     if not text or not text.strip():
+        return
+
+    if not VOICE_ENABLED:
+        log_s(f"[voice] Disabled (VOICE_ENABLED=0 or .voice-disabled flag). Skipping.")
         return
 
     if not VOICE_SCRIPT.exists():
