@@ -7,12 +7,21 @@ Design Patterns:
   - Singleton: Each provider instantiated once, reused across all calls
   - Factory: get_providers() builds the chain from configuration
 
+Providers (4 options):
+  1. ollama      - Local LLM (free, no API key, needs Ollama running)
+  2. claude_cli  - Claude Code CLI (uses your Anthropic subscription)
+  3. anthropic   - Anthropic API direct (needs ANTHROPIC_API_KEY)
+  4. openai      - OpenAI API (needs OPENAI_API_KEY)
+
 Configuration (env vars):
-  LLM_PROVIDER=ollama          # Primary provider: ollama, claude_cli, openai, auto (default)
+  LLM_PROVIDER=auto            # auto | ollama | claude_cli | anthropic | openai
   LLM_FALLBACK=claude_cli      # Fallback provider (comma-separated for chain)
   OLLAMA_ENDPOINT=http://localhost:11434/api/generate
   OLLAMA_MODEL_FAST=qwen2.5:7b
   OLLAMA_MODEL_DEEP=qwen2.5:14b
+  ANTHROPIC_API_KEY=sk-ant-...
+  ANTHROPIC_MODEL_FAST=claude-haiku-4-5-20251001
+  ANTHROPIC_MODEL_DEEP=claude-opus-4-6-20250514
   OPENAI_API_KEY=sk-...
   OPENAI_MODEL_FAST=gpt-4o-mini
   OPENAI_MODEL_DEEP=gpt-4o
@@ -290,6 +299,91 @@ class OpenAIProvider(LLMProvider):
 
 
 # =============================================================================
+# IMPLEMENTATION: AnthropicProvider (Direct Claude API)
+# =============================================================================
+
+class AnthropicProvider(LLMProvider):
+    """Anthropic API provider (direct Claude API, requires ANTHROPIC_API_KEY).
+
+    Uses the Anthropic Messages API directly via urllib (no SDK dependency).
+    This is DIFFERENT from ClaudeCLIProvider which uses the 'claude' CLI tool.
+    """
+
+    MODEL_MAP = {
+        "fast": "claude-haiku-4-5-20251001",
+        "balanced": "claude-sonnet-4-6-20250514",
+        "deep": "claude-opus-4-6-20250514",
+        "fast_classification": "claude-haiku-4-5-20251001",
+        "complex_reasoning": "claude-opus-4-6-20250514",
+        "synthesis": "claude-sonnet-4-6-20250514",
+        "planning": "claude-opus-4-6-20250514",
+        "code_review": "claude-sonnet-4-6-20250514",
+    }
+
+    def __init__(self):
+        self._api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        self._base_url = os.getenv(
+            "ANTHROPIC_BASE_URL",
+            "https://api.anthropic.com/v1/messages"
+        )
+        # Allow model override via env
+        self._model_fast = os.getenv("ANTHROPIC_MODEL_FAST", self.MODEL_MAP["fast"])
+        self._model_balanced = os.getenv("ANTHROPIC_MODEL_BALANCED", self.MODEL_MAP["balanced"])
+        self._model_deep = os.getenv("ANTHROPIC_MODEL_DEEP", self.MODEL_MAP["deep"])
+        self._available = bool(self._api_key)
+
+    @property
+    def name(self) -> str:
+        return "anthropic"
+
+    def is_available(self) -> bool:
+        return self._available
+
+    def call(self, prompt, model="fast", temperature=0.3, timeout=120, json_mode=False):
+        if not self._available:
+            return None
+
+        import urllib.request
+
+        # Select model by tier
+        if model in ("deep", "complex_reasoning", "planning"):
+            api_model = self._model_deep
+        elif model in ("balanced", "synthesis", "code_review"):
+            api_model = self._model_balanced
+        else:
+            api_model = self._model_fast
+
+        try:
+            payload = {
+                "model": api_model,
+                "max_tokens": 2048,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
+            }
+
+            req = urllib.request.Request(
+                self._base_url,
+                data=json.dumps(payload).encode(),
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": self._api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=min(timeout, 60)) as resp:
+                result = json.loads(resp.read().decode())
+                # Anthropic response: {"content": [{"type": "text", "text": "..."}]}
+                content_blocks = result.get("content", [])
+                if content_blocks:
+                    text = content_blocks[0].get("text", "").strip()
+                    if text:
+                        return text
+        except Exception as exc:
+            _log.debug("AnthropicProvider call failed: %s", exc)
+        return None
+
+
+# =============================================================================
 # PROVIDER CHAIN (Chain of Responsibility + Factory)
 # =============================================================================
 
@@ -310,6 +404,7 @@ _PROVIDER_REGISTRY = {
     "ollama": OllamaProvider,
     "claude_cli": ClaudeCLIProvider,
     "openai": OpenAIProvider,
+    "anthropic": AnthropicProvider,
 }
 
 _provider_chain: List[LLMProvider] = []
@@ -320,10 +415,11 @@ def _build_provider_chain() -> List[LLMProvider]:
 
     Configuration via env vars:
       LLM_PROVIDER=auto       -> try all available providers (default)
-      LLM_PROVIDER=ollama     -> use only Ollama
-      LLM_PROVIDER=claude_cli -> use only Claude CLI
-      LLM_PROVIDER=openai     -> use only OpenAI
-      LLM_FALLBACK=claude_cli,openai -> fallback chain (comma-separated)
+      LLM_PROVIDER=ollama     -> use only Ollama (local, free)
+      LLM_PROVIDER=claude_cli -> use only Claude CLI (Anthropic subscription)
+      LLM_PROVIDER=anthropic  -> use only Anthropic API (direct, needs ANTHROPIC_API_KEY)
+      LLM_PROVIDER=openai     -> use only OpenAI (needs OPENAI_API_KEY)
+      LLM_FALLBACK=claude_cli,anthropic,openai -> fallback chain (comma-separated)
 
     Returns:
         List of instantiated, available providers in priority order.
@@ -334,8 +430,8 @@ def _build_provider_chain() -> List[LLMProvider]:
     chain = []
 
     if primary == "auto":
-        # Auto mode: try Ollama -> Claude CLI -> OpenAI
-        order = ["ollama", "claude_cli", "openai"]
+        # Auto mode: try Ollama -> Claude CLI -> Anthropic API -> OpenAI
+        order = ["ollama", "claude_cli", "anthropic", "openai"]
     else:
         order = [primary]
         if fallback_str:
