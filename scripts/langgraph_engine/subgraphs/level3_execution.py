@@ -1521,11 +1521,10 @@ def step9_branch_creation(state: FlowState) -> dict:
         session_path = state.get("session_dir") or os.environ.get("CLAUDE_SESSION_PATH", ".")
         project_root = state.get("project_root", ".")
 
-        # Derive branch slug from issue title (LLM-generated) instead of generic label
-        if issue_title:
-            branch_slug = _slugify_title(issue_title)
-        else:
-            branch_slug = label
+        # Branch name format: {label}/issue-{id}
+        # e.g. bug/issue-168, feature/issue-170, task/issue-171
+        # Label comes from Step 8 (LLM classification: bug, feature, task, etc.)
+        branch_label = label.lower().strip() if label else task_type.lower().replace(" ", "-")
 
         # Skip branch creation if no real issue was created (issue_id=0 means fallback)
         if issue_id == "0" or not state.get("step8_issue_created", False):
@@ -1546,7 +1545,7 @@ def step9_branch_creation(state: FlowState) -> dict:
             )
             result = workflow.step9_create_branch(
                 issue_number=int(issue_id) if issue_id.isdigit() else 0,
-                label=branch_slug,
+                label=branch_label,
                 session_dir=session_path
             )
 
@@ -1564,7 +1563,7 @@ def step9_branch_creation(state: FlowState) -> dict:
             logger.warning(f"Level3GitHubWorkflow unavailable for branch: {gh_err}. Using fallback.")
 
         # Fallback: return branch name without actually creating it
-        branch_name = f"issue-{issue_id}-{branch_slug}"
+        branch_name = f"{branch_label}/issue-{issue_id}"
         return {
             "step9_branch_name": branch_name,
             "step9_branch_created": False,

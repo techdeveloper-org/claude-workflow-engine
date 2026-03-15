@@ -348,8 +348,9 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
         step_start = time.time()
 
         try:
-            # Build desired branch name
-            desired_branch = f"issue-{issue_number}-{label}"
+            # Build desired branch name: {label}/issue-{id}
+            # e.g. bug/issue-168, feature/issue-170
+            desired_branch = f"{label}/issue-{issue_number}"
 
             # --- Conflict detection & resolution ---
             repo_path = getattr(self.git, "repo_path", ".")
