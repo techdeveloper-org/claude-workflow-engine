@@ -154,6 +154,16 @@ def _detect_python_framework(root: Path) -> str:
     if (root / "manage.py").exists():
         return "django"
 
+    # LangGraph / LangChain detection (before generic checks)
+    if "langgraph" in all_text:
+        return "langgraph"
+    if "langchain" in all_text:
+        return "langchain"
+    if "celery" in all_text:
+        return "celery"
+    if "scrapy" in all_text:
+        return "scrapy"
+
     # Check for app.py with flask import
     app_py = root / "app.py"
     if app_py.exists():

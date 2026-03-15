@@ -593,7 +593,7 @@ def step5_skill_agent_selection(state: FlowState) -> dict:
 
     # Detect project type for skill matching
     detected_fw = state.get("detected_framework", "")
-    if not detected_fw:
+    if not detected_fw or detected_fw == "unknown":
         detected_fw = _detect_project_type_from_files(project_root)
 
     slim_context = {

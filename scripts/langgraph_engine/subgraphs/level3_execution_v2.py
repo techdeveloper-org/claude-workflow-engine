@@ -44,6 +44,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 from ..flow_state import FlowState
+from ..step_logger import write_level_log
 from .level3_execution import (
     step0_task_analysis,
     step1_plan_mode_decision,
@@ -184,10 +185,10 @@ def _write_step_log(
     result: Optional[Dict[str, Any]] = None,
     error: Optional[str] = None,
 ) -> None:
-    """Write per-step log entry to session directory as step-{NN}.json.
+    """Write per-step log entry to session directory.
 
-    This creates a complete audit trail in the session folder so the user can
-    see exactly what happened at each step (kab kya hua).
+    Delegates to the shared write_level_log utility for the level3 step-logs
+    directory, AND writes a backward-compatible step-{NN}.json file.
 
     Args:
         state: Current flow state (for session_dir)
@@ -198,8 +199,12 @@ def _write_step_log(
         result: Step result dict (keys only, not full values to save space)
         error: Error message if failed
     """
-    import json
-    from datetime import datetime
+    # Write to shared level3-logs/{step_name}.json
+    step_name = f"step-{step_number:02d}-{step_label.lower().replace(' ', '-')}"
+    write_level_log(state, "level3", step_name, status, duration, result, error)
+
+    # Also write backward-compatible step-logs/step-{NN}.json
+    import json as _json
 
     session_dir = state.get("session_dir") or state.get("session_path", "")
     if not session_dir:
@@ -222,26 +227,12 @@ def _write_step_log(
             log_entry["error"] = error
 
         if result:
-            # Store result keys and summary values (not full data to save space)
-            summary = {}
-            for k, v in result.items():
-                if isinstance(v, bool):
-                    summary[k] = v
-                elif isinstance(v, (int, float)):
-                    summary[k] = v
-                elif isinstance(v, str):
-                    summary[k] = v[:200] if len(v) > 200 else v
-                elif isinstance(v, list):
-                    summary[k] = f"[{len(v)} items]"
-                elif isinstance(v, dict):
-                    summary[k] = f"{{{len(v)} keys}}"
-                else:
-                    summary[k] = str(type(v).__name__)
-            log_entry["result_summary"] = summary
+            from ..step_logger import _summarize_result
+            log_entry["result_summary"] = _summarize_result(result)
 
         log_file = log_dir / f"step-{step_number:02d}.json"
         with open(log_file, 'w', encoding='utf-8') as f:
-            json.dump(log_entry, f, indent=2)
+            _json.dump(log_entry, f, indent=2)
 
     except Exception:
         pass  # Logging failure is never fatal

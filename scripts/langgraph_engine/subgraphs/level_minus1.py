@@ -12,6 +12,7 @@ Checks:
 """
 
 import sys
+import time
 import platform
 from pathlib import Path
 
@@ -24,6 +25,7 @@ except ImportError:
 from ..flow_state import FlowState
 from ..error_logger import ErrorLogger
 from ..backup_manager import BackupManager
+from ..step_logger import write_level_log
 
 
 # ============================================================================
@@ -54,6 +56,7 @@ def node_unicode_fix(state: FlowState) -> dict:
     # Nodes should NOT return it - let LangGraph manage it
     import sys
 
+    _step_start = time.time()
     session_id = state.get("session_id")
     logger = ErrorLogger(session_id) if session_id else None
 
@@ -97,6 +100,7 @@ def node_unicode_fix(state: FlowState) -> dict:
         else:
             logger and logger.log_validation_result("Level -1", "Unicode UTF-8 Fix", True, "Already UTF-8 configured")
         print(f"[L-1 UNICODE FIX] Returning: {list(updates.keys())}", file=sys.stderr)
+        write_level_log(state, "level-minus1", "unicode-fix", "OK", time.time() - _step_start, updates)
         return updates
 
     except Exception as e:
@@ -104,6 +108,7 @@ def node_unicode_fix(state: FlowState) -> dict:
         updates["unicode_check_error"] = str(e)
         logger and logger.log_error("Level -1", str(e), severity="ERROR", error_type="UnicodeError", recovery_action="Will retry with auto-fix")
         print(f"[L-1 UNICODE FIX] Returning (exception): {list(updates.keys())}", file=sys.stderr)
+        write_level_log(state, "level-minus1", "unicode-fix", "FAILED", time.time() - _step_start, None, str(e))
         return updates
 
 
@@ -120,6 +125,7 @@ def node_encoding_validation(state: FlowState) -> dict:
     Returns:
         Updated state with encoding_check result (only changed fields)
     """
+    _step_start = time.time()
     updates = {}
     try:
         if sys.platform != "win32":
@@ -148,11 +154,15 @@ def node_encoding_validation(state: FlowState) -> dict:
         else:
             updates["encoding_check"] = True
 
+        write_level_log(state, "level-minus1", "encoding-validation",
+                        "OK" if updates.get("encoding_check") else "FAILED",
+                        time.time() - _step_start, updates)
         return updates
 
     except Exception as e:
         updates["encoding_check"] = False
         updates["encoding_check_error"] = str(e)
+        write_level_log(state, "level-minus1", "encoding-validation", "FAILED", time.time() - _step_start, None, str(e))
         return updates
 
 
@@ -168,6 +178,7 @@ def node_windows_path_check(state: FlowState) -> dict:
     Returns:
         Updated state with windows_path_check result (only changed fields)
     """
+    _step_start = time.time()
     updates = {}
     if "session_id" in state:
         updates["session_id"] = state["session_id"]
@@ -175,6 +186,7 @@ def node_windows_path_check(state: FlowState) -> dict:
         if sys.platform != "win32":
             # Non-Windows - skip check
             updates["windows_path_check"] = True
+            write_level_log(state, "level-minus1", "windows-path-check", "OK", time.time() - _step_start, updates)
             return updates
 
         project_root = Path(state.get("project_root", "."))
@@ -198,11 +210,15 @@ def node_windows_path_check(state: FlowState) -> dict:
         else:
             updates["windows_path_check"] = True
 
+        write_level_log(state, "level-minus1", "windows-path-check",
+                        "OK" if updates.get("windows_path_check") else "FAILED",
+                        time.time() - _step_start, updates)
         return updates
 
     except Exception as e:
         updates["windows_path_check"] = False
         updates["windows_path_check_error"] = str(e)
+        write_level_log(state, "level-minus1", "windows-path-check", "FAILED", time.time() - _step_start, None, str(e))
         return updates
 
 
@@ -506,6 +522,7 @@ def level_minus1_merge_node(state: FlowState) -> dict:
     """
     import sys
 
+    _step_start = time.time()
     session_id = state.get("session_id")
     logger = ErrorLogger(session_id) if session_id else None
 
@@ -545,6 +562,9 @@ def level_minus1_merge_node(state: FlowState) -> dict:
         updates["errors"] = errors
 
     print(f"[L-1 MERGE] Returning: {list(updates.keys())}", file=sys.stderr)
+    write_level_log(state, "level-minus1", "merge",
+                    updates.get("level_minus1_status", "FAILED"),
+                    time.time() - _step_start, updates)
     return updates
 
 

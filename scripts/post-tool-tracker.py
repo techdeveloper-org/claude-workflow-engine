@@ -634,8 +634,8 @@ def check_level_3_10_version_release(tool_name, tool_input, state):
     if tool_name != 'Bash':
         return False, ''
     cmd = (tool_input or {}).get('command', '').lower()
-    # Must be a git push command (not a push to non-remote, not --dry-run)
-    if 'git push' not in cmd or '--dry-run' in cmd:
+    # Must be a git push command (not a push to non-remote, not --dry-run, not --delete)
+    if 'git push' not in cmd or '--dry-run' in cmd or '--delete' in cmd:
         return False, ''
     # Check if VERSION was among the files modified
     modified = state.get('modified_files_since_commit', [])
@@ -680,7 +680,7 @@ def check_level_3_11_git_status(tool_name, tool_input):
     if tool_name != 'Bash':
         return False, ''
     cmd = (tool_input or {}).get('command', '').lower()
-    if 'git push' not in cmd or '--dry-run' in cmd:
+    if 'git push' not in cmd or '--dry-run' in cmd or '--delete' in cmd:
         return False, ''
     try:
         import subprocess as _sp

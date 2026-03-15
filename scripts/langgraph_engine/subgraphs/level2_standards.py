@@ -7,6 +7,7 @@ Includes MCP plugin discovery for auto-routing tool optimization.
 
 import sys
 import json
+import time
 import subprocess
 from pathlib import Path
 
@@ -17,6 +18,7 @@ except ImportError:
     _LANGGRAPH_AVAILABLE = False
 
 from ..flow_state import FlowState
+from ..step_logger import write_level_log
 
 
 # ============================================================================
@@ -133,6 +135,7 @@ def detect_project_type(state: FlowState) -> None:
 
 def node_common_standards(state: FlowState) -> dict:
     """Load common standards from policies/ directory and standards-loader.py."""
+    _step_start = time.time()
     updates = {}
     try:
         detect_project_type(state)
@@ -159,16 +162,22 @@ def node_common_standards(state: FlowState) -> dict:
             "total": updates["standards_count"]
         }]
 
+        write_level_log(state, "level2", "common-standards", "OK", time.time() - _step_start, {
+            "standards_count": updates["standards_count"],
+            "policies_loaded": level2_count,
+        })
         return updates
 
     except Exception as e:
         updates["standards_loaded"] = False
         updates["standards_error"] = str(e)
+        write_level_log(state, "level2", "common-standards", "FAILED", time.time() - _step_start, None, str(e))
         return updates
 
 
 def node_java_standards(state: FlowState) -> dict:
     """Load Java-specific standards."""
+    _step_start = time.time()
     updates = {}
     try:
         # Load Java standards from policies/02-standards-system/
@@ -205,11 +214,16 @@ def node_java_standards(state: FlowState) -> dict:
             "java_standards_loaded": len(java_standards)
         }]
 
+        write_level_log(state, "level2", "java-standards", "OK", time.time() - _step_start, {
+            "java_standards_loaded": True,
+            "patterns_count": len(java_standards),
+        })
         return updates
 
     except Exception as e:
         updates["java_standards_loaded"] = False
         updates["java_standards_error"] = str(e)
+        write_level_log(state, "level2", "java-standards", "FAILED", time.time() - _step_start, None, str(e))
         return updates
 
 
@@ -218,6 +232,7 @@ def node_tool_optimization_standards(state: FlowState) -> dict:
 
     Defines HOW tools must be used. Enforced by PreToolUse hook on every call.
     """
+    _step_start = time.time()
     rules = {
         "read_max_lines": 500,       # Read tool: max lines per call
         "read_max_bytes": 51200,     # Read tool: max bytes (50KB)
@@ -240,6 +255,9 @@ def node_tool_optimization_standards(state: FlowState) -> dict:
         "total_rules": len(rules)
     }]
 
+    write_level_log(state, "level2", "tool-optimization", "OK", time.time() - _step_start, {
+        "rules_loaded": len(rules),
+    })
     return updates
 
 
@@ -250,6 +268,7 @@ def node_mcp_plugin_discovery(state: FlowState) -> dict:
     state with available MCPs. Enables AUTO-ROUTE mode in pre-tool-enforcer.py
     if Filesystem MCP is available.
     """
+    _step_start = time.time()
     updates = {}
 
     try:
@@ -302,6 +321,12 @@ def node_mcp_plugin_discovery(state: FlowState) -> dict:
             "mcp_discovered_count": 0,
         }
 
+    write_level_log(state, "level2", "mcp-discovery",
+                    "OK" if updates.get("mcp_discovered_count", 0) > 0 else "FAILED",
+                    time.time() - _step_start, {
+                        "mcp_discovered_count": updates.get("mcp_discovered_count", 0),
+                        "plugins_found": updates.get("mcp_initialization_status", "ERROR"),
+                    })
     return updates
 
 
@@ -312,6 +337,7 @@ def node_mcp_plugin_discovery(state: FlowState) -> dict:
 
 def level2_merge_node(state: FlowState) -> dict:
     """Merge Level 2 results."""
+    _step_start = time.time()
     updates = {}
     if state.get("standards_loaded"):
         updates["level2_status"] = "OK"
@@ -320,6 +346,11 @@ def level2_merge_node(state: FlowState) -> dict:
         existing_errors = state.get("errors") or []
         updates["errors"] = list(existing_errors) + ["Level 2: Standards loading failed"]
 
+    write_level_log(state, "level2", "merge", updates["level2_status"],
+                    time.time() - _step_start, {
+                        "level2_status": updates["level2_status"],
+                        "total_standards": state.get("standards_count", 0),
+                    })
     return updates
 
 

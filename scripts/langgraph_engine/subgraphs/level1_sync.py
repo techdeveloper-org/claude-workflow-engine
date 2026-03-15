@@ -17,6 +17,7 @@ Optimization features (Task #6):
 
 import sys
 import json
+import time as _time_mod
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -29,6 +30,7 @@ except ImportError:
     _LANGGRAPH_AVAILABLE = False
 
 from ..flow_state import FlowState
+from ..step_logger import write_level_log
 
 try:
     import toons
@@ -38,10 +40,13 @@ except ImportError:
 
 # Level 1 new modules (graceful import fallback)
 try:
-    from ..complexity_calculator import calculate_complexity, should_plan
+    from ..complexity_calculator import calculate_complexity, should_plan, calculate_graph_complexity
     _COMPLEXITY_CALCULATOR_AVAILABLE = True
 except ImportError:
     _COMPLEXITY_CALCULATOR_AVAILABLE = False
+
+    def calculate_graph_complexity(*args, **kwargs):
+        return 0, {}, 0.0
 
 try:
     from ..context_cache import ContextCache
@@ -74,6 +79,7 @@ def node_session_loader(state: FlowState) -> dict:
     import uuid
     import sys
 
+    _step_start = _time_mod.time()
     try:
         # Debug: Check project_root before doing anything
         print(f"[LEVEL 1 SESSION_LOADER] state['project_root'] at entry: '{state.get('project_root', 'MISSING')}'", file=sys.stderr)
@@ -103,16 +109,20 @@ def node_session_loader(state: FlowState) -> dict:
         # Set env var so Level 3 infra can find session_id
         os.environ["CURRENT_SESSION_ID"] = session_id
 
-        return {
+        result = {
             "session_id": session_id,
             "session_path": str(session_path),
             "session_loaded": True,
         }
+        write_level_log(result, "level1", "session-loader", "OK", _time_mod.time() - _step_start, result)
+        return result
     except Exception as e:
-        return {
+        result = {
             "session_loaded": False,
             "session_error": str(e),
         }
+        write_level_log(state, "level1", "session-loader", "FAILED", _time_mod.time() - _step_start, None, str(e))
+        return result
 
 
 # ============================================================================
@@ -125,19 +135,43 @@ def node_complexity_calculation(state: FlowState) -> dict:
     Uses complexity_calculator.py (new, preferred) when available.
     Falls back to legacy script or simple heuristic otherwise.
     """
+    _step_start = _time_mod.time()
     try:
         project_root = Path(state.get("project_root", "."))
         session_id = state.get("session_id", "")
 
         # --- Preferred path: use new complexity_calculator module ---
         if _COMPLEXITY_CALCULATOR_AVAILABLE:
-            score = calculate_complexity(str(project_root), session_id=session_id or None)
-            return {
-                "complexity_score": score,
+            simple_score = calculate_complexity(str(project_root), session_id=session_id or None)
+
+            # Graph-based complexity (NetworkX + Lizard) - graceful fallback
+            graph_score, graph_metrics, cyclomatic_avg = calculate_graph_complexity(
+                str(project_root), session_id=session_id or None
+            )
+
+            # Combine: simple (30%) + graph (70%) when graph available
+            if graph_score > 0:
+                simple_scaled = round(simple_score * 2.5)  # scale 1-10 to 1-25
+                combined = round((simple_scaled * 0.3) + (graph_score * 0.7))
+                combined = max(1, min(25, combined))
+            else:
+                combined = simple_score
+                graph_metrics = {}
+                cyclomatic_avg = 0.0
+
+            result = {
+                "complexity_score": simple_score,
+                "graph_complexity_score": graph_score if graph_score > 0 else None,
+                "graph_metrics": graph_metrics if graph_metrics else {},
+                "cyclomatic_complexity_avg": cyclomatic_avg if cyclomatic_avg else None,
+                "combined_complexity_score": combined if graph_score > 0 else None,
                 "project_graph": {},
                 "architecture": {},
                 "complexity_calculated": True,
             }
+            write_level_log(state, "level1", "complexity-calculation", "OK",
+                            _time_mod.time() - _step_start, result)
+            return result
 
         # --- Legacy path: try the old architecture script ---
         complexity_script = (
@@ -170,19 +204,25 @@ def node_complexity_calculation(state: FlowState) -> dict:
         py_files = list(project_root.glob("**/*.py"))
         complexity_score = min(10, max(1, len(py_files) // 10))
 
-        return {
+        result = {
             "complexity_score": complexity_score,
             "project_graph": {},
             "architecture": {},
             "complexity_calculated": True,
         }
+        write_level_log(state, "level1", "complexity-calculation", "OK",
+                        _time_mod.time() - _step_start, result)
+        return result
 
     except Exception as e:
-        return {
+        result = {
             "complexity_calculated": False,
             "complexity_error": str(e),
             "complexity_score": 5,  # Safe default
         }
+        write_level_log(state, "level1", "complexity-calculation", "FAILED",
+                        _time_mod.time() - _step_start, None, str(e))
+        return result
 
 
 # ============================================================================
@@ -358,6 +398,12 @@ def node_context_loader(state: FlowState) -> dict:
                         file=sys.stderr,
                     )
                     cache_stats = ContextCache.get_session_stats()
+                    write_level_log(state, "level1", "context-loader", "OK",
+                                    _time_mod.time() - loader_start, {
+                                        "files_loaded": len(cached.get("files_loaded", [])),
+                                        "cache_hit": True,
+                                        "load_time_ms": elapsed_ms,
+                                    })
                     return {
                         "context_data": cached,
                         "context_loaded": True,
@@ -550,7 +596,7 @@ def node_context_loader(state: FlowState) -> dict:
         )
 
         # Return partial context - whatever loaded successfully
-        return {
+        result = {
             "context_data": context_data,
             "context_loaded": True,
             "files_loaded_count": len(context_data.get("files_loaded", [])),
@@ -563,12 +609,20 @@ def node_context_loader(state: FlowState) -> dict:
             "context_hit_rate_pct": cache_stats.get("hit_rate_pct", 0.0),
             "context_streamed_files": streamed_files,
         }
+        write_level_log(state, "level1", "context-loader", "OK",
+                        _time_mod.time() - loader_start, {
+                            "files_loaded": len(context_data.get("files_loaded", [])),
+                            "total_bytes": total_loaded_bytes,
+                            "cache_hit": False,
+                            "load_time_ms": elapsed_ms,
+                        })
+        return result
 
     except Exception as e:
         # Top-level fallback: return empty context dict - never crash the pipeline
-        elapsed_ms = int((time.time() - loader_start) * 1000)
+        elapsed_ms = int((_time_mod.time() - loader_start) * 1000)
         print("[CONTEXT LOADER] ERROR: {}".format(e), file=sys.stderr)
-        return {
+        result = {
             "context_loaded": False,
             "context_error": str(e),
             "context_data": {},
@@ -579,6 +633,9 @@ def node_context_loader(state: FlowState) -> dict:
             "context_load_time_ms": elapsed_ms,
             "context_streamed_files": [],
         }
+        write_level_log(state, "level1", "context-loader", "FAILED",
+                        _time_mod.time() - loader_start, None, str(e))
+        return result
 
 
 # ============================================================================
@@ -668,6 +725,7 @@ def node_toon_compression(state: FlowState) -> dict:
     - files_loaded_count
     - compressed context (boolean flags, no raw content)
     """
+    _step_start = _time_mod.time()
     try:
         session_path = Path(state.get("session_path", ""))
         context_data = state.get("context_data", {})
@@ -745,7 +803,7 @@ def node_toon_compression(state: FlowState) -> dict:
                     file=sys.stderr,
                 )
 
-        return {
+        result = {
             "toon_object": toon_object,
             "toon_saved": True,
             "toon_integrity_ok": integrity_ok,
@@ -754,9 +812,18 @@ def node_toon_compression(state: FlowState) -> dict:
             "toon_version": toon_object.get("version", "1.0.0"),
             "clear_verbose_memory": True,
         }
+        write_level_log(state, "level1", "toon-compression", "OK",
+                        _time_mod.time() - _step_start, {
+                            "toon_saved": True,
+                            "schema_valid": integrity_ok,
+                            "compression_ratio": len(files_loaded),
+                        })
+        return result
 
     except Exception as e:
         print("[TOON COMPRESSION] ERROR: {}".format(e), file=sys.stderr)
+        write_level_log(state, "level1", "toon-compression", "FAILED",
+                        _time_mod.time() - _step_start, None, str(e))
         return {
             "toon_saved": False,
             "toon_error": str(e),
@@ -777,6 +844,7 @@ def level1_merge_node(state: FlowState) -> dict:
     OUTPUT: Only TOON object (contains session_id, complexity_score, files_loaded_count + context)
     CLEARED: All verbose variables from memory
     """
+    _step_start = _time_mod.time()
     # Build final Level 1 output
     updates = {
         "level1_complete": True,
@@ -800,6 +868,11 @@ def level1_merge_node(state: FlowState) -> dict:
 
     updates.update(cleanup_signals)
 
+    write_level_log(state, "level1", "merge", "OK", _time_mod.time() - _step_start, {
+        "level1_complete": True,
+        "toon_present": bool(state.get("toon_object")),
+        "context_percentage": state.get("context_percentage", 0),
+    })
     return updates
 
 

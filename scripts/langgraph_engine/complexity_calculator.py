@@ -318,6 +318,90 @@ def complexity_report(project_path: str) -> dict:
 
 
 # ============================================================================
+# GRAPH-BASED COMPLEXITY (NetworkX + Lizard integration)
+# ============================================================================
+
+def calculate_graph_complexity(
+    project_path: str,
+    session_id: Optional[str] = None,
+    tech_stack: Optional[list] = None,
+):
+    """Calculate graph-based complexity using code-graph-analyzer.
+
+    Uses NetworkX for dependency graph analysis and Lizard for cyclomatic
+    complexity. Returns a 1-25 score, graph metrics dict, and avg cyclomatic.
+
+    Gracefully degrades to (0, {}, 0.0) if networkx/lizard unavailable.
+
+    Args:
+        project_path: Absolute path to project root.
+        session_id: Optional session ID for logging.
+        tech_stack: Optional list of technology names.
+
+    Returns:
+        Tuple of (graph_score: int, graph_metrics: dict, cyclomatic_avg: float).
+        graph_score=0 means graph analysis was unavailable.
+    """
+    try:
+        # Import the analyzer from the architecture scripts
+        analyzer_dir = (
+            Path(__file__).parent.parent /
+            "architecture" / "03-execution-system" / "00-code-graph-analysis"
+        )
+        analyzer_module = analyzer_dir / "code-graph-analyzer.py"
+
+        if not analyzer_module.exists():
+            return 0, {}, 0.0
+
+        # Import the module dynamically
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "code_graph_analyzer", str(analyzer_module)
+        )
+        if spec is None or spec.loader is None:
+            return 0, {}, 0.0
+
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        # Check if networkx is available (the module checks internally)
+        if not getattr(mod, 'HAS_NETWORKX', False):
+            return 0, {}, 0.0
+
+        # Run the analyzer
+        analyzer = mod.CodeGraphAnalyzer(
+            project_path,
+            tech_stack=tech_stack or [],
+            session_id=session_id or 'unknown',
+        )
+        graph_score = analyzer.run()
+        analyzer.save()
+
+        graph_metrics = analyzer.metrics or {}
+        cyclomatic_avg = (analyzer.cyclomatic or {}).get('avg_cyclomatic', 0.0)
+
+        return graph_score, graph_metrics, cyclomatic_avg
+
+    except Exception as exc:
+        # Log but don't crash - graceful degradation
+        logger = None
+        if session_id and ErrorLogger:
+            try:
+                logger = ErrorLogger(session_id)
+            except Exception:
+                pass
+        if logger:
+            logger.log_error(
+                "Level 1",
+                "Graph complexity calculation failed: " + str(exc),
+                severity="WARNING",
+                error_type="GraphAnalysisError",
+                recovery_action="Using simple score only (graph_score=0)",
+            )
+        return 0, {}, 0.0
+
+
+# ============================================================================
 # CLI ENTRY POINT
 # ============================================================================
 
