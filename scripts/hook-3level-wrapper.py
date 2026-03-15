@@ -38,15 +38,13 @@ def main():
     if user_message:
         env["CLAUDE_USER_MESSAGE"] = user_message
 
-    # Determine claude-insight project path
-    # Priority: source location > global location > fallback
-    possible_projects = [
-        Path.home() / "Documents" / "workspace-spring-tool-suite-4-4.27.0-new" / "claude-insight",
-        Path.home() / "claude-insight",
-    ]
+    # Determine project path dynamically (works for ANY project)
+    # Priority: CWD (Claude Code runs from project root) > this script's parent
+    _cwd = Path.cwd()
+    _script_parent = Path(__file__).resolve().parent.parent  # scripts/ -> project root
 
     project_path = ""
-    for proj in possible_projects:
+    for proj in [_cwd, _script_parent]:
         if (proj / "CLAUDE.md").exists() or (proj / "README.md").exists():
             project_path = str(proj)
             break

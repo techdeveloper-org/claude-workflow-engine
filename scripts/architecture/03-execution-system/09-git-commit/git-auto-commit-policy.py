@@ -85,12 +85,9 @@ SESSIONS_DIR = LOGS_DIR / "sessions"
 POLICY_HIT_LOG = LOGS_DIR / "policy-hits.log"
 COMMIT_LOG = LOGS_DIR / "git-auto-commit.log"
 
-# Workspace discovery root (can be overridden by env var)
-DEFAULT_WORKSPACE = (
-    Path.home()
-    / "Documents"
-    / "workspace-spring-tool-suite-4-4.27.0-new"
-)
+# Workspace discovery root (auto-detect from CWD or env var)
+DEFAULT_WORKSPACE = Path(os.environ.get("CLAUDE_WORKSPACE_ROOT",
+                         str(Path.cwd().parent if Path.cwd().name == "scripts" else Path.cwd())))
 
 # Commit trigger thresholds
 THRESHOLDS = {

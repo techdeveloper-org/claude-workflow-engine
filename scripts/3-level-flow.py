@@ -32,18 +32,13 @@ if os.environ.get("CLAUDE_WORKFLOW_RUNNING") == "1":
 os.environ["CLAUDE_WORKFLOW_RUNNING"] = "1"
 
 # ============================================================================
-# PATH SETUP - Add claude-insight scripts to path for hook execution
+# PATH SETUP - Auto-detect scripts directory (works for ANY project)
 # ============================================================================
 
-# When hook runs, add the claude-insight scripts directory to path
-claude_insight_scripts = Path.home() / "Documents" / "workspace-spring-tool-suite-4-4.27.0-new" / "claude-insight" / "scripts"
-if claude_insight_scripts.exists() and str(claude_insight_scripts) not in sys.path:
-    sys.path.insert(0, str(claude_insight_scripts))
-
-# Also try direct path in case structure is different
-alt_path = Path.home() / "claude-insight" / "scripts"
-if alt_path.exists() and str(alt_path) not in sys.path:
-    sys.path.insert(0, str(alt_path))
+# Use this file's location to find the scripts directory (no hardcoded paths)
+_this_scripts_dir = Path(__file__).resolve().parent
+if str(_this_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_this_scripts_dir))
 
 # ============================================================================
 # IMPORTS & SETUP
