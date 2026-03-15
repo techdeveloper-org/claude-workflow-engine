@@ -655,8 +655,30 @@ class GitAutoCommitAI:
 
         return "chore"
 
+    def _describe_files(self, file_list, max_names=3):
+        """Build a readable description of changed files.
+
+        Args:
+            file_list: List of file paths.
+            max_names: Max number of file names to include.
+
+        Returns:
+            str: e.g. "stop-notifier, git_operations" or "3 langgraph_engine modules"
+        """
+        if not file_list:
+            return "files"
+        stems = [Path(f).stem for f in file_list]
+        # If all files share a common directory, mention it
+        dirs = set(str(Path(f).parent) for f in file_list)
+        if len(file_list) <= max_names:
+            return ", ".join(stems)
+        if len(dirs) == 1:
+            dirname = Path(list(dirs)[0]).name
+            return f"{len(file_list)} {dirname} modules"
+        return f"{len(file_list)} files"
+
     def generate_summary(self, changes, commit_type):
-        """Generate first line of commit message.
+        """Generate first line of commit message with meaningful file context.
 
         Args:
             changes:      Dict from analyze_changes().
@@ -669,38 +691,41 @@ class GitAutoCommitAI:
             return "update files"
 
         if commit_type == "feat":
-            if len(changes.get("added", [])) == 1:
-                filename = Path(changes["added"][0]).stem
-                return f"add {filename}"
-            else:
-                return f"add {len(changes.get('added', []))} new files"
+            desc = self._describe_files(changes.get("added", []))
+            return f"add {desc}"
 
         elif commit_type == "fix":
-            if len(changes.get("modified", [])) == 1:
-                filename = Path(changes["modified"][0]).stem
-                return f"fix issue in {filename}"
-            else:
-                return f"fix issues in {len(changes.get('modified', []))} files"
+            desc = self._describe_files(changes.get("modified", []))
+            return f"fix {desc}"
 
         elif commit_type == "refactor":
             if changes.get("deleted"):
-                return f"remove {len(changes['deleted'])} files"
+                desc = self._describe_files(changes.get("deleted", []))
+                return f"remove {desc}"
             else:
-                return f"refactor {len(changes.get('modified', []))} files"
+                desc = self._describe_files(changes.get("modified", []))
+                return f"refactor {desc}"
 
         elif commit_type == "test":
-            return "update tests"
+            desc = self._describe_files(
+                changes.get("added", []) + changes.get("modified", [])
+            )
+            return f"update tests in {desc}"
 
         elif commit_type == "docs":
-            return "update documentation"
+            desc = self._describe_files(
+                changes.get("added", []) + changes.get("modified", [])
+            )
+            return f"update docs: {desc}"
 
         else:
-            total = (
-                len(changes.get("added", []))
-                + len(changes.get("modified", []))
-                + len(changes.get("deleted", []))
+            all_files = (
+                changes.get("added", [])
+                + changes.get("modified", [])
+                + changes.get("deleted", [])
             )
-            return f"update {total} files"
+            desc = self._describe_files(all_files)
+            return f"update {desc}"
 
     def generate_details(self, changes):
         """Generate detailed description for commit body.

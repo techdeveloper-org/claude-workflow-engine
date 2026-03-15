@@ -24,7 +24,8 @@
 set -e
 
 MEMORY_PATH="$HOME/.claude/memory"
-CLAUDE_INSIGHT_PATH="/c/Users/techd/Documents/workspace-spring-tool-suite-4-4.27.0-new/claude-insight"
+# Auto-detect project path from git root or fallback to env var
+CLAUDE_INSIGHT_PATH="${CLAUDE_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/claude-workflow-engine")}"
 DETECTOR="$MEMORY_PATH/current/detect-sync-eligibility.py"
 
 # Colors

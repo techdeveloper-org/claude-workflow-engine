@@ -373,8 +373,7 @@ def _extract_project(cwd):
     # Fallback: last non-generic directory name
     for part in reversed(parts):
         if part not in ('backend', 'frontend', 'src', 'main', 'java', 'resources',
-                        'Documents', 'Users', 'workspace-spring-tool-suite-4-4.27.0-new',
-                        'C:', 'c'):
+                        'Documents', 'Users', 'C:', 'c') and 'workspace-' not in part:
             return part
     return None
 

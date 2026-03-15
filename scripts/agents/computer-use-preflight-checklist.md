@@ -21,7 +21,7 @@ TOTAL:                         25 policies PASSED
 
 **Verification:**
 ```bash
-cd ~/Documents/workspace-spring-tool-suite-4-4.27.0-new/claude-insight
+cd "$(git rev-parse --show-toplevel)"  # auto-detect project root
 python scripts/3-level-flow.py --summary
 
 # Expected output:
@@ -78,7 +78,7 @@ Check:    jq '.completion_percentage' work-summary.json → Should show >=95%
 
 #### A. Dashboard Startup
 ```bash
-cd ~/Documents/workspace-spring-tool-suite-4-4.27.0-new/claude-insight
+cd "$(git rev-parse --show-toplevel)"  # auto-detect project root
 python run.py
 
 # Expected:

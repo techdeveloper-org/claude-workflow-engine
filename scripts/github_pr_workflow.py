@@ -295,12 +295,19 @@ def _commit_session_changes(repo_root: str, session_summary: dict,
             _log(f"git add failed: {result.stderr[:200]}")
             return False
 
-        # Build commit message from session summary
-        commit_title = "Session work"
+        # Build commit message from session summary + actual changed files
+        commit_title = ""
         commit_body = ""
 
+        # Get list of staged files for context
+        diff_result = subprocess.run(
+            ['git', 'diff', '--cached', '--name-only'],
+            capture_output=True, text=True, timeout=10, cwd=repo_root
+        )
+        changed_files = [f for f in diff_result.stdout.strip().splitlines() if f] if diff_result.returncode == 0 else []
+
         if session_summary:
-            # Use task types and skills for a descriptive title
+            # Use task types for commit type prefix
             types = session_summary.get('task_types', [])
             if types:
                 commit_title = ', '.join(types[:3])
@@ -315,6 +322,29 @@ def _commit_session_changes(repo_root: str, session_summary: dict,
                         body_lines.append(f"- {prompt}")
                 if body_lines:
                     commit_body = '\n'.join(body_lines[:10])
+
+        # Generate descriptive title from changed files if no session summary
+        if not commit_title and changed_files:
+            stems = [Path(f).stem for f in changed_files[:3]]
+            if len(changed_files) <= 3:
+                commit_title = f"update {', '.join(stems)}"
+            else:
+                # Group by directory for context
+                dirs = set(str(Path(f).parent) for f in changed_files)
+                if len(dirs) == 1:
+                    dirname = Path(list(dirs)[0]).name
+                    commit_title = f"update {len(changed_files)} {dirname} modules"
+                else:
+                    commit_title = f"update {', '.join(stems)} and {len(changed_files) - 3} more"
+        elif not commit_title:
+            commit_title = "update implementation"
+
+        # Add file list to body for traceability
+        if changed_files and not commit_body:
+            commit_body = "Modified files ({}):\n{}".format(
+                len(changed_files),
+                '\n'.join(f"  - {f}" for f in changed_files[:10])
+            )
 
         # Append Closes #N for auto-closing GitHub issues (policy requirement)
         if issue_numbers:
