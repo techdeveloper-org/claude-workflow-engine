@@ -1,23 +1,25 @@
 """
 Vector DB RAG MCP Server - Qdrant-based semantic storage for workflow data.
 
-Provides vector storage and retrieval for tool calls, sessions, and flow traces.
+Provides vector storage and retrieval for tool calls, sessions, flow traces,
+and per-node pipeline decisions.
 Uses Qdrant local mode (no external server needed) with sentence-transformers
 embeddings for semantic search.
 
 Backend: Qdrant (local/in-memory), sentence-transformers (all-MiniLM-L6-v2)
 Transport: stdio
 
-Collections (3):
-  tool_calls   - Tool execution records with semantic search
-  sessions     - Session summaries and context
-  flow_traces  - Flow execution traces with step-level data
+Collections (4):
+  tool_calls      - Tool execution records with semantic search
+  sessions        - Session summaries and context
+  flow_traces     - Flow execution traces with step-level data
+  node_decisions  - Per-node LangGraph pipeline decisions for RAG recommendations
 
-Tools (10):
+Tools (11):
   vector_index_tool_call, vector_index_session, vector_index_flow_trace,
   vector_search_similar, vector_search_sessions, vector_search_traces,
   vector_get_collection_stats, vector_delete_collection,
-  vector_health_check, vector_bulk_index
+  vector_health_check, vector_bulk_index, vector_index_node_decision
 """
 
 import json
@@ -56,6 +58,10 @@ COLLECTIONS = {
         "distance": "Cosine",
     },
     "flow_traces": {
+        "size": 384,
+        "distance": "Cosine",
+    },
+    "node_decisions": {
         "size": 384,
         "distance": "Cosine",
     },
@@ -653,6 +659,72 @@ def vector_bulk_index(
             "indexed": len(points),
             "errors": len(errors),
             "error_details": errors[:5] if errors else [],
+        })
+    except Exception as e:
+        return _json({"success": False, "error": str(e)})
+
+
+# =============================================================================
+# TOOL 11: INDEX NODE DECISION
+# =============================================================================
+
+@mcp.tool()
+def vector_index_node_decision(
+    session_id: str,
+    project: str = "",
+    step: str = "",
+    decision: str = "",
+    user_prompt: str = "",
+    task_type: str = "",
+    complexity: int = 0,
+    framework: str = "",
+) -> str:
+    """Index a pipeline node decision for RAG-based recommendation.
+
+    Args:
+        session_id: Session identifier
+        project: Project name
+        step: Pipeline step (e.g., 'step0', 'step1', 'step5')
+        decision: JSON string of the node's decision/output
+        user_prompt: Original user prompt (truncated)
+        task_type: Task classification (bug, feature, etc.)
+        complexity: Task complexity (1-10)
+        framework: Detected framework (flask, spring-boot, etc.)
+    """
+    try:
+        client = _get_qdrant_client()
+        if client is None:
+            return _json({"success": False, "error": "Qdrant not available"})
+
+        embed_text = f"{step} {project} {task_type} {user_prompt[:500]} {decision[:500]}"
+        vector = _embed_text(embed_text)
+
+        from qdrant_client.models import PointStruct
+
+        point = PointStruct(
+            id=_generate_point_id(),
+            vector=vector,
+            payload={
+                "session_id": session_id,
+                "project": project,
+                "step": step,
+                "decision": decision[:3000],
+                "user_prompt": user_prompt[:1000],
+                "task_type": task_type,
+                "complexity": complexity,
+                "framework": framework,
+                "indexed_at": datetime.now().isoformat(),
+            },
+        )
+
+        client.upsert(collection_name="node_decisions", points=[point])
+
+        return _json({
+            "success": True,
+            "collection": "node_decisions",
+            "session_id": session_id,
+            "step": step,
+            "point_id": point.id,
         })
     except Exception as e:
         return _json({"success": False, "error": str(e)})

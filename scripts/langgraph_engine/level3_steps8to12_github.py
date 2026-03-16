@@ -23,6 +23,23 @@ from .git_operations import GitOperations
 from .github_facade import GitHubFacade
 from .ollama_service import OllamaService
 from .builders import CommitMessageBuilder, PRBodyBuilder, IssueBodyBuilder
+from .github_code_review import (
+    run_code_review,
+    analyze_diff_for_issues,
+    check_python_best_practices,
+    check_java_spring_patterns,
+    check_docker_best_practices,
+    run_simplify_review,
+    generate_review_recommendations,
+    comment_on_pr_with_review,
+)
+from .github_merge_validation import (
+    check_merge_conflicts_bulletproof,
+    detect_git_conflict_markers,
+    test_merge_locally,
+    detect_project_type_for_validation,
+    validate_project_after_merge,
+)
 
 # Lazy import helpers - avoids circular dependencies at module level
 def _get_review_criteria(project_root: Optional[str] = None):
@@ -781,338 +798,56 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
         """
         Run code review on PR using selected skills/agents AND ReviewCriteria checklist.
 
-        Process:
-        1. Get PR diff
-        2. Run structured ReviewCriteria evaluation (code quality, tests, docs)
-        3. Run skill-specific pattern checks (Python, Java Spring, Docker)
-        4. Combine results and determine pass/fail
-
-        The ReviewCriteria evaluation adds structured checks for:
-        - Code quality rules (bare except, type hints, secrets, function length)
-        - Test coverage ratio (70% of source files need test counterpart)
-        - Documentation requirements (docstrings, PR description length)
-
-        Args:
-            pr_number:       GitHub PR number
-            branch_name:     Source branch being reviewed
-            selected_skills: Skills selected in Step 5
-            selected_agents: Agents selected in Step 5
-            files_changed:   Optional list of files changed in PR (for ReviewCriteria)
-            pr_body:         PR description text (for ReviewCriteria DC003 check)
+        Delegates to :func:`github_code_review.run_code_review`.
 
         Returns:
             {
                 "passed": bool,
                 "issues": List[str],
                 "recommendations": str,
-                "criteria_result": Dict,  # Full ReviewCriteria evaluation (if available)
-                "criteria_score": float,  # 0.0 - 1.0
+                "criteria_result": Dict,
+                "criteria_score": float,
             }
         """
-        logger.info(
-            f"Starting code review for PR #{pr_number} with "
-            f"{len(selected_skills)} skills and {len(selected_agents)} agents"
+        project_root = getattr(self.git, "repo_path", None)
+        return run_code_review(
+            pr_number=pr_number,
+            branch_name=branch_name,
+            selected_skills=selected_skills,
+            selected_agents=selected_agents,
+            git_ops=self.git,
+            project_root=project_root,
+            files_changed=files_changed,
+            pr_body=pr_body,
         )
-
-        try:
-            # Get PR diff (simplified)
-            diff_lines = self.git.get_pr_diff(branch_name, "main")
-            diff_text = "\n".join(diff_lines)
-
-            # Analyze diff for common issues (existing logic)
-            # Pass pre-computed diff_text to avoid redundant joins in each helper
-            issues = self._analyze_diff_for_issues(diff_text, diff_lines)
-
-            # Check for specific patterns based on selected skills
-            if "python-backend-engineer" in selected_skills or "python-backend-engineer" in selected_agents:
-                issues.extend(self._check_python_best_practices(diff_text))
-
-            if "spring-boot-microservices" in selected_skills or "spring-boot-microservices" in selected_agents:
-                issues.extend(self._check_java_spring_patterns(diff_text))
-
-            if "docker" in selected_skills or "devops-engineer" in selected_agents:
-                issues.extend(self._check_docker_best_practices(diff_text))
-
-            # --- LLM-powered simplify review (reuse, quality, efficiency) ---
-            simplify_issues = self._run_simplify_review(diff_text)
-            if simplify_issues:
-                issues.extend(simplify_issues)
-
-            # --- ReviewCriteria structured evaluation ---
-            criteria_result: Dict[str, Any] = {}
-            criteria_score: float = 1.0
-
-            review_criteria = _get_review_criteria(project_root=self.git.repo_path if hasattr(self.git, "repo_path") else None)
-            if review_criteria is not None:
-                logger.info("[CodeReview] Running structured ReviewCriteria evaluation...")
-                try:
-                    evaluated_files = files_changed or []
-                    eval_result = review_criteria.evaluate(
-                        files_changed=evaluated_files,
-                        pr_title=f"PR #{pr_number} - {branch_name}",
-                        pr_body=pr_body,
-                        diff_text=diff_text,
-                    )
-                    criteria_result = eval_result.to_dict()
-                    criteria_score = eval_result.score
-
-                    logger.info(
-                        f"[CodeReview] ReviewCriteria: "
-                        f"passed={eval_result.passed}, score={eval_result.score:.2f}, "
-                        f"blocking_issues={len([i for i in eval_result.issues if i.get('severity') == 'blocking'])}"
-                    )
-
-                    # Append blocking issues to the main issues list
-                    for issue in eval_result.issues:
-                        if issue.get("severity") == "blocking":
-                            msg = (
-                                f"[{issue['rule_id']}] {issue['message']}"
-                                + (f" in {issue['file_path']}" if issue.get('file_path') else "")
-                            )
-                            issues.append(msg)
-
-                    # If ReviewCriteria failed, mark overall review as failed
-                    if not eval_result.passed:
-                        logger.warning(
-                            f"[CodeReview] ReviewCriteria FAILED - merge will be blocked"
-                        )
-
-                except Exception as criteria_err:
-                    logger.warning(f"[CodeReview] ReviewCriteria evaluation error (non-fatal): {criteria_err}")
-
-            logger.info(f"Code review found {len(issues)} issues")
-
-            passed = len(issues) == 0
-            return {
-                "passed": passed,
-                "issues": issues,
-                "recommendations": self._generate_review_recommendations(issues),
-                "criteria_result": criteria_result,
-                "criteria_score": criteria_score,
-            }
-
-        except Exception as e:
-            logger.error(f"Code review analysis failed (FAIL-SAFE): {e}")
-            logger.error("Blocking merge to prevent broken code - manual review required")
-            return {
-                "passed": False,  # FAIL-SAFE: Block merge on error
-                "issues": [
-                    "CRITICAL: Code review process crashed",
-                    f"Error: {str(e)}",
-                    "Action: Merge blocked for safety. Manual review required."
-                ],
-                "recommendations": (
-                    "Code review automation failed. "
-                    "This is a SAFETY block - do not force merge. "
-                    "Please investigate the error and retry or manually review."
-                ),
-                "criteria_result": {},
-                "criteria_score": 0.0,
-            }
 
     def _analyze_diff_for_issues(self, diff_text: str, diff_lines: List[str]) -> List[str]:
-        """Analyze diff for common issues.
-
-        Args:
-            diff_text:  Pre-joined diff string (caller computes once, no redundant join).
-            diff_lines: Raw diff lines list (needed for prefix-based addition counting).
-        """
-        issues = []
-
-        # Check for obvious issues
-        if "TODO" in diff_text or "FIXME" in diff_text:
-            issues.append("Warning: Found TODO/FIXME comments in code")
-
-        if "print(" in diff_text:
-            issues.append("Warning: Found print() statements (use logging instead)")
-
-        if "eval(" in diff_text or "exec(" in diff_text:
-            issues.append("Warning: Found dangerous eval/exec calls")
-
-        if "password" in diff_text.lower() and "***" not in diff_text:
-            issues.append("Warning: Potential exposed credentials or password in code")
-
-        # Line-level count requires diff_lines (prefix-based)
-        additions = len([l for l in diff_lines if l.startswith("+")])
-        if additions > 500:
-            issues.append(
-                f"Warning: Large addition ({additions} lines) - consider breaking into smaller commits"
-            )
-
-        return issues
+        """Delegate to :func:`github_code_review.analyze_diff_for_issues`."""
+        return analyze_diff_for_issues(diff_text, diff_lines)
 
     def _check_python_best_practices(self, diff_text: str) -> List[str]:
-        """Check for Python-specific best practices.
-
-        Args:
-            diff_text: Pre-joined diff string (caller computes once, no redundant join).
-        """
-        issues = []
-
-        if "import *" in diff_text:
-            issues.append("Warning: Found 'import *' - use explicit imports")
-
-        if "except:" in diff_text:
-            issues.append("Warning: Found bare 'except:' - specify exception types")
-
-        if "global " in diff_text:
-            issues.append("Warning: Found 'global' keyword - consider refactoring")
-
-        return issues
+        """Delegate to :func:`github_code_review.check_python_best_practices`."""
+        return check_python_best_practices(diff_text)
 
     def _check_java_spring_patterns(self, diff_text: str) -> List[str]:
-        """Check for Spring Boot/Java best practices.
-
-        Args:
-            diff_text: Pre-joined diff string (caller computes once, no redundant join).
-        """
-        issues = []
-
-        if "@Component" in diff_text and "@Autowired" not in diff_text:
-            issues.append("Warning: Found @Component but no @Autowired - verify dependency injection")
-
-        if "new Thread(" in diff_text:
-            issues.append("Warning: Found raw Thread creation - use ExecutorService instead")
-
-        return issues
+        """Delegate to :func:`github_code_review.check_java_spring_patterns`."""
+        return check_java_spring_patterns(diff_text)
 
     def _check_docker_best_practices(self, diff_text: str) -> List[str]:
-        """Check for Docker/DevOps best practices.
-
-        Args:
-            diff_text: Pre-joined diff string (caller computes once, no redundant join).
-        """
-        issues = []
-
-        if "FROM ubuntu" in diff_text or "FROM centos" in diff_text:
-            issues.append("Warning: Consider using alpine for smaller images")
-
-        if "RUN apt-get" in diff_text:
-            issues.append("Warning: RUN apt-get without apt-get update - use multi-stage or combine")
-
-        return issues
+        """Delegate to :func:`github_code_review.check_docker_best_practices`."""
+        return check_docker_best_practices(diff_text)
 
     def _run_simplify_review(self, diff_text: str) -> List[str]:
-        """Run LLM-powered simplify review on PR diff for reuse, quality, efficiency.
-
-        Uses llm_call (Ollama -> claude CLI fallback) to analyze the diff
-        similar to Claude Code's /simplify command. Returns actionable issues.
-        Non-blocking: returns empty list on failure.
-        """
-        if not diff_text or len(diff_text) < 50:
-            return []
-
-        try:
-            from .llm_call import llm_call
-        except ImportError:
-            logger.debug("[Simplify] llm_call not available, skipping LLM review")
-            return []
-
-        # Line-aware truncation to preserve diff structure
-        diff_lines = diff_text.split("\n")
-        truncated = "\n".join(diff_lines[:200]) if len(diff_lines) > 200 else diff_text
-
-        prompt = (
-            "You are a code reviewer. Analyze this git diff for 3 categories:\n"
-            "1. CODE REUSE: duplicated logic, existing utilities that could replace new code\n"
-            "2. CODE QUALITY: redundant state, copy-paste, leaky abstractions, bare except\n"
-            "3. EFFICIENCY: unnecessary work, missed concurrency, N+1 patterns, memory leaks\n\n"
-            "Return ONLY a JSON array of issue strings. Each issue should be a single line.\n"
-            "If the code is clean, return an empty array: []\n"
-            "Do NOT include explanations outside the JSON array.\n\n"
-            f"DIFF:\n```\n{truncated}\n```\n\n"
-            "Response (JSON array only):"
-        )
-
-        logger.info("[Simplify] Running LLM-powered code review...")
-
-        response = llm_call(prompt, model="balanced", temperature=0.1, timeout=30)
-        if not response:
-            logger.warning("[Simplify] LLM review returned no response, skipping")
-            return []
-
-        # Parse JSON array from response
-        issues = self._parse_simplify_response(response)
-        if issues:
-            logger.info(f"[Simplify] LLM review found {len(issues)} issues")
-        else:
-            logger.info("[Simplify] LLM review: code is clean")
-
-        return issues
-
-    @staticmethod
-    def _format_simplify_issues(items) -> List[str]:
-        """Prefix items with [Simplify] marker for PR review identification."""
-        return [f"[Simplify] {str(item)}" for item in items if item]
-
-    @staticmethod
-    def _parse_simplify_response(response: str) -> List[str]:
-        """Parse LLM simplify review response into list of issue strings."""
-        import json
-
-        text = response.strip()
-        fmt = Level3GitHubWorkflow._format_simplify_issues
-
-        # Try direct JSON parse
-        try:
-            result = json.loads(text)
-            if isinstance(result, list):
-                return fmt(result)
-        except json.JSONDecodeError:
-            pass
-
-        # Try extracting JSON array from markdown/text wrapper
-        start = text.find("[")
-        end = text.rfind("]")
-        if start != -1 and end != -1 and end > start:
-            try:
-                result = json.loads(text[start:end + 1])
-                if isinstance(result, list):
-                    return fmt(result)
-            except json.JSONDecodeError:
-                pass
-
-        # Fallback: treat non-empty lines as issues (LLM returned plain text)
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if 1 <= len(lines) <= 10:
-            return fmt(lines)
-
-        return []
+        """Delegate to :func:`github_code_review.run_simplify_review`."""
+        return run_simplify_review(diff_text)
 
     def _generate_review_recommendations(self, issues: List[str]) -> str:
-        """Generate summary recommendations from review issues."""
-        if not issues:
-            return "✓ Code review passed all checks"
+        """Delegate to :func:`github_code_review.generate_review_recommendations`."""
+        return generate_review_recommendations(issues)
 
-        issue_count = len(issues)
-        severity_high = len([i for i in issues if i.startswith("🔴")])
-        severity_medium = len([i for i in issues if i.startswith("⚠️")])
-
-        return (
-            f"Found {issue_count} issues: "
-            f"{severity_high} critical, {severity_medium} warnings. "
-            f"Please address before merge."
-        )
-
-    def _comment_on_pr_with_review(self, pr_number: int, issues: List[str]):
-        """Add PR comment with review issues."""
-        try:
-            comment = "## 🔍 Code Review Results\n\n"
-            comment += "The following issues were found during code review:\n\n"
-
-            for issue in issues:
-                comment += f"- {issue}\n"
-
-            comment += (
-                "\n**Action Required:** "
-                "Please address these issues before this PR can be merged. "
-                "Review the comments above and update your code accordingly."
-            )
-
-            self.github.add_pr_comment(pr_number, comment)
-            logger.info(f"Added review comment to PR #{pr_number}")
-        except Exception as e:
-            logger.warning(f"Could not add PR comment: {e}")
+    def _comment_on_pr_with_review(self, pr_number: int, issues: List[str]) -> None:
+        """Delegate to :func:`github_code_review.comment_on_pr_with_review`."""
+        comment_on_pr_with_review(self.github, pr_number, issues)
 
     # ========================================================================
     # BULLETPROOF MERGE CONFLICT DETECTION (4 LAYERS - LANGUAGE AGNOSTIC)
@@ -1123,357 +858,22 @@ IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no qu
         pr_number: int,
         branch_name: str
     ) -> Dict[str, Any]:
-        """
-        Bulletproof merge conflict detection - 4 layers.
-        Works for ANY project/language.
-
-        Returns:
-            {
-                "safe_to_merge": bool,
-                "layer": int (1-4 where it failed),
-                "reason": str,
-                "details": dict
-            }
-        """
-        logger.info("=" * 70)
-        logger.info("🛡️  BULLETPROOF MERGE CONFLICT DETECTION (4 LAYERS)")
-        logger.info("=" * 70)
-
-        # ====================================================================
-        # LAYER 1: GitHub API Check (pr.mergeable)
-        # ====================================================================
-        logger.info("[Layer 1] GitHub API Check (pr.mergeable)...")
-        try:
-            pr = self.github.repo.get_pull(pr_number)
-            if not pr.mergeable:
-                logger.error("[Layer 1] ❌ FAILED: PR not mergeable (GitHub API)")
-                return {
-                    "safe_to_merge": False,
-                    "layer": 1,
-                    "reason": "GitHub API: PR has unresolvable conflicts",
-                    "details": {"pr_mergeable": False}
-                }
-            logger.info("[Layer 1] ✅ PASSED: pr.mergeable = True")
-        except Exception as e:
-            logger.warning(f"[Layer 1] Could not check pr.mergeable: {e}")
-
-        # ====================================================================
-        # LAYER 2: Git Status Parsing (UU/DD/AA markers)
-        # ====================================================================
-        logger.info("[Layer 2] Git Status Parsing (conflict markers)...")
-        conflicts = self._detect_git_conflict_markers(branch_name)
-        if conflicts:
-            logger.error(f"[Layer 2] ❌ FAILED: Found {len(conflicts)} files with conflicts")
-            return {
-                "safe_to_merge": False,
-                "layer": 2,
-                "reason": f"Git status: {len(conflicts)} files have conflict markers",
-                "details": {"conflict_files": conflicts}
-            }
-        logger.info("[Layer 2] ✅ PASSED: No UU/DD/AA conflict markers")
-
-        # ====================================================================
-        # LAYER 3: Test Merge (actual merge attempt, no commit)
-        # ====================================================================
-        logger.info("[Layer 3] Test Merge (attempt without committing)...")
-        merge_test = self._test_merge_locally(branch_name)
-        if not merge_test.get("success"):
-            logger.error(f"[Layer 3] ❌ FAILED: {merge_test.get('reason')}")
-            return {
-                "safe_to_merge": False,
-                "layer": 3,
-                "reason": merge_test.get("reason"),
-                "details": merge_test.get("details", {})
-            }
-        logger.info("[Layer 3] ✅ PASSED: Test merge succeeded")
-
-        # ====================================================================
-        # LAYER 4: Auto-Detect Project Type & Validate
-        # ====================================================================
-        logger.info("[Layer 4] Auto-detect project type and validate...")
-        project_type = self._detect_project_type()
-        logger.info(f"  Detected project type: {project_type}")
-
-        validation = self._validate_project_after_merge(project_type)
-        if not validation.get("success"):
-            logger.error(f"[Layer 4] ❌ FAILED: {validation.get('reason')}")
-            return {
-                "safe_to_merge": False,
-                "layer": 4,
-                "reason": validation.get("reason"),
-                "details": validation.get("details", {})
-            }
-        logger.info("[Layer 4] ✅ PASSED: Project validation successful")
-
-        # ====================================================================
-        # ALL LAYERS PASSED - SAFE TO MERGE
-        # ====================================================================
-        logger.info("=" * 70)
-        logger.info("✅ ALL 4 LAYERS PASSED - SAFE TO MERGE")
-        logger.info("=" * 70)
-
-        return {
-            "safe_to_merge": True,
-            "layer": 4,
-            "reason": "All merge safety checks passed",
-            "details": {
-                "layer1": "GitHub API check passed",
-                "layer2": "No git conflict markers",
-                "layer3": "Test merge succeeded",
-                "layer4": f"Project validation passed ({project_type})"
-            }
-        }
+        """Delegate to :func:`github_merge_validation.check_merge_conflicts_bulletproof`."""
+        return check_merge_conflicts_bulletproof(self.github, self.git, pr_number, branch_name)
 
     def _detect_git_conflict_markers(self, branch_name: str) -> List[str]:
-        """
-        Layer 2: Parse git status for conflict markers (UU, DD, AA).
-        """
-        try:
-            # Try to merge without committing
-            result = self.git._run_git(
-                ["merge", "--no-commit", "--no-ff", f"origin/{branch_name}"],
-                check=False
-            )
-
-            # Get status
-            status_result = self.git._run_git(["status", "--porcelain"], check=False)
-            status_lines = status_result.get("stdout", "").split("\n")
-
-            # Find conflict markers
-            conflicts = []
-            for line in status_lines:
-                if line.startswith("UU") or line.startswith("DD") or line.startswith("AA"):
-                    file = line[3:].strip()
-                    conflicts.append(file)
-
-            # Abort merge
-            self.git._run_git(["merge", "--abort"], check=False)
-
-            return conflicts
-
-        except Exception as e:
-            logger.warning(f"Error detecting git conflicts: {e}")
-            return []
+        """Delegate to :func:`github_merge_validation.detect_git_conflict_markers`."""
+        return detect_git_conflict_markers(self.git, branch_name)
 
     def _test_merge_locally(self, branch_name: str) -> Dict[str, Any]:
-        """
-        Layer 3: Actually try to merge without committing.
-        """
-        try:
-            # Fetch latest
-            self.git._run_git(["fetch", "origin"], check=False)
-
-            # Try merge without commit
-            result = self.git._run_git(
-                ["merge", "--no-commit", "--no-ff", f"origin/{branch_name}"],
-                check=False
-            )
-
-            if result.get("returncode") != 0:
-                # Merge failed
-                self.git._run_git(["merge", "--abort"], check=False)
-                return {
-                    "success": False,
-                    "reason": "Merge attempt failed - conflicts exist",
-                    "details": {"error": result.get("stderr", "")}
-                }
-
-            # Merge succeeded - abort without committing
-            self.git._run_git(["merge", "--abort"], check=False)
-            return {"success": True}
-
-        except Exception as e:
-            logger.warning(f"Error in test merge: {e}")
-            try:
-                self.git._run_git(["merge", "--abort"], check=False)
-            except Exception:
-                pass
-            return {
-                "success": False,
-                "reason": f"Test merge error: {str(e)}",
-                "details": {}
-            }
+        """Delegate to :func:`github_merge_validation.test_merge_locally`."""
+        return test_merge_locally(self.git, branch_name)
 
     def _detect_project_type(self) -> str:
-        """
-        Layer 4: Auto-detect project type by checking for indicator files.
-        """
-        from pathlib import Path
-
-        indicators = {
-            "python": ["setup.py", "requirements.txt", "pyproject.toml", "Pipfile", "setup.cfg"],
-            "java": ["pom.xml", "build.gradle", "build.gradle.kts"],
-            "nodejs": ["package.json"],
-            "go": ["go.mod"],
-            "rust": ["Cargo.toml"],
-            "ruby": ["Gemfile", "Rakefile"],
-            "php": ["composer.json"],
-            "csharp": ["*.csproj", "*.sln"],
-            "cpp": ["CMakeLists.txt", "Makefile"],
-        }
-
-        for lang, files in indicators.items():
-            for file_pattern in files:
-                try:
-                    if Path(self.git.repo_path / file_pattern).exists():
-                        return lang
-                except (OSError, TypeError):
-                    pass
-
-        return "unknown"
+        """Delegate to :func:`github_merge_validation.detect_project_type_for_validation`."""
+        repo_path = getattr(self.git, "repo_path", None)
+        return detect_project_type_for_validation(repo_path)
 
     def _validate_project_after_merge(self, project_type: str) -> Dict[str, Any]:
-        """
-        Layer 4: Run project-specific validation if available.
-        Language-agnostic approach - use what the project provides.
-        """
-        try:
-            if project_type == "python":
-                return self._validate_python()
-            elif project_type == "java":
-                return self._validate_java()
-            elif project_type == "nodejs":
-                return self._validate_nodejs()
-            elif project_type == "go":
-                return self._validate_go()
-            elif project_type == "rust":
-                return self._validate_rust()
-            else:
-                # Unknown type - just basic check
-                logger.info(f"Unknown project type '{project_type}', skipping validation")
-                return {"success": True, "reason": "Unknown type - no validation"}
-
-        except Exception as e:
-            logger.error(f"Validation error: {e}")
-            return {
-                "success": False,
-                "reason": f"Validation failed: {str(e)}",
-                "details": {}
-            }
-
-    def _validate_python(self) -> Dict[str, Any]:
-        """Validate Python project."""
-        try:
-            # Try pytest
-            result = self.git._run_git(
-                ["bash", "-c", "pytest --co -q 2>/dev/null || echo 'no-pytest'"],
-                check=False
-            )
-            if "no-pytest" not in result.get("stdout", ""):
-                logger.info("  Running pytest...")
-                result = self.git._run_git(
-                    ["bash", "-c", "pytest -x 2>&1"],
-                    check=False
-                )
-                if result.get("returncode") != 0:
-                    return {
-                        "success": False,
-                        "reason": "Python tests failed",
-                        "details": {}
-                    }
-                return {"success": True}
-
-            # Try unittest
-            result = self.git._run_git(
-                ["bash", "-c", "python -m unittest discover -s . 2>&1"],
-                check=False
-            )
-            if result.get("returncode") == 0:
-                return {"success": True}
-
-            # No tests found - just syntax check
-            logger.info("  No tests found, checking syntax...")
-            result = self.git._run_git(
-                ["bash", "-c", "python -m py_compile $(find . -name '*.py') 2>&1"],
-                check=False
-            )
-            return {
-                "success": result.get("returncode") == 0,
-                "reason": "Syntax error" if result.get("returncode") != 0 else None
-            }
-
-        except Exception as e:
-            logger.warning(f"Python validation error: {e}")
-            return {"success": True}  # Non-blocking
-
-    def _validate_java(self) -> Dict[str, Any]:
-        """Validate Java project."""
-        try:
-            # Try Maven
-            if Path(self.git.repo_path / "pom.xml").exists():
-                logger.info("  Running mvn test...")
-                result = self.git._run_git(
-                    ["bash", "-c", "mvn test -q 2>&1"],
-                    check=False
-                )
-                return {
-                    "success": result.get("returncode") == 0,
-                    "reason": "Maven tests failed" if result.get("returncode") != 0 else None
-                }
-
-            # Try Gradle
-            if Path(self.git.repo_path / "build.gradle").exists() or \
-               Path(self.git.repo_path / "build.gradle.kts").exists():
-                logger.info("  Running gradle test...")
-                result = self.git._run_git(
-                    ["bash", "-c", "./gradlew test -q 2>&1"],
-                    check=False
-                )
-                return {
-                    "success": result.get("returncode") == 0,
-                    "reason": "Gradle tests failed" if result.get("returncode") != 0 else None
-                }
-
-            return {"success": True}  # No build system found
-
-        except Exception as e:
-            logger.warning(f"Java validation error: {e}")
-            return {"success": True}
-
-    def _validate_nodejs(self) -> Dict[str, Any]:
-        """Validate Node.js project."""
-        try:
-            logger.info("  Running npm test...")
-            result = self.git._run_git(
-                ["bash", "-c", "npm test 2>&1"],
-                check=False
-            )
-            return {
-                "success": result.get("returncode") == 0,
-                "reason": "npm tests failed" if result.get("returncode") != 0 else None
-            }
-        except Exception as e:
-            logger.warning(f"Node.js validation error: {e}")
-            return {"success": True}
-
-    def _validate_go(self) -> Dict[str, Any]:
-        """Validate Go project."""
-        try:
-            logger.info("  Running go test...")
-            result = self.git._run_git(
-                ["bash", "-c", "go test ./... 2>&1"],
-                check=False
-            )
-            return {
-                "success": result.get("returncode") == 0,
-                "reason": "go tests failed" if result.get("returncode") != 0 else None
-            }
-        except Exception as e:
-            logger.warning(f"Go validation error: {e}")
-            return {"success": True}
-
-    def _validate_rust(self) -> Dict[str, Any]:
-        """Validate Rust project."""
-        try:
-            logger.info("  Running cargo test...")
-            result = self.git._run_git(
-                ["bash", "-c", "cargo test 2>&1"],
-                check=False
-            )
-            return {
-                "success": result.get("returncode") == 0,
-                "reason": "cargo tests failed" if result.get("returncode") != 0 else None
-            }
-        except Exception as e:
-            logger.warning(f"Rust validation error: {e}")
-            return {"success": True}
+        """Delegate to :func:`github_merge_validation.validate_project_after_merge`."""
+        return validate_project_after_merge(self.git, project_type)

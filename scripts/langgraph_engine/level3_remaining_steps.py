@@ -31,6 +31,25 @@ from .plan_convergence import run_planning_loop, assess_plan_quality, DEFAULT_MA
 from .task_validator import validate_breakdown
 from .token_manager import TokenBudget
 
+# Focused sub-modules (extracted helpers)
+from .level3_code_explorer import (
+    tool_read,
+    tool_grep,
+    tool_search,
+    explore_codebase,
+    analyze_directory_structure,
+    find_relevant_files,
+    detect_project_patterns,
+    find_key_files,
+    extract_code_snippets,
+)
+from .level3_llm_retry import (
+    is_llm_retryable,
+    llm_call_with_retry,
+    LLM_MAX_RETRIES,
+    LLM_BACKOFF_DELAYS,
+)
+
 # Optional performance modules
 try:
     from .parallel_executor import run_parallel_step2_exploration
@@ -41,103 +60,28 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# LLM Error Handling Utilities
+# Module-level aliases kept for any code that referenced the private names
+# directly (e.g., tests or subgraphs that imported from this module).
 # ---------------------------------------------------------------------------
-
-# Exponential backoff delays: 1s, 2s, 4s, 8s
-_LLM_BACKOFF_DELAYS: List[float] = [1.0, 2.0, 4.0, 8.0]
-_LLM_MAX_RETRIES: int = 3
 
 T = TypeVar("T")
 
+_LLM_BACKOFF_DELAYS: List[float] = LLM_BACKOFF_DELAYS
+_LLM_MAX_RETRIES: int = LLM_MAX_RETRIES
+
 
 def _is_llm_retryable(exc: Exception) -> bool:
-    """
-    Determine if an LLM exception is transient and worth retrying.
-
-    Retryable: network timeouts, connection errors, server overload,
-               rate limiting, 5xx HTTP errors.
-    Non-retryable: authentication errors, invalid model names,
-                   malformed requests, programming errors.
-    """
-    err_lower = str(exc).lower()
-    # Check for anthropic-specific error types
-    exc_class = type(exc).__name__.lower()
-    transient_keywords = (
-        "timeout", "connection", "rate_limit", "ratelimit", "overloaded",
-        "503", "502", "500", "too many requests", "retry", "network",
-        "unavailable", "refused", "apiconnectionerror", "apitimeouterror",
-        "internalservererror",
-    )
-    return any(kw in err_lower or kw in exc_class for kw in transient_keywords)
+    """Alias for :func:`level3_llm_retry.is_llm_retryable` (backward compat)."""
+    return is_llm_retryable(exc)
 
 
 def _llm_call_with_retry(
     call_fn: Callable[[], T],
     step_name: str,
-    max_retries: int = _LLM_MAX_RETRIES,
+    max_retries: int = LLM_MAX_RETRIES,
 ) -> T:
-    """
-    Execute an LLM call with exponential backoff retry on transient failures.
-
-    On anthropic.APIError or connection errors: retry up to max_retries times
-    with delays: 1s, 2s, 4s, 8s.
-
-    On permanent errors (auth, invalid input): raise immediately.
-
-    Args:
-        call_fn:    No-arg callable that performs the LLM request and returns result.
-        step_name:  Human-readable step name for logging (e.g. "Step 2 Plan").
-        max_retries: Maximum retry attempts before re-raising.
-
-    Returns:
-        Result of call_fn() on success.
-
-    Raises:
-        Last exception if all retries are exhausted.
-    """
-    last_exc: Optional[Exception] = None
-
-    for attempt in range(max_retries + 1):
-        try:
-            return call_fn()
-
-        except Exception as exc:
-            last_exc = exc
-            exc_name = type(exc).__name__
-
-            # Try to import anthropic for specific error detection
-            try:
-                import anthropic as _anthropic
-                is_anthropic_err = isinstance(exc, _anthropic.APIError)
-            except ImportError:
-                is_anthropic_err = False
-
-            is_retryable = is_anthropic_err or _is_llm_retryable(exc)
-
-            if not is_retryable:
-                logger.error(
-                    f"[{step_name}] Non-retryable LLM error ({exc_name}): {exc}"
-                )
-                raise
-
-            if attempt < max_retries:
-                delay = _LLM_BACKOFF_DELAYS[min(attempt, len(_LLM_BACKOFF_DELAYS) - 1)]
-                logger.warning(
-                    f"[{step_name}] LLM error attempt {attempt + 1}/{max_retries} "
-                    f"({exc_name}) - retrying in {delay:.0f}s: {exc}"
-                )
-                time.sleep(delay)
-            else:
-                logger.error(
-                    f"[{step_name}] LLM call failed after {max_retries} retries "
-                    f"({exc_name}): {exc}"
-                )
-
-    # All retries exhausted
-    if last_exc is not None:
-        raise last_exc
-    raise RuntimeError(f"[{step_name}] LLM call failed with no recorded exception")
+    """Alias for :func:`level3_llm_retry.llm_call_with_retry` (backward compat)."""
+    return llm_call_with_retry(call_fn, step_name, max_retries=max_retries)
 
 
 class Level3RemainingSteps:
@@ -442,382 +386,46 @@ Be very specific and actionable - mention actual file paths and existing functio
         }
 
     # ===== TOOL-OPTIMIZED EXPLORATION (WORKFLOW.md: Read, Grep, Search) =====
+    # The heavy logic lives in level3_code_explorer.py.
+    # These thin wrappers bind the session_dir so call sites need no changes.
 
     def _tool_read(self, file_path: str, offset: int = 0, limit: int = 500) -> str:
-        """Simulate Claude's Read tool with offset/limit optimization.
-
-        WORKFLOW.md SPEC: Read (with offset/limit for large files)
-
-        Args:
-            file_path: Path to file relative to project root
-            offset: Starting line number (0-indexed)
-            limit: Maximum lines to read (max 500)
-
-        Returns:
-            File contents from offset to offset+limit
-        """
-        try:
-            # Enforce limit (max 500 lines)
-            if limit > 500:
-                logger.warning(f"Read limit {limit} exceeds max 500, using 500")
-                limit = 500
-
-            full_path = self.session_dir.parent / file_path
-            if not full_path.exists():
-                return f"File not found: {file_path}"
-
-            with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-
-            # Apply offset and limit
-            start = min(offset, len(lines))
-            end = min(start + limit, len(lines))
-            selected_lines = lines[start:end]
-
-            result = f"=== {file_path} (lines {start}-{end}) ===\n"
-            result += "".join(selected_lines)
-            return result
-
-        except Exception as e:
-            return f"Error reading {file_path}: {e}"
+        """Delegate to :func:`level3_code_explorer.tool_read`."""
+        return tool_read(file_path, offset=offset, limit=limit, base_path=self.session_dir.parent)
 
     def _tool_grep(self, pattern: str, glob_pattern: str = "**/*.py", head_limit: int = 20) -> str:
-        """Simulate Claude's Grep tool with head_limit optimization.
-
-        WORKFLOW.md SPEC: Grep (with head_limit)
-
-        Args:
-            pattern: Regex pattern to search for
-            glob_pattern: File glob pattern (e.g., "**/*.py")
-            head_limit: Maximum matches to return (max 50)
-
-        Returns:
-            List of matching files and lines
-        """
-        try:
-            # Enforce head_limit (max 50)
-            if head_limit > 50:
-                logger.warning(f"Grep head_limit {head_limit} exceeds max 50, using 50")
-                head_limit = 50
-
-            root = self.session_dir.parent
-            matches = []
-            match_count = 0
-
-            for file_path in root.glob(glob_pattern):
-                if not file_path.is_file():
-                    continue
-
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        for line_num, line in enumerate(f, 1):
-                            if pattern.lower() in line.lower():
-                                rel_path = file_path.relative_to(root)
-                                matches.append(f"{rel_path}:{line_num}: {line.strip()}")
-                                match_count += 1
-                                if match_count >= head_limit:
-                                    break
-                except Exception:
-                    pass
-
-                if match_count >= head_limit:
-                    break
-
-            result = f"=== Grep: {pattern} ({match_count} matches, limit {head_limit}) ===\n"
-            result += "\n".join(matches[:head_limit])
-            return result
-
-        except Exception as e:
-            return f"Error in grep: {e}"
+        """Delegate to :func:`level3_code_explorer.tool_grep`."""
+        return tool_grep(pattern, glob_pattern=glob_pattern, head_limit=head_limit, base_path=self.session_dir.parent)
 
     def _tool_search(self, query: str, max_results: int = 10) -> str:
-        """Simulate Claude's Search tool with optimization.
-
-        WORKFLOW.md SPEC: Search (with optimization)
-
-        Args:
-            query: Search query
-            max_results: Maximum results to return
-
-        Returns:
-            List of relevant files and context
-        """
-        try:
-            # Limit results
-            max_results = min(max_results, 10)
-
-            root = self.session_dir.parent
-            keywords = query.lower().split()[:5]  # Take first 5 keywords
-            results = {}
-
-            # Search for files matching keywords
-            for file_path in root.rglob("*.py"):
-                if not file_path.is_file():
-                    continue
-
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-
-                    # Count keyword matches
-                    matches = sum(content.lower().count(kw) for kw in keywords)
-                    if matches > 0:
-                        rel_path = file_path.relative_to(root)
-                        results[str(rel_path)] = matches
-
-                except Exception:
-                    pass
-
-            # Sort by match count and return top results
-            sorted_results = sorted(results.items(), key=lambda x: x[1], reverse=True)
-            result = f"=== Search: {query} ({len(sorted_results)} matches) ===\n"
-            result += "\n".join(f"{path}: {count} matches" for path, count in sorted_results[:max_results])
-            return result
-
-        except Exception as e:
-            return f"Error in search: {e}"
+        """Delegate to :func:`level3_code_explorer.tool_search`."""
+        return tool_search(query, max_results=max_results, base_path=self.session_dir.parent)
 
     def _explore_codebase(self, user_requirement: str, project_root: Optional[str] = None) -> str:
-        """
-        Explore codebase using tool-optimized methods (Read, Grep, Search).
-
-        When parallel_executor is available, runs 3+ exploration tasks concurrently
-        for ~50% speedup over sequential execution.
-
-        WORKFLOW.md SPEC: Use exploration tools (Read, Grep, Search)
-        - Read: offset/limit (max 500 lines per file)
-        - Grep: head_limit (max 50 matches)
-        - Search: max_results optimization
-
-        Args:
-            user_requirement: User's requirement to search for related code
-            project_root: Root directory to explore (defaults to session_dir)
-
-        Returns:
-            String containing exploration results from tool calls
-        """
+        """Delegate to :func:`level3_code_explorer.explore_codebase`."""
         if project_root is None:
             project_root = str(self.session_dir)
-
-        # --- Parallel path (preferred) ---
-        if _PERF_AVAILABLE:
-            try:
-                key_files = self._find_key_files(project_root)
-                result = run_parallel_step2_exploration(
-                    user_requirement=user_requirement,
-                    project_root=project_root,
-                    search_fn=self._tool_search,
-                    grep_fn=self._tool_grep,
-                    read_fn=self._tool_read,
-                    key_files=key_files,
-                    max_workers=3,
-                )
-                structure = self._analyze_directory_structure(project_root)
-                result += "\n\n=== PROJECT STRUCTURE ===\n" + structure
-                logger.info("Codebase exploration completed (parallel mode)")
-                return result
-            except Exception as par_err:
-                logger.warning(f"Parallel exploration failed ({par_err}), falling back to sequential")
-
-        # --- Sequential fallback ---
-        try:
-            analysis_parts = []
-
-            # 1. Search for relevant files (TOOL: Search)
-            logger.info("-> Searching for relevant files...")
-            analysis_parts.append("=== SEARCH RESULTS ===")
-            search_result = self._tool_search(user_requirement, max_results=10)
-            analysis_parts.append(search_result)
-
-            # 2. Grep for keyword matches (TOOL: Grep with head_limit)
-            logger.info("-> Finding code patterns...")
-            analysis_parts.append("\n=== CODE PATTERNS (Grep with head_limit=20) ===")
-            keywords = user_requirement.lower().split()[:3]
-            if keywords:
-                for keyword in keywords:
-                    grep_result = self._tool_grep(keyword, glob_pattern="**/*.py", head_limit=20)
-                    analysis_parts.append(grep_result)
-            else:
-                analysis_parts.append("(No keywords to search)")
-
-            # 3. Read key files (TOOL: Read with offset/limit)
-            logger.info("-> Reading key file contents...")
-            analysis_parts.append("\n=== KEY FILE CONTENTS (Read with limit=500) ===")
-            key_files = self._find_key_files(project_root)
-            for file_type, files in key_files.items():
-                if files:
-                    for file_path in files[:2]:  # Read first 2 key files
-                        try:
-                            read_result = self._tool_read(file_path, offset=0, limit=500)
-                            analysis_parts.append(f"\n{read_result}")
-                        except Exception as e:
-                            logger.debug(f"Could not read {file_path}: {e}")
-
-            # 4. Project structure (informational)
-            analysis_parts.append("\n=== PROJECT STRUCTURE ===")
-            structure = self._analyze_directory_structure(project_root)
-            analysis_parts.append(structure)
-
-            logger.info("Codebase exploration completed (sequential mode)")
-            return "\n".join(analysis_parts)
-
-        except Exception as e:
-            logger.warning(f"Codebase exploration partial: {e}")
-            return f"Could not fully explore codebase: {str(e)}"
+        return explore_codebase(user_requirement, project_root, base_path=self.session_dir.parent)
 
     def _analyze_directory_structure(self, root: str, max_depth: int = 2) -> str:
-        """Analyze directory structure."""
-        try:
-            root_path = Path(root)
-            if not root_path.exists():
-                return f"Directory not found: {root}"
-
-            lines = []
-            lines.append(f"Root: {root_path.name}/")
-
-            # List key directories
-            for item in sorted(root_path.iterdir()):
-                if item.is_dir() and not item.name.startswith('.'):
-                    lines.append(f"  📁 {item.name}/")
-                    # Count files in this dir
-                    file_count = len(list(item.glob("*.*")))
-                    if file_count > 0:
-                        lines.append(f"      ({file_count} files)")
-
-            return "\n".join(lines[:20])  # Limit output
-        except Exception as e:
-            return f"Structure analysis failed: {e}"
+        """Delegate to :func:`level3_code_explorer.analyze_directory_structure`."""
+        return analyze_directory_structure(root, max_depth=max_depth)
 
     def _find_relevant_files(self, requirement: str, root: str) -> List[str]:
-        """Find files related to the requirement using keyword matching."""
-        try:
-            root_path = Path(root)
-            if not root_path.exists():
-                return []
-
-            relevant = []
-            keywords = requirement.lower().split()[:5]  # Get first 5 keywords
-
-            # Search for Python files with matching names or content
-            for pattern in ["*.py", "*.java", "*.js", "*.ts", "*.go"]:
-                for file_path in root_path.rglob(pattern):
-                    if file_path.is_file() and ".git" not in str(file_path):
-                        # Check filename for keywords
-                        filename_lower = file_path.name.lower()
-                        for keyword in keywords:
-                            if keyword in filename_lower and len(keyword) > 2:
-                                relevant.append(str(file_path.relative_to(root_path)))
-                                break
-
-            return list(set(relevant))[:10]
-        except Exception as e:
-            logger.debug(f"File search failed: {e}")
-            return []
+        """Delegate to :func:`level3_code_explorer.find_relevant_files`."""
+        return find_relevant_files(requirement, root)
 
     def _detect_project_patterns(self, root: str) -> str:
-        """Detect programming language and architectural patterns."""
-        try:
-            root_path = Path(root)
-            patterns = []
-
-            # Check file extensions
-            extensions = {}
-            for file_path in root_path.rglob("*.*"):
-                if ".git" not in str(file_path):
-                    ext = file_path.suffix
-                    extensions[ext] = extensions.get(ext, 0) + 1
-
-            # Identify primary language
-            language_map = {
-                ".py": "Python",
-                ".java": "Java",
-                ".js": "JavaScript",
-                ".ts": "TypeScript",
-                ".go": "Go",
-                ".rs": "Rust",
-            }
-
-            primary_lang = None
-            max_count = 0
-            for ext, lang in language_map.items():
-                if extensions.get(ext, 0) > max_count:
-                    max_count = extensions[ext]
-                    primary_lang = lang
-
-            if primary_lang:
-                patterns.append(f"Primary Language: {primary_lang} ({max_count} files)")
-
-            # Check for common frameworks/tools
-            for name in ["requirements.txt", "package.json", "go.mod", "Cargo.toml", "pom.xml"]:
-                if (root_path / name).exists():
-                    patterns.append(f"Found: {name} (dependency manifest)")
-
-            for name in [".git", "docker-compose.yml", "Dockerfile", ".github"]:
-                if (root_path / name).exists():
-                    patterns.append(f"Found: {name}")
-
-            return "\n".join(patterns) if patterns else "No specific patterns detected"
-
-        except Exception as e:
-            return f"Pattern detection incomplete: {e}"
+        """Delegate to :func:`level3_code_explorer.detect_project_patterns`."""
+        return detect_project_patterns(root)
 
     def _find_key_files(self, root: str) -> Dict[str, List[str]]:
-        """Find key architectural files (config, main, test, etc)."""
-        try:
-            root_path = Path(root)
-            key_files = {
-                "Config": [],
-                "Main/Entry": [],
-                "Tests": [],
-                "Documentation": []
-            }
-
-            config_patterns = ["config.py", "settings.py", "requirements.txt", ".env"]
-            main_patterns = ["main.py", "app.py", "index.py", "main.java", "app.js"]
-            test_patterns = ["test_*.py", "*_test.py", "*.test.js", "*Test.java"]
-            doc_patterns = ["README.md", "ARCHITECTURE.md", "DESIGN.md"]
-
-            for pattern in config_patterns:
-                files = list(root_path.rglob(pattern))
-                key_files["Config"].extend([f.relative_to(root_path).as_posix() for f in files])
-
-            for pattern in main_patterns:
-                files = list(root_path.rglob(pattern))
-                key_files["Main/Entry"].extend([f.relative_to(root_path).as_posix() for f in files])
-
-            for pattern in test_patterns:
-                files = list(root_path.rglob(pattern))
-                key_files["Tests"].extend([f.relative_to(root_path).as_posix() for f in files])
-
-            for pattern in doc_patterns:
-                files = list(root_path.rglob(pattern))
-                key_files["Documentation"].extend([f.relative_to(root_path).as_posix() for f in files])
-
-            return key_files
-        except Exception:
-            return {k: [] for k in ["Config", "Main/Entry", "Tests", "Documentation"]}
+        """Delegate to :func:`level3_code_explorer.find_key_files`."""
+        return find_key_files(root)
 
     def _extract_code_snippets(self, file_paths: List[str], max_files: int = 3) -> str:
-        """Extract relevant code snippets from files."""
-        try:
-            snippets = []
-            for file_path in file_paths[:max_files]:
-                try:
-                    full_path = self.session_dir / file_path
-                    if full_path.exists() and full_path.is_file():
-                        with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-                            lines = f.readlines()
-                            # Get first 15 lines (imports, class/function defs)
-                            snippet = "".join(lines[:15])
-                            if len(snippet) > 200:
-                                snippet = snippet[:200] + "..."
-                            snippets.append(f"\n### {file_path}:\n{snippet}")
-                except Exception:
-                    pass
-
-            return "".join(snippets) if snippets else "(No code snippets available)"
-        except Exception as e:
-            return f"Code extraction failed: {e}"
+        """Delegate to :func:`level3_code_explorer.extract_code_snippets`."""
+        return extract_code_snippets(file_paths, max_files=max_files, base_path=self.session_dir)
 
     # ===== STEP 3: TASK BREAKDOWN =====
 

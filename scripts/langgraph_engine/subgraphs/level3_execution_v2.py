@@ -45,6 +45,7 @@ except ImportError:
 
 from ..flow_state import FlowState
 from ..step_logger import write_level_log
+from ..rag_integration import rag_store_after_node, get_rag_layer
 from .level3_execution import (
     step0_task_analysis,
     step1_plan_mode_decision,
@@ -366,6 +367,13 @@ def _run_step(
 
         # Write step log to session directory
         _write_step_log(state, step_number, step_label, "OK", duration, result)
+
+        # Store node decision in Vector DB for RAG (non-blocking)
+        try:
+            step_key = f"step{step_number}"
+            rag_store_after_node(step=step_key, decision=result or {}, state=dict(state))
+        except Exception:
+            pass  # RAG storage is never fatal
 
         if result is not None:
             result[f"step{step_number}_execution_time_ms"] = duration * 1000

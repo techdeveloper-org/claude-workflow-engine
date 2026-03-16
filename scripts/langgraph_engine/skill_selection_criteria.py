@@ -25,8 +25,106 @@ Task dict schema (subset used here):
     }
 """
 
+import json
+from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional, Set
 from loguru import logger
+
+
+# ---------------------------------------------------------------------------
+# Cross-session learning: RAG-based skill boost + pattern detection
+# ---------------------------------------------------------------------------
+
+# Cache for pattern data (loaded once per process)
+_pattern_cache = None  # type: Optional[Dict]
+
+
+def _load_cross_project_patterns():
+    """Load cross-project patterns from detect-patterns output."""
+    global _pattern_cache
+    if _pattern_cache is not None:
+        return _pattern_cache
+
+    patterns_file = Path.home() / ".claude" / "memory" / "cross-project-patterns.json"
+    try:
+        if patterns_file.exists():
+            _pattern_cache = json.loads(patterns_file.read_text(encoding="utf-8"))
+        else:
+            _pattern_cache = {"patterns": []}
+    except Exception:
+        _pattern_cache = {"patterns": []}
+    return _pattern_cache
+
+
+def _get_rag_skill_boost(task, skill):
+    """Get RAG-based boost for a skill based on historical success patterns.
+
+    Checks two sources:
+    1. Vector DB: Search for past sessions where this skill was used for similar tasks
+    2. Cross-project patterns: Boost if skill matches detected technology patterns
+
+    Returns a bonus score between 0.0 and 0.15.
+    """
+    boost = 0.0
+    skill_name = (skill.get("name") or "").lower()
+    task_type = (task.get("task_type") or task.get("type") or "").lower()
+
+    if not skill_name:
+        return 0.0
+
+    # Source 1: Vector DB RAG lookup (past skill selections)
+    try:
+        from .rag_integration import _get_vector_functions
+        vf = _get_vector_functions()
+        if vf.get("available"):
+            query = f"step5 skill selection {skill_name} {task_type}"
+            result_json = vf["search"](
+                query=query,
+                collection="node_decisions",
+                limit=3,
+                min_score=0.70,
+                filter_field="step",
+                filter_value="step5",
+            )
+            result = json.loads(result_json)
+            matches = result.get("matches", [])
+            if matches:
+                # Found past successful use of this skill
+                best_score = matches[0].get("score", 0)
+                # Scale: 0.70-1.0 score -> 0.0-0.10 boost
+                if best_score >= 0.70:
+                    boost += min(0.10, (best_score - 0.70) * 0.33)
+    except Exception:
+        pass  # RAG lookup failure is non-fatal
+
+    # Source 2: Cross-project pattern matching
+    try:
+        patterns_data = _load_cross_project_patterns()
+        patterns = patterns_data.get("patterns", [])
+
+        # Map skill names to technology keywords
+        skill_keywords = set()
+        skill_keywords.add(skill_name)
+        # Extract keywords from skill name (e.g., "java-spring-boot" -> {"java", "spring", "boot"})
+        for part in skill_name.replace("-", " ").replace("_", " ").split():
+            skill_keywords.add(part.lower())
+
+        # Check if any detected patterns match skill keywords
+        matching_patterns = 0
+        for pattern in patterns:
+            pattern_name = (pattern.get("name") or "").lower()
+            if pattern_name in skill_keywords:
+                confidence = pattern.get("confidence", 0)
+                if confidence >= 0.6:
+                    matching_patterns += 1
+
+        # Scale: 1+ pattern matches -> up to 0.05 boost
+        if matching_patterns > 0:
+            boost += min(0.05, matching_patterns * 0.025)
+    except Exception:
+        pass  # Pattern detection failure is non-fatal
+
+    return min(boost, 0.15)
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +325,12 @@ def score_skill(task: Dict[str, Any], skill: Dict[str, Any]) -> float:
     if task_tags and skill_tags:
         overlap = len(task_tags & skill_tags) / max(len(task_tags), 1)
         score += 0.10 * min(overlap, 1.0)
+
+    # Cross-session RAG boost (up to +0.15 bonus)
+    # If this skill was successfully used for similar tasks in the past,
+    # boost its score based on historical success patterns.
+    rag_boost = _get_rag_skill_boost(task, skill)
+    score += rag_boost
 
     return min(score, 1.0)
 

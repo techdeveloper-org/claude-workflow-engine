@@ -53,7 +53,7 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
 | Session Bridge | src/mcp/session_hooks.py | MCP direct import bridge |
 
-### MCP Servers (11 servers, 102 tools)
+### MCP Servers (11 servers, 103 tools)
 
 All registered in `~/.claude/settings.json`. Version synced via `scripts/sync-version.py`.
 
@@ -69,14 +69,23 @@ All registered in `~/.claude/settings.json`. Version synced via `scripts/sync-ve
 | post-tool-tracker | post_tool_tracker_mcp_server.py | 6 | Post-tool tracking (progress, commit readiness, stats) |
 | standards-loader | standards_loader_mcp_server.py | 7 | Standards (project detect, framework detect, hot-reload) |
 | skill-manager | skill_manager_mcp_server.py | 8 | Skill lifecycle (load, search, validate, rank, conflicts) |
-| vector-db | vector_db_mcp_server.py | 10 | Vector RAG (Qdrant, 3 collections, semantic search, bulk index) |
+| vector-db | vector_db_mcp_server.py | 11 | Vector RAG (Qdrant, 4 collections, semantic search, bulk index, node decisions) |
+
+### RAG Integration (NEW)
+
+Every LangGraph node stores its decision in Vector DB (`node_decisions` collection).
+Before LLM calls, the pipeline checks RAG for similar past decisions.
+If confidence > threshold, RAG result replaces LLM call (saving inference time).
+
+Key module: `scripts/langgraph_engine/rag_integration.py`
+Collections: `node_decisions`, `sessions`, `flow_traces`, `tool_calls`
 
 ### Execution Modes
 
 ```
 Hook Mode (default, CLAUDE_HOOK_MODE=1):
   Steps 0-7 -> PreToolUse hook -> output prompt to Claude
-  Steps 8-14 -> deferred to Stop hook after Claude finishes
+  Steps 8-14 -> Stop hook auto-executes (PR, issue close, docs, summary)
 
 Full Mode (CLAUDE_HOOK_MODE=0):
   Steps 0-14 -> sequential (no user interaction mid-pipeline)

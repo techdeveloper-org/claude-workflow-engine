@@ -580,7 +580,7 @@ def check_module_health() -> str:
 
 @mcp.tool()
 def check_all_mcp_servers_health() -> str:
-    """Check health of all 10 MCP servers by importing each one.
+    """Check health of all 11 MCP servers by importing each one.
 
     Returns import status, tool count, and file size for each server.
     This is a quick health check - does NOT start the servers, just verifies
@@ -601,6 +601,7 @@ def check_all_mcp_servers_health() -> str:
             ("post-tool-tracker", "post_tool_tracker_mcp_server.py"),
             ("standards-loader", "standards_loader_mcp_server.py"),
             ("skill-manager", "skill_manager_mcp_server.py"),
+            ("vector-db", "vector_db_mcp_server.py"),
         ]
 
         results = []
@@ -722,6 +723,19 @@ def check_system_health() -> str:
         except Exception as e:
             health["components"]["vector_db"] = {"status": "ERROR", "error": str(e)[:100]}
 
+        # Vector DB: verify collections are accessible
+        try:
+            _src_mcp = Path(__file__).resolve().parent
+            if str(_src_mcp) not in sys.path:
+                sys.path.insert(0, str(_src_mcp))
+            from vector_db_mcp_server import vector_health_check
+            import json as _json_mod
+            vdb_result = _json_mod.loads(vector_health_check())
+            health["vector_db_healthy"] = vdb_result.get("healthy", False)
+            health["vector_db_collections"] = vdb_result.get("collections", {})
+        except Exception:
+            health["vector_db_healthy"] = False
+
         # 4. LLM Providers (async-style concurrent check)
         providers_status = {}
         import concurrent.futures
@@ -736,7 +750,18 @@ def check_system_health() -> str:
                 latency = round((_time.time() - start) * 1000)
                 if r.status_code == 200:
                     models = r.json().get("models", [])
-                    return {"status": "HEALTHY", "latency_ms": latency, "models": len(models)}
+                    result = {"status": "HEALTHY", "latency_ms": latency, "models": len(models)}
+                    # Quick Ollama inference test (5s timeout)
+                    try:
+                        resp = requests.post(
+                            f"{url}/api/generate",
+                            json={"model": "qwen2.5:7b", "prompt": "test", "stream": False},
+                            timeout=5,
+                        )
+                        result["ollama_inference"] = resp.status_code == 200
+                    except Exception:
+                        result["ollama_inference"] = False
+                    return result
                 return {"status": "ERROR", "code": r.status_code}
             except Exception as e:
                 return {"status": "UNAVAILABLE", "error": str(e)[:80]}
@@ -811,10 +836,14 @@ def check_system_health() -> str:
             memory_dir = Path.home() / ".claude" / "memory"
             if memory_dir.exists():
                 total_size = sum(f.stat().st_size for f in memory_dir.rglob("*") if f.is_file())
+                memory_dir_mb = round(total_size / (1024 * 1024), 2)
                 health["components"]["disk"] = {
-                    "memory_dir_mb": round(total_size / (1024 * 1024), 2),
+                    "memory_dir_mb": memory_dir_mb,
                     "path": str(memory_dir),
                 }
+                if memory_dir_mb > 500:
+                    unhealthy.append("disk_usage_high")
+                    health["disk_warning"] = f"Memory dir is {memory_dir_mb:.0f}MB (threshold: 500MB)"
         except Exception:
             pass
 
