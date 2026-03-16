@@ -118,8 +118,9 @@ Default threshold: 0.82 (step-specific: 0.75-0.90)
 
 ```
 Hook Mode (default, CLAUDE_HOOK_MODE=1):
-  Steps 0-7  -> PreToolUse hook -> output prompt to Claude
-  Steps 8-14 -> Stop hook auto-executes (PR, issue close, docs, summary)
+  Steps 0-9   -> Pipeline (analysis + prompt + GitHub issue + branch)
+  Step 10      -> Claude Code itself (user implements with generated prompt)
+  Steps 11-14 -> Stop hook auto-executes (PR, issue close, docs, summary)
 
 Full Mode (CLAUDE_HOOK_MODE=0):
   Steps 0-14 -> sequential (no user interaction mid-pipeline)
