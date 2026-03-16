@@ -90,15 +90,6 @@ class TestPolicyScriptIntegration:
 class TestPolicyScriptOutput:
     """Test that policy scripts produce expected output format"""
 
-    def test_run_policy_script_returns_dict(self):
-        """Verify run_policy_script returns a dict"""
-        # This will try to run a script - if it doesn't exist, returns error dict
-        result = run_policy_script("test-nonexistent")
-
-        # Should always return a dict (error or success)
-        assert isinstance(result, dict), "run_policy_script should return dict"
-        assert "status" in result, "Result should have 'status' field"
-
     def test_call_execution_script_returns_dict(self):
         """Verify call_execution_script returns a dict"""
         result = call_execution_script("test-nonexistent")

@@ -1216,6 +1216,7 @@ def create_initial_state(session_id: str = "", project_root: str = "", user_mess
     # project_root is Annotated[_keep_first_value] so once set, it can't change
     # We must set it to the correct value BEFORE creating the state
     import sys
+    import os
     print(f"[CREATE_INITIAL_STATE] Input project_root: '{project_root}'", file=sys.stderr)
     if not project_root:
         # Use cwd from hook event or actual cwd - NOT hardcoded path
