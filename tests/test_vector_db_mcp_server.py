@@ -80,7 +80,8 @@ class TestVectorCollectionStats:
             assert "tool_calls" in result["collections"]
             assert "sessions" in result["collections"]
             assert "flow_traces" in result["collections"]
-            assert result["total_points"] == 30  # 10 per collection
+            assert "node_decisions" in result["collections"]
+            assert result["total_points"] == 40  # 10 per 4 collections
 
 
 class TestVectorIndexToolCall:
