@@ -1,6 +1,6 @@
 # Claude Workflow Engine
 
-**Version:** 7.3.0
+**Version:** 7.4.0
 **Status:** Active Development
 **Last Updated:** 2026-03-16
 

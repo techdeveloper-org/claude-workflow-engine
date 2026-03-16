@@ -3,8 +3,9 @@
 Version Sync - Single source of truth from VERSION file.
 
 Reads VERSION file and updates all references across the project:
-- README.md (line: **Version:** X.Y.Z)
+- README.md (line: **Version:** X.Y.Z + Last Updated)
 - CLAUDE.md (line: **Version:** X.Y.Z + Last Updated)
+- docs/SYSTEM_REQUIREMENTS_SPECIFICATION.md (title + Last Updated)
 - setup.py (already reads VERSION dynamically)
 
 Usage:
@@ -37,6 +38,17 @@ TARGETS = [
         "patterns": [
             (r"\*\*Version:\*\*\s*[\d.]+", f"**Version:** {{version}}"),
             (r"\*\*Last Updated:\*\*\s*\d{4}-\d{2}-\d{2}", f"**Last Updated:** {TODAY}"),
+        ],
+    },
+    {
+        "file": PROJECT_ROOT / "docs" / "SYSTEM_REQUIREMENTS_SPECIFICATION.md",
+        "patterns": [
+            # Title: # Claude Workflow Engine v7.3.0 - System Requirements Specification
+            (r"# Claude Workflow Engine v[\d.]+ -", f"# Claude Workflow Engine v{{version}} -"),
+            (r"\*\*Last Updated:\*\*\s*\d{4}-\d{2}-\d{2}", f"**Last Updated:** {TODAY}"),
+            (r"\*\*Release Date:\*\*\s*\d{4}-\d{2}-\d{2}", f"**Release Date:** {TODAY}"),
+            # Version in key stats table: | **Version** | 7.3.0 |
+            (r"(\| \*\*Version\*\* \| )[\d.]+", f"\\g<1>{{version}}"),
         ],
     },
 ]
