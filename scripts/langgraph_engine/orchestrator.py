@@ -22,11 +22,11 @@ from typing import Literal, Optional
 
 try:
     from langgraph.graph import StateGraph, START, END
-    # Send not available in LangGraph 0.2.0
-# from langgraph.types import Send, Command
     _LANGGRAPH_AVAILABLE = True
 except ImportError:
     _LANGGRAPH_AVAILABLE = False
+
+from .checkpointer import CheckpointerManager
 
 from .flow_state import FlowState, WorkflowContextOptimizer, StepKeys
 
@@ -1132,7 +1132,11 @@ def create_flow_graph(hook_mode: bool = False):
         graph.add_edge("level3_merge", "output_node")
         graph.add_edge("output_node", END)
 
-        compiled_graph = graph.compile()
+        try:
+            checkpointer = CheckpointerManager.get_default_checkpointer(use_sqlite=True)
+            compiled_graph = graph.compile(checkpointer=checkpointer)
+        except Exception:
+            compiled_graph = graph.compile()
         return compiled_graph
 
     # ========================================================================
@@ -1189,9 +1193,14 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_edge("level3_merge", "output_node")
     graph.add_edge("output_node", END)
 
-    # Compile graph WITHOUT checkpointer to avoid session_id conflicts
-    # TODO: Add checkpointer support after fixing state merge issues
-    compiled_graph = graph.compile()
+    # Compile graph with SqliteSaver checkpointer for state persistence
+    # Enables resume from any step if pipeline is interrupted
+    try:
+        checkpointer = CheckpointerManager.get_default_checkpointer(use_sqlite=True)
+        compiled_graph = graph.compile(checkpointer=checkpointer)
+    except Exception:
+        # Fallback to no checkpointer if SQLite setup fails
+        compiled_graph = graph.compile()
     return compiled_graph
 
 

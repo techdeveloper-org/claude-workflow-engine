@@ -15,6 +15,7 @@ Resources (2):
 """
 
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -652,6 +653,180 @@ def enforcement_status_resource() -> str:
 def enforcement_compliance_resource() -> str:
     """Policy compliance report."""
     return verify_compliance()
+
+
+@mcp.tool()
+def check_system_health() -> str:
+    """Comprehensive system health check across all components.
+
+    Checks: MCP servers, checkpoint DB, vector DB, LLM providers,
+    orchestrator graph, and disk usage. Returns aggregated health status.
+    """
+    try:
+        health = {
+            "timestamp": datetime.now().isoformat(),
+            "components": {},
+            "overall": "HEALTHY",
+        }
+        unhealthy = []
+
+        # 1. MCP Servers health
+        try:
+            mcp_result = json.loads(check_all_mcp_servers_health())
+            health["components"]["mcp_servers"] = {
+                "status": "HEALTHY" if mcp_result.get("all_healthy") else "DEGRADED",
+                "healthy": mcp_result.get("healthy", 0),
+                "total": mcp_result.get("total", 0),
+            }
+            if not mcp_result.get("all_healthy"):
+                unhealthy.append("mcp_servers")
+        except Exception as e:
+            health["components"]["mcp_servers"] = {"status": "ERROR", "error": str(e)[:100]}
+            unhealthy.append("mcp_servers")
+
+        # 2. Checkpoint DB
+        try:
+            db_path = Path.home() / ".claude" / "memory" / "langgraph-checkpoints.db"
+            if db_path.exists():
+                import sqlite3
+                conn = sqlite3.connect(str(db_path))
+                conn.execute("SELECT 1")
+                conn.close()
+                health["components"]["checkpoint_db"] = {
+                    "status": "HEALTHY",
+                    "path": str(db_path),
+                    "size_kb": round(db_path.stat().st_size / 1024, 1),
+                }
+            else:
+                health["components"]["checkpoint_db"] = {
+                    "status": "NOT_INITIALIZED",
+                    "path": str(db_path),
+                }
+        except Exception as e:
+            health["components"]["checkpoint_db"] = {"status": "ERROR", "error": str(e)[:100]}
+            unhealthy.append("checkpoint_db")
+
+        # 3. Vector DB (Qdrant)
+        try:
+            vector_db_path = Path.home() / ".claude" / "memory" / "vector_db"
+            if vector_db_path.exists():
+                health["components"]["vector_db"] = {
+                    "status": "INITIALIZED",
+                    "path": str(vector_db_path),
+                    "size_kb": round(
+                        sum(f.stat().st_size for f in vector_db_path.rglob("*") if f.is_file()) / 1024, 1
+                    ),
+                }
+            else:
+                health["components"]["vector_db"] = {"status": "NOT_INITIALIZED"}
+        except Exception as e:
+            health["components"]["vector_db"] = {"status": "ERROR", "error": str(e)[:100]}
+
+        # 4. LLM Providers (async-style concurrent check)
+        providers_status = {}
+        import concurrent.futures
+        import time as _time
+
+        def _check_ollama():
+            try:
+                import requests
+                url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+                start = _time.time()
+                r = requests.get(f"{url}/api/tags", timeout=3)
+                latency = round((_time.time() - start) * 1000)
+                if r.status_code == 200:
+                    models = r.json().get("models", [])
+                    return {"status": "HEALTHY", "latency_ms": latency, "models": len(models)}
+                return {"status": "ERROR", "code": r.status_code}
+            except Exception as e:
+                return {"status": "UNAVAILABLE", "error": str(e)[:80]}
+
+        def _check_anthropic():
+            try:
+                api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+                if not api_key:
+                    return {"status": "NO_API_KEY"}
+                return {"status": "CONFIGURED", "key_prefix": api_key[:8] + "..."}
+            except Exception as e:
+                return {"status": "ERROR", "error": str(e)[:80]}
+
+        def _check_claude_cli():
+            try:
+                import subprocess
+                start = _time.time()
+                result = subprocess.run(
+                    ["claude", "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                latency = round((_time.time() - start) * 1000)
+                if result.returncode == 0:
+                    return {"status": "HEALTHY", "latency_ms": latency,
+                            "version": result.stdout.strip()[:50]}
+                return {"status": "ERROR", "code": result.returncode}
+            except FileNotFoundError:
+                return {"status": "NOT_INSTALLED"}
+            except Exception as e:
+                return {"status": "ERROR", "error": str(e)[:80]}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(_check_ollama): "ollama",
+                executor.submit(_check_anthropic): "anthropic",
+                executor.submit(_check_claude_cli): "claude_cli",
+            }
+            for future in concurrent.futures.as_completed(futures, timeout=10):
+                name = futures[future]
+                try:
+                    providers_status[name] = future.result()
+                except Exception as e:
+                    providers_status[name] = {"status": "TIMEOUT", "error": str(e)[:80]}
+
+        health["components"]["llm_providers"] = providers_status
+
+        any_llm_healthy = any(
+            v.get("status") in ("HEALTHY", "CONFIGURED")
+            for v in providers_status.values()
+        )
+        if not any_llm_healthy:
+            unhealthy.append("llm_providers")
+
+        # 5. Policy modules
+        try:
+            mod_result = json.loads(check_module_health())
+            verified = mod_result.get("verified_ok", 0)
+            total = mod_result.get("total_modules", 0)
+            health["components"]["policy_modules"] = {
+                "status": "HEALTHY" if verified == total else "DEGRADED",
+                "verified": verified,
+                "total": total,
+                "missing": mod_result.get("missing", []),
+            }
+            if verified < total:
+                unhealthy.append("policy_modules")
+        except Exception as e:
+            health["components"]["policy_modules"] = {"status": "ERROR", "error": str(e)[:100]}
+
+        # 6. Disk usage
+        try:
+            memory_dir = Path.home() / ".claude" / "memory"
+            if memory_dir.exists():
+                total_size = sum(f.stat().st_size for f in memory_dir.rglob("*") if f.is_file())
+                health["components"]["disk"] = {
+                    "memory_dir_mb": round(total_size / (1024 * 1024), 2),
+                    "path": str(memory_dir),
+                }
+        except Exception:
+            pass
+
+        # Overall status
+        if unhealthy:
+            health["overall"] = "DEGRADED"
+            health["unhealthy_components"] = unhealthy
+
+        health["success"] = True
+        return _json(health)
+    except Exception as e:
+        return _json({"success": False, "error": str(e), "overall": "ERROR"})
 
 
 if __name__ == "__main__":

@@ -181,43 +181,156 @@ def llm_list_models() -> str:
         return _json({"success": False, "error": str(e)})
 
 
+# Health check cache (60s TTL)
+_health_cache = {"timestamp": 0, "result": None}
+_HEALTH_CACHE_TTL = 60
+
+
 @mcp.tool()
-def llm_health_check() -> str:
-    """Check health and availability of all configured LLM providers."""
+def llm_health_check(force_refresh: bool = False) -> str:
+    """Check health and availability of all LLM providers concurrently.
+
+    Runs parallel health probes to Ollama, Claude CLI, Anthropic API, and OpenAI.
+    Results are cached for 60 seconds to avoid repeated slow checks.
+
+    Args:
+        force_refresh: If True, bypass cache and re-probe all providers
+    """
+    import time as _time
+
+    # Return cached result if fresh
+    if not force_refresh and _health_cache["result"]:
+        age = _time.time() - _health_cache["timestamp"]
+        if age < _HEALTH_CACHE_TTL:
+            cached = json.loads(_health_cache["result"])
+            cached["from_cache"] = True
+            cached["cache_age_s"] = round(age, 1)
+            return _json(cached)
+
     try:
-        mod = _get_llm_module()
-        if "error" in mod:
-            return _json({
-                "success": False,
-                "error": f"LLM module not available: {mod['error']}"
-            })
+        import concurrent.futures
 
         results = {}
-        for p in mod["provider_chain"]:
-            available = p.is_available()
-            results[p.name] = {
-                "available": available,
-                "status": "healthy" if available else "unavailable"
+
+        def _probe_ollama():
+            try:
+                import urllib.request
+                endpoint = os.getenv("OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
+                start = _time.time()
+                req = urllib.request.Request(f"{endpoint}/api/tags", method="GET")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    latency = round((_time.time() - start) * 1000)
+                    data = json.loads(resp.read().decode())
+                    models = [m.get("name", "") for m in data.get("models", [])]
+                    return {
+                        "available": True, "status": "healthy",
+                        "latency_ms": latency, "endpoint": endpoint,
+                        "models": models, "model_count": len(models),
+                    }
+            except Exception as e:
+                return {"available": False, "status": "unavailable", "error": str(e)[:80]}
+
+        def _probe_claude_cli():
+            try:
+                import subprocess
+                start = _time.time()
+                result = subprocess.run(
+                    ["claude", "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                latency = round((_time.time() - start) * 1000)
+                if result.returncode == 0:
+                    return {
+                        "available": True, "status": "healthy",
+                        "latency_ms": latency,
+                        "version": result.stdout.strip()[:50],
+                    }
+                return {"available": False, "status": "error", "code": result.returncode}
+            except FileNotFoundError:
+                return {"available": False, "status": "not_installed"}
+            except Exception as e:
+                return {"available": False, "status": "error", "error": str(e)[:80]}
+
+        def _probe_anthropic():
+            api_key = os.getenv("ANTHROPIC_API_KEY", "")
+            if not api_key:
+                return {"available": False, "status": "no_api_key", "has_api_key": False}
+            try:
+                import urllib.request
+                start = _time.time()
+                req = urllib.request.Request(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Content-Type": "application/json",
+                    },
+                    data=json.dumps({
+                        "model": "claude-haiku-4-5-20251001",
+                        "max_tokens": 1,
+                        "messages": [{"role": "user", "content": "hi"}],
+                    }).encode(),
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    latency = round((_time.time() - start) * 1000)
+                    return {
+                        "available": True, "status": "healthy",
+                        "latency_ms": latency, "has_api_key": True,
+                    }
+            except Exception as e:
+                err_str = str(e)[:80]
+                # 401 = bad key, but connection works
+                if "401" in err_str:
+                    return {"available": False, "status": "invalid_key", "has_api_key": True}
+                # Any HTTP error means API is reachable
+                if "HTTP Error" in err_str:
+                    return {"available": True, "status": "reachable", "has_api_key": True}
+                return {"available": False, "status": "error", "error": err_str, "has_api_key": True}
+
+        def _probe_openai():
+            api_key = os.getenv("OPENAI_API_KEY", "")
+            if not api_key:
+                return {"available": False, "status": "no_api_key", "has_api_key": False}
+            return {"available": True, "status": "configured", "has_api_key": True}
+
+        # Run all probes concurrently
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {
+                executor.submit(_probe_ollama): "ollama",
+                executor.submit(_probe_claude_cli): "claude_cli",
+                executor.submit(_probe_anthropic): "anthropic",
+                executor.submit(_probe_openai): "openai",
             }
+            for future in concurrent.futures.as_completed(futures, timeout=15):
+                name = futures[future]
+                try:
+                    results[name] = future.result()
+                except Exception as e:
+                    results[name] = {"available": False, "status": "timeout", "error": str(e)[:80]}
 
-            # Provider-specific health info
-            if p.name == "ollama" and hasattr(p, "_endpoint"):
-                results[p.name]["endpoint"] = p._endpoint
-            elif p.name == "claude_cli" and hasattr(p, "_claude_path"):
-                results[p.name]["cli_path"] = p._claude_path
-            elif p.name == "anthropic":
-                results[p.name]["has_api_key"] = bool(os.getenv("ANTHROPIC_API_KEY"))
-            elif p.name == "openai":
-                results[p.name]["has_api_key"] = bool(os.getenv("OPENAI_API_KEY"))
+        any_healthy = any(r.get("available") for r in results.values())
 
-        any_healthy = any(r["available"] for r in results.values())
+        # Also include module-level provider chain info
+        mod = _get_llm_module()
+        active_chain = []
+        if "error" not in mod:
+            active_chain = mod["get_active_providers"]()
 
-        return _json({
+        output = {
             "success": True,
             "healthy": any_healthy,
             "providers": results,
-            "active_chain": mod["get_active_providers"]()
-        })
+            "active_chain": active_chain,
+            "from_cache": False,
+            "checked_at": _time.time(),
+        }
+
+        # Cache the result
+        _health_cache["timestamp"] = _time.time()
+        _health_cache["result"] = _json(output)
+
+        return _json(output)
     except Exception as e:
         return _json({"success": False, "error": str(e)})
 

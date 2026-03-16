@@ -563,5 +563,109 @@ def list_available_standards(source: str = "all") -> str:
         return _json({"success": False, "error": str(e)})
 
 
+# =============================================================================
+# TOOL 7: RELOAD STANDARDS (invalidate cache on file changes)
+# =============================================================================
+
+# Standards cache with TTL
+_standards_cache = {}
+_cache_timestamp = 0
+_CACHE_TTL = 300  # 5 minutes default
+_file_watcher_active = False
+
+
+def _get_watched_dirs():
+    """Get list of directories to watch for standards changes."""
+    dirs = []
+    for d in [POLICIES_DIR, ARCH_STANDARDS_DIR, TEAM_STANDARDS_DIR, TEAM_STANDARDS_ALT]:
+        if d.exists():
+            dirs.append(d)
+    return dirs
+
+
+def _invalidate_cache():
+    """Invalidate the standards cache."""
+    global _standards_cache, _cache_timestamp
+    _standards_cache = {}
+    _cache_timestamp = 0
+
+
+def _start_file_watcher():
+    """Start watching standards directories for changes (if watchdog available)."""
+    global _file_watcher_active
+    if _file_watcher_active:
+        return {"status": "already_running"}
+
+    try:
+        from watchdog.observers import Observer
+        from watchdog.events import FileSystemEventHandler
+
+        class StandardsChangeHandler(FileSystemEventHandler):
+            def on_modified(self, event):
+                if event.src_path.endswith(".md"):
+                    _invalidate_cache()
+
+            def on_created(self, event):
+                if event.src_path.endswith(".md"):
+                    _invalidate_cache()
+
+            def on_deleted(self, event):
+                if event.src_path.endswith(".md"):
+                    _invalidate_cache()
+
+        observer = Observer()
+        handler = StandardsChangeHandler()
+
+        watched = []
+        for watch_dir in _get_watched_dirs():
+            observer.schedule(handler, str(watch_dir), recursive=True)
+            watched.append(str(watch_dir))
+
+        observer.daemon = True
+        observer.start()
+        _file_watcher_active = True
+
+        return {"status": "started", "watching": watched}
+    except ImportError:
+        return {"status": "watchdog_not_installed", "fallback": "TTL-based cache (5 min)"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:100]}
+
+
+@mcp.tool()
+def reload_standards(project_path: str = ".", start_watcher: bool = True) -> str:
+    """Reload standards by invalidating cache and optionally starting file watcher.
+
+    Invalidates the cached standards so next load_standards call fetches fresh data.
+    Can also start a background file watcher (requires watchdog) that auto-invalidates
+    cache when .md files in policies/ or standards/ directories change.
+
+    Args:
+        project_path: Path to project root
+        start_watcher: If True, start file watcher for auto-reload
+    """
+    try:
+        _invalidate_cache()
+
+        watcher_status = {}
+        if start_watcher:
+            watcher_status = _start_file_watcher()
+
+        # Reload standards immediately
+        result = json.loads(load_standards(project_path))
+
+        return _json({
+            "success": True,
+            "reloaded": True,
+            "standards_loaded": result.get("standards_loaded", 0),
+            "project_type": result.get("project_type", "unknown"),
+            "framework": result.get("framework", "unknown"),
+            "watcher": watcher_status,
+            "watched_dirs": [str(d) for d in _get_watched_dirs()],
+        })
+    except Exception as e:
+        return _json({"success": False, "error": str(e)})
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

@@ -1,7 +1,7 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 7.4.0
+**Version:** 7.5.0
 **Type:** LangGraph Orchestration Pipeline
 **Last Updated:** 2026-03-16
 
@@ -35,7 +35,7 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 |   +-- 01-sync-system/   # Level 1 policies
 |   +-- 02-standards/     # Level 2 policies
 |   +-- 03-execution/     # Level 3 policies
-+-- src/mcp/              # 10 FastMCP servers (91 tools, 7,235 LOC)
++-- src/mcp/              # 11 FastMCP servers (102 tools, 8,400+ LOC)
 +-- tests/                # Test suite (476 tests, 30 files)
 +-- docs/                 # Documentation (40 files)
 ```
@@ -53,7 +53,7 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
 | Session Bridge | src/mcp/session_hooks.py | MCP direct import bridge |
 
-### MCP Servers (10 servers, 91 tools)
+### MCP Servers (11 servers, 102 tools)
 
 All registered in `~/.claude/settings.json`. Version synced via `scripts/sync-version.py`.
 
@@ -62,13 +62,14 @@ All registered in `~/.claude/settings.json`. Version synced via `scripts/sync-ve
 | git-ops | git_mcp_server.py | 14 | Git (branch, commit, push, pull, stash, post-merge cleanup) |
 | github-api | github_mcp_server.py | 12 | GitHub (PR, issue, merge, label, build validate, merge cycle) |
 | session-mgr | session_mcp_server.py | 14 | Session (create, chain, tag, accumulate, finalize, work items) |
-| policy-enforcement | enforcement_mcp_server.py | 9 | Policy compliance, flow-trace, module health check |
-| llm-provider | llm_mcp_server.py | 8 | LLM (4 providers, hybrid GPU-first, model selection) |
+| policy-enforcement | enforcement_mcp_server.py | 10 | Policy compliance, flow-trace, module health, system health |
+| llm-provider | llm_mcp_server.py | 8 | LLM (4 providers, hybrid GPU-first, async health, cached) |
 | token-optimizer | token_optimization_mcp_server.py | 10 | Token reduction (AST nav, smart read, dedup, 60-85% savings) |
 | pre-tool-gate | pre_tool_gate_mcp_server.py | 8 | Pre-tool validation (8 policy checks, skill hints) |
 | post-tool-tracker | post_tool_tracker_mcp_server.py | 6 | Post-tool tracking (progress, commit readiness, stats) |
-| standards-loader | standards_loader_mcp_server.py | 6 | Standards (project detect, framework detect, conflict resolve) |
+| standards-loader | standards_loader_mcp_server.py | 7 | Standards (project detect, framework detect, hot-reload) |
 | skill-manager | skill_manager_mcp_server.py | 8 | Skill lifecycle (load, search, validate, rank, conflicts) |
+| vector-db | vector_db_mcp_server.py | 10 | Vector RAG (Qdrant, 3 collections, semantic search, bulk index) |
 
 ### Execution Modes
 

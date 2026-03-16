@@ -26,6 +26,17 @@ anthropic==0.50.0           # Anthropic SDK for Claude API
 requests>=2.31.0            # HTTP requests for Ollama API
 
 # ============================================================================
+# VECTOR DB RAG (Qdrant + Embeddings)
+# ============================================================================
+qdrant-client>=1.7.0        # Qdrant vector DB (local mode, no server needed)
+sentence-transformers>=2.2.0  # Embedding model (all-MiniLM-L6-v2, 384-dim)
+
+# ============================================================================
+# LANGGRAPH CHECKPOINTING
+# ============================================================================
+langgraph-checkpoint-sqlite>=1.0.0  # SQLite-backed state persistence
+
+# ============================================================================
 # SYSTEM & UTILITIES
 # ============================================================================
 python-dotenv==1.0.1        # Environment variable management
@@ -33,6 +44,7 @@ psutil>=5.9.8               # System monitoring
 loguru>=0.7.0               # Structured logging
 rich>=13.0.0                # Beautiful terminal output (progress bars, colors, tables)
 toons>=0.5.3                # TOON schema support
+watchdog>=3.0.0             # File system watcher (standards hot-reload)
 
 # ============================================================================
 # VOICE / TTS (Text-to-Speech)
