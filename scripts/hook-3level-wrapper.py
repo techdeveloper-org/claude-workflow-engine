@@ -66,7 +66,7 @@ def main():
         result = subprocess.run(
             cmd,
             env=env,
-            timeout=180,  # 3 minutes - allows for Ollama processing + all 14 steps
+            timeout=180,  # 3 minutes - allows for Ollama processing + all 15 steps
             capture_output=True,  # CRITICAL: Capture output so we can forward to Claude Code
             text=True
         )

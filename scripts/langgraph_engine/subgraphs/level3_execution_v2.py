@@ -1,10 +1,10 @@
 """
-Level 3 SubGraph v2 - Integrated 14-Step Execution Pipeline
+Level 3 SubGraph v2 - Integrated 15-Step Execution Pipeline (Step 0-14)
 
 Bridge module that wraps the WORKFLOW.md-compliant level3_execution.py functions
 with proper orchestrator integration and logging.
 
-All 14 steps implemented with:
+All 15 steps (Step 0-14) implemented with:
 - Proper logging via loguru
 - Time tracking
 - TOON object handling

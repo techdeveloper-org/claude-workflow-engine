@@ -72,11 +72,11 @@
 
 ---
 
-### LEVEL 3: 14-STEP EXECUTION
+### LEVEL 3: 15-STEP EXECUTION (Step 0-14)
 **Current Score:** 70/100 | **Status:** 🟡 Happy Path Works, Failures Unknown
 
 ```
-Total Missing: 45 gaps across 14 steps
+Total Missing: 45 gaps across 15 steps (Step 0-14)
 
 Step 1 (Plan Decision):    6 gaps - No thresholds, no fallbacks
 Step 2 (Plan Execution):   7 gaps - No convergence, no rollback

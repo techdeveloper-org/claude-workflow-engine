@@ -19,7 +19,7 @@ LEVEL 1: CONTEXT SYNC (Build TOON Object)
     ↓
 LEVEL 2: STANDARDS SYSTEM (Claude's Rules Folder - Not in Flow)
     ↓
-LEVEL 3: 14-STEP EXECUTION PIPELINE
+LEVEL 3: 15-STEP EXECUTION PIPELINE (Step 0-14)
     ↓
 RESULT
 ```
@@ -208,7 +208,7 @@ GO TO LEVEL 3
 
 ---
 
-## LEVEL 3: 14-STEP EXECUTION PIPELINE
+## LEVEL 3: 15-STEP EXECUTION PIPELINE (Step 0-14)
 
 ### Purpose
 Execute the actual development task using plan, skills, agents, and automation.
@@ -733,7 +733,7 @@ Result:
 - **README.md** - Project overview
 - **Level -1 Details** - Auto-fix enforcement
 - **Level 1 Details** - Context sync with TOON
-- **Level 3 Details** - 14-step execution pipeline
+- **Level 3 Details** - 15-step execution pipeline (Step 0-14)
 
 ---
 

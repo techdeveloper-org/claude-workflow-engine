@@ -168,7 +168,7 @@ class ExecutionLogger:
     """
     High-level execution logger for LEVEL 3 steps.
 
-    Provides consistent logging interface across all 14 steps.
+    Provides consistent logging interface across all 15 steps (Step 0-14).
     """
 
     def __init__(self, session_dir: Path):

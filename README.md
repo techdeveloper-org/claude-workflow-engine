@@ -6,7 +6,7 @@
 
 ## Overview
 
-Claude Workflow Engine is a **3-level LangGraph-based orchestration pipeline** for automating Claude Code development workflows. It handles session management, coding standards enforcement, and end-to-end 14-step task execution with full GitHub integration, RAG-powered decision caching, and hybrid LLM inference.
+Claude Workflow Engine is a **3-level LangGraph-based orchestration pipeline** for automating Claude Code development workflows. It handles session management, coding standards enforcement, and end-to-end 15-step task execution (Step 0-14) with full GitHub integration, RAG-powered decision caching, and hybrid LLM inference.
 
 ### Key Statistics
 
@@ -15,7 +15,7 @@ Claude Workflow Engine is a **3-level LangGraph-based orchestration pipeline** f
 | **Pipeline Levels** | 4 (Level -1, 1, 2, 3) |
 | **Execution Steps** | 15 (Step 0 - Step 14) |
 | **MCP Servers** | 11 |
-| **MCP Tools** | 103 |
+| **MCP Tools** | 109 |
 | **LangGraph Engine Modules** | 75 (70 root + 5 subgraphs) |
 | **Architecture Modules** | 83 |
 | **Policy Files** | 44 (43 .md + 1 .json) |
@@ -27,10 +27,10 @@ Claude Workflow Engine is a **3-level LangGraph-based orchestration pipeline** f
 
 ### Key Features
 
-- **3-Level Architecture** - Auto-fix, Sync, Standards, and 14-step Execution
+- **3-Level Architecture** - Auto-fix, Sync, Standards, and 15-step Execution (Step 0-14)
 - **LangGraph Orchestration** - StateGraph with parallel execution via `Send()` API
-- **14-Step Execution Pipeline** - From task analysis to PR creation and documentation
-- **11 MCP Servers** - 103 tools via FastMCP protocol (stdio JSON-RPC)
+- **15-Step Execution Pipeline (Step 0-14)** - From task analysis to PR creation and documentation
+- **11 MCP Servers** - 109 tools via FastMCP protocol (stdio JSON-RPC)
 - **RAG Integration** - Vector DB decision caching, skip LLM calls when confidence > threshold
 - **Policy System** - 44 policies across 3 enforcement levels
 - **Hybrid Inference** - GPU-first (Ollama) + Claude API + Anthropic + OpenAI fallback
@@ -108,7 +108,7 @@ CLAUDE_DEBUG=1 python scripts/3-level-flow.py --task "your task" --summary
                              |
                     +--------v---------+
                     | LEVEL 3:         |
-                    | 14-STEP          |
+                    | 15-STEP          |
                     | EXECUTION        |
                     | (Steps 0-14)     |
                     +--------+---------+
@@ -362,7 +362,7 @@ Output:
 
 ---
 
-## Level 3: 14-Step Execution Pipeline
+## Level 3: 15-Step Execution Pipeline (Step 0-14)
 
 **Purpose:** Execute the actual development task using intelligent planning, skills, agents, and full GitHub automation.
 
@@ -373,7 +373,7 @@ FROM LEVEL 2 (standards loaded)
   |
   v
 +====================================================+
-|              LEVEL 3: 14-STEP PIPELINE              |
+|              LEVEL 3: 15-STEP PIPELINE              |
 +====================================================+
 
   +---------------------------------------------------+
@@ -623,7 +623,7 @@ Vector DB Collections (Qdrant):
 
 ---
 
-## MCP Servers (11 Servers, 103 Tools)
+## MCP Servers (11 Servers, 109 Tools)
 
 All servers use FastMCP framework, communicate via stdio JSON-RPC, and are registered in `~/.claude/settings.json`.
 
@@ -632,7 +632,7 @@ All servers use FastMCP framework, communicate via stdio JSON-RPC, and are regis
 | 1 | **git-ops** | git_mcp_server.py | 14 | Git operations (branch, commit, push, pull, stash, log, diff, fetch, post-merge cleanup, origin URL) |
 | 2 | **github-api** | github_mcp_server.py | 12 | GitHub (create/close issue, PR, merge with gh CLI fallback, label, build validate, full merge cycle, issue branch) |
 | 3 | **session-mgr** | session_mcp_server.py | 14 | Session lifecycle (create with ID gen, chain parent/child, tag with auto-extract, accumulate, finalize, work items, search, archive) |
-| 4 | **policy-enforcement** | enforcement_mcp_server.py | 10 | Policy compliance (enforce steps 0-13, flow-trace recording, compliance verify, module health, MCP system health check) |
+| 4 | **policy-enforcement** | enforcement_mcp_server.py | 11 | Policy compliance (enforce steps 0-13, flow-trace recording, compliance verify, module health, MCP system health check) |
 | 5 | **llm-provider** | llm_mcp_server.py | 8 | LLM access (4 providers: Ollama/Claude CLI/Anthropic/OpenAI, hybrid GPU-first routing, model selection, discover models, commit title gen) |
 | 6 | **token-optimizer** | token_optimization_mcp_server.py | 10 | Token reduction (optimize any tool call, AST code navigation, smart read, context dedup, budget monitor, 60-85% savings) |
 | 7 | **pre-tool-gate** | pre_tool_gate_mcp_server.py | 8 | Pre-tool validation (8 policy checks, task breakdown flag, skill flag, level completion, failure patterns, skill hints) |
@@ -671,13 +671,13 @@ claude-insight/
 |   |       +-- level_minus1.py       # Auto-fix enforcement (28K)
 |   |       +-- level1_sync.py        # Context sync + TOON (37K)
 |   |       +-- level2_standards.py   # Standards loading (15K)
-|   |       +-- level3_execution.py   # 14-step pipeline original (97K)
-|   |       +-- level3_execution_v2.py# 14-step v2 with RAG (36K)
+|   |       +-- level3_execution.py   # 15-step pipeline original (DEPRECATED) (97K)
+|   |       +-- level3_execution_v2.py# 15-step v2 with RAG (ACTIVE) (36K)
 |   |
 |   +-- architecture/                 # Architecture system (83 modules)
 |   |   +-- 01-sync-system/           # Session, context, preferences, patterns
 |   |   +-- 02-standards-system/      # Coding standards enforcement
-|   |   +-- 03-execution-system/      # All 14 steps + failure prevention
+|   |   +-- 03-execution-system/      # All 15 steps (Step 0-14) + failure prevention
 |   |   +-- testing/                  # Test case policy scripts
 |   |
 |   +-- agents/                       # Computer-use agent + tools
@@ -691,15 +691,15 @@ claude-insight/
 +-- policies/                         # 44 policy definitions
 |   +-- 01-sync-system/               # Level 1: session, context, preferences, patterns
 |   +-- 02-standards-system/          # Level 2: coding standards, common standards
-|   +-- 03-execution-system/          # Level 3: all 14 steps + failure prevention
+|   +-- 03-execution-system/          # Level 3: all 15 steps (Step 0-14) + failure prevention
 |   +-- testing/                      # Test case policies
 |
 +-- src/
-|   +-- mcp/                          # 11 FastMCP servers (103 tools, 8,400+ LOC)
+|   +-- mcp/                          # 11 FastMCP servers (109 tools, 8,400+ LOC)
 |   |   +-- git_mcp_server.py         # 14 tools
 |   |   +-- github_mcp_server.py      # 12 tools
 |   |   +-- session_mcp_server.py     # 14 tools
-|   |   +-- enforcement_mcp_server.py # 10 tools
+|   |   +-- enforcement_mcp_server.py # 11 tools
 |   |   +-- llm_mcp_server.py         # 8 tools
 |   |   +-- token_optimization_mcp_server.py  # 10 tools
 |   |   +-- pre_tool_gate_mcp_server.py       # 8 tools
@@ -723,7 +723,7 @@ claude-insight/
 |       +-- test_failure_scenarios.py # Failure scenario testing (57K)
 |
 +-- docs/                             # 40 documentation files
-|   +-- WORKFLOW.md                   # Complete 14-step specification
+|   +-- WORKFLOW.md                   # Complete 15-step specification
 |   +-- LANGGRAPH-ENGINE.md           # Engine implementation details
 |   +-- CHANGELOG.md                  # Version history
 |   +-- SYSTEM_REQUIREMENTS_SPECIFICATION.md  # Full SRS
@@ -775,7 +775,7 @@ python scripts/generate-mcp-docs.py
 | Document | Location | Purpose |
 |----------|----------|---------|
 | CLAUDE.md | Root | Project context for Claude Code |
-| WORKFLOW.md | docs/ | Complete 14-step pipeline specification |
+| WORKFLOW.md | docs/ | Complete 15-step pipeline specification |
 | SRS | docs/SYSTEM_REQUIREMENTS_SPECIFICATION.md | Full system requirements |
 | CHANGELOG.md | docs/ | Version history and changes |
 | LANGGRAPH-ENGINE.md | docs/ | Engine implementation details |
@@ -797,7 +797,7 @@ See `.env.example` for environment variables:
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **7.5.0** | 2026-03-16 | RAG integration, 11th MCP server (vector-db), cross-session learning, 103 tools |
+| **7.5.0** | 2026-03-16 | RAG integration, 11th MCP server (vector-db), cross-session learning, 109 tools |
 | 7.4.0 | 2026-03-16 | Dynamic versioning, SRS rewrite, MCP health checks |
 | 7.3.0 | 2026-03-16 | 10 MCP servers (91 tools), hook migration to MCP imports |
 | 7.2.0 | 2026-03-15 | 7 design patterns, Anthropic API as 4th LLM provider |

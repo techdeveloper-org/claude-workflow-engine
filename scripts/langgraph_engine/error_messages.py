@@ -683,7 +683,7 @@ def format_exception(
 _GENERAL_HELP = """
 Claude Workflow Engine Pipeline - Help
 
-The pipeline runs in 14 steps to process your request:
+The pipeline runs in 15 steps to process your request:
   Steps  1-7:  Planning, skill selection, and prompt generation
   Steps  8-12: GitHub workflow (issue, branch, implementation, PR, closure)
   Steps 13-14: Documentation and summary

@@ -96,7 +96,7 @@ def enforce_policy_step(step_number: int, step_name: str) -> str:
         step_name: Human-readable step name
     """
     try:
-        # Complete step mapping for all 14 steps
+        # Complete step mapping for all 15 steps (Step 0-14)
         script_map = {
             0: "00-prompt-generation/prompt-generation-policy.md",
             1: "01-task-breakdown/automatic-task-breakdown-policy.md",

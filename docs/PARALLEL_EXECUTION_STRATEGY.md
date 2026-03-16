@@ -166,7 +166,7 @@ WEEK 2 - DAYS 15-18:
 
 WEEK 3 - DAYS 19-21:
   Task #9: Testing (8h) [blocked by Task #5]
-  ├─ Day 19-20: Integration tests (14 steps)
+  ├─ Day 19-20: Integration tests (15 steps)
   └─ Day 21: Failure scenario tests
 ```
 

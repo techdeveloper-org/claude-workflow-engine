@@ -9,7 +9,7 @@
 
 ## Project Overview
 
-Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 14-step task execution with GitHub integration, RAG-powered decision caching, and hybrid LLM inference across 4 providers.
+Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 15-step task execution (Step 0-14) with GitHub integration, RAG-powered decision caching, and hybrid LLM inference across 4 providers.
 
 ### Quick Info
 
@@ -19,7 +19,7 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Frameworks** | LangGraph 1.0.10+, LangChain, FastMCP, Qdrant |
 | **Status** | Active Development |
 | **Primary Location** | scripts/langgraph_engine/ |
-| **MCP Servers** | 11 (103 tools) |
+| **MCP Servers** | 11 (109 tools) |
 | **Total Python Files** | 258 |
 | **Test Files** | 45 |
 
@@ -59,13 +59,13 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 ```
 /
 +-- scripts/                          # Pipeline scripts and hooks
-|   +-- langgraph_engine/             # Core orchestration (75 modules: 70 root + 5 subgraphs)
+|   +-- langgraph_engine/             # Core orchestration (76 modules: 70 root + 6 subgraph files)
 |   +-- architecture/                 # Architecture system (83 modules)
 +-- policies/                         # 44 policy definitions (43 .md + 1 .json)
 |   +-- 01-sync-system/               # Level 1 policies
 |   +-- 02-standards-system/          # Level 2 policies
-|   +-- 03-execution-system/          # Level 3 policies (14 steps + failure prevention)
-+-- src/mcp/                          # 11 FastMCP servers (103 tools, 8,400+ LOC)
+|   +-- 03-execution-system/          # Level 3 policies (15 steps: 0-14 + failure prevention)
++-- src/mcp/                          # 11 FastMCP servers (109 tools, 8,400+ LOC)
 +-- tests/                            # 45 test files (38 root + 2 integration + 5 other)
 +-- docs/                             # 40 documentation files
 +-- rules/                            # 5 coding standard definitions
@@ -81,12 +81,12 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | Level -1 | scripts/langgraph_engine/subgraphs/level_minus1.py | Auto-fix enforcement (28K) |
 | Level 1 | scripts/langgraph_engine/subgraphs/level1_sync.py | Session/context sync + TOON (37K) |
 | Level 2 | scripts/langgraph_engine/subgraphs/level2_standards.py | Standards loading (15K) |
-| Level 3 v2 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 14-step execution with RAG (36K) |
-| Level 3 v1 | scripts/langgraph_engine/subgraphs/level3_execution.py | Original 14-step pipeline (97K) |
+| Level 3 v2 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 15-step execution with RAG (36K) - ACTIVE |
+| Level 3 v1 | scripts/langgraph_engine/subgraphs/level3_execution.py | Original pipeline (97K) - DEPRECATED, v2 is used |
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
 | Session Bridge | src/mcp/session_hooks.py | MCP direct import bridge |
 
-### MCP Servers (11 servers, 103 tools)
+### MCP Servers (11 servers, 109 tools)
 
 All registered in `~/.claude/settings.json`. Version synced via `scripts/sync-version.py`.
 
@@ -95,7 +95,7 @@ All registered in `~/.claude/settings.json`. Version synced via `scripts/sync-ve
 | git-ops | git_mcp_server.py | 14 | Git (branch, commit, push, pull, stash, diff, fetch, post-merge cleanup) |
 | github-api | github_mcp_server.py | 12 | GitHub (PR, issue, merge, label, build validate, full merge cycle) |
 | session-mgr | session_mcp_server.py | 14 | Session (create, chain, tag, accumulate, finalize, work items, search) |
-| policy-enforcement | enforcement_mcp_server.py | 10 | Policy compliance, flow-trace, module health, system health |
+| policy-enforcement | enforcement_mcp_server.py | 11 | Policy compliance, flow-trace, module health, system health |
 | llm-provider | llm_mcp_server.py | 8 | LLM (4 providers, hybrid GPU-first, async health, cached) |
 | token-optimizer | token_optimization_mcp_server.py | 10 | Token reduction (AST nav, smart read, dedup, 60-85% savings) |
 | pre-tool-gate | pre_tool_gate_mcp_server.py | 8 | Pre-tool validation (8 policy checks, skill hints) |

@@ -12,7 +12,7 @@ Before implementation, we must answer these precisely:
 
 ### 1. TOON Object Lifecycle
 
-**Question:** How does TOON flow through all 14 steps?
+**Question:** How does TOON flow through all 15 steps (Step 0-14)?
 
 **Current Understanding:**
 - Input: TOON from Level 1 (complexity_score, files_loaded, context)
@@ -398,7 +398,7 @@ Session folder: ~/.claude/logs/sessions/{session_id}/
 **Question:** What makes Level 3 "production-ready"?
 
 **CRITERIA TO DEFINE:**
-- [ ] All 14 steps implemented
+- [ ] All 15 steps (Step 0-14) implemented
 - [ ] Error handling for all failure cases
 - [ ] Rollback mechanism for partial failures
 - [ ] Data persistence to session folder
@@ -475,7 +475,7 @@ Before implementation, we must decide:
 1. **Answer each critical question above** (user input needed)
 2. **Create detailed specification** based on decisions
 3. **Plan exact code changes** (which files, what modifications)
-4. **Create implementation checklist** (14 steps, dependencies)
+4. **Create implementation checklist** (15 steps, dependencies)
 5. **Only THEN implement** (with full context)
 
 **No code should be written until these decisions are made.**

@@ -142,7 +142,7 @@ class TestLevel2StandardsExecution:
 
 
 class TestLevel3ExecutionSystem:
-    """Test 4: Level 3 - Execution System (14 steps)"""
+    """Test 4: Level 3 - Execution System (15 steps, Step 0-14)"""
 
     @patch("langgraph_engine.subgraphs.level3_execution.call_execution_script")
     def test_task_analysis_calls_script(self, mock_call):

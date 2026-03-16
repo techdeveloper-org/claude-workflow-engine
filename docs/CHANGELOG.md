@@ -96,7 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - LangGraph 3-level orchestration pipeline
 - Session management with checkpointing
-- 14-step execution system (WORKFLOW.md compliant)
+- 15-step execution system (Step 0-14) (WORKFLOW.md compliant)
 - GitHub integration (issue, PR, merge cycle)
 
 ### Removed

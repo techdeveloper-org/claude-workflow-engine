@@ -903,8 +903,8 @@ class TestHybridInferenceFailures:
         assert manager.router is None
 
     @_skip_if_no_hybrid
-    def test_step_routing_map_covers_all_14_steps(self):
-        """All 14 steps must appear in STEP_ROUTING map."""
+    def test_step_routing_map_covers_all_15_steps(self):
+        """All 15 steps (Step 0-14) must appear in STEP_ROUTING map."""
         from langgraph_engine.hybrid_inference import HybridInferenceManager
         routing = HybridInferenceManager.STEP_ROUTING
         expected_steps = {

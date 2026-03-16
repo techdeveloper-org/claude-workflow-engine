@@ -161,7 +161,7 @@ Response: 1-2s
 | Skill Selection | GPU | 1-2s | ⭐⭐⭐⭐⭐ |
 | Prompt Generation | GPU | 1-2s | ⭐⭐⭐⭐⭐ |
 
-**Total pipeline (14 steps):** ~30-45 seconds (was 60+ with GPU only)
+**Total pipeline (15 steps: 0-14):** ~30-45 seconds (was 60+ with GPU only)
 
 ---
 

@@ -2,12 +2,12 @@
 """
 End-to-End Workflow Test - Real-World Scenario
 
-Demonstrates the complete 14-step pipeline with a realistic task:
+Demonstrates the complete 15-step pipeline (Step 0-14) with a realistic task:
 "Implement user authentication system with OAuth2 support"
 
 This test:
 1. Creates a mock project structure
-2. Simulates all 14 steps
+2. Simulates all 15 steps
 3. Validates conditional routing
 4. Tests error recovery
 5. Reports comprehensive metrics

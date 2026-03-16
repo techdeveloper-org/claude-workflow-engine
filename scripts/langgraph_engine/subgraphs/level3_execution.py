@@ -1,5 +1,5 @@
 """
-Level 3 SubGraph - Execution System (WORKFLOW.md Compliant - 14 Steps)
+Level 3 SubGraph - Execution System (WORKFLOW.md Compliant - 15 Steps (Step 0-14) - DEPRECATED: Use level3_execution_v2.py)
 
 Implements complete WORKFLOW.md-compliant execution pipeline with proper step ordering:
 - Step 1: Plan Mode Decision
@@ -2345,7 +2345,7 @@ def route_after_step11_review(state: FlowState) -> str:
 
 
 def level3_merge_node(state: FlowState) -> dict:
-    """Determine final status based on all 14 steps."""
+    """Determine final status based on all 15 steps (Step 0-14)."""
     error_steps = [k for k in state if k.endswith("_error") and state.get(k)]
 
     updates = {}
@@ -2365,7 +2365,7 @@ def level3_merge_node(state: FlowState) -> dict:
 
 
 def create_level3_subgraph():
-    """Create Level 3 subgraph (WORKFLOW.md compliant - 14 steps).
+    """Create Level 3 subgraph (WORKFLOW.md compliant - 15 steps (Step 0-14)).
 
     Implements complete WORKFLOW.md-compliant execution pipeline:
 

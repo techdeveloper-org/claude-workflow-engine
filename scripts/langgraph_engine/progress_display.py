@@ -1,5 +1,5 @@
 """
-Progress Display - Real-time step progress visualization for the 14-step pipeline.
+Progress Display - Real-time step progress visualization for the 15-step pipeline (Step 0-14).
 
 Provides:
 - ASCII progress bars with completion percentage
@@ -160,7 +160,7 @@ class StepRecord:
 # ---------------------------------------------------------------------------
 
 class ProgressDisplay:
-    """Real-time step progress visualization for the 14-step pipeline.
+    """Real-time step progress visualization for the 15-step pipeline (Step 0-14).
 
     Thread-safe: update_step() can be called from any thread. A background
     refresh thread redraws the display every ``refresh_interval`` seconds.

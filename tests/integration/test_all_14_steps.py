@@ -1,8 +1,8 @@
 """
-Integration Tests - All 14 Steps of the Level 3 Execution Pipeline
+Integration Tests - All 15 Steps (Step 0-14) of the Level 3 Execution Pipeline
 
 Covers:
-- Individual unit tests for each of the 14 steps
+- Individual unit tests for each of the 15 steps (Step 0-14)
 - Step-sequence integration tests (upstream data flowing to downstream steps)
 - Full workflow end-to-end validation
 - FlowState integrity across transitions
@@ -1179,7 +1179,7 @@ class TestEndToEndWorkflow:
 
     def test_full_pipeline_accumulates_all_step_keys(self):
         """
-        Run all 14 steps in sequence with mocked calls.
+        Run all 15 steps (Step 0-14) in sequence with mocked calls.
         Verify the final state contains outputs from all steps.
         """
         import tempfile

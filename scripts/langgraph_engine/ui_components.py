@@ -1,5 +1,5 @@
 """
-UI Components - Unified UX layer for the 14-step pipeline.
+UI Components - Unified UX layer for the 15-step pipeline (Step 0-14).
 
 This module is the single entry point for all user experience concerns:
 - Progress visibility (delegates to ProgressDisplay)
@@ -65,7 +65,7 @@ def _terminal_width(default: int = 72) -> int:
 
 class PipelineUI:
     """
-    Unified user experience controller for the 14-step pipeline.
+    Unified user experience controller for the 15-step pipeline (Step 0-14).
 
     Coordinates progress display, decision explanations, and error messages
     into a single coherent interface that all pipeline nodes can use.

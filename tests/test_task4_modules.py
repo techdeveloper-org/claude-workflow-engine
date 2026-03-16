@@ -217,7 +217,7 @@ valid, errors = sv.validate_step_14_output({'step14_summary': {}})
 assert valid is False
 print(f'  Step 14 output FAIL empty: {errors}')
 
-# Test all 14 steps exist
+# Test all 15 steps (Step 0-14) exist
 _toon = {'complexity_score': 5, 'session_id': 'test'}
 methods = [
     ('validate_step_1_input', {'level1_context_toon': _toon, 'user_requirement': 'x'}),
