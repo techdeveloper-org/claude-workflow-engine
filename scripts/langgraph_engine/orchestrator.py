@@ -718,6 +718,27 @@ def output_node(state: FlowState) -> dict:
             except Exception:
                 pass
 
+    # SESSION ACCUMULATE - Record this request's data via MCP session tools
+    try:
+        _src_mcp_dir = Path(__file__).resolve().parent.parent.parent / "src" / "mcp"
+        if str(_src_mcp_dir) not in sys.path:
+            sys.path.insert(0, str(_src_mcp_dir))
+        from session_hooks import accumulate_request
+        accumulate_request(
+            session_id=state.get(StepKeys.SESSION_ID, ""),
+            prompt=state.get(StepKeys.USER_MESSAGE, "")[:300],
+            task_type=state.get(StepKeys.TASK_TYPE, ""),
+            skill=state.get(StepKeys.SKILL, ""),
+            complexity=int(state.get(StepKeys.COMPLEXITY, 0)),
+            model=state.get(StepKeys.SELECTED_MODEL, ""),
+            cwd=state.get(StepKeys.PROJECT_ROOT, ""),
+            plan_mode=bool(state.get(StepKeys.PLAN_REQUIRED)),
+            context_pct=int(state.get("context_pct", 0)),
+            supplementary_skills=",".join(state.get(StepKeys.SKILLS, []) or []),
+        )
+    except Exception:
+        pass  # Accumulation is non-blocking, never fail the pipeline
+
     # Return synthesis result with proper status
     return {
         "final_status": final_status,

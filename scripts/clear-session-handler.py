@@ -758,7 +758,23 @@ def _finalize_session_summary(session_id):
     """
     Finalize session summary (generate session-summary.md) before closing.
     Called by clear-session-handler on /clear.
+
+    Uses MCP session_hooks (direct import, no subprocess).
+    Falls back to old subprocess call if MCP import fails.
     """
+    # Primary: MCP direct call (no subprocess overhead)
+    try:
+        _src_mcp_dir = Path(__file__).resolve().parent.parent / "src" / "mcp"
+        if str(_src_mcp_dir) not in sys.path:
+            sys.path.insert(0, str(_src_mcp_dir))
+        from session_hooks import finalize_session
+        if finalize_session(session_id):
+            log_event(f"[SUMMARY] Finalized for {session_id} (MCP)")
+            return
+    except Exception:
+        pass
+
+    # Fallback: old subprocess call
     summary_script = CURRENT_DIR / 'session-summary-manager.py'
     if not summary_script.exists():
         log_event(f"[WARN] session-summary-manager.py not found, skipping finalize")
@@ -781,9 +797,25 @@ def _finalize_session_summary(session_id):
 
 def _link_session_chain(child_session, parent_session):
     """
-    Link new session to its parent via session-chain-manager.py.
+    Link new session to its parent via MCP session tools.
     Called after /clear creates a new session.
+
+    Uses MCP session_hooks (direct import, no subprocess).
+    Falls back to old subprocess call if MCP import fails.
     """
+    # Primary: MCP direct call
+    try:
+        _src_mcp_dir = Path(__file__).resolve().parent.parent / "src" / "mcp"
+        if str(_src_mcp_dir) not in sys.path:
+            sys.path.insert(0, str(_src_mcp_dir))
+        from session_hooks import link_sessions
+        if link_sessions(child_session, parent_session):
+            log_event(f"[CHAIN] Linked {child_session} -> parent: {parent_session} (MCP)")
+            return
+    except Exception:
+        pass
+
+    # Fallback: old subprocess call
     chain_script = CURRENT_DIR / 'session-chain-manager.py'
     if not chain_script.exists():
         log_event(f"[WARN] session-chain-manager.py not found, skipping chain link")
