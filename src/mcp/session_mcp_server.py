@@ -681,5 +681,450 @@ def session_search_tags(
         return _json({"success": False, "error": str(e)})
 
 
+LOGS_PATH = MEMORY_PATH / "logs" / "sessions"
+
+
+def _load_accumulation(session_id: str) -> dict:
+    """Load accumulated session data from session-summary.json."""
+    json_path = LOGS_PATH / session_id / "session-summary.json"
+    if json_path.exists():
+        try:
+            return json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return None
+
+
+def _save_accumulation(session_id: str, data: dict):
+    """Save accumulated session data atomically."""
+    session_dir = LOGS_PATH / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    json_path = session_dir / "session-summary.json"
+    temp = json_path.with_suffix(".tmp")
+    temp.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+    temp.replace(json_path)
+
+
+@mcp.tool()
+def session_accumulate(
+    session_id: str,
+    prompt: str = "",
+    task_type: str = "",
+    skill: str = "",
+    complexity: int = 0,
+    model: str = "",
+    cwd: str = "",
+    plan_mode: bool = False,
+    context_pct: int = 0,
+    supplementary_skills: str = "",
+    standards_count: int = 0,
+    rules_count: int = 0
+) -> str:
+    """Accumulate per-request data for session summary generation.
+
+    Called by 3-level-flow.py after every user message. Appends a request
+    entry and updates aggregate fields.
+
+    Args:
+        session_id: Active session ID
+        prompt: User message text (truncated to 500 chars)
+        task_type: Classified task type (e.g., 'Backend', 'Bug Fix')
+        skill: Primary skill selected
+        complexity: Task complexity score (0-25)
+        model: Model name (e.g., 'SONNET', 'OPUS')
+        cwd: Working directory path
+        plan_mode: Whether plan mode was used
+        context_pct: Estimated context window usage percentage
+        supplementary_skills: Comma-separated supplementary skill names
+        standards_count: Number of active standards loaded
+        rules_count: Number of active rules loaded
+    """
+    try:
+        if not session_id:
+            return _json({"success": False, "error": "session_id is required"})
+
+        data = _load_accumulation(session_id)
+        if not data:
+            data = {
+                "session_id": session_id,
+                "created_at": datetime.now().isoformat(),
+                "requests": [],
+                "request_count": 0,
+                "skills_used": [],
+                "task_types": [],
+                "models_used": [],
+                "all_supplementary_skills": [],
+                "plan_mode_count": 0,
+                "context_history": [],
+                "peak_context_pct": 0,
+                "total_complexity": 0,
+                "max_complexity": 0,
+                "status": "IN_PROGRESS"
+            }
+
+        # Add request entry
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "prompt": prompt[:500],
+            "prompt_char_count": len(prompt),
+            "task_type": task_type,
+            "skill": skill,
+            "complexity": complexity,
+            "model": model,
+            "cwd": cwd,
+            "plan_mode": plan_mode,
+            "context_pct": context_pct,
+            "supplementary_skills": [s.strip() for s in supplementary_skills.split(",") if s.strip()] if supplementary_skills else [],
+            "decision_rationale": f"Complexity {complexity} -> Model {model}, Skill {skill}",
+        }
+
+        data["requests"].append(entry)
+        data["request_count"] = len(data["requests"])
+        data["last_updated"] = datetime.now().isoformat()
+
+        # Track unique values
+        if skill and skill not in data["skills_used"]:
+            data["skills_used"].append(skill)
+        if task_type and task_type not in data["task_types"]:
+            data["task_types"].append(task_type)
+        if model and model not in data["models_used"]:
+            data["models_used"].append(model)
+
+        # Supplementary skills
+        if supplementary_skills:
+            for s in supplementary_skills.split(","):
+                s = s.strip()
+                if s and s not in data.get("all_supplementary_skills", []):
+                    data.setdefault("all_supplementary_skills", []).append(s)
+
+        # Plan mode
+        if plan_mode:
+            data["plan_mode_count"] = data.get("plan_mode_count", 0) + 1
+
+        # Context tracking
+        ctx = int(context_pct)
+        data.setdefault("context_history", []).append(ctx)
+        data["peak_context_pct"] = max(data.get("peak_context_pct", 0), ctx)
+
+        # Complexity tracking
+        comp = int(complexity)
+        data["total_complexity"] = data.get("total_complexity", 0) + comp
+        data["max_complexity"] = max(data.get("max_complexity", 0), comp)
+
+        _save_accumulation(session_id, data)
+
+        return _json({
+            "success": True,
+            "session_id": session_id,
+            "request_number": data["request_count"],
+            "skills_used": data["skills_used"],
+            "peak_context": data["peak_context_pct"]
+        })
+    except Exception as e:
+        return _json({"success": False, "error": str(e)})
+
+
+@mcp.tool()
+def session_finalize(session_id: str) -> str:
+    """Generate comprehensive session summary on session close.
+
+    Merges accumulated request data with tool stats, flow-trace decisions,
+    and generates a rich markdown summary.
+
+    Called by clear-session-handler.py on /clear.
+
+    Args:
+        session_id: Session ID to finalize
+    """
+    try:
+        if not session_id:
+            return _json({"success": False, "error": "session_id is required"})
+
+        data = _load_accumulation(session_id)
+        if not data:
+            return _json({
+                "success": False,
+                "error": f"No accumulated data for {session_id}"
+            })
+
+        # Load flow-trace for pipeline decisions
+        flow_trace_file = LOGS_PATH / session_id / "flow-trace.json"
+        flow_trace = None
+        if flow_trace_file.exists():
+            try:
+                flow_trace = json.loads(flow_trace_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        # Load tool tracker for file stats
+        tool_tracker_file = LOGS_PATH / session_id / "tool-tracker.jsonl"
+        files_modified = set()
+        files_read = set()
+        tool_count = 0
+        error_count = 0
+        if tool_tracker_file.exists():
+            try:
+                for line in tool_tracker_file.read_text(encoding="utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    entry = json.loads(line)
+                    tool_count += 1
+                    tool_name = entry.get("tool", "")
+                    file_path = entry.get("file", "")
+                    if entry.get("error"):
+                        error_count += 1
+                    if file_path:
+                        if tool_name in ("Write", "Edit"):
+                            files_modified.add(file_path)
+                        elif tool_name == "Read":
+                            files_read.add(file_path)
+            except Exception:
+                pass
+
+        # Calculate duration
+        created = data.get("created_at", "")
+        last_updated = data.get("last_updated", datetime.now().isoformat())
+        duration_human = ""
+        duration_seconds = 0
+        if created:
+            try:
+                start = datetime.fromisoformat(created)
+                end = datetime.fromisoformat(last_updated)
+                diff = end - start
+                duration_seconds = int(diff.total_seconds())
+                hours, remainder = divmod(duration_seconds, 3600)
+                minutes, secs = divmod(remainder, 60)
+                if hours > 0:
+                    duration_human = f"{hours}h {minutes}m {secs}s"
+                elif minutes > 0:
+                    duration_human = f"{minutes}m {secs}s"
+                else:
+                    duration_human = f"{secs}s"
+            except Exception:
+                pass
+
+        # Calculate stats
+        req_count = data.get("request_count", 0)
+        total_complexity = data.get("total_complexity", 0)
+        avg_complexity = round(total_complexity / req_count, 1) if req_count > 0 else 0
+        success_rate = round(((tool_count - error_count) / tool_count) * 100, 1) if tool_count > 0 else 100.0
+
+        # Policy execution stats
+        policy_count = 0
+        policy_duration = 0
+        if flow_trace:
+            policies = flow_trace.get("all_policies_executed", [])
+            policy_count = len(policies)
+            policy_duration = sum(p.get("duration_ms", 0) for p in policies)
+
+        # Generate markdown summary
+        md_lines = [
+            f"# Session Summary: {session_id}",
+            "",
+            f"**Duration:** {duration_human or 'N/A'} | **Requests:** {req_count} | **Complexity:** avg {avg_complexity}, max {data.get('max_complexity', 0)}",
+            "",
+            "## Overview",
+            "",
+            f"| Metric | Value |",
+            f"|--------|-------|",
+            f"| Skills Used | {', '.join(data.get('skills_used', [])) or 'None'} |",
+            f"| Task Types | {', '.join(data.get('task_types', [])) or 'None'} |",
+            f"| Models Used | {', '.join(data.get('models_used', [])) or 'None'} |",
+            f"| Plan Mode | {data.get('plan_mode_count', 0)} times |",
+            f"| Peak Context | {data.get('peak_context_pct', 0)}% |",
+            f"| Tool Calls | {tool_count} (success rate: {success_rate}%) |",
+            f"| Files Modified | {len(files_modified)} |",
+            f"| Files Read | {len(files_read)} |",
+            f"| Policies Executed | {policy_count} ({policy_duration}ms total) |",
+            "",
+        ]
+
+        # Supplementary skills
+        supp = data.get("all_supplementary_skills", [])
+        if supp:
+            md_lines.append(f"**Supplementary Skills:** {', '.join(supp)}")
+            md_lines.append("")
+
+        # Request log
+        md_lines.append("## Request Log")
+        md_lines.append("")
+        md_lines.append("| # | Time | Type | Skill | Complexity | Model |")
+        md_lines.append("|---|------|------|-------|-----------|-------|")
+        for i, req in enumerate(data.get("requests", []), 1):
+            ts = req.get("timestamp", "")[:19]
+            md_lines.append(
+                f"| {i} | {ts} | {req.get('task_type', '')} | "
+                f"{req.get('skill', '')} | {req.get('complexity', 0)} | "
+                f"{req.get('model', '')} |"
+            )
+        md_lines.append("")
+
+        # Files section
+        if files_modified:
+            md_lines.append("## Files Modified")
+            md_lines.append("")
+            for f in sorted(files_modified):
+                md_lines.append(f"- {f}")
+            md_lines.append("")
+
+        # Pipeline decisions
+        if flow_trace:
+            decisions = flow_trace.get("decisions_timeline", [])
+            if decisions:
+                md_lines.append("## Pipeline Decisions")
+                md_lines.append("")
+                for d in decisions[-10:]:
+                    md_lines.append(f"- **{d.get('policy', '')}**: {d.get('decision', '')}")
+                md_lines.append("")
+
+        md_lines.append(f"---")
+        md_lines.append(f"*Generated at {datetime.now().isoformat()[:19]}*")
+
+        summary_md = "\n".join(md_lines)
+
+        # Save markdown summary
+        session_dir = LOGS_PATH / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        md_path = session_dir / "session-summary.md"
+        md_path.write_text(summary_md, encoding="utf-8")
+
+        # Update accumulated data status
+        data["status"] = "COMPLETED"
+        data["duration_human"] = duration_human
+        data["duration_seconds"] = duration_seconds
+        data["avg_complexity"] = avg_complexity
+        data["files_modified"] = sorted(files_modified)
+        data["files_read"] = sorted(files_read)
+        data["total_tool_calls"] = tool_count
+        data["error_count"] = error_count
+        data["success_rate_pct"] = success_rate
+        _save_accumulation(session_id, data)
+
+        # Update chain index summary
+        index = _load_chain_index()
+        if session_id in index.get("sessions", {}):
+            index["sessions"][session_id]["summary"] = (
+                f"{req_count} requests, {', '.join(data.get('skills_used', [])[:3])}, "
+                f"complexity avg {avg_complexity}"
+            )
+            _save_chain_index(index)
+
+        return _json({
+            "success": True,
+            "session_id": session_id,
+            "summary_file": str(md_path),
+            "duration": duration_human,
+            "requests": req_count,
+            "tools": tool_count,
+            "files_modified": len(files_modified),
+            "policies": policy_count
+        })
+    except Exception as e:
+        return _json({"success": False, "error": str(e)})
+
+
+@mcp.tool()
+def session_add_work_item(
+    session_id: str,
+    description: str,
+    work_type: str = "TASK",
+    metadata: str = "{}"
+) -> str:
+    """Add a work item to a session for tracking tasks within sessions.
+
+    Args:
+        session_id: Session ID to add work item to
+        description: Human-readable description of the work item
+        work_type: Type prefix for work item ID (e.g., 'TASK', 'WORK', 'BUG')
+        metadata: JSON string of additional fields
+    """
+    try:
+        index = _load_chain_index()
+
+        if session_id not in index["sessions"]:
+            return _json({"success": False, "error": f"Session not found: {session_id}"})
+
+        session = index["sessions"][session_id]
+
+        # Generate work item ID
+        suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        work_id = f"{work_type}-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{suffix}"
+
+        # Parse metadata
+        try:
+            meta = json.loads(metadata)
+        except (json.JSONDecodeError, TypeError):
+            meta = {}
+
+        work_item = {
+            "work_id": work_id,
+            "type": work_type,
+            "description": description,
+            "started_at": datetime.now().isoformat(),
+            "completed_at": None,
+            "status": "IN_PROGRESS",
+            "metadata": meta
+        }
+
+        session.setdefault("work_items", []).append(work_item)
+        _save_chain_index(index)
+
+        return _json({
+            "success": True,
+            "work_id": work_id,
+            "session_id": session_id,
+            "description": description,
+            "status": "IN_PROGRESS"
+        })
+    except Exception as e:
+        return _json({"success": False, "error": str(e)})
+
+
+@mcp.tool()
+def session_complete_work_item(
+    session_id: str,
+    work_id: str,
+    status: str = "COMPLETED"
+) -> str:
+    """Mark a work item as completed.
+
+    Args:
+        session_id: Parent session ID
+        work_id: Work item ID to complete
+        status: Final status (COMPLETED, FAILED, SKIPPED)
+    """
+    try:
+        index = _load_chain_index()
+
+        if session_id not in index["sessions"]:
+            return _json({"success": False, "error": f"Session not found: {session_id}"})
+
+        session = index["sessions"][session_id]
+        work_items = session.get("work_items", [])
+
+        found = False
+        for item in work_items:
+            if item["work_id"] == work_id:
+                item["completed_at"] = datetime.now().isoformat()
+                item["status"] = status
+                found = True
+                break
+
+        if not found:
+            return _json({"success": False, "error": f"Work item not found: {work_id}"})
+
+        _save_chain_index(index)
+
+        return _json({
+            "success": True,
+            "work_id": work_id,
+            "session_id": session_id,
+            "status": status,
+            "completed_at": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return _json({"success": False, "error": str(e)})
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

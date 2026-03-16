@@ -491,6 +491,88 @@ def get_flow_trace_summary(session_id: Optional[str] = None) -> str:
         return _json({"success": False, "error": str(e)})
 
 
+# Module registry for health checks (from policy-executor.py)
+_POLICY_MODULES = [
+    {"level": 1, "path": "01-sync-system/session-management/session-loader.py", "name": "Session Loader"},
+    {"level": 1, "path": "01-sync-system/context-management/context-monitor-v2.py", "name": "Context Monitor"},
+    {"level": 1, "path": "01-sync-system/user-preferences/preference-auto-tracker.py", "name": "Preference Auto-Tracker"},
+    {"level": 1, "path": "01-sync-system/pattern-detection/detect-patterns.py", "name": "Pattern Detector"},
+    {"level": 1, "path": "01-sync-system/session-management/session-save-triggers.py", "name": "Session Save Triggers"},
+    {"level": 1, "path": "01-sync-system/session-management/archive-old-sessions.py", "name": "Archive Old Sessions"},
+    {"level": 2, "path": "02-standards-system/standards-loader.py", "name": "Standards Loader"},
+    {"level": 3, "path": "03-execution-system/00-prompt-generation/prompt-generator.py", "name": "Prompt Generator"},
+    {"level": 3, "path": "03-execution-system/01-task-breakdown/task-breakdown.py", "name": "Task Breakdown"},
+    {"level": 3, "path": "03-execution-system/02-plan-mode/plan-mode-decision.py", "name": "Plan Mode Decision"},
+    {"level": 3, "path": "03-execution-system/04-model-selection/model-selector.py", "name": "Model Selector"},
+    {"level": 3, "path": "03-execution-system/05-skill-agent-selection/skill-agent-selector.py", "name": "Skill/Agent Selector"},
+    {"level": 3, "path": "03-execution-system/06-tool-optimization/tool-optimizer.py", "name": "Tool Optimizer"},
+    {"level": 3, "path": "03-execution-system/08-progress-tracking/progress-tracker.py", "name": "Progress Tracker"},
+    {"level": 3, "path": "03-execution-system/09-git-commit/git-auto-commit.py", "name": "Git Auto-Commit"},
+]
+
+
+@mcp.tool()
+def check_module_health() -> str:
+    """Check health of all registered policy modules (existence + importability).
+
+    Scans the architecture directory for all policy modules and reports
+    which ones are present, missing, or have import errors.
+    """
+    try:
+        arch_dir = _PROJECT_ROOT / "scripts" / "architecture"
+        results_by_level = {1: [], 2: [], 3: []}
+        missing = []
+        failed_import = []
+
+        for mod in _POLICY_MODULES:
+            mod_path = arch_dir / mod["path"]
+            level = mod["level"]
+            name = mod["name"]
+
+            if not mod_path.exists():
+                results_by_level[level].append({"name": name, "status": "MISSING", "path": mod["path"]})
+                missing.append(name)
+                continue
+
+            # Check importability
+            try:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location(name, str(mod_path))
+                if spec is None:
+                    results_by_level[level].append({"name": name, "status": "IMPORT_FAILED", "path": mod["path"]})
+                    failed_import.append(name)
+                else:
+                    results_by_level[level].append({"name": name, "status": "OK", "path": mod["path"]})
+            except Exception:
+                results_by_level[level].append({"name": name, "status": "IMPORT_FAILED", "path": mod["path"]})
+                failed_import.append(name)
+
+        total = len(_POLICY_MODULES)
+        total_ok = sum(
+            1 for level_results in results_by_level.values()
+            for r in level_results if r["status"] == "OK"
+        )
+
+        by_level = {}
+        for level, results in results_by_level.items():
+            ok = sum(1 for r in results if r["status"] == "OK")
+            by_level[f"level_{level}"] = {"ok": ok, "total": len(results)}
+
+        return _json({
+            "success": True,
+            "verified_ok": total_ok,
+            "total_modules": total,
+            "missing": missing,
+            "failed_import": failed_import,
+            "by_level": by_level,
+            "results": {
+                f"level_{k}": v for k, v in results_by_level.items()
+            }
+        })
+    except Exception as e:
+        return _json({"success": False, "error": str(e)})
+
+
 # =============================================================================
 # RESOURCES (2)
 # =============================================================================
