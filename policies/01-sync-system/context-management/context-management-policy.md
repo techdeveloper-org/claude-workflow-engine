@@ -11,7 +11,7 @@
 Context Management Policy monitors, tracks, and optimizes Claude's context window usage in real-time. It prevents token overflow, manages memory efficiently, and ensures continuous operation within token budgets.
 
 **Location:** `policies/01-sync-system/context-management/`
-**Implementation:** `scripts/architecture/01-sync-system/context-management/context-monitor-v2.py`
+**Implementation:** `scripts/architecture/01-sync-system/context-management/context-monitor.py`
 
 ---
 
@@ -151,8 +151,8 @@ Force:  Remove non-essential context
 
 | Script | Purpose |
 |--------|---------|
-| `context-monitor-v2.py` | Main monitoring engine |
-| `context-estimator.py` | Token estimation & projection |
+| `context-monitor.py` | Main monitoring engine |
+| `context-monitor.py` | Token estimation & projection |
 | `context-extractor.py` | Extract context from files |
 | `context-cache.py` | In-memory context caching |
 | `auto-context-pruner.py` | Automatic pruning logic |

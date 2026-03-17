@@ -1126,7 +1126,7 @@ User Natural Language Input
         ↓
     User Confirms or Adjusts
         ↓
-🟢 context-monitor-v2.py (Context Check)
+🟢 context-monitor.py (Context Check)
 🟢 model-selection-enforcer.py (Model Selection)
 🟢 task-phase-enforcer.py (Task/Phase Analysis)
         ↓

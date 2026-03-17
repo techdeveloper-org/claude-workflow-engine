@@ -94,7 +94,7 @@ class DummyProjectSeeder:
             {
                 "step": "LEVEL_1_CONTEXT",
                 "name": "Context Management",
-                "policy": "context-monitor-v2.py",
+                "policy": "context-monitor.py",
                 "duration_ms": 89
             },
             {

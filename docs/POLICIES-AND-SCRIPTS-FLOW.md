@@ -23,7 +23,7 @@ policies/01-sync-system/
 │   └── context-management-policy.md
 │       ↓
 │   scripts/architecture/01-sync-system/context-management/
-│   ├── context-monitor-v2.py (Monitor context usage)
+│   ├── context-monitor.py (Monitor context usage)
 │   ├── context-management-policy.py (Enforce policy)
 │   └── session-pruning-policy.py (Clean old data)
 │
@@ -201,7 +201,7 @@ Failure Prevention:
 
 | Policy File | What It Says | Script File | What It Does |
 |-------------|--------------|------------|--------------|
-| context-management-policy.md | "Monitor context ≤85%" | context-monitor-v2.py | Checks usage, archives old |
+| context-management-policy.md | "Monitor context ≤85%" | context-monitor.py | Checks usage, archives old |
 | session-*-policy.md | "Save with unique IDs" | session-chaining-policy.py | Creates chains |
 | cross-project-patterns-policy.md | "Detect & replicate" | detect-patterns.py | Finds patterns |
 | common-standards-policy.md | "Follow 65 rules" | common-standards-enforcer.py | Validates all |

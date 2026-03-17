@@ -50,7 +50,7 @@ The engine receives ALL collected data (~500 tokens):
 | keyword_complexity | keyword + graph combined | 15 |
 | tech_stack | context-reader.py | ["spring-boot", "java", "jwt"] |
 | keywords | prompt-generator.py | ["authentication", "api"] |
-| context_pct | context-monitor-v2.py | 65 |
+| context_pct | context-monitor.py | 65 |
 | task_count | task-breakdown.py | 3 |
 | plan_required | plan-mode check | false |
 | project_name | Path.cwd().name | "claude-insight" |

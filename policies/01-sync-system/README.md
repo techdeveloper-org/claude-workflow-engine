@@ -49,7 +49,7 @@
 ├── context-management/      📖 Context optimization
 │   ├── README.md               (14 files total)
 │   ├── context-daemon.py
-│   ├── context-monitor-v2.py
+│   ├── context-monitor.py
 │   ├── smart-cleanup.py
 │   ├── tiered-cache.py
 │   └── ... (context-related files)

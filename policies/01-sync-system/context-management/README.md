@@ -21,13 +21,13 @@
 
 ### **Monitoring:**
 - `context-daemon.py` - Context monitoring daemon
-- `context-monitor-v2.py` - Context usage monitor (v2)
+- `context-monitor.py` - Context usage monitor (v2)
 - `monitor-context.py` - Monitor context
 - `monitor-and-cleanup-context.py` - Monitor + cleanup combined
 
 ### **Optimization:**
 - `context-cache.py` - Context caching
-- `context-estimator.py` - Estimate context usage
+- `context-monitor.py` - Estimate context usage
 - `context-extractor.py` - Extract context info
 - `auto-context-pruner.py` - Auto-prune context
 
@@ -41,7 +41,7 @@
 
 ### **Monitor Context:**
 ```bash
-python context-monitor-v2.py --current-status
+python context-monitor.py --current-status
 ```
 
 **Output:**
@@ -58,7 +58,7 @@ bash trigger-context-cleanup.sh
 
 ### **Estimate Context:**
 ```bash
-python context-estimator.py --file ProductService.java
+python context-monitor.py --file ProductService.java
 ```
 
 ---

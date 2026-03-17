@@ -431,7 +431,7 @@ def get_flow_trace_summary(session_id: Optional[str] = None) -> dict:
 # Module registry for health checks (from policy-executor.py)
 _POLICY_MODULES = [
     {"level": 1, "path": "01-sync-system/session-management/session-loader.py", "name": "Session Loader"},
-    {"level": 1, "path": "01-sync-system/context-management/context-monitor-v2.py", "name": "Context Monitor"},
+    {"level": 1, "path": "01-sync-system/context-management/context-monitor.py", "name": "Context Monitor"},
     {"level": 1, "path": "01-sync-system/user-preferences/preference-auto-tracker.py", "name": "Preference Auto-Tracker"},
     {"level": 1, "path": "01-sync-system/pattern-detection/detect-patterns.py", "name": "Pattern Detector"},
     {"level": 1, "path": "01-sync-system/session-management/session-save-triggers.py", "name": "Session Save Triggers"},

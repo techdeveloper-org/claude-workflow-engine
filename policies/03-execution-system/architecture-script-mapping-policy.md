@@ -68,7 +68,7 @@ All scripts that existed in the original v1.0.0 policy (65 total) but are no lon
 | Original Functional Area | Migrated To (scripts/langgraph_engine/) |
 |--------------------------|----------------------------------------|
 | Session management (session-loader, session-state, auto-save, archive) | `session_manager.py`, `checkpoint_manager.py`, `backup_manager.py` |
-| Context management (context-monitor-v2, context-estimator, context-pruner) | `context_cache.py`, `context_deduplicator.py`, `token_manager.py` |
+| Context management (context-monitor, context-pruner) | `context_cache.py`, `context_deduplicator.py`, `token_manager.py` |
 | User preferences (load-preferences, preference-detector) | `skill_selection_criteria.py`, `patterns.py` |
 | Pattern detection (detect-patterns, apply-patterns) | `rag_integration.py` (RAG-based pattern matching) |
 | Model selection (model-auto-selector, intelligent-model-selector) | `version_selector.py`, `inference_router.py`, `hybrid_inference.py` |

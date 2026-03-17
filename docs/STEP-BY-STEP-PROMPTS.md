@@ -41,7 +41,7 @@ Else → Continue to Level 1
 ## LEVEL 1: SYNC SYSTEM (4 Context Tasks)
 
 ### Node 1: Context Loader
-**Script:** `context-monitor-v2.py`
+**Script:** `context-monitor.py`
 
 **Input:** None (reads system state)
 

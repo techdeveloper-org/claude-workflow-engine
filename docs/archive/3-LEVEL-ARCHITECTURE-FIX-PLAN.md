@@ -9,7 +9,7 @@
 ## ✅ Scripts That Exist (All 7 Core Scripts)
 
 1. ✅ `auto-fix-enforcer.sh` - WORKING ✅
-2. ✅ `context-monitor-v2.py` - WORKING ✅
+2. ✅ `context-monitor.py` - WORKING ✅
 3. ✅ `standards-loader.py` - WORKING ✅
 4. ✅ `prompt-generator.py` - WORKING ✅
 5. ✅ `task-auto-analyzer.py` - NEEDS FIX 🔧
@@ -129,7 +129,7 @@ bash ~/.claude/memory/auto-fix-enforcer.sh
 
 **Step 1.1: Context Management**
 ```bash
-python ~/.claude/memory/01-sync-system/context-management/context-monitor-v2.py --current-status
+python ~/.claude/memory/01-sync-system/context-management/context-monitor.py --current-status
 ```
 **Status:** ✅ WORKING
 
@@ -242,7 +242,7 @@ bash ~/.claude/memory/auto-fix-enforcer.sh || exit 1
 
 # LEVEL 1: Sync System
 echo "[LEVEL 1] Context Check..."
-python ~/.claude/memory/01-sync-system/context-management/context-monitor-v2.py --current-status
+python ~/.claude/memory/01-sync-system/context-management/context-monitor.py --current-status
 
 echo "[LEVEL 1] Session ID..."
 python ~/.claude/memory/session-id-generator.py current

@@ -118,8 +118,8 @@ Default threshold: 0.82 (step-specific: 0.75-0.90)
 
 ```
 Hook Mode (default, CLAUDE_HOOK_MODE=1):
-  Steps 0-7   -> Pipeline (analysis + prompt generation)
-  Steps 8-14  -> Skipped (user creates issues/PRs manually or via Full Mode)
+  Steps 0-9   -> Pipeline (analysis + prompt + GitHub issue + branch)
+  Steps 10-14 -> Skipped (user implements, then runs Full Mode for PR/closure)
 
 Full Mode (CLAUDE_HOOK_MODE=0):
   Steps 0-14  -> All steps execute sequentially

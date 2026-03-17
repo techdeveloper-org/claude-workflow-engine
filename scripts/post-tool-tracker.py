@@ -1088,7 +1088,7 @@ def main():
             resp_chars = get_response_content_length(tool_response)
             state['content_chars'] = state.get('content_chars', 0) + resp_chars
 
-            # Compute and store dynamic context estimate so context-monitor-v2.py reads it
+            # Compute and store dynamic context estimate so context-monitor.py reads it
             ctx_est = estimate_context_pct(state['tool_counts'], state.get('content_chars', 0))
             state['context_estimate_pct'] = ctx_est
             debug_log(f"  [GRANULAR] Step 3.1.8: ? Context estimates computed")

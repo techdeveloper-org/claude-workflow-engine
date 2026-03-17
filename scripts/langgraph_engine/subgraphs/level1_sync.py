@@ -68,6 +68,45 @@ except ImportError:
 
 
 # ============================================================================
+# ARCHITECTURE SCRIPT LOADER (lazy, importlib-based)
+# Scripts in scripts/architecture/01-sync-system/ are not a Python package.
+# Use importlib.util.spec_from_file_location for dynamic import.
+# ============================================================================
+
+def _load_architecture_script(script_name: str):
+    """Dynamically load a script from scripts/architecture/01-sync-system/.
+
+    Returns the loaded module, or None if the file does not exist or
+    fails to import.  All failures are silently swallowed so that the
+    pipeline is never blocked by an optional enhancement.
+
+    Args:
+        script_name: filename without path, e.g. "pattern-detector.py"
+
+    Returns:
+        Loaded module object, or None on any failure.
+    """
+    try:
+        import importlib.util
+        script_path = (
+            Path(__file__).parent.parent.parent /
+            "architecture" / "01-sync-system" / script_name
+        )
+        if not script_path.exists():
+            return None
+        # Convert filename to a valid Python module name
+        module_name = script_name.replace("-", "_").replace(".py", "")
+        spec = importlib.util.spec_from_file_location(module_name, str(script_path))
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        return None
+
+
+# ============================================================================
 # NODE 1: SESSION LOADER (MUST BE FIRST)
 # ============================================================================
 
@@ -114,6 +153,35 @@ def node_session_loader(state: FlowState) -> dict:
             "session_path": str(session_path),
             "session_loaded": True,
         }
+
+        # ---- Best-effort: prune old sessions (optional enhancement) ----
+        try:
+            _pruner = _load_architecture_script("session-pruner.py")
+            if _pruner is not None and hasattr(_pruner, "prune_sessions"):
+                _sessions_dir = Path.home() / ".claude" / "logs" / "sessions"
+                _prune_result = _pruner.prune_sessions(_sessions_dir)
+                result["session_pruning_done"] = True
+                result["session_pruning_archived"] = _prune_result.get("archived", 0)
+        except Exception as _prune_exc:
+            print(
+                "[LEVEL 1 SESSION_LOADER] Session pruning skipped: {}".format(_prune_exc),
+                file=sys.stderr,
+            )
+
+        # ---- Best-effort: track user preferences from session history ----
+        try:
+            _pref_tracker = _load_architecture_script("preference-tracker.py")
+            if _pref_tracker is not None and hasattr(_pref_tracker, "track_preferences"):
+                _sessions_dir = Path.home() / ".claude" / "logs" / "sessions"
+                if not state.get("preferences_data"):
+                    _prefs = _pref_tracker.track_preferences(_sessions_dir)
+                    result["preferences_data"] = _prefs
+        except Exception as _pref_exc:
+            print(
+                "[LEVEL 1 SESSION_LOADER] Preference tracking skipped: {}".format(_pref_exc),
+                file=sys.stderr,
+            )
+
         write_level_log(result, "level1", "session-loader", "OK", _time_mod.time() - _step_start, result)
         return result
     except Exception as e:
@@ -595,6 +663,19 @@ def node_context_loader(state: FlowState) -> dict:
             file=sys.stderr,
         )
 
+        # ---- Best-effort: detect technology patterns in project root ----
+        _detected_patterns = None
+        try:
+            _pattern_mod = _load_architecture_script("pattern-detector.py")
+            if _pattern_mod is not None and hasattr(_pattern_mod, "detect_patterns"):
+                if not state.get("patterns_detected"):
+                    _detected_patterns = _pattern_mod.detect_patterns(project_root)
+        except Exception as _pat_exc:
+            print(
+                "[LEVEL 1 CONTEXT LOADER] Pattern detection skipped: {}".format(_pat_exc),
+                file=sys.stderr,
+            )
+
         # Return partial context - whatever loaded successfully
         result = {
             "context_data": context_data,
@@ -609,6 +690,8 @@ def node_context_loader(state: FlowState) -> dict:
             "context_hit_rate_pct": cache_stats.get("hit_rate_pct", 0.0),
             "context_streamed_files": streamed_files,
         }
+        if _detected_patterns is not None:
+            result["patterns_detected"] = _detected_patterns
         write_level_log(state, "level1", "context-loader", "OK",
                         _time_mod.time() - loader_start, {
                             "files_loaded": len(context_data.get("files_loaded", [])),
@@ -931,6 +1014,27 @@ def cleanup_level1_memory(state: FlowState) -> dict:
         print(f"  TOON object preserved: {list(toon.keys())}", file=sys.stderr)
         print(f"  ✓ Memory cleanup complete\n", file=sys.stderr)
 
+    # ---- Best-effort: estimate context window usage after cleanup ----
+    _context_monitor_result = {}
+    try:
+        _monitor_mod = _load_architecture_script("context-monitor.py")
+        if _monitor_mod is not None and hasattr(_monitor_mod, "estimate_context_usage"):
+            _session_path_val = state.get("session_path", "")
+            _session_dir = Path(_session_path_val) if _session_path_val else None
+            _usage = _monitor_mod.estimate_context_usage(_session_dir)
+            _context_monitor_result = {
+                "context_percentage": _usage.get("percentage", 0.0),
+                "context_percentage_display": _usage.get("percentage_display", ""),
+                "context_threshold_zone": _usage.get("threshold_zone", ""),
+                "context_estimated_tokens": _usage.get("estimated_tokens", 0),
+                "context_recommendation": _usage.get("recommendation", ""),
+            }
+    except Exception as _mon_exc:
+        print(
+            "[LEVEL 1 CLEANUP] Context monitor skipped: {}".format(_mon_exc),
+            file=sys.stderr,
+        )
+
     # Return cleanup updates
     # In Python, we just set these to None/empty
     # LangGraph will update the state
@@ -944,4 +1048,5 @@ def cleanup_level1_memory(state: FlowState) -> dict:
         # Store cleanup summary for logging
         "level1_cleanup_summary": cleanup_summary,
     }
+    cleanup.update(_context_monitor_result)
     return cleanup
