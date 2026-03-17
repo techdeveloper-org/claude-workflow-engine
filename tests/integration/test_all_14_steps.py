@@ -1158,7 +1158,7 @@ class TestOrchestratorRouting:
         from langgraph_engine.orchestrator import route_context_threshold
         state = _base_state()
         state["context_threshold_exceeded"] = True
-        assert route_context_threshold(state) == "emergency_archive"
+        assert route_context_threshold(state) == "level2_emergency_archive"
 
     def test_route_context_threshold_within_limit(self):
         from langgraph_engine.orchestrator import route_context_threshold

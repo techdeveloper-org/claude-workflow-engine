@@ -336,7 +336,7 @@ class TestContextThresholdRouting:
         result = route_context_threshold(state)
 
         # Should route to emergency archive
-        assert result == "emergency_archive"
+        assert result == "level2_emergency_archive"
 
     def test_normal_context_routes_to_standards(self):
         """Verify normal context usage routes to standards"""

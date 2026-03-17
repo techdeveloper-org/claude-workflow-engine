@@ -794,7 +794,7 @@ class CodeGraphAnalyzer:
         duration = (datetime.now() - self.start_time).total_seconds() * 1000
 
         return {
-            'step': 'LEVEL_3_STEP_3_0_1',
+            'step': 'LEVEL_3_STEP_0_CODE_GRAPH',
             'name': 'Code Graph Analysis (Pre-Flight)',
             'level': 3,
             'order': 0.1,

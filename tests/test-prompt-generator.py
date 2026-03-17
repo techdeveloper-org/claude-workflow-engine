@@ -73,7 +73,7 @@ def test_json_trace_has_enhanced_prompt():
 
     # Find step 3.0
     for step in trace.get('pipeline', []):
-        if step.get('step') == 'LEVEL_3_STEP_3_0':
+        if step.get('step') == 'LEVEL_3_STEP_0':
             policy_output = step.get('policy_output', {})
             if 'enhanced_prompt' in policy_output:
                 val = policy_output['enhanced_prompt']

@@ -215,11 +215,11 @@ def test_ac7_orchestrator_hooks():
     nodes = list(graph.nodes.keys())
 
     expected_hooks = [
-        "standards_hook_step1",
-        "standards_hook_step2",
-        "standards_hook_step5",
-        "standards_hook_step10",
-        "standards_hook_step13",
+        "level3_standards_hook_step1",
+        "level3_standards_hook_step2",
+        "level3_standards_hook_step5",
+        "level3_standards_hook_step10",
+        "level3_standards_hook_step13",
         "level2_select_standards",
     ]
     for hook in expected_hooks:

@@ -164,7 +164,7 @@ def emit_policy_step(step_name: str, level: int, passed: bool,
 
     Parameters
     ----------
-    step_name   : e.g. 'LEVEL_1_CONTEXT', 'LEVEL_3_STEP_3_4_MODEL'
+    step_name   : e.g. 'LEVEL_1_CONTEXT', 'LEVEL_3_STEP_4'
     level       : top-level policy level (-1, 1, 2, or 3)
     passed      : True if the step completed successfully
     duration_ms : time the step took (0 if not measured)
@@ -257,7 +257,7 @@ if __name__ == '__main__':
     emit_enforcement_event('pre-tool-enforcer.py', 'task_breakdown_block',
                            tool_name='Write', reason='task-breakdown-pending flag found',
                            blocked=True, session_id='SESSION-TEST-001')
-    emit_policy_step('LEVEL_3_STEP_3_4_MODEL', level=3, passed=True,
+    emit_policy_step('LEVEL_3_STEP_4', level=3, passed=True,
                      duration_ms=5, session_id='SESSION-TEST-001',
                      details={'model': 'SONNET', 'complexity': 8})
     emit_flag_lifecycle('skill_selection', 'write',
