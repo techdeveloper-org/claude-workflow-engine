@@ -22,10 +22,16 @@ Tools (6):
 """
 
 import json
+import sys
 from pathlib import Path
 from typing import Optional
 
+# Ensure src/mcp/ is in path for base package imports
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from mcp.server.fastmcp import FastMCP
+from base.response import to_json
+from base.decorators import mcp_tool_handler
 
 mcp = FastMCP(
     "standards-loader",
@@ -46,15 +52,12 @@ PRIORITY_FRAMEWORK = 2
 PRIORITY_LANGUAGE = 1
 
 
-def _json(data: dict) -> str:
-    return json.dumps(data, indent=2, default=str)
-
-
 # =============================================================================
 # TOOL 1: DETECT PROJECT TYPE
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def detect_project_type(project_path: str = ".") -> str:
     """Detect the primary programming language of a project.
 
@@ -68,7 +71,7 @@ def detect_project_type(project_path: str = ".") -> str:
         root = Path(project_path).resolve()
 
         if not root.exists():
-            return _json({"success": False, "error": f"Path not found: {project_path}"})
+            return to_json({"success": False, "error": f"Path not found: {project_path}"})
 
         # Python
         if any((root / f).exists() for f in ["setup.py", "pyproject.toml", "requirements.txt", "Pipfile"]):
@@ -100,13 +103,13 @@ def detect_project_type(project_path: str = ".") -> str:
         else:
             lang = "unknown"
 
-        return _json({
+        return to_json({
             "success": True,
             "project_type": lang,
             "project_path": str(root),
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -114,6 +117,7 @@ def detect_project_type(project_path: str = ".") -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def detect_framework(project_path: str = ".", project_type: str = "") -> str:
     """Detect the primary framework within a project type.
 
@@ -139,14 +143,14 @@ def detect_framework(project_path: str = ".", project_type: str = "") -> str:
         elif project_type == "swift":
             framework = "swiftui" if list(root.rglob("*View.swift"))[:1] else "uikit"
 
-        return _json({
+        return to_json({
             "success": True,
             "project_type": project_type,
             "framework": framework,
             "project_path": str(root),
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 def _detect_python_fw(root: Path) -> str:
@@ -218,6 +222,7 @@ def _detect_js_fw(root: Path) -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def load_standards(project_path: str = ".") -> str:
     """Load all applicable standards for a project with full traceability.
 
@@ -289,7 +294,7 @@ def load_standards(project_path: str = ".") -> str:
         # 6. Resolve conflicts (higher priority wins)
         merged_rules = _resolve_conflicts(all_standards)
 
-        return _json({
+        return to_json({
             "success": True,
             "project_type": project_type,
             "framework": framework,
@@ -305,7 +310,7 @@ def load_standards(project_path: str = ".") -> str:
             "traceability": traceability,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 def _load_from_dirs(dirs, source, priority):
@@ -450,6 +455,7 @@ def _resolve_conflicts(standards_list):
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def resolve_standard_conflicts(standards_json: str) -> str:
     """Resolve conflicts in a list of standards (higher priority wins).
 
@@ -460,14 +466,14 @@ def resolve_standard_conflicts(standards_json: str) -> str:
         standards = json.loads(standards_json)
         conflicts = _detect_conflicts(standards)
         merged = _resolve_conflicts(standards)
-        return _json({
+        return to_json({
             "success": True,
             "conflicts": conflicts,
             "merged_rules": merged,
             "total_rules": len(merged),
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -475,6 +481,7 @@ def resolve_standard_conflicts(standards_json: str) -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def get_active_standards(project_path: str = ".") -> str:
     """Get currently active standards summary for a project.
 
@@ -486,9 +493,9 @@ def get_active_standards(project_path: str = ".") -> str:
     try:
         result = json.loads(load_standards(project_path))
         if not result.get("success"):
-            return _json(result)
+            return to_json(result)
 
-        return _json({
+        return to_json({
             "success": True,
             "project_type": result["project_type"],
             "framework": result["framework"],
@@ -501,7 +508,7 @@ def get_active_standards(project_path: str = ".") -> str:
             "rule_count": len(result.get("merged_rules", {})),
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -509,6 +516,7 @@ def get_active_standards(project_path: str = ".") -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def list_available_standards(source: str = "all") -> str:
     """List all available standard files across all sources.
 
@@ -553,14 +561,14 @@ def list_available_standards(source: str = "all") -> str:
                             "size_kb": round(f.stat().st_size / 1024, 1),
                         })
 
-        return _json({
+        return to_json({
             "success": True,
             "standards": standards,
             "count": len(standards),
             "source_filter": source,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -633,6 +641,7 @@ def _start_file_watcher():
 
 
 @mcp.tool()
+@mcp_tool_handler
 def reload_standards(project_path: str = ".", start_watcher: bool = True) -> str:
     """Reload standards by invalidating cache and optionally starting file watcher.
 
@@ -654,7 +663,7 @@ def reload_standards(project_path: str = ".", start_watcher: bool = True) -> str
         # Reload standards immediately
         result = json.loads(load_standards(project_path))
 
-        return _json({
+        return to_json({
             "success": True,
             "reloaded": True,
             "standards_loaded": result.get("standards_loaded", 0),
@@ -664,7 +673,7 @@ def reload_standards(project_path: str = ".", start_watcher: bool = True) -> str
             "watched_dirs": [str(d) for d in _get_watched_dirs()],
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":

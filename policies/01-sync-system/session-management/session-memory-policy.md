@@ -733,13 +733,13 @@ print(f"🎯 Session Started: {session_id}")
 
 **File:** `~/.claude/memory/sessions/{project-name}/session-{session-id}.md`
 
-**Example:** `~/.claude/memory/sessions/m2-surgricals/session-20260216-1430-a3f7.md`
+**Example:** `~/.claude/memory/sessions/surgricalswale/session-20260216-1430-a3f7.md`
 
 ```markdown
 ---
 session_id: "20260216-1430-a3f7"
 timestamp: "2026-02-16 14:30:00"
-project: "m2-surgricals"
+project: "surgricalswale"
 purpose: "Implement authentication feature"
 tags: ["authentication", "jwt", "security", "user-service"]
 duration: "45 minutes"
@@ -851,28 +851,28 @@ backend/user-service/src/main/java/
     {
       "session_id": "20260216-1430-a3f7",
       "timestamp": "2026-02-16T14:30:00",
-      "project": "m2-surgricals",
+      "project": "surgricalswale",
       "purpose": "Implement authentication feature",
       "tags": ["authentication", "jwt", "security", "user-service"],
       "duration_minutes": 45,
       "files_modified": 5,
       "status": "completed",
-      "file_path": "sessions/m2-surgricals/session-20260216-1430-a3f7.md"
+      "file_path": "sessions/surgricalswale/session-20260216-1430-a3f7.md"
     },
     {
       "session_id": "20260215-1020-b8c3",
       "timestamp": "2026-02-15T10:20:00",
-      "project": "m2-surgricals",
+      "project": "surgricalswale",
       "purpose": "Setup user service structure",
       "tags": ["setup", "user-service", "microservice"],
       "duration_minutes": 30,
       "files_modified": 8,
       "status": "completed",
-      "file_path": "sessions/m2-surgricals/session-20260215-1020-b8c3.md"
+      "file_path": "sessions/surgricalswale/session-20260215-1020-b8c3.md"
     }
   ],
   "total_sessions": 2,
-  "projects": ["m2-surgricals", "example-project-ui"],
+  "projects": ["surgricalswale", "example-project-ui"],
   "last_updated": "2026-02-16T15:15:00"
 }
 ```
@@ -951,7 +951,7 @@ python ~/.claude/memory/session-search.py --tags authentication jwt
 
 **Search by project:**
 ```bash
-python ~/.claude/memory/session-search.py --project m2-surgricals
+python ~/.claude/memory/session-search.py --project surgricalswale
 # Returns: All sessions for this project
 ```
 
@@ -1137,7 +1137,7 @@ Claude: [Loads session 20260216-1430-a3f7]
 session list
 
 # List sessions for project
-session list --project m2-surgricals
+session list --project surgricalswale
 
 # Load session
 session load 20260216-1430-a3f7
@@ -1210,8 +1210,8 @@ Daemon extracts tags from:
 
 | ID | Date | Project | Purpose | Duration |
 |----|------|---------|---------|----------|
-| 20260216-1430-a3f7 | 2026-02-16 | m2-surgricals | Implement auth | 45 min |
-| 20260215-1020-b8c3 | 2026-02-15 | m2-surgricals | User service setup | 30 min |
+| 20260216-1430-a3f7 | 2026-02-16 | surgricalswale | Implement auth | 45 min |
+| 20260215-1020-b8c3 | 2026-02-15 | surgricalswale | User service setup | 30 min |
 | 20260214-1600-c9d4 | 2026-02-14 | example-project-ui | Fix login UI | 20 min |
 
 ---

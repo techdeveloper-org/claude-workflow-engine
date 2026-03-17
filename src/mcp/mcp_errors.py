@@ -1,10 +1,20 @@
 """
 Structured MCP error responses for consistent error handling across all MCP servers.
+
+NOTE: For new code, prefer using base.response (MCPResponse, success, error, to_json)
+and base.decorators (mcp_tool_handler). This module is kept for backward compatibility
+with existing callers outside the MCP server layer.
 """
 
 import json
 import traceback
 from datetime import datetime
+
+# Re-export from base for convenience
+try:
+    from base.response import to_json, success as mcp_success, error as mcp_error
+except ImportError:
+    pass  # Fallback: functions below still work standalone
 
 
 def mcp_error_response(error_type, message, details=None, suggestion=None):

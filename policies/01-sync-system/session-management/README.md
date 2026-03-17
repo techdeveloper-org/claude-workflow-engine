@@ -59,7 +59,7 @@ python session-loader.py load 20260216-1430-a3f7
 python session-search.py --tags authentication jwt
 
 # By project
-python session-search.py --project m2-surgricals
+python session-search.py --project surgricalswale
 
 # By file
 python session-search.py --file AuthController.java
@@ -79,14 +79,14 @@ python session-loader.py list 20
 
 **File:** `sessions/{project}/session-{id}.md`
 
-**Example:** `sessions/m2-surgricals/session-20260216-1430-a3f7.md`
+**Example:** `sessions/surgricalswale/session-20260216-1430-a3f7.md`
 
 **Contains:**
 ```yaml
 ---
 session_id: "20260216-1430-a3f7"
 timestamp: "2026-02-16 14:30:00"
-project: "m2-surgricals"
+project: "surgricalswale"
 purpose: "Implement authentication"
 tags: ["authentication", "jwt", "security"]
 duration: "45 minutes"

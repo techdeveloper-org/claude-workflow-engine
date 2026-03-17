@@ -36,9 +36,13 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.path_resolver import get_config_dir
 
 from mcp.server.fastmcp import FastMCP
+from base.response import to_json
+from base.decorators import mcp_tool_handler
+from base.persistence import SessionIdResolver
 
 mcp = FastMCP(
     "pre-tool-gate",
@@ -50,6 +54,9 @@ MEMORY_PATH = get_config_dir()
 FLAG_DIR = Path.home() / ".claude"
 CURRENT_SESSION_FILE = MEMORY_PATH / ".current-session.json"
 LOGS_PATH = MEMORY_PATH / "logs" / "sessions"
+
+# Singleton session resolver
+_session_resolver = SessionIdResolver(MEMORY_PATH)
 
 # Constants
 CHECKPOINT_MAX_AGE_MINUTES = 60
@@ -67,31 +74,9 @@ WINDOWS_BLOCKED_CMDS = [
 ]
 
 
-def _json(data: dict) -> str:
-    return json.dumps(data, indent=2, default=str)
-
-
 def _get_session_id() -> str:
-    """Get current session ID from .current-session.json."""
-    try:
-        if CURRENT_SESSION_FILE.exists():
-            data = json.loads(CURRENT_SESSION_FILE.read_text(encoding="utf-8"))
-            sid = data.get("current_session_id", "")
-            if sid.startswith("SESSION-"):
-                return sid
-    except Exception:
-        pass
-    # Fallback: session-progress.json
-    try:
-        pf = MEMORY_PATH / "logs" / "session-progress.json"
-        if pf.exists():
-            data = json.loads(pf.read_text(encoding="utf-8"))
-            sid = data.get("session_id", "")
-            if sid.startswith("SESSION-"):
-                return sid
-    except Exception:
-        pass
-    return ""
+    """Get current session ID via SessionIdResolver singleton."""
+    return _session_resolver.get()
 
 
 def _find_flag(flag_name: str, session_id: str) -> Optional[dict]:
@@ -187,6 +172,7 @@ def _pipeline_step_present(trace: dict, step_name: str) -> bool:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def validate_tool_call(tool_name: str, tool_input: str = "{}") -> str:
     """Run all policy checks for a tool call. Returns allow/block decision.
 
@@ -215,7 +201,7 @@ def validate_tool_call(tool_name: str, tool_input: str = "{}") -> str:
 
     # Always-allowed tools skip blocking checks
     if tool_name in ALWAYS_ALLOWED:
-        return _json({
+        return to_json({
             "allowed": True,
             "tool": tool_name,
             "hints": [],
@@ -289,7 +275,7 @@ def validate_tool_call(tool_name: str, tool_input: str = "{}") -> str:
 
     allowed = len(blocks) == 0
 
-    return _json({
+    return to_json({
         "allowed": allowed,
         "tool": tool_name,
         "session_id": session_id,
@@ -305,12 +291,13 @@ def validate_tool_call(tool_name: str, tool_input: str = "{}") -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def check_task_breakdown() -> str:
     """Check if task breakdown is pending for current session."""
     try:
         session_id = _get_session_id()
         active, data = _check_flag_with_ttl("task-breakdown-pending", session_id, FLAG_TTL_SECONDS)
-        return _json({
+        return to_json({
             "success": True,
             "pending": active,
             "session_id": session_id,
@@ -318,7 +305,7 @@ def check_task_breakdown() -> str:
             "ttl_seconds": FLAG_TTL_SECONDS
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -326,12 +313,13 @@ def check_task_breakdown() -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def check_skill_selected() -> str:
     """Check if skill/agent selection is pending for current session."""
     try:
         session_id = _get_session_id()
         active, data = _check_flag_with_ttl("skill-selection-pending", session_id, FLAG_TTL_SECONDS)
-        return _json({
+        return to_json({
             "success": True,
             "pending": active,
             "session_id": session_id,
@@ -339,7 +327,7 @@ def check_skill_selected() -> str:
             "required_type": data.get("required_type", "") if data else "",
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -347,6 +335,7 @@ def check_skill_selected() -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def check_level_completion(level: str = "all") -> str:
     """Check if pipeline levels are complete in flow-trace.
 
@@ -358,7 +347,7 @@ def check_level_completion(level: str = "all") -> str:
         trace = _load_flow_trace(session_id)
 
         if not trace:
-            return _json({
+            return to_json({
                 "success": True,
                 "session_id": session_id,
                 "trace_found": False,
@@ -369,7 +358,7 @@ def check_level_completion(level: str = "all") -> str:
         l1_session = _pipeline_step_present(trace, "LEVEL_1_SESSION")
         l2_standards = _pipeline_step_present(trace, "LEVEL_2_STANDARDS")
 
-        return _json({
+        return to_json({
             "success": True,
             "session_id": session_id,
             "trace_found": True,
@@ -381,7 +370,7 @@ def check_level_completion(level: str = "all") -> str:
             "all_complete": l1_context and l1_session and l2_standards
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -389,6 +378,7 @@ def check_level_completion(level: str = "all") -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def get_enforcer_state() -> str:
     """Get current enforcer state snapshot (all flags + flow-trace status)."""
     try:
@@ -399,7 +389,7 @@ def get_enforcer_state() -> str:
         skill_active, skill_data = _check_flag_with_ttl("skill-selection-pending", session_id, FLAG_TTL_SECONDS)
         trace = _load_flow_trace(session_id)
 
-        return _json({
+        return to_json({
             "success": True,
             "session_id": session_id,
             "flags": {
@@ -420,7 +410,7 @@ def get_enforcer_state() -> str:
             "always_allowed": sorted(ALWAYS_ALLOWED)
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -428,6 +418,7 @@ def get_enforcer_state() -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def check_failure_patterns(tool_name: str, tool_input: str = "{}") -> str:
     """Check known failure patterns from failure-kb.json for a tool call.
 
@@ -483,7 +474,7 @@ def check_failure_patterns(tool_name: str, tool_input: str = "{}") -> str:
         if fp and not params.get("offset") and not params.get("limit"):
             hints.append("Consider adding offset/limit for large files")
 
-    return _json({
+    return to_json({
         "success": True,
         "tool": tool_name,
         "hints": hints,
@@ -521,6 +512,7 @@ _EXT_SKILL_MAP = {
 
 
 @mcp.tool()
+@mcp_tool_handler
 def get_dynamic_skill_hint(file_path: str) -> str:
     """Get skill/agent hint based on file extension.
 
@@ -540,7 +532,7 @@ def get_dynamic_skill_hint(file_path: str) -> str:
         elif name.endswith(".github/workflows"):
             skill = "github-actions-ci"
 
-        return _json({
+        return to_json({
             "success": True,
             "file": file_path,
             "extension": ext,
@@ -548,7 +540,7 @@ def get_dynamic_skill_hint(file_path: str) -> str:
             "has_suggestion": skill is not None
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -556,6 +548,7 @@ def get_dynamic_skill_hint(file_path: str) -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def reset_enforcer_flags(flag_name: str = "all") -> str:
     """Reset enforcement flags for current session.
 
@@ -566,7 +559,7 @@ def reset_enforcer_flags(flag_name: str = "all") -> str:
     try:
         session_id = _get_session_id()
         if not session_id:
-            return _json({"success": False, "error": "No active session"})
+            return to_json({"success": False, "error": "No active session"})
 
         flags_to_clear = []
         if flag_name == "all":
@@ -588,14 +581,14 @@ def reset_enforcer_flags(flag_name: str = "all") -> str:
                 if fname not in cleared:
                     cleared.append(fname)
 
-        return _json({
+        return to_json({
             "success": True,
             "session_id": session_id,
             "cleared": cleared,
             "count": len(cleared)
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":

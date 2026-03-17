@@ -19,7 +19,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+# Ensure src/mcp/ is in path for base package imports
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from mcp.server.fastmcp import FastMCP
+from base.response import to_json
+from base.decorators import mcp_tool_handler
 
 # Add project paths for imports
 _PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -53,12 +58,8 @@ def _get_llm_module():
     return _llm_module
 
 
-def _json(data: dict) -> str:
-    """Return compact JSON string."""
-    return json.dumps(data, indent=2, default=str)
-
-
 @mcp.tool()
+@mcp_tool_handler
 def llm_generate(
     prompt: str,
     model: str = "fast",
@@ -84,7 +85,7 @@ def llm_generate(
     try:
         mod = _get_llm_module()
         if "error" in mod:
-            return _json({
+            return to_json({
                 "success": False,
                 "error": f"LLM module not available: {mod['error']}"
             })
@@ -110,7 +111,7 @@ def llm_generate(
                     break
 
             if not target:
-                return _json({
+                return to_json({
                     "success": False,
                     "error": f"Provider '{provider}' not available. Active: {[p.name for p in chain]}"
                 })
@@ -122,7 +123,7 @@ def llm_generate(
                                timeout=timeout)
 
         if response:
-            return _json({
+            return to_json({
                 "success": True,
                 "response": response,
                 "model": model,
@@ -130,23 +131,24 @@ def llm_generate(
                 "temperature": temperature
             })
         else:
-            return _json({
+            return to_json({
                 "success": False,
                 "error": "All providers failed to generate a response",
                 "active_providers": mod["get_active_providers"]()
             })
 
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 @mcp.tool()
+@mcp_tool_handler
 def llm_list_models() -> str:
     """List all configured LLM providers and their available models."""
     try:
         mod = _get_llm_module()
         if "error" in mod:
-            return _json({
+            return to_json({
                 "success": False,
                 "error": f"LLM module not available: {mod['error']}"
             })
@@ -167,7 +169,7 @@ def llm_list_models() -> str:
 
             providers.append(info)
 
-        return _json({
+        return to_json({
             "success": True,
             "providers": providers,
             "active_count": len([p for p in providers if p["available"]]),
@@ -178,7 +180,7 @@ def llm_list_models() -> str:
             }
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # Health check cache (60s TTL)
@@ -187,6 +189,7 @@ _HEALTH_CACHE_TTL = 60
 
 
 @mcp.tool()
+@mcp_tool_handler
 def llm_health_check(force_refresh: bool = False) -> str:
     """Check health and availability of all LLM providers concurrently.
 
@@ -205,7 +208,7 @@ def llm_health_check(force_refresh: bool = False) -> str:
             cached = json.loads(_health_cache["result"])
             cached["from_cache"] = True
             cached["cache_age_s"] = round(age, 1)
-            return _json(cached)
+            return to_json(cached)
 
     try:
         import concurrent.futures
@@ -328,14 +331,15 @@ def llm_health_check(force_refresh: bool = False) -> str:
 
         # Cache the result
         _health_cache["timestamp"] = _time.time()
-        _health_cache["result"] = _json(output)
+        _health_cache["result"] = to_json(output)
 
-        return _json(output)
+        return to_json(output)
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 @mcp.tool()
+@mcp_tool_handler
 def llm_git_commit_title(
     commit_type: Optional[str] = None,
     cwd: Optional[str] = None
@@ -352,7 +356,7 @@ def llm_git_commit_title(
     try:
         mod = _get_llm_module()
         if "error" in mod:
-            return _json({
+            return to_json({
                 "success": False,
                 "error": f"LLM module not available: {mod['error']}"
             })
@@ -362,12 +366,12 @@ def llm_git_commit_title(
             from langgraph_engine.llm_call import generate_llm_commit_title
             title = generate_llm_commit_title(commit_type=commit_type, cwd=cwd)
             if title:
-                return _json({
+                return to_json({
                     "success": True,
                     "title": title,
                     "commit_type": commit_type
                 })
-            return _json({
+            return to_json({
                 "success": False,
                 "error": "No staged changes found or LLM unavailable"
             })
@@ -386,7 +390,7 @@ def llm_git_commit_title(
             diff_text = diff_result.stdout[:3000] if diff_result.returncode == 0 else ""
 
             if not stat_text and not diff_text:
-                return _json({"success": False, "error": "No staged changes found"})
+                return to_json({"success": False, "error": "No staged changes found"})
 
             type_hint = f"Commit type: {commit_type}\n" if commit_type else ""
             type_rule = (f"- Start with type prefix: {commit_type}:\n" if commit_type
@@ -408,20 +412,20 @@ def llm_git_commit_title(
             llm_call = mod["llm_call"]
             response = llm_call(prompt, model="fast", temperature=0.1, timeout=15)
             if not response:
-                return _json({"success": False, "error": "LLM call failed"})
+                return to_json({"success": False, "error": "LLM call failed"})
 
             title = response.strip().splitlines()[0].strip().strip('"').strip("'")
             if commit_type and not title.lower().startswith(commit_type):
                 title = f"{commit_type}: {title}"
             title = title[:69] + "..." if len(title) > 72 else title
 
-            return _json({
+            return to_json({
                 "success": True,
                 "title": title,
                 "commit_type": commit_type
             })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -482,6 +486,7 @@ _MODEL_RECOMMENDATIONS = {
 
 
 @mcp.tool()
+@mcp_tool_handler
 def llm_classify_step(step_name: str) -> str:
     """Classify a pipeline step for optimal model routing.
 
@@ -494,7 +499,7 @@ def llm_classify_step(step_name: str) -> str:
     step_type = _STEP_CLASSIFICATION.get(step_name, "complex_reasoning")
     recommendation = _MODEL_RECOMMENDATIONS.get(step_type, _MODEL_RECOMMENDATIONS["complex_reasoning"])
 
-    return _json({
+    return to_json({
         "success": True,
         "step": step_name,
         "step_type": step_type,
@@ -507,6 +512,7 @@ def llm_classify_step(step_name: str) -> str:
 
 
 @mcp.tool()
+@mcp_tool_handler
 def llm_select_model(
     task_type: str = "",
     complexity: int = 5,
@@ -558,7 +564,7 @@ def llm_select_model(
             selected_provider = None
             reason = "No LLM needed for this step"
 
-        return _json({
+        return to_json({
             "success": True,
             "selected_model": selected_model,
             "selected_provider": selected_provider,
@@ -570,10 +576,11 @@ def llm_select_model(
             "active_providers": providers,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 @mcp.tool()
+@mcp_tool_handler
 def llm_discover_models() -> str:
     """Discover all available local models (Ollama + local files).
 
@@ -615,17 +622,18 @@ def llm_discover_models() -> str:
                         "path": str(f),
                     })
 
-        return _json({
+        return to_json({
             "success": True,
             "models": models,
             "total": len(models),
             "ollama_available": any(m["platform"] == "gpu_ollama" for m in models),
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 @mcp.tool()
+@mcp_tool_handler
 def llm_hybrid_generate(
     prompt: str,
     step_name: str = "",
@@ -658,7 +666,7 @@ def llm_hybrid_generate(
         rec = _MODEL_RECOMMENDATIONS.get(step_type, _MODEL_RECOMMENDATIONS["complex_reasoning"])
 
         if step_type == "no_llm":
-            return _json({
+            return to_json({
                 "success": True,
                 "response": "",
                 "step_type": step_type,
@@ -688,7 +696,7 @@ def llm_hybrid_generate(
                     result = json.loads(resp.read().decode())
                     response_text = result.get("response", "")
                     if response_text.strip():
-                        return _json({
+                        return to_json({
                             "success": True,
                             "response": response_text,
                             "provider": "ollama",
@@ -703,13 +711,13 @@ def llm_hybrid_generate(
         # Fallback to provider chain
         mod = _get_llm_module()
         if "error" in mod:
-            return _json({"success": False, "error": f"LLM module unavailable: {mod['error']}"})
+            return to_json({"success": False, "error": f"LLM module unavailable: {mod['error']}"})
 
         tier = rec["fallback"] or "balanced"
         response = mod["llm_call"](prompt, model=tier, temperature=temp)
 
         if response:
-            return _json({
+            return to_json({
                 "success": True,
                 "response": response,
                 "provider": "claude_fallback",
@@ -719,10 +727,10 @@ def llm_hybrid_generate(
                 "routing": "cloud_fallback"
             })
 
-        return _json({"success": False, "error": "All providers failed"})
+        return to_json({"success": False, "error": "All providers failed"})
 
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":

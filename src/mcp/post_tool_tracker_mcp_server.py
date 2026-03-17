@@ -28,9 +28,13 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.path_resolver import get_config_dir
 
 from mcp.server.fastmcp import FastMCP
+from base.response import to_json
+from base.decorators import mcp_tool_handler
+from base.persistence import AtomicJsonStore, JsonlAppender, SessionIdResolver
 
 mcp = FastMCP(
     "post-tool-tracker",
@@ -43,6 +47,10 @@ LOGS_PATH = MEMORY_PATH / "logs"
 PROGRESS_FILE = LOGS_PATH / "session-progress.json"
 CURRENT_SESSION_FILE = MEMORY_PATH / ".current-session.json"
 
+# Persistence singletons
+_progress_store = AtomicJsonStore(PROGRESS_FILE)
+_session_resolver = SessionIdResolver(MEMORY_PATH)
+
 # Progress delta per tool type (complexity-weighted in track_tool_usage)
 PROGRESS_DELTA = {
     "Write": 8, "Edit": 5, "NotebookEdit": 5,
@@ -52,35 +60,13 @@ PROGRESS_DELTA = {
 }
 
 
-def _json(data: dict) -> str:
-    return json.dumps(data, indent=2, default=str)
-
-
 def _get_session_id() -> str:
-    try:
-        if CURRENT_SESSION_FILE.exists():
-            data = json.loads(CURRENT_SESSION_FILE.read_text(encoding="utf-8"))
-            sid = data.get("current_session_id", "")
-            if sid.startswith("SESSION-"):
-                return sid
-    except Exception:
-        pass
-    try:
-        if PROGRESS_FILE.exists():
-            data = json.loads(PROGRESS_FILE.read_text(encoding="utf-8"))
-            return data.get("session_id", "")
-    except Exception:
-        pass
-    return ""
+    """Get current session ID via SessionIdResolver singleton."""
+    return _session_resolver.get()
 
 
-def _load_progress() -> dict:
-    """Load session progress state."""
-    try:
-        if PROGRESS_FILE.exists():
-            return json.loads(PROGRESS_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        pass
+def _default_progress() -> dict:
+    """Default progress state factory."""
     return {
         "session_id": _get_session_id(),
         "total_progress": 0,
@@ -97,12 +83,14 @@ def _load_progress() -> dict:
     }
 
 
+def _load_progress() -> dict:
+    """Load session progress state via AtomicJsonStore."""
+    return _progress_store.load(default=_default_progress())
+
+
 def _save_progress(state: dict):
-    """Save session progress atomically."""
-    LOGS_PATH.mkdir(parents=True, exist_ok=True)
-    temp = PROGRESS_FILE.with_suffix(".tmp")
-    temp.write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
-    temp.replace(PROGRESS_FILE)
+    """Save session progress atomically via AtomicJsonStore."""
+    _progress_store.save(state)
 
 
 def _log_tool_entry(entry: dict):
@@ -131,6 +119,7 @@ def _estimate_context_pct(tool_counts: dict, content_chars: int = 0) -> int:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def track_tool_usage(
     tool_name: str,
     tool_input: str = "{}",
@@ -276,7 +265,7 @@ def track_tool_usage(
 
         _save_progress(state)
 
-        return _json({
+        return to_json({
             "success": True,
             "tool": tool_name,
             "progress_delta": delta,
@@ -286,7 +275,7 @@ def track_tool_usage(
             "session_id": session_id
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 def _clear_flag(flag_name: str, session_id: str):
@@ -306,6 +295,7 @@ def _clear_flag(flag_name: str, session_id: str):
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def increment_progress(delta: int = 5, reason: str = "") -> str:
     """Manually increment session progress.
 
@@ -317,14 +307,14 @@ def increment_progress(delta: int = 5, reason: str = "") -> str:
         state = _load_progress()
         state["total_progress"] = min(100, state["total_progress"] + delta)
         _save_progress(state)
-        return _json({
+        return to_json({
             "success": True,
             "total_progress": state["total_progress"],
             "delta": delta,
             "reason": reason
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -332,6 +322,7 @@ def increment_progress(delta: int = 5, reason: str = "") -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def clear_enforcement_flag(flag_name: str) -> str:
     """Clear a specific enforcement flag for current session.
 
@@ -341,13 +332,13 @@ def clear_enforcement_flag(flag_name: str) -> str:
     try:
         session_id = _get_session_id()
         _clear_flag(flag_name, session_id)
-        return _json({
+        return to_json({
             "success": True,
             "cleared": flag_name,
             "session_id": session_id
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -355,11 +346,12 @@ def clear_enforcement_flag(flag_name: str) -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def get_progress_status() -> str:
     """Get current session progress snapshot."""
     try:
         state = _load_progress()
-        return _json({
+        return to_json({
             "success": True,
             "total_progress": state.get("total_progress", 0),
             "tasks_created": state.get("tasks_created", 0),
@@ -374,7 +366,7 @@ def get_progress_status() -> str:
             "session_id": state.get("session_id", "")
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -382,6 +374,7 @@ def get_progress_status() -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def get_tool_stats() -> str:
     """Get detailed tool usage statistics for current session."""
     try:
@@ -389,7 +382,7 @@ def get_tool_stats() -> str:
         tracker_file = LOGS_PATH / "sessions" / session_id / "tool-tracker.jsonl"
 
         if not tracker_file.exists():
-            return _json({"success": True, "entries": 0, "message": "No tool tracker data"})
+            return to_json({"success": True, "entries": 0, "message": "No tool tracker data"})
 
         entries = []
         for line in tracker_file.read_text(encoding="utf-8").splitlines():
@@ -411,7 +404,7 @@ def get_tool_stats() -> str:
             if e.get("file") and e.get("tool") in ("Write", "Edit"):
                 files_modified.add(e["file"])
 
-        return _json({
+        return to_json({
             "success": True,
             "session_id": session_id,
             "total_entries": len(entries),
@@ -423,7 +416,7 @@ def get_tool_stats() -> str:
             "last_entry": entries[-1].get("ts", "") if entries else "",
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -431,6 +424,7 @@ def get_tool_stats() -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def check_commit_readiness() -> str:
     """Check if auto-commit should be triggered based on modified files."""
     try:
@@ -445,7 +439,7 @@ def check_commit_readiness() -> str:
             tasks_completed > 0
         )
 
-        return _json({
+        return to_json({
             "success": True,
             "should_commit": should_commit,
             "modified_files": modified,
@@ -460,7 +454,7 @@ def check_commit_readiness() -> str:
             )
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":

@@ -34,9 +34,13 @@ from pathlib import Path
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils.path_resolver import get_config_dir
 
 from mcp.server.fastmcp import FastMCP
+from base.response import to_json
+from base.decorators import mcp_tool_handler
+from base.persistence import JsonlAppender
 
 mcp = FastMCP(
     "token-optimizer",
@@ -47,6 +51,9 @@ mcp = FastMCP(
 MEMORY_PATH = get_config_dir()
 LOGS_PATH = MEMORY_PATH / "logs"
 OPTIMIZATION_LOG = LOGS_PATH / "tool-optimization.jsonl"
+
+# Structured logger for optimization events
+_opt_logger = JsonlAppender(OPTIMIZATION_LOG)
 CONTEXT_BUDGET_BYTES = 200 * 1024  # 200KB budget
 
 # Track file access counts (in-process cache)
@@ -57,15 +64,12 @@ _DEDUP_MIN_SAVINGS = 0.20  # 20% threshold
 _DEDUP_PRIORITY = ["srs", "readme", "claude_md"]
 
 
-def _json(data: dict) -> str:
-    return json.dumps(data, indent=2, default=str)
-
-
 # =============================================================================
 # TOOL 1: OPTIMIZE ANY TOOL CALL (Interceptor)
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def optimize_tool_call(tool_name: str, params: str = "{}") -> str:
     """Intercept and optimize any Claude tool call before execution.
 
@@ -114,7 +118,7 @@ def optimize_tool_call(tool_name: str, params: str = "{}") -> str:
     # Log optimization
     _log_opt(tool_name, p != optimized, savings, len(suggestions))
 
-    return _json({
+    return to_json({
         "success": True,
         "tool": tool_name,
         "original_params": p,
@@ -293,6 +297,7 @@ def _optimize_write(p: dict):
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def ast_navigate_code(file_path: str, show_methods: bool = False) -> str:
     """Extract code structure without reading full file content.
 
@@ -307,7 +312,7 @@ def ast_navigate_code(file_path: str, show_methods: bool = False) -> str:
     try:
         path = Path(file_path)
         if not path.exists():
-            return _json({"success": False, "error": f"File not found: {file_path}"})
+            return to_json({"success": False, "error": f"File not found: {file_path}"})
 
         ext = path.suffix.lower()
         content = path.read_text(encoding="utf-8", errors="ignore")
@@ -323,16 +328,16 @@ def ast_navigate_code(file_path: str, show_methods: bool = False) -> str:
             result = _navigate_typescript(content, show_methods)
             result["language"] = "javascript"
         else:
-            return _json({"success": False, "error": f"Unsupported: {ext}"})
+            return to_json({"success": False, "error": f"Unsupported: {ext}"})
 
         result["file"] = file_path
         result["total_lines"] = line_count
         result["tokens_saved_estimate"] = line_count * 80  # ~80 tokens/line saved
         result["success"] = True
-        return _json(result)
+        return to_json(result)
 
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 def _navigate_java(content: str, show_methods: bool) -> dict:
@@ -428,6 +433,7 @@ def _navigate_python(file_path: str, content: str, show_methods: bool) -> dict:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def smart_read_analyze(file_path: str) -> str:
     """Analyze a file and recommend optimal reading strategy.
 
@@ -440,7 +446,7 @@ def smart_read_analyze(file_path: str) -> str:
     try:
         path = Path(file_path)
         if not path.exists():
-            return _json({"success": False, "error": f"File not found: {file_path}"})
+            return to_json({"success": False, "error": f"File not found: {file_path}"})
 
         size = path.stat().st_size
         size_kb = size / 1024
@@ -479,7 +485,7 @@ def smart_read_analyze(file_path: str) -> str:
                 "alternative": "Grep with head_limit=100 for specific patterns",
             }
 
-        return _json({
+        return to_json({
             "success": True,
             "file": file_path,
             "size_bytes": size,
@@ -489,7 +495,7 @@ def smart_read_analyze(file_path: str) -> str:
             "estimated_tokens": line_count * 80,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -501,6 +507,7 @@ def _fingerprint(text: str) -> str:
 
 
 @mcp.tool()
+@mcp_tool_handler
 def deduplicate_context(contexts: str) -> str:
     """Remove duplicate content across SRS, README, and CLAUDE.md.
 
@@ -513,7 +520,7 @@ def deduplicate_context(contexts: str) -> str:
     try:
         ctx = json.loads(contexts)
     except (json.JSONDecodeError, TypeError):
-        return _json({"success": False, "error": "Invalid JSON"})
+        return to_json({"success": False, "error": "Invalid JSON"})
 
     texts = {}
     for key in _DEDUP_PRIORITY:
@@ -522,11 +529,11 @@ def deduplicate_context(contexts: str) -> str:
             texts[key] = val
 
     if len(texts) < 2:
-        return _json({"success": True, "dedup_applied": False, "reason": "Less than 2 docs"})
+        return to_json({"success": True, "dedup_applied": False, "reason": "Less than 2 docs"})
 
     original_size = sum(len(t.encode("utf-8", errors="ignore")) for t in texts.values())
     if original_size == 0:
-        return _json({"success": True, "dedup_applied": False, "reason": "Empty content"})
+        return to_json({"success": True, "dedup_applied": False, "reason": "Empty content"})
 
     seen_fps = set()
     deduped = {}
@@ -557,7 +564,7 @@ def deduplicate_context(contexts: str) -> str:
         result_ctx = dict(ctx)
         for key, text in deduped.items():
             result_ctx[key] = text
-        return _json({
+        return to_json({
             "success": True,
             "dedup_applied": True,
             "savings_ratio": round(ratio, 3),
@@ -567,7 +574,7 @@ def deduplicate_context(contexts: str) -> str:
             "deduped_contexts": result_ctx,
         })
     else:
-        return _json({
+        return to_json({
             "success": True,
             "dedup_applied": False,
             "savings_ratio": round(ratio, 3),
@@ -577,6 +584,7 @@ def deduplicate_context(contexts: str) -> str:
 
 
 @mcp.tool()
+@mcp_tool_handler
 def dedup_estimate(contexts: str) -> str:
     """Estimate deduplication savings without actually deduplicating.
 
@@ -586,7 +594,7 @@ def dedup_estimate(contexts: str) -> str:
     try:
         ctx = json.loads(contexts)
     except (json.JSONDecodeError, TypeError):
-        return _json({"success": False, "error": "Invalid JSON"})
+        return to_json({"success": False, "error": "Invalid JSON"})
 
     texts = {}
     for key in _DEDUP_PRIORITY:
@@ -595,7 +603,7 @@ def dedup_estimate(contexts: str) -> str:
             texts[key] = val
 
     if len(texts) < 2:
-        return _json({"success": True, "savings_ratio": 0, "original_bytes": 0})
+        return to_json({"success": True, "savings_ratio": 0, "original_bytes": 0})
 
     original_size = sum(len(t.encode("utf-8", errors="ignore")) for t in texts.values())
     seen_fps = set()
@@ -616,7 +624,7 @@ def dedup_estimate(contexts: str) -> str:
 
     ratio = removed / original_size if original_size > 0 else 0.0
 
-    return _json({
+    return to_json({
         "success": True,
         "savings_ratio": round(ratio, 3),
         "savings_pct": f"{ratio*100:.1f}%",
@@ -631,6 +639,7 @@ def dedup_estimate(contexts: str) -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def context_budget_status() -> str:
     """Check current context budget usage (logs + sessions directories).
 
@@ -650,7 +659,7 @@ def context_budget_status() -> str:
         usage_pct = (total_bytes / CONTEXT_BUDGET_BYTES) * 100 if CONTEXT_BUDGET_BYTES > 0 else 0
         alert = usage_pct >= 85
 
-        return _json({
+        return to_json({
             "success": True,
             "total_bytes": total_bytes,
             "total_kb": round(total_bytes / 1024, 2),
@@ -661,7 +670,7 @@ def context_budget_status() -> str:
             "recommendation": "Archive old sessions to free space" if alert else "Within budget",
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -669,6 +678,7 @@ def context_budget_status() -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def get_optimization_stats(date: str = "") -> str:
     """Get optimization statistics from logged data.
 
@@ -679,7 +689,7 @@ def get_optimization_stats(date: str = "") -> str:
         target_date = date or datetime.now().strftime("%Y-%m-%d")
 
         if not OPTIMIZATION_LOG.exists():
-            return _json({
+            return to_json({
                 "success": True,
                 "date": target_date,
                 "total_optimizations": 0,
@@ -707,7 +717,7 @@ def get_optimization_stats(date: str = "") -> str:
             except (json.JSONDecodeError, TypeError):
                 continue
 
-        return _json({
+        return to_json({
             "success": True,
             "date": target_date,
             "total_calls": total,
@@ -717,7 +727,7 @@ def get_optimization_stats(date: str = "") -> str:
             "by_tool": by_tool,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -725,23 +735,20 @@ def get_optimization_stats(date: str = "") -> str:
 # =============================================================================
 
 def _log_opt(tool: str, optimized: bool, savings: int, suggestion_count: int):
-    """Internal: append optimization entry to log."""
+    """Internal: append optimization entry to log via JsonlAppender."""
     try:
-        LOGS_PATH.mkdir(parents=True, exist_ok=True)
-        entry = {
-            "timestamp": datetime.now().isoformat(),
+        _opt_logger.append({
             "tool": tool,
             "optimized": optimized,
             "token_savings": savings,
             "suggestions": suggestion_count,
-        }
-        with open(OPTIMIZATION_LOG, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
+        })
     except Exception:
         pass
 
 
 @mcp.tool()
+@mcp_tool_handler
 def log_optimization(
     tool: str,
     optimized: bool = False,
@@ -768,9 +775,9 @@ def log_optimization(
         with open(OPTIMIZATION_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, default=str) + "\n")
 
-        return _json({"success": True, "logged": True, "tool": tool})
+        return to_json({"success": True, "logged": True, "tool": tool})
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -778,6 +785,7 @@ def log_optimization(
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def optimize_read_params(
     file_path: str,
     offset: int = -1,
@@ -796,7 +804,7 @@ def optimize_read_params(
     try:
         path = Path(file_path)
         if not path.exists():
-            return _json({"success": True, "params": {"file_path": file_path},
+            return to_json({"success": True, "params": {"file_path": file_path},
                           "note": "File not found - use provided params"})
 
         line_count = sum(1 for _ in open(path, "rb"))
@@ -832,7 +840,7 @@ def optimize_read_params(
         if _file_access_count[file_path] >= 3:
             notes.append(f"Accessed {_file_access_count[file_path]}x - consider caching")
 
-        return _json({
+        return to_json({
             "success": True,
             "params": result,
             "lines": line_count,
@@ -840,10 +848,11 @@ def optimize_read_params(
             "notes": notes,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 @mcp.tool()
+@mcp_tool_handler
 def optimize_grep_params(
     pattern: str,
     path: str = "",
@@ -884,7 +893,7 @@ def optimize_grep_params(
     if not path:
         notes.append("No path restriction - add path for faster search")
 
-    return _json({
+    return to_json({
         "success": True,
         "optimized_params": optimized,
         "notes": notes,

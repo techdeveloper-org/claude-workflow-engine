@@ -23,31 +23,26 @@ Tools (11):
 """
 
 import json
-import os
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+
+# Ensure src/mcp/ is in path for base package imports
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from mcp.server.fastmcp import FastMCP
+
+from base.response import to_json
+from base.decorators import mcp_tool_handler
+from base.clients import QdrantManager, EmbeddingManager
 
 mcp = FastMCP(
     "vector-db",
     instructions="Vector DB RAG for semantic search over workflow data (Qdrant local mode)"
 )
 
-# Paths
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-_VECTOR_DB_PATH = Path.home() / ".claude" / "memory" / "vector_db"
-
-# Lazy-loaded clients
-_qdrant_client = None
-_embedding_model = None
-_QDRANT_AVAILABLE = False
-_EMBEDDINGS_AVAILABLE = False
-
-# Collection definitions
+# Collection definitions (kept local for clarity alongside the tools that use them)
 COLLECTIONS = {
     "tool_calls": {
         "size": 384,  # all-MiniLM-L6-v2 output dimension
@@ -68,71 +63,6 @@ COLLECTIONS = {
 }
 
 
-def _json(data: dict) -> str:
-    return json.dumps(data, indent=2, default=str)
-
-
-def _get_qdrant_client():
-    """Lazy-initialize Qdrant client in local persistent mode."""
-    global _qdrant_client, _QDRANT_AVAILABLE
-    if _qdrant_client is not None:
-        return _qdrant_client
-
-    try:
-        from qdrant_client import QdrantClient
-        from qdrant_client.models import VectorParams, Distance
-
-        _VECTOR_DB_PATH.mkdir(parents=True, exist_ok=True)
-        _qdrant_client = QdrantClient(path=str(_VECTOR_DB_PATH))
-        _QDRANT_AVAILABLE = True
-
-        # Ensure collections exist
-        existing = {c.name for c in _qdrant_client.get_collections().collections}
-        for name, config in COLLECTIONS.items():
-            if name not in existing:
-                dist = getattr(Distance, config["distance"].upper(), Distance.COSINE)
-                _qdrant_client.create_collection(
-                    collection_name=name,
-                    vectors_config=VectorParams(size=config["size"], distance=dist),
-                )
-
-        return _qdrant_client
-    except ImportError:
-        _QDRANT_AVAILABLE = False
-        return None
-    except Exception as e:
-        print(f"Warning: Qdrant init failed: {e}", file=sys.stderr)
-        return None
-
-
-def _get_embedding_model():
-    """Lazy-initialize sentence-transformers embedding model."""
-    global _embedding_model, _EMBEDDINGS_AVAILABLE
-    if _embedding_model is not None:
-        return _embedding_model
-
-    try:
-        from sentence_transformers import SentenceTransformer
-        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-        _EMBEDDINGS_AVAILABLE = True
-        return _embedding_model
-    except ImportError:
-        _EMBEDDINGS_AVAILABLE = False
-        return None
-    except Exception as e:
-        print(f"Warning: Embedding model init failed: {e}", file=sys.stderr)
-        return None
-
-
-def _embed_text(text: str) -> list:
-    """Generate embedding vector for text."""
-    model = _get_embedding_model()
-    if model is None:
-        raise RuntimeError("sentence-transformers not available")
-    embedding = model.encode(text, normalize_embeddings=True)
-    return embedding.tolist()
-
-
 def _generate_point_id() -> int:
     """Generate unique point ID based on timestamp."""
     import hashlib
@@ -145,6 +75,7 @@ def _generate_point_id() -> int:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def vector_index_tool_call(
     tool_name: str,
     status: str,
@@ -153,7 +84,7 @@ def vector_index_tool_call(
     complexity: int = 0,
     session_id: str = "",
     description: str = "",
-) -> str:
+) -> dict:
     """Index a tool call record into the vector database.
 
     Args:
@@ -165,42 +96,35 @@ def vector_index_tool_call(
         session_id: Session identifier
         description: Text description of what the tool did
     """
-    try:
-        client = _get_qdrant_client()
-        if client is None:
-            return _json({"success": False, "error": "Qdrant not available"})
+    client = QdrantManager.instance().get_or_raise()
 
-        # Build text for embedding
-        embed_text = f"{tool_name} {status} {description} {project}"
-        vector = _embed_text(embed_text)
+    embed_text = f"{tool_name} {status} {description} {project}"
+    vector = EmbeddingManager.instance().embed(embed_text)
 
-        from qdrant_client.models import PointStruct
+    from qdrant_client.models import PointStruct
 
-        point = PointStruct(
-            id=_generate_point_id(),
-            vector=vector,
-            payload={
-                "tool_name": tool_name,
-                "status": status,
-                "duration_ms": duration_ms,
-                "project": project,
-                "complexity": complexity,
-                "session_id": session_id,
-                "description": description,
-                "indexed_at": datetime.now().isoformat(),
-            },
-        )
-
-        client.upsert(collection_name="tool_calls", points=[point])
-
-        return _json({
-            "success": True,
-            "collection": "tool_calls",
+    point = PointStruct(
+        id=_generate_point_id(),
+        vector=vector,
+        payload={
             "tool_name": tool_name,
-            "point_id": point.id,
-        })
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+            "status": status,
+            "duration_ms": duration_ms,
+            "project": project,
+            "complexity": complexity,
+            "session_id": session_id,
+            "description": description,
+            "indexed_at": datetime.now().isoformat(),
+        },
+    )
+
+    client.upsert(collection_name="tool_calls", points=[point])
+
+    return {
+        "collection": "tool_calls",
+        "tool_name": tool_name,
+        "point_id": point.id,
+    }
 
 
 # =============================================================================
@@ -208,6 +132,7 @@ def vector_index_tool_call(
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def vector_index_session(
     session_id: str,
     project: str = "",
@@ -216,7 +141,7 @@ def vector_index_session(
     context_pct: float = 0.0,
     duration_min: float = 0.0,
     tags: str = "",
-) -> str:
+) -> dict:
     """Index a session summary into the vector database.
 
     Args:
@@ -228,41 +153,35 @@ def vector_index_session(
         duration_min: Session duration in minutes
         tags: Comma-separated tags
     """
-    try:
-        client = _get_qdrant_client()
-        if client is None:
-            return _json({"success": False, "error": "Qdrant not available"})
+    client = QdrantManager.instance().get_or_raise()
 
-        embed_text = f"{summary} {project} {tags}"
-        vector = _embed_text(embed_text)
+    embed_text = f"{summary} {project} {tags}"
+    vector = EmbeddingManager.instance().embed(embed_text)
 
-        from qdrant_client.models import PointStruct
+    from qdrant_client.models import PointStruct
 
-        point = PointStruct(
-            id=_generate_point_id(),
-            vector=vector,
-            payload={
-                "session_id": session_id,
-                "project": project,
-                "summary": summary,
-                "tool_count": tool_count,
-                "context_pct": context_pct,
-                "duration_min": duration_min,
-                "tags": [t.strip() for t in tags.split(",") if t.strip()],
-                "indexed_at": datetime.now().isoformat(),
-            },
-        )
-
-        client.upsert(collection_name="sessions", points=[point])
-
-        return _json({
-            "success": True,
-            "collection": "sessions",
+    point = PointStruct(
+        id=_generate_point_id(),
+        vector=vector,
+        payload={
             "session_id": session_id,
-            "point_id": point.id,
-        })
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+            "project": project,
+            "summary": summary,
+            "tool_count": tool_count,
+            "context_pct": context_pct,
+            "duration_min": duration_min,
+            "tags": [t.strip() for t in tags.split(",") if t.strip()],
+            "indexed_at": datetime.now().isoformat(),
+        },
+    )
+
+    client.upsert(collection_name="sessions", points=[point])
+
+    return {
+        "collection": "sessions",
+        "session_id": session_id,
+        "point_id": point.id,
+    }
 
 
 # =============================================================================
@@ -270,6 +189,7 @@ def vector_index_session(
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def vector_index_flow_trace(
     session_id: str,
     level: str = "",
@@ -278,7 +198,7 @@ def vector_index_flow_trace(
     context_pct: float = 0.0,
     description: str = "",
     recommendations: str = "",
-) -> str:
+) -> dict:
     """Index a flow trace step into the vector database.
 
     Args:
@@ -290,42 +210,36 @@ def vector_index_flow_trace(
         description: What happened at this step
         recommendations: Any recommendations from this step
     """
-    try:
-        client = _get_qdrant_client()
-        if client is None:
-            return _json({"success": False, "error": "Qdrant not available"})
+    client = QdrantManager.instance().get_or_raise()
 
-        embed_text = f"{level} {step} {status} {description} {recommendations}"
-        vector = _embed_text(embed_text)
+    embed_text = f"{level} {step} {status} {description} {recommendations}"
+    vector = EmbeddingManager.instance().embed(embed_text)
 
-        from qdrant_client.models import PointStruct
+    from qdrant_client.models import PointStruct
 
-        point = PointStruct(
-            id=_generate_point_id(),
-            vector=vector,
-            payload={
-                "session_id": session_id,
-                "level": level,
-                "step": step,
-                "status": status,
-                "context_pct": context_pct,
-                "description": description,
-                "recommendations": recommendations,
-                "indexed_at": datetime.now().isoformat(),
-            },
-        )
-
-        client.upsert(collection_name="flow_traces", points=[point])
-
-        return _json({
-            "success": True,
-            "collection": "flow_traces",
+    point = PointStruct(
+        id=_generate_point_id(),
+        vector=vector,
+        payload={
             "session_id": session_id,
+            "level": level,
             "step": step,
-            "point_id": point.id,
-        })
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+            "status": status,
+            "context_pct": context_pct,
+            "description": description,
+            "recommendations": recommendations,
+            "indexed_at": datetime.now().isoformat(),
+        },
+    )
+
+    client.upsert(collection_name="flow_traces", points=[point])
+
+    return {
+        "collection": "flow_traces",
+        "session_id": session_id,
+        "step": step,
+        "point_id": point.id,
+    }
 
 
 # =============================================================================
@@ -333,6 +247,7 @@ def vector_index_flow_trace(
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def vector_search_similar(
     query: str,
     collection: str = "tool_calls",
@@ -340,7 +255,7 @@ def vector_search_similar(
     min_score: float = 0.5,
     filter_field: str = "",
     filter_value: str = "",
-) -> str:
+) -> dict:
     """Search for semantically similar records in any collection.
 
     Args:
@@ -351,49 +266,43 @@ def vector_search_similar(
         filter_field: Optional payload field to filter on
         filter_value: Value for the filter field
     """
-    try:
-        client = _get_qdrant_client()
-        if client is None:
-            return _json({"success": False, "error": "Qdrant not available"})
+    client = QdrantManager.instance().get_or_raise()
 
-        if collection not in COLLECTIONS:
-            return _json({"success": False, "error": f"Unknown collection: {collection}"})
+    if collection not in COLLECTIONS:
+        raise ValueError(f"Unknown collection: {collection}")
 
-        vector = _embed_text(query)
-        limit = max(1, min(limit, 20))
+    vector = EmbeddingManager.instance().embed(query)
+    limit = max(1, min(limit, 20))
 
-        query_filter = None
-        if filter_field and filter_value:
-            from qdrant_client.models import Filter, FieldCondition, MatchValue
-            query_filter = Filter(
-                must=[FieldCondition(key=filter_field, match=MatchValue(value=filter_value))]
-            )
-
-        results = client.search(
-            collection_name=collection,
-            query_vector=vector,
-            limit=limit,
-            score_threshold=min_score,
-            query_filter=query_filter,
+    query_filter = None
+    if filter_field and filter_value:
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        query_filter = Filter(
+            must=[FieldCondition(key=filter_field, match=MatchValue(value=filter_value))]
         )
 
-        matches = []
-        for hit in results:
-            matches.append({
-                "id": hit.id,
-                "score": round(hit.score, 4),
-                "payload": hit.payload,
-            })
+    results = client.search(
+        collection_name=collection,
+        query_vector=vector,
+        limit=limit,
+        score_threshold=min_score,
+        query_filter=query_filter,
+    )
 
-        return _json({
-            "success": True,
-            "collection": collection,
-            "query": query,
-            "matches": matches,
-            "total_matches": len(matches),
+    matches = []
+    for hit in results:
+        matches.append({
+            "id": hit.id,
+            "score": round(hit.score, 4),
+            "payload": hit.payload,
         })
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+
+    return {
+        "collection": collection,
+        "query": query,
+        "matches": matches,
+        "total_matches": len(matches),
+    }
 
 
 # =============================================================================
@@ -465,56 +374,52 @@ def vector_search_traces(
 # =============================================================================
 
 @mcp.tool()
-def vector_get_collection_stats(collection: str = "all") -> str:
+@mcp_tool_handler
+def vector_get_collection_stats(collection: str = "all") -> dict:
     """Get statistics for vector database collections.
 
     Args:
         collection: Collection name or 'all' for all collections
     """
-    try:
-        client = _get_qdrant_client()
-        if client is None:
-            return _json({"success": False, "error": "Qdrant not available"})
+    client = QdrantManager.instance().get_or_raise()
 
-        collections_to_check = (
-            list(COLLECTIONS.keys()) if collection == "all"
-            else [collection]
-        )
+    collections_to_check = (
+        list(COLLECTIONS.keys()) if collection == "all"
+        else [collection]
+    )
 
-        stats = {}
-        total_points = 0
-        for col_name in collections_to_check:
-            if col_name not in COLLECTIONS:
-                continue
-            try:
-                info = client.get_collection(col_name)
-                count = info.points_count or 0
-                total_points += count
-                stats[col_name] = {
-                    "points_count": count,
-                    "vectors_count": info.vectors_count or 0,
-                    "status": str(info.status),
-                    "vector_size": COLLECTIONS[col_name]["size"],
-                }
-            except Exception as e:
-                stats[col_name] = {"error": str(e)}
+    stats = {}
+    total_points = 0
+    for col_name in collections_to_check:
+        if col_name not in COLLECTIONS:
+            continue
+        try:
+            info = client.get_collection(col_name)
+            count = info.points_count or 0
+            total_points += count
+            stats[col_name] = {
+                "points_count": count,
+                "vectors_count": info.vectors_count or 0,
+                "status": str(info.status),
+                "vector_size": COLLECTIONS[col_name]["size"],
+            }
+        except Exception as e:
+            stats[col_name] = {"error": str(e)}
 
-        # DB size on disk
-        db_size_kb = 0
-        if _VECTOR_DB_PATH.exists():
-            db_size_kb = sum(
-                f.stat().st_size for f in _VECTOR_DB_PATH.rglob("*") if f.is_file()
-            ) / 1024
+    # DB size on disk
+    db_path = QdrantManager.DB_PATH
+    db_size_kb = 0
+    if db_path.exists():
+        db_size_kb = sum(
+            f.stat().st_size for f in db_path.rglob("*") if f.is_file()
+        ) / 1024
 
-        return _json({
-            "success": True,
-            "collections": stats,
-            "total_points": total_points,
-            "db_path": str(_VECTOR_DB_PATH),
-            "db_size_kb": round(db_size_kb, 1),
-        })
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+    return {
+        "collections": stats,
+        "total_points": total_points,
+        "db_path": str(db_path),
+        "db_size_kb": round(db_size_kb, 1),
+    }
 
 
 # =============================================================================
@@ -522,38 +427,33 @@ def vector_get_collection_stats(collection: str = "all") -> str:
 # =============================================================================
 
 @mcp.tool()
-def vector_delete_collection(collection: str) -> str:
+@mcp_tool_handler
+def vector_delete_collection(collection: str) -> dict:
     """Delete a vector collection and all its data.
 
     Args:
         collection: Collection name to delete
     """
-    try:
-        client = _get_qdrant_client()
-        if client is None:
-            return _json({"success": False, "error": "Qdrant not available"})
+    client = QdrantManager.instance().get_or_raise()
 
-        if collection not in COLLECTIONS:
-            return _json({"success": False, "error": f"Unknown collection: {collection}"})
+    if collection not in COLLECTIONS:
+        raise ValueError(f"Unknown collection: {collection}")
 
-        client.delete_collection(collection)
+    client.delete_collection(collection)
 
-        # Recreate empty collection
-        from qdrant_client.models import VectorParams, Distance
-        config = COLLECTIONS[collection]
-        dist = getattr(Distance, config["distance"].upper(), Distance.COSINE)
-        client.create_collection(
-            collection_name=collection,
-            vectors_config=VectorParams(size=config["size"], distance=dist),
-        )
+    # Recreate empty collection
+    from qdrant_client.models import VectorParams, Distance
+    config = COLLECTIONS[collection]
+    dist = getattr(Distance, config["distance"].upper(), Distance.COSINE)
+    client.create_collection(
+        collection_name=collection,
+        vectors_config=VectorParams(size=config["size"], distance=dist),
+    )
 
-        return _json({
-            "success": True,
-            "collection": collection,
-            "action": "deleted_and_recreated",
-        })
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+    return {
+        "collection": collection,
+        "action": "deleted_and_recreated",
+    }
 
 
 # =============================================================================
@@ -561,43 +461,41 @@ def vector_delete_collection(collection: str) -> str:
 # =============================================================================
 
 @mcp.tool()
-def vector_health_check() -> str:
+@mcp_tool_handler
+def vector_health_check() -> dict:
     """Check vector database health and dependencies."""
-    try:
-        health = {
-            "qdrant_available": False,
-            "embeddings_available": False,
-            "collections": {},
-            "db_path": str(_VECTOR_DB_PATH),
-        }
+    health = {
+        "qdrant_available": False,
+        "embeddings_available": False,
+        "collections": {},
+        "db_path": str(QdrantManager.DB_PATH),
+    }
 
-        # Check Qdrant
-        client = _get_qdrant_client()
-        if client is not None:
-            health["qdrant_available"] = True
-            for col_name in COLLECTIONS:
-                try:
-                    info = client.get_collection(col_name)
-                    health["collections"][col_name] = {
-                        "status": str(info.status),
-                        "points": info.points_count or 0,
-                    }
-                except Exception:
-                    health["collections"][col_name] = {"status": "ERROR"}
+    # Check Qdrant
+    client = QdrantManager.instance().get()
+    if client is not None:
+        health["qdrant_available"] = True
+        for col_name in COLLECTIONS:
+            try:
+                info = client.get_collection(col_name)
+                health["collections"][col_name] = {
+                    "status": str(info.status),
+                    "points": info.points_count or 0,
+                }
+            except Exception:
+                health["collections"][col_name] = {"status": "ERROR"}
 
-        # Check embeddings
-        model = _get_embedding_model()
-        if model is not None:
-            health["embeddings_available"] = True
-            health["embedding_model"] = "all-MiniLM-L6-v2"
-            health["embedding_dim"] = 384
+    # Check embeddings
+    embedding_mgr = EmbeddingManager.instance()
+    model = embedding_mgr.get()
+    if model is not None:
+        health["embeddings_available"] = True
+        health["embedding_model"] = "all-MiniLM-L6-v2"
+        health["embedding_dim"] = 384
 
-        health["success"] = health["qdrant_available"]
-        health["healthy"] = health["qdrant_available"] and health["embeddings_available"]
+    health["healthy"] = health["qdrant_available"] and health["embeddings_available"]
 
-        return _json(health)
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+    return health
 
 
 # =============================================================================
@@ -605,10 +503,11 @@ def vector_health_check() -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def vector_bulk_index(
     collection: str,
     records_json: str,
-) -> str:
+) -> dict:
     """Bulk index multiple records into a collection.
 
     Args:
@@ -616,52 +515,46 @@ def vector_bulk_index(
         records_json: JSON array of record objects to index.
             Each record should have a 'text' field for embedding plus payload fields.
     """
-    try:
-        client = _get_qdrant_client()
-        if client is None:
-            return _json({"success": False, "error": "Qdrant not available"})
+    client = QdrantManager.instance().get_or_raise()
 
-        if collection not in COLLECTIONS:
-            return _json({"success": False, "error": f"Unknown collection: {collection}"})
+    if collection not in COLLECTIONS:
+        raise ValueError(f"Unknown collection: {collection}")
 
-        records = json.loads(records_json)
-        if not isinstance(records, list):
-            return _json({"success": False, "error": "records_json must be a JSON array"})
+    records = json.loads(records_json)
+    if not isinstance(records, list):
+        raise ValueError("records_json must be a JSON array")
 
-        from qdrant_client.models import PointStruct
+    from qdrant_client.models import PointStruct
 
-        points = []
-        errors = []
-        for i, record in enumerate(records):
-            try:
-                text = record.pop("text", "")
-                if not text:
-                    text = json.dumps(record)
-                vector = _embed_text(text)
-                record["indexed_at"] = datetime.now().isoformat()
-                points.append(PointStruct(
-                    id=_generate_point_id(),
-                    vector=vector,
-                    payload=record,
-                ))
-            except Exception as e:
-                errors.append({"index": i, "error": str(e)})
+    points = []
+    errors = []
+    for i, record in enumerate(records):
+        try:
+            text = record.pop("text", "")
+            if not text:
+                text = json.dumps(record)
+            vector = EmbeddingManager.instance().embed(text)
+            record["indexed_at"] = datetime.now().isoformat()
+            points.append(PointStruct(
+                id=_generate_point_id(),
+                vector=vector,
+                payload=record,
+            ))
+        except Exception as e:
+            errors.append({"index": i, "error": str(e)})
 
-        if points:
-            # Batch upsert in chunks of 100
-            for chunk_start in range(0, len(points), 100):
-                chunk = points[chunk_start:chunk_start + 100]
-                client.upsert(collection_name=collection, points=chunk)
+    if points:
+        # Batch upsert in chunks of 100
+        for chunk_start in range(0, len(points), 100):
+            chunk = points[chunk_start:chunk_start + 100]
+            client.upsert(collection_name=collection, points=chunk)
 
-        return _json({
-            "success": True,
-            "collection": collection,
-            "indexed": len(points),
-            "errors": len(errors),
-            "error_details": errors[:5] if errors else [],
-        })
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+    return {
+        "collection": collection,
+        "indexed": len(points),
+        "errors": len(errors),
+        "error_details": errors[:5] if errors else [],
+    }
 
 
 # =============================================================================
@@ -669,6 +562,7 @@ def vector_bulk_index(
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def vector_index_node_decision(
     session_id: str,
     project: str = "",
@@ -678,7 +572,7 @@ def vector_index_node_decision(
     task_type: str = "",
     complexity: int = 0,
     framework: str = "",
-) -> str:
+) -> dict:
     """Index a pipeline node decision for RAG-based recommendation.
 
     Args:
@@ -691,43 +585,37 @@ def vector_index_node_decision(
         complexity: Task complexity (1-10)
         framework: Detected framework (flask, spring-boot, etc.)
     """
-    try:
-        client = _get_qdrant_client()
-        if client is None:
-            return _json({"success": False, "error": "Qdrant not available"})
+    client = QdrantManager.instance().get_or_raise()
 
-        embed_text = f"{step} {project} {task_type} {user_prompt[:500]} {decision[:500]}"
-        vector = _embed_text(embed_text)
+    embed_text = f"{step} {project} {task_type} {user_prompt[:500]} {decision[:500]}"
+    vector = EmbeddingManager.instance().embed(embed_text)
 
-        from qdrant_client.models import PointStruct
+    from qdrant_client.models import PointStruct
 
-        point = PointStruct(
-            id=_generate_point_id(),
-            vector=vector,
-            payload={
-                "session_id": session_id,
-                "project": project,
-                "step": step,
-                "decision": decision[:3000],
-                "user_prompt": user_prompt[:1000],
-                "task_type": task_type,
-                "complexity": complexity,
-                "framework": framework,
-                "indexed_at": datetime.now().isoformat(),
-            },
-        )
-
-        client.upsert(collection_name="node_decisions", points=[point])
-
-        return _json({
-            "success": True,
-            "collection": "node_decisions",
+    point = PointStruct(
+        id=_generate_point_id(),
+        vector=vector,
+        payload={
             "session_id": session_id,
+            "project": project,
             "step": step,
-            "point_id": point.id,
-        })
-    except Exception as e:
-        return _json({"success": False, "error": str(e)})
+            "decision": decision[:3000],
+            "user_prompt": user_prompt[:1000],
+            "task_type": task_type,
+            "complexity": complexity,
+            "framework": framework,
+            "indexed_at": datetime.now().isoformat(),
+        },
+    )
+
+    client.upsert(collection_name="node_decisions", points=[point])
+
+    return {
+        "collection": "node_decisions",
+        "session_id": session_id,
+        "step": step,
+        "point_id": point.id,
+    }
 
 
 if __name__ == "__main__":

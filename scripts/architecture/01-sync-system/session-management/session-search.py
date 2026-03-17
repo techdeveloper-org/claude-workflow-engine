@@ -184,7 +184,7 @@ Examples:
   python session-search.py --tags authentication jwt
 
   # Search by project
-  python session-search.py --project m2-surgricals
+  python session-search.py --project surgricalswale
 
   # Search by file
   python session-search.py --file AuthController.java
@@ -196,7 +196,7 @@ Examples:
   python session-search.py --purpose authentication
 
   # Combined search
-  python session-search.py --tags jwt --project m2-surgricals --date-from 2026-02-01
+  python session-search.py --tags jwt --project surgricalswale --date-from 2026-02-01
 """
     )
 

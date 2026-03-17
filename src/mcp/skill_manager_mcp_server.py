@@ -16,10 +16,16 @@ Tools (8):
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
+# Ensure src/mcp/ is in path for base package imports
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from mcp.server.fastmcp import FastMCP
+from base.response import to_json
+from base.decorators import mcp_tool_handler
 
 mcp = FastMCP(
     "skill-manager",
@@ -28,10 +34,6 @@ mcp = FastMCP(
 
 SKILLS_DIR = Path.home() / ".claude" / "skills"
 AGENTS_DIR = Path.home() / ".claude" / "agents"
-
-
-def _json(data: dict) -> str:
-    return json.dumps(data, indent=2, default=str)
 
 
 def _extract_metadata(content: str) -> dict:
@@ -100,6 +102,7 @@ def _load_agent_file(agent_name: str) -> Optional[tuple]:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def skill_load_all() -> str:
     """Load all available skills from ~/.claude/skills/ with metadata.
 
@@ -108,7 +111,7 @@ def skill_load_all() -> str:
     try:
         skills = []
         if not SKILLS_DIR.exists():
-            return _json({"success": True, "skills": [], "count": 0})
+            return to_json({"success": True, "skills": [], "count": 0})
 
         # Find all SKILL.md files
         for skill_file in sorted(SKILLS_DIR.rglob("SKILL.md")):
@@ -127,9 +130,9 @@ def skill_load_all() -> str:
             except Exception:
                 skills.append({"name": name, "path": str(skill_file), "error": "load_failed"})
 
-        return _json({"success": True, "skills": skills, "count": len(skills)})
+        return to_json({"success": True, "skills": skills, "count": len(skills)})
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -137,6 +140,7 @@ def skill_load_all() -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def skill_load(skill_name: str) -> str:
     """Load full SKILL.md content for a specific skill.
 
@@ -150,14 +154,14 @@ def skill_load(skill_name: str) -> str:
             available = []
             if SKILLS_DIR.exists():
                 available = [f.parent.name for f in SKILLS_DIR.rglob("SKILL.md")][:10]
-            return _json({
+            return to_json({
                 "success": False,
                 "error": f"Skill not found: {skill_name}",
                 "available": available
             })
 
         meta = _extract_metadata(content)
-        return _json({
+        return to_json({
             "success": True,
             "name": skill_name,
             "path": path,
@@ -166,7 +170,7 @@ def skill_load(skill_name: str) -> str:
             "metadata": meta,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -174,6 +178,7 @@ def skill_load(skill_name: str) -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def skill_search(query: str = "", tags: str = "", project_type: str = "") -> str:
     """Search skills by keyword, tags, or project type.
 
@@ -184,7 +189,7 @@ def skill_search(query: str = "", tags: str = "", project_type: str = "") -> str
     """
     try:
         if not SKILLS_DIR.exists():
-            return _json({"success": True, "results": [], "count": 0})
+            return to_json({"success": True, "results": [], "count": 0})
 
         results = []
         query_lower = query.lower()
@@ -230,7 +235,7 @@ def skill_search(query: str = "", tags: str = "", project_type: str = "") -> str
 
         results.sort(key=lambda r: r.get("relevance", 0), reverse=True)
 
-        return _json({
+        return to_json({
             "success": True,
             "results": results[:20],
             "count": len(results),
@@ -238,7 +243,7 @@ def skill_search(query: str = "", tags: str = "", project_type: str = "") -> str
             "tags": tag_list,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -246,6 +251,7 @@ def skill_search(query: str = "", tags: str = "", project_type: str = "") -> str
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def skill_validate(skill_name: str, required_capabilities: str = "") -> str:
     """Validate whether a skill satisfies required capabilities.
 
@@ -256,19 +262,19 @@ def skill_validate(skill_name: str, required_capabilities: str = "") -> str:
     try:
         content, _ = _load_skill_file(skill_name)
         if content is None:
-            return _json({"success": False, "error": f"Skill not found: {skill_name}"})
+            return to_json({"success": False, "error": f"Skill not found: {skill_name}"})
 
         meta = _extract_metadata(content)
         skill_caps = {c.lower() for c in meta.get("capabilities", [])}
         required = [c.strip().lower() for c in required_capabilities.split(",") if c.strip()]
 
         if not required:
-            return _json({"success": True, "valid": True, "message": "No requirements specified"})
+            return to_json({"success": True, "valid": True, "message": "No requirements specified"})
 
         missing = [c for c in required if c not in skill_caps]
         valid = len(missing) == 0
 
-        return _json({
+        return to_json({
             "success": True,
             "valid": valid,
             "skill": skill_name,
@@ -278,7 +284,7 @@ def skill_validate(skill_name: str, required_capabilities: str = "") -> str:
             "message": "OK" if valid else f"Missing: {', '.join(missing)}",
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -286,6 +292,7 @@ def skill_validate(skill_name: str, required_capabilities: str = "") -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def skill_rank(
     task_type: str = "",
     project_type: str = "",
@@ -305,7 +312,7 @@ def skill_rank(
     """
     try:
         if not SKILLS_DIR.exists():
-            return _json({"success": True, "ranked": [], "count": 0})
+            return to_json({"success": True, "ranked": [], "count": 0})
 
         required = [c.strip().lower() for c in required_capabilities.split(",") if c.strip()]
         ranked = []
@@ -353,7 +360,7 @@ def skill_rank(
 
         ranked.sort(key=lambda r: r["score"], reverse=True)
 
-        return _json({
+        return to_json({
             "success": True,
             "ranked": ranked[:10],
             "count": len(ranked),
@@ -364,7 +371,7 @@ def skill_rank(
             },
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -372,6 +379,7 @@ def skill_rank(
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def skill_detect_conflicts(skill_names: str) -> str:
     """Detect conflicts between selected skills.
 
@@ -424,7 +432,7 @@ def skill_detect_conflicts(skill_names: str) -> str:
                         "reason": f"Same exclusive domain: {d1}"
                     })
 
-        return _json({
+        return to_json({
             "success": True,
             "skills_checked": names,
             "conflicts": conflicts,
@@ -432,7 +440,7 @@ def skill_detect_conflicts(skill_names: str) -> str:
             "compatible": len(conflicts) == 0,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 # =============================================================================
@@ -440,12 +448,13 @@ def skill_detect_conflicts(skill_names: str) -> str:
 # =============================================================================
 
 @mcp.tool()
+@mcp_tool_handler
 def agent_load_all() -> str:
     """Load all available agents from ~/.claude/agents/ with metadata."""
     try:
         agents = []
         if not AGENTS_DIR.exists():
-            return _json({"success": True, "agents": [], "count": 0})
+            return to_json({"success": True, "agents": [], "count": 0})
 
         for agent_dir in sorted(AGENTS_DIR.iterdir()):
             if not agent_dir.is_dir():
@@ -466,12 +475,13 @@ def agent_load_all() -> str:
             except Exception:
                 agents.append({"name": name, "error": "load_failed"})
 
-        return _json({"success": True, "agents": agents, "count": len(agents)})
+        return to_json({"success": True, "agents": agents, "count": len(agents)})
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 @mcp.tool()
+@mcp_tool_handler
 def agent_load(agent_name: str) -> str:
     """Load full agent.md content for a specific agent.
 
@@ -485,14 +495,14 @@ def agent_load(agent_name: str) -> str:
             if AGENTS_DIR.exists():
                 available = [d.name for d in AGENTS_DIR.iterdir()
                            if d.is_dir() and (d / "agent.md").exists()][:10]
-            return _json({
+            return to_json({
                 "success": False,
                 "error": f"Agent not found: {agent_name}",
                 "available": available
             })
 
         meta = _extract_metadata(content)
-        return _json({
+        return to_json({
             "success": True,
             "name": agent_name,
             "path": path,
@@ -501,7 +511,7 @@ def agent_load(agent_name: str) -> str:
             "metadata": meta,
         })
     except Exception as e:
-        return _json({"success": False, "error": str(e)})
+        return to_json({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":
