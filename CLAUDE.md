@@ -61,7 +61,7 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 +-- scripts/                          # Pipeline scripts and hooks
 |   +-- langgraph_engine/             # Core orchestration (76 modules: 70 root + 6 subgraph files)
 |   +-- architecture/                 # Active pipeline scripts (6 scripts + 1 data file)
-+-- policies/                         # 44 policy definitions (43 .md + 1 .json)
++-- policies/                         # 49 policy definitions (48 .md + 1 .json)
 |   +-- 01-sync-system/               # Level 1 policies
 |   +-- 02-standards-system/          # Level 2 policies
 |   +-- 03-execution-system/          # Level 3 policies (15 steps: 0-14 + failure prevention)
