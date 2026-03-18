@@ -646,10 +646,11 @@ def _get_watched_dirs():
 
 
 def _invalidate_cache():
-    """Invalidate the standards cache."""
-    global _standards_cache, _cache_timestamp
+    """Invalidate the standards cache and mtime tracking."""
+    global _standards_cache, _cache_timestamp, _standards_mtimes
     _standards_cache = {}
     _cache_timestamp = 0
+    _standards_mtimes = {}
 
 
 def _start_file_watcher():

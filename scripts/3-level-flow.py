@@ -294,6 +294,7 @@ def main():
                 print("  --project=PATH     Project directory")
                 print("  --message=MSG      User message/task")
                 print("  --summary,-s       Print summary output")
+                print("  --dry-run          Run Steps 0-7 only (analysis + prompt), skip GitHub/implementation")
                 print("  --help,-h          Show this help")
                 sys.exit(0)
 
@@ -347,6 +348,18 @@ def main():
 
         # Print checkpoint
         print_flow_checkpoint(result, verbose=DEBUG)
+
+        # Dry-run summary
+        if os.environ.get("CLAUDE_DRY_RUN") == "1":
+            print("\n=== DRY RUN COMPLETE ===")
+            print(f"Task Type: {result.get('step0_task_type', 'N/A')}")
+            print(f"Complexity: {result.get('step0_complexity', 'N/A')}/10")
+            print(f"Plan: {result.get('step2_plan_status', 'N/A')}")
+            print(f"Skill: {result.get('step5_skill', 'N/A')}")
+            print(f"Agent: {result.get('step5_agent', 'N/A')}")
+            print(f"Prompt saved to: {result.get('step7_system_prompt_file', 'N/A')}")
+            print("===")
+            print("GitHub issue, implementation, PR, review, docs SKIPPED (--dry-run)")
 
         # Return status code
         # HOOK FIX: Always return 0 so Claude Code doesn't treat flow errors as hook failures

@@ -281,6 +281,13 @@ def _run_step(
     Returns:
         Result dict from step_fn, or fallback_result on timeout/failure.
     """
+    import os as _os
+    # Dry-run: skip Steps 8-14 (GitHub, implementation, PR, review, docs)
+    if step_number >= 8 and _os.environ.get("CLAUDE_DRY_RUN") == "1":
+        logger.info(f"[v2] Step {step_number} skipped (dry-run mode)")
+        print(f"[STEP {step_number:02d}] {step_label} - SKIPPED (dry-run)", file=sys.stderr)
+        return {**(fallback_result or {}), f"step{step_number}_status": "DRY_RUN_SKIPPED"}
+
     infra = _get_infra(state)
     cp = infra["checkpoint"]
     metrics = infra["metrics"]
