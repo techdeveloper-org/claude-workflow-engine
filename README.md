@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 7.5.0 | **Status:** Alpha | **Last Updated:** 2026-03-18
+**Version:** 7.6.0 | **Status:** Alpha | **Last Updated:** 2026-03-18
 
 ---
 
@@ -93,22 +93,152 @@ Full Mode (CLAUDE_HOOK_MODE=0):
 
 ### Call Graph Analysis (Class-Level Code Intelligence)
 
-Built-in AST-based call graph builder that maps every class, method, and function call with full context:
+The call graph is the **brain** of the engine. It is NOT a simple JSON dependency list - it is a **complete call stack** that maps every class, every method, every function call, and every relationship in the entire codebase. Think of it as a **live X-ray of your code** - it sees everything.
+
+#### Before vs After
 
 ```
-Before (v7.5.0):  211 file nodes, 515 import edges (flat, no class context)
-After  (v7.6.0):  566 classes, 3686 methods, 25,948 call edges (with FQN + line numbers)
+OLD (v7.5.0) - File-level flat graph:
+  Nodes: 211 files (just filenames, no idea what's inside)
+  Edges: 515 imports (only "file A imports file B", nothing deeper)
+  Context: ZERO (can't tell Calculator.add from Logger.add - both are just "add")
+  Impact: IMPOSSIBLE (can't answer "what breaks if I change this method?")
+
+NEW (v7.6.0) - Class-level call stack:
+  Classes: 566 (every class with name, file, line number, parent classes)
+  Methods: 3,686 (every method with params, return types, visibility, complexity)
+  Functions: 1,061 (standalone functions, separate from methods)
+  Call Edges: 25,948 (who calls whom, with exact line numbers)
+  Inheritance: 93 edges (Child extends Base, tracked explicitly)
+  Resolved: 7,957 edges matched to exact FQN definitions
+  Call Paths: Full chains traced from entry points to leaf methods
 ```
 
-| Capability | Description |
-|-----------|-------------|
-| **FQN Tracking** | Every node has `module.py::ClassName.method` format |
-| **Class Context** | `self.method()` resolves to same-class methods (AST NodeVisitor, not walk) |
-| **Call Paths** | Full chains: `main -> run_engine -> Manager.invoke -> Client.get` |
-| **Impact Analysis** | "Change this method, these 15 callers are affected" |
-| **Per-Method Complexity** | Cyclomatic complexity per method (not just per file) |
-| **Inheritance Tracking** | `Child extends Base` edges with line numbers |
-| **Edge Resolution** | 30%+ call edges resolved to exact FQN definitions |
+#### Why This Matters - The Real Power
+
+**1. Accurate Complexity Scoring (Step 0)**
+
+The old graph counted files and imports. A project with 100 files all doing simple CRUD got the same score as 100 files with deeply nested recursive algorithms. Now complexity is measured at the **method level** - if `Orchestrator.run()` has cyclomatic complexity 15 and calls 8 other methods across 4 classes, that's a genuinely complex function. The score reflects reality.
+
+**2. Impact Analysis - "What Breaks If I Change This?"**
+
+```
+Input:  "I want to change Processor.execute()"
+Output: "These 5 methods directly call it:
+           - Orchestrator.run() at line 45
+           - BatchRunner.process_all() at line 112
+           - TestProcessor.test_execute() at line 23
+           - CLIHandler.handle_command() at line 89
+           - RetryManager.retry_with_backoff() at line 67
+         And transitively, 12 more methods are affected through the call chain."
+```
+
+This is **impossible** with a file-level graph. You'd only know "engine.py imports processor.py" - useless for understanding the blast radius of a change.
+
+**3. Smarter Task Breakdown (Step 3)**
+
+When the engine breaks a task into subtasks, the call graph tells it:
+- Which methods are entry points (never called by others - these are the "doors" into the system)
+- Which methods are bottlenecks (called by many others - dangerous to change)
+- Which classes are tightly coupled (change one, must change the other)
+- What the full call chain looks like from user input to database write
+
+**4. Better Skill Selection (Step 5)**
+
+The call graph reveals the **actual architecture** - not what the README says, but what the code actually does:
+- Heavy use of async/await? Select `asyncio` patterns
+- Deep inheritance trees? Needs OOP expertise
+- Method complexity > 20? Needs refactoring skill
+- Cross-class coupling > 10? Needs architectural skill
+
+**5. Precise Code Review (Step 11)**
+
+The PR review loop uses the call graph to check:
+- Did the change touch a bottleneck method? Flag for extra review
+- Does the new code introduce circular dependencies?
+- Is the method complexity within acceptable bounds?
+- Are all affected callers still compatible with the change?
+
+**6. Complete UML Diagrams (Step 13)**
+
+Sequence diagrams now show **actual** call flows with class context:
+```
+Before: add ->> validate: validate()     (which class? unknown)
+After:  Calculator.add ->> Calculator._validate: _validate(x)   (exact class + params)
+```
+
+#### What the Graph Looks Like
+
+```json
+{
+  "version": "2.0.0",
+  "stats": {
+    "total_classes": 566,
+    "total_methods": 3686,
+    "total_call_edges": 25948,
+    "max_call_depth": 7,
+    "avg_cyclomatic": 4.01
+  },
+  "nodes": {
+    "classes": [
+      {
+        "id": "scripts/langgraph_engine/orchestrator.py::Orchestrator",
+        "type": "class",
+        "name": "Orchestrator",
+        "file": "scripts/langgraph_engine/orchestrator.py",
+        "line": 45,
+        "bases": ["StateGraph"],
+        "methods": ["...::Orchestrator.run", "...::Orchestrator._build_graph"]
+      }
+    ],
+    "methods": [
+      {
+        "id": "scripts/langgraph_engine/orchestrator.py::Orchestrator.run",
+        "type": "method",
+        "name": "run",
+        "parent_class": "...::Orchestrator",
+        "params": ["task: str", "session_id: str"],
+        "return_type": "dict",
+        "visibility": "+",
+        "cyclomatic": 12,
+        "line": 120
+      }
+    ]
+  },
+  "edges": [
+    {
+      "from": "...::Orchestrator.run",
+      "to": "...::HybridInferenceManager.invoke",
+      "line": 145,
+      "type": "method_call",
+      "resolved": true
+    }
+  ],
+  "call_paths": [
+    {
+      "path": ["main", "run_langgraph_engine", "Orchestrator.run", "HybridInferenceManager.invoke", "LazyClient.get"],
+      "depth": 5,
+      "total_complexity": 45
+    }
+  ]
+}
+```
+
+#### How It Works (Technical)
+
+The key insight: Python's `ast.walk()` **loses class context**. When you walk the AST tree, you see `FunctionDef("add")` but you don't know if it belongs to `Calculator` or `Logger`. Our solution uses `ast.NodeVisitor` which visits nodes in tree order, maintaining a **class stack**:
+
+```
+visit_ClassDef("Calculator")     -> push "Calculator" to stack
+  visit_FunctionDef("add")       -> FQN = "module.py::Calculator.add" (knows it's inside Calculator)
+    found Call("self._validate")  -> resolves to "module.py::Calculator._validate" (same class)
+  visit_FunctionDef("_validate") -> FQN = "module.py::Calculator._validate"
+pop "Calculator" from stack
+
+visit_FunctionDef("standalone")  -> FQN = "module.py::standalone" (no class, type="function")
+```
+
+This simple architectural choice (NodeVisitor vs walk) is what makes the entire system work. Every other feature - impact analysis, call paths, complexity scoring - builds on this foundation of **knowing which class a method belongs to**.
 
 ### LangGraph Orchestration (78 modules)
 
@@ -192,7 +322,7 @@ policies/
 
 ## Current Status: What's Built vs What's Remaining
 
-### BUILT (v7.5.0 - Alpha)
+### BUILT (v7.6.0 - Alpha)
 
 | Component | Status | Details |
 |-----------|--------|---------|
@@ -374,16 +504,103 @@ claude-insight/
 
 ## Configuration
 
-See `.env.example` for all options:
+All configuration is done through environment variables in `.env` (copy from `.env.example`). No hardcoded paths exist anywhere in the codebase - everything resolves through `path_resolver.py`.
 
-| Variable | Default | Description |
+### Pipeline Settings
+
+| Variable | Default | What It Does |
 |----------|---------|-------------|
-| `CLAUDE_HOOK_MODE` | `1` | Hook mode (1) or Full mode (0) |
-| `CLAUDE_DEBUG` | `0` | Enable debug output |
-| `OLLAMA_ENDPOINT` | `http://localhost:11434` | Ollama server URL |
-| `ANTHROPIC_API_KEY` | - | Claude API key (optional if using Ollama) |
-| `GITHUB_TOKEN` | - | GitHub personal access token |
-| `LLM_PROVIDER` | `auto` | Force specific provider (ollama/anthropic/openai/auto) |
+| `CLAUDE_HOOK_MODE` | `1` | **Controls how many steps run.** `1` = Hook Mode (Steps 0-9 only, generates prompt + creates issue/branch, you implement). `0` = Full Mode (all 15 steps including implementation, PR, and issue closure). Use `1` for daily work, `0` for full automation. |
+| `CLAUDE_DEBUG` | `0` | **Enables verbose logging.** `1` = prints every LLM call, every state transition, every decision. Useful when a step fails and you need to see exactly what happened. |
+| `INFERENCE_MODE` | `auto` | **Which hardware to use for AI inference.** `auto` = smart routing (simple tasks to NPU, complex to GPU). `gpu_only` = only use Ollama GPU. `npu_only` = only use Intel NPU. Most users should leave this as `auto`. |
+
+### LLM Provider Settings
+
+| Variable | Default | What It Does |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | `auto` | **Which AI provider to use.** `auto` = tries all in order: Ollama (free, local) -> Claude CLI -> Anthropic API -> OpenAI API. Set to a specific provider name to force it. |
+| `OLLAMA_ENDPOINT` | `http://localhost:11434` | **Where Ollama GPU server is running.** Change this if you run Ollama on a different port or remote machine. |
+| `ANTHROPIC_API_KEY` | _(none)_ | **Your Claude API key.** Only needed if Ollama is not available and you want to use Claude directly. Get from console.anthropic.com. |
+| `GITHUB_TOKEN` | _(none)_ | **GitHub personal access token.** Required for Steps 8-12 (issue creation, branch, PR). Without this, the pipeline stops at Step 7. Falls back to `gh auth token` if not set. |
+| `OPENAI_API_KEY` | _(none)_ | **OpenAI API key.** Last fallback in the LLM chain. Only used if all other providers fail. |
+
+### Path System - Cross-Platform Directory Standard
+
+Every path in the engine follows a strict standard. The golden rule: **never hardcode an absolute path**. All paths resolve through environment variables with cross-platform defaults using `Path.home()` (which returns `C:\Users\<you>` on Windows, `/home/<you>` on Linux, `/Users/<you>` on Mac).
+
+The central authority is `src/utils/path_resolver.py` - a singleton that every module imports. It resolves paths in this priority:
+
+```
+1. Environment variable (if set)     -> highest priority, you control it
+2. Path.home() based default         -> works on any OS, any username
+3. Project-local fallback            -> when nothing else exists
+```
+
+#### Claude Directories
+
+These are where Claude Code stores its configuration, scripts, and data.
+
+| Variable | Default | What It Is | Why It Exists |
+|----------|---------|-----------|---------------|
+| `CLAUDE_HOME` | `~/.claude/` | **Root of all Claude directories.** Everything Claude-related lives under this folder. On Windows: `C:\Users\you\.claude\`, on Linux: `/home/you/.claude/`, on Mac: `/Users/you/.claude/`. | Claude Code creates this automatically. All hooks, settings, memory, and sessions live here. Change this only if you want Claude to use a completely different location (e.g., on an external drive). |
+| `CLAUDE_SCRIPTS_DIR` | `~/.claude/scripts/` | **Where hook scripts live.** Contains `3-level-flow.py`, `pre-tool-enforcer.py`, `post-tool-tracker.py`, `stop-notifier.py`. These are the scripts that run on every Claude Code event (user message, tool use, session end). | Hooks reference these scripts by absolute path in `settings.json`. The engine downloads them from the repo to this directory. If you're developing hooks, you might point this to your repo's `scripts/` directory instead. |
+| `CLAUDE_POLICIES_DIR` | `~/.claude/policies/` | **Where policy definition files live.** The 49 policy `.md` files that define rules for every pipeline step. | Used by Level 2 (Standards) to load coding standards and enforcement rules. Change if you want to use custom policies for different projects. |
+| `CLAUDE_SETTINGS_FILE` | `~/.claude/settings.json` | **Claude Code's main configuration file.** Defines hooks (which scripts run on which events), permissions, and MCP server registrations. | This is read by Claude Code itself, not by the engine. The engine provides a template in `scripts/settings-config.json` that you customize with your paths. |
+| `CLAUDE_INSIGHT_DATA_DIR` | `~/.claude/memory/` | **Where all runtime data is stored.** Sessions, logs, flow traces, checkpoints, anomaly records, performance metrics. This is the "database" of the engine. | Has a 3-tier fallback: (1) this env var, (2) `~/.claude/memory/` if it exists, (3) `./data/` in the project root. The IDE launcher sets this to control where data goes. |
+
+#### Intel AI Directories
+
+These are where GPU and NPU hardware inference runs from. Only needed if you use local AI models (Ollama, Intel AI Boost).
+
+| Variable | Default | What It Is | Why It Exists |
+|----------|---------|-----------|---------------|
+| `INTEL_AI_PATH` | `~/intel-ai/` | **Root directory for all Intel AI tools and models.** Contains GPU (Ollama), NPU (llama-cli), and model files. On Windows: `C:\Users\you\intel-ai\`, on Linux: `/home/you/intel-ai/`. | This is the base that GPU/NPU/Models paths are built from. Set this once and all sub-paths inherit it. If you installed Intel AI tools in a custom location, just set this one variable. |
+| `INTEL_AI_GPU_PATH` | `~/intel-ai/gpu/` | **Directory containing the Ollama GPU server.** Has `ollama.exe` (Windows) or `ollama` (Linux/Mac) and its configuration. | Ollama with Intel Arc GPU drivers for fast local inference. The engine starts and manages this server automatically. |
+| `INTEL_AI_NPU_PATH` | `~/intel-ai/npu/` | **Directory containing the Intel AI Boost NPU CLI.** Has `llama-cli-npu.exe` (Windows) for running models on Intel's Neural Processing Unit. | NPU is 2-3x faster than GPU for simple classification tasks. Used for Step 1 (plan decision) and Step 3 (task breakdown) where speed matters more than quality. |
+| `INTEL_AI_MODELS_PATH` | `~/intel-ai/models/` | **Where AI model files are stored.** Sub-directories: `gpu/` (Ollama models), `npu/` (GGUF files for NPU), `openvino-npu/` (OpenVINO optimized models). | Model files are large (1-8 GB each). Keeping them in one place makes it easy to manage, backup, or move them. The model discovery system scans this directory to find available models. |
+| `INTEL_AI_GPU_EXE` | `~/intel-ai/gpu/ollama[.exe]` | **Exact path to the Ollama executable.** Automatically appends `.exe` on Windows. | Override if your Ollama is installed system-wide (e.g., `/usr/local/bin/ollama` on Linux) instead of in the Intel AI directory. |
+| `INTEL_AI_NPU_EXE` | `~/intel-ai/npu/llama-cli-npu[.exe]` | **Exact path to the NPU CLI executable.** Automatically appends `.exe` on Windows. | Override if your NPU tools are in a non-standard location. |
+
+#### How Paths Work Across Platforms
+
+```
+Windows user "alice":
+  CLAUDE_HOME     = C:\Users\alice\.claude\
+  INTEL_AI_PATH   = C:\Users\alice\intel-ai\
+  GPU executable  = C:\Users\alice\intel-ai\gpu\ollama.exe
+
+Linux user "bob":
+  CLAUDE_HOME     = /home/bob/.claude/
+  INTEL_AI_PATH   = /home/bob/intel-ai/
+  GPU executable  = /home/bob/intel-ai/gpu/ollama
+
+Mac user "carol":
+  CLAUDE_HOME     = /Users/carol/.claude/
+  INTEL_AI_PATH   = /Users/carol/intel-ai/
+  GPU executable  = /Users/carol/intel-ai/gpu/ollama
+
+Custom override (any OS):
+  export INTEL_AI_PATH=/opt/ai-models
+  -> GPU path becomes /opt/ai-models/gpu/
+  -> NPU path becomes /opt/ai-models/npu/
+  -> Models path becomes /opt/ai-models/models/
+```
+
+#### Quick Setup Example
+
+```bash
+# Minimum required (most users)
+cp .env.example .env
+# Edit .env: set GITHUB_TOKEN=ghp_your_token
+
+# If Intel AI tools are in a custom location
+export INTEL_AI_PATH=/path/to/your/intel-ai
+
+# If Claude home is non-standard
+export CLAUDE_HOME=/path/to/your/.claude
+
+# That's it - all other paths derive automatically
+```
 
 ---
 
@@ -391,7 +608,7 @@ See `.env.example` for all options:
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **7.6.0** | 2026-03-18 | Call graph builder (class-level FQN, impact analysis, 47 tests), replaces flat file graph |
+| **7.6.0** | 2026-03-18 | Call graph builder (class-level FQN, impact analysis, 47 tests), path standardization (30+ hardcoded paths removed, env var overrides) |
 | 7.5.0 | 2026-03-18 | UML diagram generation (12 types), 12th MCP server (uml-diagram, 14 tools), AST + LLM hybrid |
 | 7.5.0 | 2026-03-17 | Gap analysis fixes, all 49 policies complete, code graph analyzer, Level 1 integration |
 | 7.5.0 | 2026-03-16 | RAG integration, 11th MCP server (vector-db), cross-session learning, 109 tools |
