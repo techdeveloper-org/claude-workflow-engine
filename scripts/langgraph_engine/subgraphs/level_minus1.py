@@ -496,7 +496,7 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
                                 line = line.replace('\\\\', '/')
                                 # Replace single backslashes that look like path separators
                                 # (but not escape sequences like \n, \t, \r, etc.)
-                                line = re.sub(r'(?<!\\)\\(?![\\ntrvxa0-9"\'])', '/', line)
+                                line = re.sub(r"\\(?![\\ntrvxa0-9\"'])", "/", line)
                             new_lines.append(line)
 
                         content = '\n'.join(new_lines)
