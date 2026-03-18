@@ -62,10 +62,11 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 +-- scripts/                          # Pipeline scripts and hooks
 |   +-- langgraph_engine/             # Core orchestration (80 modules: 74 root + 6 subgraph files)
 |   +-- architecture/                 # Active pipeline scripts (6 scripts + 1 data file)
-+-- policies/                         # 49 policy definitions (48 .md + 1 .json)
++-- policies/                         # 63 policy definitions (62 .md + 1 .json)
+|   +-- 00-auto-fix-system/           # Level -1 policies (Unicode, encoding, paths, recovery)
 |   +-- 01-sync-system/               # Level 1 policies
-|   +-- 02-standards-system/          # Level 2 policies
-|   +-- 03-execution-system/          # Level 3 policies (15 steps: 0-14 + failure prevention)
+|   +-- 02-standards-system/          # Level 2 policies (+ tool optimization, MCP discovery)
+|   +-- 03-execution-system/          # Level 3 policies (15 steps + RAG, CallGraph, QualityGate, hooks)
 +-- src/mcp/                          # 12 FastMCP servers (124 tools, 9,000+ LOC)
 +-- tests/                            # 49 test files (42 root + 2 integration + 5 other)
 +-- docs/                             # 40 documentation files
