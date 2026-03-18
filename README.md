@@ -759,6 +759,77 @@ These are where Claude Code stores its configuration, scripts, and data.
 | `CLAUDE_SETTINGS_FILE` | `~/.claude/settings.json` | **Claude Code's main configuration file.** Defines hooks (which scripts run on which events), permissions, and MCP server registrations. | This is read by Claude Code itself, not by the engine. The engine provides a template in `scripts/settings-config.json` that you customize with your paths. |
 | `CLAUDE_INSIGHT_DATA_DIR` | `~/.claude/memory/` | **Where all runtime data is stored.** Sessions, logs, flow traces, checkpoints, anomaly records, performance metrics. This is the "database" of the engine. | Has a 3-tier fallback: (1) this env var, (2) `~/.claude/memory/` if it exists, (3) `./data/` in the project root. The IDE launcher sets this to control where data goes. |
 
+#### Log & Data Directories
+
+These are where the pipeline writes telemetry, sessions, cache, and quality data. The monitoring system reads from these paths.
+
+| Variable | Default | Function | What's Stored |
+|----------|---------|----------|--------------|
+| `CLAUDE_LOGS_DIR` | `~/.claude/logs/` | `get_logs_dir()` | **Root for ALL log data.** Set this ONE variable and all sub-paths below change automatically. Monitoring repo uses this to find data. |
+| _(auto)_ | `{LOGS}/sessions/` | `get_session_logs_dir()` | Per-session folders with session.json, flow-trace.json, prompts. **409+ sessions** stored here. |
+| _(auto)_ | `{LOGS}/telemetry/` | `get_telemetry_dir()` | Per-step JSONL files with timing, status, LLM calls. Written by Level 1 (5 nodes) + Level 3 (15 steps). |
+| _(auto)_ | `{LOGS}/level/` | `get_level_logs_dir()` | Per-level execution logs (Level -1, 1, 2, 3 status). |
+| _(auto)_ | `{LOGS}/cache/` | `get_cache_logs_dir()` | Context cache data (SHA-256 keyed, 24h TTL). **576+ items.** |
+| _(auto)_ | `{LOGS}/errors/` | `get_error_logs_dir()` | Error logs with stack traces, severity, recovery actions. |
+| _(auto)_ | `{LOGS}/flow-traces/` | `get_flow_traces_dir()` | Pipeline flow execution traces for debugging. |
+| _(auto)_ | `{LOGS}/benchmarks/` | `get_benchmarks_dir()` | Performance benchmark history for metrics dashboard. |
+| _(auto)_ | `{LOGS}/tool-optimization.jsonl` | `get_tool_opt_log()` | Tool call optimization log (savings %, per-tool stats). |
+
+#### Skill & Agent Directories
+
+| Variable | Default | Function | What's Stored |
+|----------|---------|----------|--------------|
+| `CLAUDE_SKILLS_DIR` | `~/.claude/skills/` | `get_skills_dir()` | 16 skill definitions (SKILL.md files). Flat structure: `skills/{name}/SKILL.md`. |
+| `CLAUDE_AGENTS_DIR` | `~/.claude/agents/` | `get_agents_dir()` | 13 agent definitions (agent.md files). One dir per agent: `agents/{name}/agent.md`. |
+
+#### Complete Directory Tree
+
+```
+~/.claude/                              # CLAUDE_HOME
+├── logs/                               # CLAUDE_LOGS_DIR
+│   ├── sessions/{session_id}/          # get_session_logs_dir()
+│   │   ├── session.json                #   Session metadata
+│   │   ├── flow-trace.json             #   Pipeline execution trace
+│   │   ├── system_prompt.txt           #   Generated prompt (Step 7)
+│   │   └── execution-summary.txt       #   Final summary (Step 14)
+│   ├── telemetry/{session_id}.jsonl    # get_telemetry_dir()
+│   ├── level/                          # get_level_logs_dir()
+│   ├── cache/                          # get_cache_logs_dir()
+│   ├── errors/                         # get_error_logs_dir()
+│   ├── flow-traces/                    # get_flow_traces_dir()
+│   ├── benchmarks/                     # get_benchmarks_dir()
+│   └── tool-optimization.jsonl         # get_tool_opt_log()
+├── scripts/                            # CLAUDE_SCRIPTS_DIR
+│   ├── 3-level-flow.py                 #   Pipeline entry point
+│   ├── pre-tool-enforcer.py            #   PreToolUse hook
+│   ├── post-tool-tracker.py            #   PostToolUse hook
+│   └── stop-notifier.py               #   Stop hook
+├── policies/                           # CLAUDE_POLICIES_DIR
+│   ├── 01-sync-system/                 #   Level 1 policies
+│   ├── 02-standards-system/            #   Level 2 policies
+│   └── 03-execution-system/            #   Level 3 policies (15 steps)
+├── skills/                             # CLAUDE_SKILLS_DIR (16 skills)
+├── agents/                             # CLAUDE_AGENTS_DIR (13 agents)
+├── memory/                             # CLAUDE_INSIGHT_DATA_DIR
+└── settings.json                       # CLAUDE_SETTINGS_FILE
+```
+
+#### How It Works (Single Source of Truth)
+
+```python
+# In ANY module - import path_resolver, get the path:
+from utils.path_resolver import get_telemetry_dir, get_session_logs_dir
+
+telemetry = get_telemetry_dir()  # ~/.claude/logs/telemetry/ (auto per OS)
+sessions = get_session_logs_dir()  # ~/.claude/logs/sessions/
+
+# Override via env var (e.g., for monitoring repo on different machine):
+# export CLAUDE_LOGS_DIR=/mnt/shared/claude-logs
+# Now get_telemetry_dir() returns /mnt/shared/claude-logs/telemetry/
+```
+
+**21 files** in the engine import from `path_resolver.py`. Change one path there = all 21 files automatically update. Zero hardcoded absolute paths in the codebase.
+
 #### Intel AI Directories
 
 These are where GPU and NPU hardware inference runs from. Only needed if you use local AI models (Ollama, Intel AI Boost).
