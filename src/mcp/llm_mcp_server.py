@@ -607,9 +607,13 @@ def llm_discover_models() -> str:
         except Exception:
             pass
 
-        # Check local model files
+        # Check local model files (cross-platform via env var or default)
+        intel_ai_models = Path(os.getenv(
+            'INTEL_AI_MODELS_PATH',
+            str(Path.home() / 'intel-ai' / 'models'),
+        ))
         local_dirs = [
-            Path.home() / "Downloads" / "intel-ai" / "models",
+            intel_ai_models,
             Path.home() / ".ollama" / "models",
         ]
         for model_dir in local_dirs:

@@ -1,5 +1,8 @@
 # Hybrid Inference Setup - NPU + GPU Optimization
 
+> **Note:** Paths in this document use `~` to represent the user's home directory.
+> Override with environment variables: `INTEL_AI_PATH` for Intel AI location, `CLAUDE_HOME` for Claude config directory.
+
 ## Overview
 
 This project now supports **hybrid inference** that intelligently routes between:
@@ -72,7 +75,7 @@ Set these environment variables:
 export INFERENCE_MODE=auto
 
 # NPU path (if using Intel AI Boost)
-export NPU_PATH="C:/Users/techd/Downloads/intel-ai/npu"
+export NPU_PATH="~/intel-ai/npu"
 
 # GPU/Ollama endpoint (if using local GPU)
 export OLLAMA_ENDPOINT="http://127.0.0.1:11434"
@@ -183,7 +186,7 @@ manager.print_stats()
 ### Performance Tuning
 
 **If NPU performance is poor:**
-1. Check NPU model is installed: `ls C:/Users/techd/Downloads/intel-ai/npu/models`
+1. Check NPU model is installed: `ls ~/intel-ai/npu/models`
 2. Verify NPU has available memory: `nvidia-smi` or AMD equivalent
 3. Fallback to larger model: Update `STEP_ROUTING["npu_model"]`
 
@@ -298,7 +301,7 @@ export PATH="/path/to/claude:$PATH"
 
 ```bash
 # Check NPU installation
-ls "C:\Users\techd\Downloads\intel-ai\npu"
+ls ~/intel-ai/npu
 
 # Install if missing
 # Download from: https://www.intel.com/content/www/us/en/developer/tools/oneapi/ai-runtime.html

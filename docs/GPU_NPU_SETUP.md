@@ -1,6 +1,9 @@
 # Intel AI GPU + NPU Setup Guide
 
-**Status:** ✅ Integrated with claude-insight
+> **Note:** Paths in this document use `~` to represent the user's home directory.
+> Override with environment variables: `INTEL_AI_PATH` for Intel AI location, `CLAUDE_HOME` for Claude config directory.
+
+**Status:** Integrated with claude-insight
 **Date:** 2026-03-13
 **Hardware:** Intel Core Ultra 5 125H (Arc GPU + Intel AI Boost NPU)
 
@@ -19,8 +22,8 @@ The system automatically chooses the best backend based on task type and complex
 ## Prerequisites
 
 ✅ **Already Installed:**
-- `C:\Users\techd\Downloads\intel-ai\gpu\` (Ollama with Intel Arc drivers)
-- `C:\Users\techd\Downloads\intel-ai\npu\` (llama-cli-npu.exe)
+- `~/intel-ai\gpu\` (Ollama with Intel Arc drivers)
+- `~/intel-ai\npu\` (llama-cli-npu.exe)
 - Models in both `models/gpu` and `models/npu` directories
 - `loguru` Python package (install via `pip install loguru`)
 
@@ -30,14 +33,14 @@ The system automatically chooses the best backend based on task type and complex
 
 **Option A: Using run.bat**
 ```batch
-cd C:\Users\techd\Downloads\intel-ai
+cd ~/intel-ai
 run.bat
 → Choose [1] GPU Mode
 ```
 
 **Option B: Manual Start (PowerShell)**
 ```powershell
-cd C:\Users\techd\Downloads\intel-ai\gpu
+cd ~/intel-ai\gpu
 $env:OLLAMA_NUM_GPU=33
 $env:ZES_ENABLE_SYSMAN=1
 $env:SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
@@ -62,14 +65,14 @@ curl http://127.0.0.1:11434/api/tags
 - `qwen2.5:7b` - Fast, balanced (default for most tasks)
 - `granite4:3b` - Lightweight alternative
 
-*Location:* `C:\Users\techd\Downloads\intel-ai\models\gpu\`
+*Location:* `~/intel-ai\models\gpu\`
 
 ### NPU Models (Intel AI Boost)
 - `DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf` ⚡ (1.46GB, fastest)
 - `Llama-3.2-3B-Instruct-Q6_K.gguf` (2.64GB)
 - `DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf` 🚀 (4.68GB, best quality)
 
-*Location:* `C:\Users\techd\Downloads\intel-ai\models\npu\`
+*Location:* `~/intel-ai\models\npu\`
 
 ---
 
@@ -112,7 +115,7 @@ curl -X POST http://127.0.0.1:11434/api/chat \
 
 ### Test NPU
 ```bash
-cd C:\Users\techd\Downloads\intel-ai\npu
+cd ~/intel-ai\npu
 .\llama-cli-npu.exe -m ..\models\npu\DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf --prompt "Namaste!" -n 50
 ```
 
@@ -172,13 +175,13 @@ Response: 1-2s
 [ERROR] Cannot connect to Ollama server at http://127.0.0.1:11434
 ```
 **Solution:**
-1. Start GPU with: `cd C:\Users\techd\Downloads\intel-ai\gpu && ollama.exe serve`
+1. Start GPU with: `cd ~/intel-ai\gpu && ollama.exe serve`
 2. Wait 5 seconds for startup
 3. Verify: `curl http://127.0.0.1:11434/api/tags`
 
 ### NPU models not found
 ```
-[ERROR] NPU models directory not found at C:\Users\techd\Downloads\intel-ai\models\npu
+[ERROR] NPU models directory not found at ~/intel-ai\models\npu
 ```
 **Solution:**
 1. Check path exists
@@ -210,7 +213,7 @@ set OLLAMA_ENDPOINT=http://127.0.0.1:11434
 set OLLAMA_NUM_GPU=33
 
 # NPU configuration
-set NPU_PATH=C:/Users/techd/Downloads/intel-ai/npu
+set NPU_PATH=~/intel-ai/npu
 
 # Enable debug logging
 set INFERENCE_DEBUG=1
@@ -270,7 +273,7 @@ curl http://127.0.0.1:11434/api/tags | jq '.models[].name'
 
 ### Check NPU Models
 ```bash
-ls C:\Users\techd\Downloads\intel-ai\models\npu\*.gguf
+ls ~/intel-ai\models\npu\*.gguf
 ```
 
 ### View Inference Router Logs
@@ -283,7 +286,7 @@ tail -f ~/.claude/logs/sessions/*/inference.log
 
 ## Next Steps
 
-1. ✅ Start GPU: `cd C:\Users\techd\Downloads\intel-ai\gpu && ollama.exe serve`
+1. ✅ Start GPU: `cd ~/intel-ai\gpu && ollama.exe serve`
 2. ✅ Test connection: `curl http://127.0.0.1:11434/api/tags`
 3. ✅ Send first prompt to Claude Insight
 4. 📊 Monitor latency improvements (30-45s total vs 60+ before)

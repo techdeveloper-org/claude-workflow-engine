@@ -7,10 +7,11 @@ slow and produces unreadable output. GPU models: qwen2.5:7b, granite4:3b.
 Configuration via environment variables:
 - INFERENCE_MODE: "auto" (default), "gpu_only", "npu_only"
 - OLLAMA_ENDPOINT: GPU endpoint (default: http://127.0.0.1:11434)
-- NPU_PATH: NPU path (default: C:/Users/techd/Downloads/intel-ai/npu)
+- INTEL_AI_NPU_PATH: NPU path (default: ~/intel-ai/npu)
 """
 
 import os
+from pathlib import Path
 from typing import Dict, Any, List, Optional, Literal
 from loguru import logger
 
@@ -25,7 +26,7 @@ class InferenceRouter:
         self,
         mode: str = "auto",
         ollama_endpoint: str = "http://127.0.0.1:11434",
-        npu_path: str = "C:/Users/techd/Downloads/intel-ai/npu",
+        npu_path: str = None,
     ):
         """
         Initialize inference router.
@@ -33,8 +34,12 @@ class InferenceRouter:
         Args:
             mode: "auto" (smart routing), "gpu_only", "npu_only"
             ollama_endpoint: GPU Ollama endpoint
-            npu_path: NPU executable path
+            npu_path: NPU executable path (default: ~/intel-ai/npu or INTEL_AI_NPU_PATH)
         """
+        if npu_path is None:
+            npu_path = str(
+                Path(os.getenv('INTEL_AI_NPU_PATH', str(Path.home() / 'intel-ai' / 'npu')))
+            )
         self.mode = mode.lower()
         self.ollama_endpoint = ollama_endpoint
         self.npu_path = npu_path
@@ -71,9 +76,13 @@ class InferenceRouter:
 
         # Validate at least one is available
         if not self.ollama and not self.npu:
+            gpu_exe = os.getenv(
+                'INTEL_AI_GPU_EXE',
+                str(Path.home() / 'intel-ai' / 'gpu' / 'ollama'),
+            )
             raise RuntimeError(
                 "No inference backend available (GPU and NPU both failed). "
-                "Start GPU with: C:\\Users\\techd\\Downloads\\intel-ai\\gpu\\ollama.exe serve"
+                "Start GPU with: %s serve" % gpu_exe
             )
 
     def choose_backend(
@@ -248,7 +257,7 @@ def get_inference_router() -> InferenceRouter:
     if not hasattr(get_inference_router, "_instance"):
         mode = os.getenv("INFERENCE_MODE", "auto")
         ollama_endpoint = os.getenv("OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
-        npu_path = os.getenv("NPU_PATH", "C:/Users/techd/Downloads/intel-ai/npu")
+        npu_path = os.getenv("INTEL_AI_NPU_PATH", str(Path.home() / "intel-ai" / "npu"))
 
         get_inference_router._instance = InferenceRouter(
             mode=mode, ollama_endpoint=ollama_endpoint, npu_path=npu_path

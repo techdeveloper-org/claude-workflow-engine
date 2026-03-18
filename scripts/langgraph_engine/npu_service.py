@@ -16,8 +16,9 @@ Supported Models (GGUF format):
 - Llama-3.1-8B: Strong (5.2GB) - complex tasks, deep reasoning
 - DeepSeek-R1-Distill-Qwen-7B: Powerful (4.4GB) - best quality
 
-Configuration:
-- Endpoint: C:/Users/techd/Downloads/intel-ai/npu/llama-cli-npu.exe
+Configuration (environment variables):
+- INTEL_AI_NPU_PATH: NPU directory (default: ~/intel-ai/npu/)
+- INTEL_AI_NPU_EXE: NPU executable (default: {NPU_PATH}/llama-cli-npu[.exe])
 - Speed: 2-3x faster than GPU for simple tasks
 - Latency: <500ms for classification tasks
 """
@@ -33,22 +34,40 @@ from loguru import logger
 class NPUService:
     """Manages Intel AI Boost NPU inference with multiple models."""
 
-    def __init__(self, npu_path: str = "C:/Users/techd/Downloads/intel-ai/npu"):
+    def __init__(self, npu_path: str = None):
         """
         Initialize NPU service.
 
         Args:
-            npu_path: Path to NPU executable directory
+            npu_path: Path to NPU executable directory.
+                     Override: INTEL_AI_NPU_PATH env var.
+                     Default: ~/intel-ai/npu/
         """
+        if npu_path is None:
+            npu_path = os.getenv(
+                'INTEL_AI_NPU_PATH',
+                str(Path.home() / 'intel-ai' / 'npu'),
+            )
         self.npu_path = Path(npu_path)
-        self.cli_exe = self.npu_path / "llama-cli-npu.exe"
-        self.models_path = self.npu_path.parent / "models" / "npu"
+
+        # Resolve executable (platform-aware)
+        import sys as _sys
+        exe_name = 'llama-cli-npu.exe' if _sys.platform == 'win32' else 'llama-cli-npu'
+        npu_exe_env = os.environ.get('INTEL_AI_NPU_EXE')
+        self.cli_exe = Path(npu_exe_env) if npu_exe_env else (self.npu_path / exe_name)
+
+        self.models_path = Path(os.getenv(
+            'INTEL_AI_MODELS_PATH',
+            str(self.npu_path.parent / "models"),
+        )) / "npu"
 
         # Validate NPU setup
         if not self.cli_exe.exists():
             raise RuntimeError(
-                f"NPU CLI not found at {self.cli_exe}. "
-                f"Install Intel AI Boost from C:\\Users\\techd\\Downloads\\intel-ai"
+                "NPU CLI not found at %s. "
+                "Set INTEL_AI_NPU_PATH or INTEL_AI_NPU_EXE env var. "
+                "Download from: https://github.com/intel-analytics/ipex-llm/releases"
+                % str(self.cli_exe)
             )
 
         if not self.models_path.exists():
@@ -347,7 +366,7 @@ Return tasks as JSON array: [{{"id": "Task-1", "description": "...", "files": [.
         return result
 
 
-def get_npu_service(npu_path: str = "C:/Users/techd/Downloads/intel-ai/npu") -> Optional[NPUService]:
+def get_npu_service(npu_path: str = None) -> Optional[NPUService]:
     """Get or create singleton NPU service instance."""
     try:
         if not hasattr(get_npu_service, "_instance"):

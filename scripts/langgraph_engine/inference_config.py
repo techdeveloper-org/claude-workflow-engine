@@ -1,23 +1,56 @@
 """
 Inference Configuration - GPU vs NPU routing and model setup
 
-Supports Intel AI setup with GPU (Ollama) and NPU (Intel AI Boost)
+Supports Intel AI setup with GPU (Ollama) and NPU (Intel AI Boost).
+
+All paths are resolved via environment variables with cross-platform defaults.
+See path_resolver.py for the path standard. Never hardcode absolute paths.
+
+Environment variables for path overrides:
+    INTEL_AI_PATH       -> Root (default: ~/intel-ai/)
+    INTEL_AI_GPU_PATH   -> GPU dir (default: {INTEL_AI_PATH}/gpu/)
+    INTEL_AI_NPU_PATH   -> NPU dir (default: {INTEL_AI_PATH}/npu/)
+    INTEL_AI_MODELS_PATH -> Models dir (default: {INTEL_AI_PATH}/models/)
+    INTEL_AI_GPU_EXE    -> GPU executable (default: {GPU_PATH}/ollama[.exe])
+    INTEL_AI_NPU_EXE    -> NPU executable (default: {NPU_PATH}/llama-cli-npu[.exe])
+    OLLAMA_ENDPOINT     -> GPU endpoint (default: http://127.0.0.1:11434)
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Literal
 
 
+def _resolve_path(env_var, default_parts):
+    """Resolve a path from env var or build from home + parts."""
+    val = os.environ.get(env_var)
+    if val:
+        return Path(val)
+    return Path.home().joinpath(*default_parts)
+
+
+# Resolve Intel AI paths (cross-platform, no hardcoded usernames)
+_INTEL_AI_ROOT = _resolve_path('INTEL_AI_PATH', ['intel-ai'])
+_GPU_PATH = _resolve_path('INTEL_AI_GPU_PATH', ['intel-ai', 'gpu'])
+_NPU_PATH = _resolve_path('INTEL_AI_NPU_PATH', ['intel-ai', 'npu'])
+_MODELS_PATH = _resolve_path('INTEL_AI_MODELS_PATH', ['intel-ai', 'models'])
+
+_EXE_SUFFIX = '.exe' if sys.platform == 'win32' else ''
+
+
 class InferenceConfig:
-    """Configuration for inference backends."""
+    """Configuration for inference backends.
+
+    All paths use environment variable overrides with cross-platform defaults.
+    """
 
     # ============================================================================
     # INFERENCE MODE - Choose between GPU, NPU, or Auto routing
     # ============================================================================
 
     # Mode options: "auto" | "gpu_only" | "npu_only"
-    # - "auto": Smart routing (fast tasks→NPU, complex tasks→GPU)
+    # - "auto": Smart routing (fast tasks->NPU, complex tasks->GPU)
     # - "gpu_only": Use only Ollama GPU
     # - "npu_only": Use only Intel AI Boost NPU
     INFERENCE_MODE: Literal["auto", "gpu_only", "npu_only"] = os.getenv(
@@ -29,25 +62,40 @@ class InferenceConfig:
     # ============================================================================
 
     GPU_ENABLED = True
-    GPU_ENDPOINT = "http://127.0.0.1:11434"
-    GPU_MODELS_PATH = "C:\\Users\\techd\\Downloads\\intel-ai\\models\\gpu"
-    GPU_EXECUTABLE = "C:\\Users\\techd\\Downloads\\intel-ai\\gpu\\ollama.exe"
-
-    # GPU startup command (Windows)
-    GPU_STARTUP_COMMAND = (
-        'start "Ollama GPU Server" cmd /k '
-        '"cd /d C:\\Users\\techd\\Downloads\\intel-ai\\gpu && '
-        "set OLLAMA_NUM_GPU=33 && "
-        "set ZES_ENABLE_SYSMAN=1 && "
-        "set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1 && "
-        "set SYCL_CACHE_PERSISTENT=1 && "
-        "set ONEAPI_DEVICE_SELECTOR=level_zero:0 && "
-        "set OLLAMA_KEEP_ALIVE=10m && "
-        "set OLLAMA_NUM_PARALLEL=1 && "
-        "set OLLAMA_HOST=127.0.0.1:11434 && "
-        "ollama.exe serve"
-        '"'
+    GPU_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
+    GPU_MODELS_PATH = str(_MODELS_PATH / "gpu")
+    GPU_EXECUTABLE = str(
+        _resolve_path('INTEL_AI_GPU_EXE', ['intel-ai', 'gpu', 'ollama' + _EXE_SUFFIX])
     )
+
+    # GPU startup command (platform-aware)
+    @staticmethod
+    def get_gpu_startup_command():
+        """Build GPU startup command for current platform."""
+        gpu_dir = str(_GPU_PATH)
+        if sys.platform == 'win32':
+            return (
+                'start "Ollama GPU Server" cmd /k '
+                '"cd /d %s && '
+                "set OLLAMA_NUM_GPU=33 && "
+                "set ZES_ENABLE_SYSMAN=1 && "
+                "set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1 && "
+                "set SYCL_CACHE_PERSISTENT=1 && "
+                "set ONEAPI_DEVICE_SELECTOR=level_zero:0 && "
+                "set OLLAMA_KEEP_ALIVE=10m && "
+                "set OLLAMA_NUM_PARALLEL=1 && "
+                "set OLLAMA_HOST=127.0.0.1:11434 && "
+                'ollama%s serve"'
+            ) % (gpu_dir, _EXE_SUFFIX)
+        else:
+            return (
+                "cd %s && "
+                "OLLAMA_NUM_GPU=33 "
+                "ZES_ENABLE_SYSMAN=1 "
+                "OLLAMA_KEEP_ALIVE=10m "
+                "OLLAMA_HOST=127.0.0.1:11434 "
+                "./ollama serve &"
+            ) % gpu_dir
 
     # Available GPU models (from GPU mode)
     GPU_MODELS = {
@@ -61,9 +109,11 @@ class InferenceConfig:
     # ============================================================================
 
     NPU_ENABLED = True
-    NPU_PATH = "C:\\Users\\techd\\Downloads\\intel-ai\\npu"
-    NPU_CLI_EXE = "C:\\Users\\techd\\Downloads\\intel-ai\\npu\\llama-cli-npu.exe"
-    NPU_MODELS_PATH = "C:\\Users\\techd\\Downloads\\intel-ai\\models\\npu"
+    NPU_PATH = str(_NPU_PATH)
+    NPU_CLI_EXE = str(
+        _resolve_path('INTEL_AI_NPU_EXE', ['intel-ai', 'npu', 'llama-cli-npu' + _EXE_SUFFIX])
+    )
+    NPU_MODELS_PATH = str(_MODELS_PATH / "npu")
 
     # Available NPU models (GGUF format)
     NPU_MODELS = {
@@ -123,35 +173,37 @@ class InferenceConfig:
     @staticmethod
     def get_gpu_startup_instruction() -> str:
         """Get instruction for starting GPU."""
+        gpu_dir = str(_GPU_PATH)
         return (
             "GPU (Ollama with Intel Arc) not running.\n"
             "To start:\n"
-            "  1. Open Command Prompt\n"
-            "  2. cd C:\\Users\\techd\\Downloads\\intel-ai\\gpu\n"
+            "  1. Open terminal\n"
+            "  2. cd %s\n"
             "  3. Set environment variables:\n"
-            "     set OLLAMA_NUM_GPU=33\n"
-            "     set ZES_ENABLE_SYSMAN=1\n"
-            "     set SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1\n"
-            "     set SYCL_CACHE_PERSISTENT=1\n"
-            "     set ONEAPI_DEVICE_SELECTOR=level_zero:0\n"
-            "     set OLLAMA_KEEP_ALIVE=10m\n"
-            "     set OLLAMA_NUM_PARALLEL=1\n"
-            "     set OLLAMA_HOST=127.0.0.1:11434\n"
-            "  4. ollama.exe serve\n"
-        )
+            "     OLLAMA_NUM_GPU=33\n"
+            "     ZES_ENABLE_SYSMAN=1\n"
+            "     OLLAMA_KEEP_ALIVE=10m\n"
+            "     OLLAMA_HOST=127.0.0.1:11434\n"
+            "  4. ollama serve\n"
+            "\n"
+            "  Or set INTEL_AI_GPU_PATH env var to your GPU directory.\n"
+        ) % gpu_dir
 
     @staticmethod
     def get_npu_startup_instruction() -> str:
         """Get instruction for starting NPU."""
+        npu_exe = str(_NPU_PATH / ('llama-cli-npu' + _EXE_SUFFIX))
+        models_dir = str(_MODELS_PATH / 'npu')
         return (
             "NPU (Intel AI Boost) not available.\n"
             "Required files:\n"
-            "  - C:\\Users\\techd\\Downloads\\intel-ai\\npu\\llama-cli-npu.exe\n"
-            "  - Models in C:\\Users\\techd\\Downloads\\intel-ai\\models\\npu\\\n"
+            "  - %s\n"
+            "  - Models in %s\n"
             "\n"
-            "If not installed, download Intel AI setup from:\n"
+            "Set INTEL_AI_NPU_PATH env var to customize location.\n"
+            "Download Intel AI setup from:\n"
             "  https://github.com/intel-analytics/ipex-llm/releases\n"
-        )
+        ) % (npu_exe, models_dir)
 
     @staticmethod
     def validate_setup() -> dict:

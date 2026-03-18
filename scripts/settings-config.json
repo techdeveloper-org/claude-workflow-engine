@@ -1,4 +1,5 @@
 {
+  "_comment": "Template for ~/.claude/settings.json. Replace {CLAUDE_SCRIPTS} with your actual scripts path. On Windows: C:/Users/<username>/.claude/scripts, On Linux/Mac: /home/<username>/.claude/scripts. Or set CLAUDE_SCRIPTS_DIR env var.",
   "permissions": {
     "defaultMode": "default"
   },
@@ -8,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python C:/Users/techd/.claude/scripts/3-level-flow.py",
+            "command": "python {CLAUDE_SCRIPTS}/3-level-flow.py",
             "timeout": 120
           }
         ]
@@ -20,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python C:/Users/techd/.claude/scripts/pre-tool-enforcer.py",
+            "command": "python {CLAUDE_SCRIPTS}/pre-tool-enforcer.py",
             "timeout": 12
           }
         ]
@@ -32,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python C:/Users/techd/.claude/scripts/post-tool-tracker.py",
+            "command": "python {CLAUDE_SCRIPTS}/post-tool-tracker.py",
             "timeout": 30
           }
         ]
@@ -42,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python C:/Users/techd/.claude/scripts/post-tool-tracker.py",
+            "command": "python {CLAUDE_SCRIPTS}/post-tool-tracker.py",
             "timeout": 10
           }
         ]
@@ -53,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python C:/Users/techd/.claude/scripts/stop-notifier.py",
+            "command": "python {CLAUDE_SCRIPTS}/stop-notifier.py",
             "timeout": 60
           }
         ]

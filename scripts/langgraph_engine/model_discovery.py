@@ -7,8 +7,8 @@ Scans local model directories and provides unified access to:
 - GPU models (via Ollama)
 
 Configuration:
-- INTEL_AI_MODELS_PATH: Path to intel-ai/models directory
-- Defaults to: C:\\Users\\techd\\Downloads\\intel-ai\\models\\
+- INTEL_AI_MODELS_PATH: Path to models directory (default: ~/intel-ai/models/)
+- INTEL_AI_PATH: Root Intel AI directory (default: ~/intel-ai/)
 """
 
 import json
@@ -54,10 +54,14 @@ class ModelDiscovery:
 
         Args:
             models_path: Path to intel-ai/models directory.
-                        Defaults to C:\\Users\\techd\\Downloads\\intel-ai\\models\\
+                        Override: INTEL_AI_MODELS_PATH env var.
+                        Default: ~/intel-ai/models/
         """
         if models_path is None:
-            models_path = r"C:\Users\techd\Downloads\intel-ai\models"
+            models_path = os.getenv(
+                'INTEL_AI_MODELS_PATH',
+                str(Path.home() / 'intel-ai' / 'models'),
+            )
 
         self.models_path = Path(models_path)
         self.models: Dict[str, ModelInfo] = {}
