@@ -15,6 +15,16 @@ Path Standard:
     | Policies      | CLAUDE_POLICIES_DIR     | {CLAUDE_HOME}/policies/     |
     | Settings      | CLAUDE_SETTINGS_FILE    | {CLAUDE_HOME}/settings.json |
     | Data/Memory   | CLAUDE_INSIGHT_DATA_DIR | {CLAUDE_HOME}/memory/       |
+    | Logs Root     | CLAUDE_LOGS_DIR         | {CLAUDE_HOME}/logs/         |
+    | Telemetry     | (auto)                  | {LOGS}/telemetry/           |
+    | Level Logs    | (auto)                  | {LOGS}/level/               |
+    | Cache         | (auto)                  | {LOGS}/cache/               |
+    | Error Logs    | (auto)                  | {LOGS}/errors/              |
+    | Flow Traces   | (auto)                  | {LOGS}/flow-traces/         |
+    | Benchmarks    | (auto)                  | {LOGS}/benchmarks/          |
+    | Tool Opt Log  | (auto)                  | {LOGS}/tool-optimization.jsonl |
+    | Skills        | CLAUDE_SKILLS_DIR       | {CLAUDE_HOME}/skills/       |
+    | Agents        | CLAUDE_AGENTS_DIR       | {CLAUDE_HOME}/agents/       |
     | Intel AI Root | INTEL_AI_PATH           | ~/intel-ai/                 |
     | GPU Path      | INTEL_AI_GPU_PATH       | {INTEL_AI_PATH}/gpu/        |
     | NPU Path      | INTEL_AI_NPU_PATH       | {INTEL_AI_PATH}/npu/        |
@@ -48,6 +58,15 @@ Convenience functions (all delegate to path_resolver):
     get_models_path() -> Path
     get_gpu_executable() -> Path
     get_npu_executable() -> Path
+    get_telemetry_dir() -> Path
+    get_level_logs_dir() -> Path
+    get_cache_logs_dir() -> Path
+    get_error_logs_dir() -> Path
+    get_flow_traces_dir() -> Path
+    get_benchmarks_dir() -> Path
+    get_tool_opt_log() -> Path
+    get_skills_dir() -> Path
+    get_agents_dir() -> Path
 
 Classes:
     PathResolver: Data directory resolver with three-tier priority fallback.
@@ -102,6 +121,11 @@ class PathResolver:
             'CLAUDE_HOME', Path.home() / '.claude'
         )
         self.global_memory = self.claude_home / 'memory'
+
+        # ---- Logs root (overridable for monitoring repo) ----
+        self.logs_root = _env_path(
+            'CLAUDE_LOGS_DIR', self.claude_home / 'logs'
+        )
 
         # ---- Intel AI paths (GPU/NPU/Models) ----
         self.intel_ai_root = _env_path(
@@ -174,6 +198,65 @@ class PathResolver:
     def get_file(self, *parts):
         """Get file path within data directory."""
         return self.base_dir.joinpath(*parts)
+
+    # ---- Log subdirectories (all under logs_root) ----
+
+    def get_telemetry_dir(self):
+        """Get telemetry directory for per-step JSONL files."""
+        d = self.logs_root / 'telemetry'
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def get_level_logs_dir(self):
+        """Get level logs directory for per-level execution logs."""
+        d = self.logs_root / 'level'
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def get_cache_logs_dir(self):
+        """Get cache directory for cache stats and data."""
+        d = self.logs_root / 'cache'
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def get_error_logs_dir(self):
+        """Get error logs directory."""
+        d = self.logs_root / 'errors'
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def get_flow_traces_dir(self):
+        """Get flow traces directory for pipeline execution traces."""
+        d = self.logs_root / 'flow-traces'
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def get_benchmarks_dir(self):
+        """Get benchmarks directory for performance data."""
+        d = self.logs_root / 'benchmarks'
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def get_tool_opt_log(self):
+        """Get tool optimization JSONL log file path."""
+        self.logs_root.mkdir(parents=True, exist_ok=True)
+        return self.logs_root / 'tool-optimization.jsonl'
+
+    def get_skills_dir(self):
+        """Get skills directory.
+
+        Override: CLAUDE_SKILLS_DIR env var.
+        Default: {CLAUDE_HOME}/skills/
+        """
+        return _env_path('CLAUDE_SKILLS_DIR', self.claude_home / 'skills')
+
+    def get_agents_dir(self):
+        """Get agents directory.
+
+        Override: CLAUDE_AGENTS_DIR env var.
+        Default: {CLAUDE_HOME}/agents/
+        """
+        return _env_path('CLAUDE_AGENTS_DIR', self.claude_home / 'agents')
 
     # ---- Claude directories ----
 
@@ -473,3 +556,48 @@ def get_npu_executable():
         Path: Absolute path to llama-cli-npu executable.
     """
     return path_resolver.get_npu_executable()
+
+
+def get_telemetry_dir():
+    """Return telemetry directory for per-step JSONL files."""
+    return path_resolver.get_telemetry_dir()
+
+
+def get_level_logs_dir():
+    """Return level logs directory."""
+    return path_resolver.get_level_logs_dir()
+
+
+def get_cache_logs_dir():
+    """Return cache logs directory."""
+    return path_resolver.get_cache_logs_dir()
+
+
+def get_error_logs_dir():
+    """Return error logs directory."""
+    return path_resolver.get_error_logs_dir()
+
+
+def get_flow_traces_dir():
+    """Return flow traces directory."""
+    return path_resolver.get_flow_traces_dir()
+
+
+def get_benchmarks_dir():
+    """Return benchmarks directory."""
+    return path_resolver.get_benchmarks_dir()
+
+
+def get_tool_opt_log():
+    """Return tool optimization JSONL log file path."""
+    return path_resolver.get_tool_opt_log()
+
+
+def get_skills_dir():
+    """Return skills directory."""
+    return path_resolver.get_skills_dir()
+
+
+def get_agents_dir():
+    """Return agents directory."""
+    return path_resolver.get_agents_dir()
