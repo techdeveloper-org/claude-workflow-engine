@@ -255,6 +255,106 @@ class MetricsDashboard:
         return "\n".join(lines)
 
 
+def get_dashboard_data(days=7):
+    """Get formatted dashboard data from metrics aggregator.
+
+    Bridge function: reads from metrics_aggregator.get_full_report()
+    and formats for dashboard consumption (JSON API or template rendering).
+
+    Args:
+        days: Number of days to aggregate (default 7).
+
+    Returns:
+        Dict with summary, steps, skills, tools, task_types sections.
+    """
+    try:
+        from .metrics_aggregator import get_full_report
+        report = get_full_report(days)
+
+        return {
+            "period_days": days,
+            "summary": {
+                "total_sessions": report.get("sessions", {}).get("total_sessions", 0),
+                "avg_complexity": report.get("sessions", {}).get("avg_complexity", 0),
+                "total_llm_calls": report.get("llm_usage", {}).get("total_llm_calls", 0),
+                "cache_hit_rate": report.get("llm_usage", {}).get("cache_hit_rate", 0),
+            },
+            "steps": report.get("step_performance", {}).get("steps", {}),
+            "top_skills": report.get("sessions", {}).get("skills_used", {}),
+            "top_tools": report.get("tool_usage", {}).get("tools", {}),
+            "task_types": report.get("sessions", {}).get("task_types", {}),
+        }
+    except Exception as exc:
+        logger.debug("Dashboard data unavailable: %s", exc)
+        return {"error": str(exc), "period_days": days}
+
+
+def format_dashboard_text(data=None, days=7):
+    """Format dashboard data as ASCII text for terminal display.
+
+    Args:
+        data: Pre-fetched dashboard data dict, or None to fetch fresh.
+        days: Number of days (used if data is None).
+
+    Returns:
+        Formatted string for terminal output.
+    """
+    if data is None:
+        data = get_dashboard_data(days)
+
+    lines = []
+    lines.append("=" * 60)
+    lines.append("  CLAUDE WORKFLOW ENGINE - METRICS DASHBOARD")
+    lines.append("=" * 60)
+
+    summary = data.get("summary", {})
+    lines.append("")
+    lines.append("  Sessions: %d | Avg Complexity: %.1f" % (
+        summary.get("total_sessions", 0),
+        summary.get("avg_complexity", 0),
+    ))
+    lines.append("  LLM Calls: %d | Cache Hit Rate: %.1f%%" % (
+        summary.get("total_llm_calls", 0),
+        summary.get("cache_hit_rate", 0) * 100,
+    ))
+    lines.append("")
+
+    # Step performance
+    steps = data.get("steps", {})
+    if steps:
+        lines.append("  STEP PERFORMANCE:")
+        for step_name in sorted(steps.keys()):
+            step_data = steps[step_name]
+            if isinstance(step_data, dict):
+                avg_ms = step_data.get("avg_duration_ms", 0)
+                rate = step_data.get("success_rate", 1.0)
+                bar_len = min(30, max(1, int(avg_ms / 100)))
+                bar = "#" * bar_len
+                lines.append("    %-20s  %s  %dms  %.0f%%" % (
+                    step_name, bar, avg_ms, rate * 100
+                ))
+        lines.append("")
+
+    # Top skills
+    skills = data.get("top_skills", {})
+    if skills:
+        lines.append("  TOP SKILLS:")
+        for skill, count in sorted(skills.items(), key=lambda x: -x[1])[:5]:
+            lines.append("    %-30s  %d uses" % (skill, count))
+        lines.append("")
+
+    # Task types
+    tasks = data.get("task_types", {})
+    if tasks:
+        lines.append("  TASK TYPES:")
+        for ttype, count in sorted(tasks.items(), key=lambda x: -x[1])[:5]:
+            lines.append("    %-20s  %d" % (ttype, count))
+        lines.append("")
+
+    lines.append("=" * 60)
+    return "\n".join(lines)
+
+
 def main():
     """CLI entry point for metrics dashboard."""
     dashboard = MetricsDashboard()

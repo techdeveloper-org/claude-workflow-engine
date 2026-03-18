@@ -19,10 +19,10 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Frameworks** | LangGraph 1.0.10+, LangChain, FastMCP, Qdrant |
 | **Status** | Active Development |
 | **Primary Location** | scripts/langgraph_engine/ |
-| **MCP Servers** | 12 (124 tools) |
-| **Total Python Files** | 263 |
-| **Test Files** | 49 |
-| **Call Graph** | 574 classes, 3783 methods, 213 files analyzed |
+| **MCP Servers** | 16 (149 tools) |
+| **Total Python Files** | 280+ |
+| **Test Files** | 54 |
+| **Call Graph** | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 
 ---
 
@@ -91,6 +91,12 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | UML Generators | scripts/langgraph_engine/uml_generators.py | 13 UML diagram types (CallGraph + AST + LLM) |
 | Doc Manager | scripts/langgraph_engine/level3_documentation_manager.py | Circular SDLC doc cycle (Step 0/13) |
 | Session Bridge | src/mcp/session_hooks.py | MCP direct import bridge |
+| Metrics Aggregator | scripts/langgraph_engine/metrics_aggregator.py | Session/step/LLM/tool stats from logs (CLI) |
+| Metrics Dashboard | scripts/langgraph_engine/metrics_dashboard.py | Dashboard data formatting + ASCII display |
+| SonarQube Scanner | scripts/langgraph_engine/sonarqube_scanner.py | API-first scan + lightweight fallback |
+| Quality Gate | scripts/langgraph_engine/quality_gate.py | 4-gate merge enforcement |
+| Test Generator | scripts/langgraph_engine/test_generator.py | Template-based unit tests (4 languages) |
+| Coverage Analyzer | scripts/langgraph_engine/coverage_analyzer.py | AST-based coverage, risk-prioritized |
 
 ### MCP Servers (12 servers, 123 tools)
 
