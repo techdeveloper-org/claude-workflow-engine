@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python -m pytest tests/test_level_minus1.py -v)",
       "Bash(grep -n \"TODO\\\\|FIXME\\\\|XXX\\\\|STUB\\\\|pass$\" /c/Users/techd/Documents/workspace-spring-tool-suite-4-4.27.0-new/claude-insight/scripts/langgraph_engine/subgraphs/level3_execution.py)",
-      "Bash(find /c/Users/techd/Documents/workspace-spring-tool-suite-4-4.27.0-new/claude-insight/src/mcp -name session_hooks.py -o -name session*)"
+      "Bash(find /c/Users/techd/Documents/workspace-spring-tool-suite-4-4.27.0-new/claude-insight/src/mcp -name session_hooks.py -o -name session*)",
+      "Bash(git status:*)"
     ]
   },
   "prefersReducedMotion": true
