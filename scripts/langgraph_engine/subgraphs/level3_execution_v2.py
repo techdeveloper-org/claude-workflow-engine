@@ -809,6 +809,15 @@ def step2_plan_execution_node(state: FlowState) -> Dict[str, Any]:
             result["step2_plan_validated"] = True  # Default to valid on error
             result["step2_plan_validation_issues"] = []
 
+    # --- User Interaction: High-risk plan confirmation ---
+    try:
+        from ..user_interaction import generate_step2_questions
+        questions = generate_step2_questions({**state, **result})
+        if questions:
+            result["step2_pending_questions"] = questions
+    except Exception as e:
+        logger.debug("[v2] Step 2 user interaction skipped: %s", e)
+
     return result
 
 
@@ -937,7 +946,7 @@ def step4_toon_refinement_node(state: FlowState) -> Dict[str, Any]:
 
 def step5_skill_selection_node(state: FlowState) -> Dict[str, Any]:
     """Step 5: Skill & Agent Selection with full error handling."""
-    return _run_step(
+    result = _run_step(
         5, "Skill & Agent Selection",
         step5_skill_agent_selection,
         state,
@@ -950,6 +959,17 @@ def step5_skill_selection_node(state: FlowState) -> Dict[str, Any]:
             "step5_llm_query_needed": False,
         },
     )
+
+    # --- User Interaction: Low-confidence skill confirmation ---
+    try:
+        from ..user_interaction import generate_step5_questions
+        questions = generate_step5_questions(result)
+        if questions:
+            result["step5_pending_questions"] = questions
+    except Exception as e:
+        logger.debug("[v2] Step 5 user interaction skipped: %s", e)
+
+    return result
 
 
 def step6_skill_validation_node(state: FlowState) -> Dict[str, Any]:
@@ -1129,6 +1149,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
     pre_change_graph = {}
     call_context = {}
     suggested_tests = []
+    _dep_result = None
     try:
         from ..call_graph_analyzer import (
             snapshot_call_graph, get_implementation_context,
@@ -1149,6 +1170,13 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
                     len(call_context.get("entry_points_affected", [])),
                     len(suggested_tests),
                 )
+        # Resolve project dependencies for better graph coverage
+        try:
+            from ..build_dependency_resolver import resolve_and_enhance
+            if call_context.get("call_graph_available") and pre_change_graph:
+                _dep_result = resolve_and_enhance(project_root, None)
+        except Exception as e:
+            logger.debug("[v2] Step 10 dependency resolution skipped: %s", e)
     except Exception as e:
         logger.debug("[v2] Step 10 CallGraph context skipped: %s", e)
 
@@ -1260,6 +1288,64 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
         result["step10_call_context"] = call_context
     if suggested_tests:
         result["step10_suggested_test_scope"] = suggested_tests
+    if _dep_result is not None:
+        result["step10_dependency_resolution"] = _dep_result
+
+    # --- Quality: SonarQube scan + auto-fix + test generation ---
+    try:
+        from ..sonarqube_scanner import scan_and_report
+        project_root = state.get("project_root", ".")
+        modified_files = result.get("step10_modified_files", [])
+
+        if modified_files and os.environ.get("CLAUDE_DRY_RUN") != "1":
+            # 1. Scan for issues
+            scan_result = scan_and_report(project_root, modified_files)
+            result["step10_sonar_results"] = scan_result
+
+            # 2. Auto-fix if findings exist
+            if scan_result.get("findings"):
+                try:
+                    from ..sonar_auto_fixer import run_fix_loop
+                    fix_result = run_fix_loop(
+                        project_root, scan_result["findings"], max_iterations=2
+                    )
+                    result["step10_auto_fix_result"] = fix_result
+                    logger.info(
+                        "[v2] Step 10 auto-fix: %d fixed, %d remaining",
+                        fix_result.get("findings_fixed", 0),
+                        fix_result.get("findings_remaining", 0),
+                    )
+                except Exception as e:
+                    logger.debug("[v2] Step 10 auto-fix skipped: %s", e)
+
+            # 3. Generate tests for modified files
+            try:
+                from ..test_generator import generate_tests_for_modified_files
+                test_result = generate_tests_for_modified_files(
+                    project_root, modified_files, call_graph=pre_change_graph if pre_change_graph else None
+                )
+                result["step10_generated_tests"] = test_result
+                if test_result.get("tests_generated", 0) > 0:
+                    logger.info(
+                        "[v2] Step 10 generated %d test files for %d methods",
+                        test_result.get("tests_generated", 0),
+                        test_result.get("total_methods_tested", 0),
+                    )
+            except Exception as e:
+                logger.debug("[v2] Step 10 test generation skipped: %s", e)
+
+            # 4. Coverage analysis
+            try:
+                from ..coverage_analyzer import suggest_test_scope
+                coverage_result = suggest_test_scope(
+                    project_root, modified_files
+                )
+                result["step10_coverage_results"] = coverage_result
+            except Exception as e:
+                logger.debug("[v2] Step 10 coverage analysis skipped: %s", e)
+
+    except Exception as e:
+        logger.debug("[v2] Step 10 quality pipeline skipped: %s", e)
 
     return result
 
@@ -1325,6 +1411,61 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
                 )
     except Exception as e:
         logger.debug("[v2] Step 11 CallGraph review skipped: %s", e)
+
+    # --- Quality Gate: Evaluate all gates before merge ---
+    try:
+        from ..quality_gate import evaluate_quality_gate, generate_gate_report
+        project_root = state.get("project_root", ".")
+
+        gate_result = evaluate_quality_gate(project_root, {
+            **state,
+            **result,  # Include step10/11 results
+        })
+        result["step11_quality_gate"] = gate_result
+
+        if not gate_result.get("gate_passed", True):
+            # Add gate failures to review issues
+            existing_issues = result.get("step11_review_issues", [])
+            for gate_name in gate_result.get("blocking_gates", []):
+                gate_info = gate_result.get("gates", {}).get(gate_name, {})
+                existing_issues.append(
+                    "QUALITY GATE FAILED: %s - %s" % (
+                        gate_name, gate_info.get("reason", "unknown")
+                    )
+                )
+            result["step11_review_issues"] = existing_issues
+            result["step11_quality_gate_passed"] = False
+
+            # Generate gate report for PR comment
+            gate_report = generate_gate_report(gate_result)
+            result["step11_gate_report"] = gate_report
+
+            logger.info(
+                "[v2] Step 11 quality gate FAILED: %s",
+                ", ".join(gate_result.get("blocking_gates", [])),
+            )
+        else:
+            result["step11_quality_gate_passed"] = True
+            logger.info("[v2] Step 11 quality gate PASSED")
+
+    except Exception as e:
+        logger.debug("[v2] Step 11 quality gate skipped: %s", e)
+
+    # --- User Interaction: Generate questions for breaking changes ---
+    try:
+        from ..user_interaction import generate_step11_questions, InteractionManager
+        questions = generate_step11_questions({**state, **result})
+        if questions:
+            result["pending_interactions"] = questions
+            mgr = InteractionManager()
+            for q in questions:
+                mgr._interactions.append(q)
+            # In hook mode, apply defaults automatically
+            if os.environ.get("CLAUDE_HOOK_MODE", "1") == "1":
+                mgr.apply_defaults()
+            result["step11_interaction_questions"] = len(questions)
+    except Exception as e:
+        logger.debug("[v2] Step 11 user interaction skipped: %s", e)
 
     return result
 

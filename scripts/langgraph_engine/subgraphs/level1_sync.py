@@ -183,6 +183,25 @@ def node_session_loader(state: FlowState) -> dict:
             )
 
         write_level_log(result, "level1", "session-loader", "OK", _time_mod.time() - _step_start, result)
+        # Telemetry
+        try:
+            import json as _json_tel, time as _time_tel
+            from pathlib import Path as _Path_tel
+            _sid_tel = state.get("session_id", result.get("session_id", ""))
+            if _sid_tel:
+                _tdir_tel = _Path_tel.home() / ".claude" / "logs" / "telemetry"
+                _tdir_tel.mkdir(parents=True, exist_ok=True)
+                _tfile_tel = _tdir_tel / ("%s.jsonl" % _sid_tel)
+                _entry_tel = {
+                    "level": 1,
+                    "node": "node_session_loader",
+                    "status": "OK" if not result.get("error") else "ERROR",
+                    "timestamp": _time_tel.strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+                with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
+                    _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
+        except Exception:
+            pass  # Non-blocking
         return result
     except Exception as e:
         result = {
@@ -190,6 +209,25 @@ def node_session_loader(state: FlowState) -> dict:
             "session_error": str(e),
         }
         write_level_log(state, "level1", "session-loader", "FAILED", _time_mod.time() - _step_start, None, str(e))
+        # Telemetry
+        try:
+            import json as _json_tel, time as _time_tel
+            from pathlib import Path as _Path_tel
+            _sid_tel = state.get("session_id", result.get("session_id", ""))
+            if _sid_tel:
+                _tdir_tel = _Path_tel.home() / ".claude" / "logs" / "telemetry"
+                _tdir_tel.mkdir(parents=True, exist_ok=True)
+                _tfile_tel = _tdir_tel / ("%s.jsonl" % _sid_tel)
+                _entry_tel = {
+                    "level": 1,
+                    "node": "node_session_loader",
+                    "status": "ERROR",
+                    "timestamp": _time_tel.strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+                with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
+                    _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
+        except Exception:
+            pass  # Non-blocking
         return result
 
 
@@ -239,6 +277,25 @@ def node_complexity_calculation(state: FlowState) -> dict:
             }
             write_level_log(state, "level1", "complexity-calculation", "OK",
                             _time_mod.time() - _step_start, result)
+            # Telemetry
+            try:
+                import json as _json_tel, time as _time_tel
+                from pathlib import Path as _Path_tel
+                _sid_tel = state.get("session_id", result.get("session_id", ""))
+                if _sid_tel:
+                    _tdir_tel = _Path_tel.home() / ".claude" / "logs" / "telemetry"
+                    _tdir_tel.mkdir(parents=True, exist_ok=True)
+                    _tfile_tel = _tdir_tel / ("%s.jsonl" % _sid_tel)
+                    _entry_tel = {
+                        "level": 1,
+                        "node": "node_complexity_calculation",
+                        "status": "OK" if not result.get("error") else "ERROR",
+                        "timestamp": _time_tel.strftime("%Y-%m-%dT%H:%M:%S"),
+                    }
+                    with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
+                        _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
+            except Exception:
+                pass  # Non-blocking
             return result
 
         # --- Legacy path: try the old architecture script ---
@@ -259,12 +316,32 @@ def node_complexity_calculation(state: FlowState) -> dict:
             if result.returncode == 0:
                 try:
                     data = json.loads(result.stdout)
-                    return {
+                    _legacy_result = {
                         "complexity_score": data.get("complexity_score", 5),
                         "project_graph": data.get("graph", {}),
                         "architecture": data.get("architecture", {}),
                         "complexity_calculated": True,
                     }
+                    # Telemetry
+                    try:
+                        import json as _json_tel, time as _time_tel
+                        from pathlib import Path as _Path_tel
+                        _sid_tel = state.get("session_id", "")
+                        if _sid_tel:
+                            _tdir_tel = _Path_tel.home() / ".claude" / "logs" / "telemetry"
+                            _tdir_tel.mkdir(parents=True, exist_ok=True)
+                            _tfile_tel = _tdir_tel / ("%s.jsonl" % _sid_tel)
+                            _entry_tel = {
+                                "level": 1,
+                                "node": "node_complexity_calculation",
+                                "status": "OK",
+                                "timestamp": _time_tel.strftime("%Y-%m-%dT%H:%M:%S"),
+                            }
+                            with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
+                                _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
+                    except Exception:
+                        pass  # Non-blocking
+                    return _legacy_result
                 except Exception:
                     pass
 
@@ -280,6 +357,25 @@ def node_complexity_calculation(state: FlowState) -> dict:
         }
         write_level_log(state, "level1", "complexity-calculation", "OK",
                         _time_mod.time() - _step_start, result)
+        # Telemetry
+        try:
+            import json as _json_tel, time as _time_tel
+            from pathlib import Path as _Path_tel
+            _sid_tel = state.get("session_id", result.get("session_id", ""))
+            if _sid_tel:
+                _tdir_tel = _Path_tel.home() / ".claude" / "logs" / "telemetry"
+                _tdir_tel.mkdir(parents=True, exist_ok=True)
+                _tfile_tel = _tdir_tel / ("%s.jsonl" % _sid_tel)
+                _entry_tel = {
+                    "level": 1,
+                    "node": "node_complexity_calculation",
+                    "status": "OK" if not result.get("error") else "ERROR",
+                    "timestamp": _time_tel.strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+                with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
+                    _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
+        except Exception:
+            pass  # Non-blocking
         return result
 
     except Exception as e:
@@ -290,6 +386,25 @@ def node_complexity_calculation(state: FlowState) -> dict:
         }
         write_level_log(state, "level1", "complexity-calculation", "FAILED",
                         _time_mod.time() - _step_start, None, str(e))
+        # Telemetry
+        try:
+            import json as _json_tel, time as _time_tel
+            from pathlib import Path as _Path_tel
+            _sid_tel = state.get("session_id", result.get("session_id", ""))
+            if _sid_tel:
+                _tdir_tel = _Path_tel.home() / ".claude" / "logs" / "telemetry"
+                _tdir_tel.mkdir(parents=True, exist_ok=True)
+                _tfile_tel = _tdir_tel / ("%s.jsonl" % _sid_tel)
+                _entry_tel = {
+                    "level": 1,
+                    "node": "node_complexity_calculation",
+                    "status": "ERROR",
+                    "timestamp": _time_tel.strftime("%Y-%m-%dT%H:%M:%S"),
+                }
+                with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
+                    _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
+        except Exception:
+            pass  # Non-blocking
         return result
 
 
@@ -472,7 +587,7 @@ def node_context_loader(state: FlowState) -> dict:
                                         "cache_hit": True,
                                         "load_time_ms": elapsed_ms,
                                     })
-                    return {
+                    _cache_hit_result = {
                         "context_data": cached,
                         "context_loaded": True,
                         "files_loaded_count": len(cached.get("files_loaded", [])),
@@ -486,6 +601,26 @@ def node_context_loader(state: FlowState) -> dict:
                         "context_hit_rate_pct": cache_stats.get("hit_rate_pct", 0.0),
                         "context_streamed_files": [],
                     }
+                    # Telemetry
+                    try:
+                        import json as _json_tel, time as _time_tel
+                        from pathlib import Path as _Path_tel
+                        _sid_tel = state.get("session_id", "")
+                        if _sid_tel:
+                            _tdir_tel = _Path_tel.home() / ".claude" / "logs" / "telemetry"
+                            _tdir_tel.mkdir(parents=True, exist_ok=True)
+                            _tfile_tel = _tdir_tel / ("%s.jsonl" % _sid_tel)
+                            _entry_tel = {
+                                "level": 1,
+                                "node": "node_context_loader",
+                                "status": "OK",
+                                "timestamp": _time_tel.strftime("%Y-%m-%dT%H:%M:%S"),
+                            }
+                            with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
+                                _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
+                    except Exception:
+                        pass  # Non-blocking
+                    return _cache_hit_result
             except Exception as cache_exc:
                 print(
                     "[LEVEL 1 CONTEXT LOADER] Cache check failed (ignored): {}".format(cache_exc),

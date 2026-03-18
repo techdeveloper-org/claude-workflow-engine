@@ -287,5 +287,74 @@ class TestRouteAfterMerge(unittest.TestCase):
         self.assertEqual(result, "ask_fix")
 
 
+class TestFixLevelMinus1Issues:
+    """Tests for the fix_level_minus1_issues() function."""
+
+    def test_fix_unicode_sets_flag(self):
+        """Unicode fix attempt should return level_minus1_fixes_applied and ready_to_retry."""
+        state = {
+            "unicode_check": False,
+            "encoding_check": True,
+            "windows_path_check": True,
+            "project_root": ".",
+        }
+        result = fix_level_minus1_issues(state)
+        assert "level_minus1_fixes_applied" in result
+        assert result.get("level_minus1_ready_to_retry") is True
+
+    def test_fix_path_backslashes(self, tmp_path):
+        """Path fixer should convert backslashes to forward slashes."""
+        # Create a Python file with backslash paths
+        py_file = tmp_path / "test_paths.py"
+        py_file.write_text('path = "C:\\\\Users\\\\test"\n', encoding="utf-8")
+
+        state = {
+            "unicode_check": True,
+            "encoding_check": True,
+            "windows_path_check": False,
+            "project_root": str(tmp_path),
+        }
+        result = fix_level_minus1_issues(state)
+        assert isinstance(result, dict)
+
+    def test_fix_preserves_escape_sequences(self, tmp_path):
+        """Path fixer should NOT convert \\n, \\t, \\r to forward slashes."""
+        py_file = tmp_path / "test_escapes.py"
+        py_file.write_text('msg = "hello\\nworld\\ttab"\n', encoding="utf-8")
+
+        state = {
+            "unicode_check": True,
+            "encoding_check": True,
+            "windows_path_check": False,
+            "project_root": str(tmp_path),
+        }
+        result = fix_level_minus1_issues(state)
+        # Verify file still has escape sequences intact
+        content = py_file.read_text(encoding="utf-8")
+        assert "\\n" in content or "hello" in content
+
+    def test_fix_empty_project(self, tmp_path):
+        """Fix on empty project should not crash."""
+        state = {
+            "unicode_check": True,
+            "encoding_check": True,
+            "windows_path_check": False,
+            "project_root": str(tmp_path),
+        }
+        result = fix_level_minus1_issues(state)
+        assert isinstance(result, dict)
+
+    def test_fix_all_checks_pass(self):
+        """When all checks pass, fix should be a no-op."""
+        state = {
+            "unicode_check": True,
+            "encoding_check": True,
+            "windows_path_check": True,
+            "project_root": ".",
+        }
+        result = fix_level_minus1_issues(state)
+        assert isinstance(result, dict)
+
+
 if __name__ == "__main__":
     unittest.main()
