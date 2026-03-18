@@ -68,6 +68,8 @@ from .standards_integration import apply_standards_at_step, STANDARDS_INTEGRATIO
 from .standard_selector import select_standards, detect_project_type as selector_detect_project_type
 
 from .subgraphs.level3_execution_v2 import (
+    step0_0_project_context_node,
+    step0_1_initial_callgraph_node,
     level3_init_node,
     step0_task_analysis_node,
     step1_plan_mode_decision_node,
@@ -1096,13 +1098,21 @@ def create_flow_graph(hook_mode: bool = False):
     # LEVEL 3: EXECUTION SYSTEM - 14-STEP PIPELINE (v2 WORKFLOW.MD COMPLIANT)
     # ========================================================================
 
-    # Bridge node: session_path → session_dir
+    # Bridge node: session_path -> session_dir
     graph.add_node("level3_init", level3_init_node)
     graph.add_edge("level2_optimize_context", "level3_init")
 
+    # Step 0.0: Pre-flight - Project Context (README, CHANGELOG, etc.)
+    graph.add_node("level3_step0_0", step0_0_project_context_node)
+    graph.add_edge("level3_init", "level3_step0_0")
+
+    # Step 0.1: Pre-flight - Initial CallGraph Snapshot (baseline for Step 11 diff)
+    graph.add_node("level3_step0_1", step0_1_initial_callgraph_node)
+    graph.add_edge("level3_step0_0", "level3_step0_1")
+
     # Step 0: Task Analysis (MUST run before Step 1 - provides task_type, complexity, tasks)
     graph.add_node("level3_step0", step0_task_analysis_node)
-    graph.add_edge("level3_init", "level3_step0")
+    graph.add_edge("level3_step0_1", "level3_step0")
 
     # Standards integration hook: Step 1 - before plan mode decision
     graph.add_node("level3_standards_hook_step1", apply_integration_step1)

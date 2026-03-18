@@ -264,6 +264,63 @@ def node_windows_path_check(state: FlowState) -> dict:
 
 
 # ============================================================================
+# FAILURE PREVENTION KB
+# ============================================================================
+
+
+def _load_failure_kb(project_root_str="."):
+    """Load Failure Prevention KB from common-failures-prevention.md.
+
+    Parses Signature -> Prevention Strategy pairs from the KB policy file.
+    Returns list of dicts: [{signature, prevention, category}].
+
+    Fail-open: returns empty list on any error.
+    """
+    try:
+        import re
+
+        kb_path = (
+            Path(project_root_str)
+            / "policies"
+            / "03-execution-system"
+            / "failure-prevention"
+            / "common-failures-prevention.md"
+        )
+        if not kb_path.is_file():
+            return []
+
+        content = kb_path.read_text(encoding="utf-8", errors="replace")
+
+        entries = []
+        # Parse markdown sections: look for Signature/Prevention pairs
+        # Pattern: **Signature:** ... **Prevention Strategy:** ...
+        sig_pattern = re.compile(
+            r"\*\*Signature[:\s]*\*\*\s*(.+?)(?:\n|\r)",
+            re.IGNORECASE,
+        )
+        prev_pattern = re.compile(
+            r"\*\*Prevention\s*(?:Strategy)?[:\s]*\*\*\s*(.+?)(?:\n|\r)",
+            re.IGNORECASE,
+        )
+
+        signatures = sig_pattern.findall(content)
+        preventions = prev_pattern.findall(content)
+
+        # Pair up signatures with their prevention strategies
+        for i, sig in enumerate(signatures):
+            prevention = preventions[i].strip() if i < len(preventions) else ""
+            entries.append({
+                "signature": sig.strip(),
+                "prevention": prevention,
+                "category": "auto-fix",
+            })
+
+        return entries
+    except Exception:
+        return []
+
+
+# ============================================================================
 # INTERACTIVE RECOVERY NODES
 # ============================================================================
 
@@ -334,6 +391,26 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
     else:
         failed_checks.append("  ✅ Windows path handling: PASS")
 
+    # Failure Prevention KB lookup (best-effort, never blocks)
+    kb_suggestions = []
+    kb_loaded = False
+    try:
+        project_root = state.get("project_root", ".")
+        kb_entries = _load_failure_kb(project_root)
+        kb_loaded = len(kb_entries) > 0
+        if kb_entries:
+            import re as _re_kb
+            for check_msg in failed_checks:
+                if "PASS" in check_msg:
+                    continue
+                for entry in kb_entries:
+                    # Match KB signature keywords against failure message
+                    sig_words = entry["signature"].lower().split()
+                    if any(w in check_msg.lower() for w in sig_words if len(w) > 3):
+                        kb_suggestions.append(entry)
+    except Exception:
+        pass  # Fail-open
+
     # Show message to user
     message = f"\n[LEVEL -1] VALIDATION CHECKS ({attempt}/{MAX_LEVEL_MINUS1_ATTEMPTS}):\n"
     message += "\n".join(failed_checks)
@@ -372,6 +449,8 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
         "level_minus1_user_choice": user_choice,
         "level_minus1_retry_count": attempt,
         "level_minus1_failed_checks": failed_checks,
+        "failure_kb_loaded": kb_loaded,
+        "failure_kb_suggestions": kb_suggestions,
     }
 
 
@@ -424,35 +503,89 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
             fix_errors.append(error_msg)
             logger and logger.log_error("Level -1", str(e), severity="ERROR", error_type="UnicodeError")
 
-    # Fix 2: Non-ASCII Python files (report for user to fix)
+    # Fix 2: Non-ASCII Python files (auto-replace common chars to ASCII)
     if not state.get("encoding_check"):
         try:
+            import re as _re_enc
+
+            # ASCII replacement map: smart quotes, em dashes, arrows, bullets
+            _ASCII_MAP = {
+                "\u2018": "'",   # left single quote
+                "\u2019": "'",   # right single quote
+                "\u201c": '"',   # left double quote
+                "\u201d": '"',   # right double quote
+                "\u2013": "-",   # en dash
+                "\u2014": "--",  # em dash
+                "\u2026": "...", # ellipsis
+                "\u2192": "->",  # right arrow
+                "\u2190": "<-",  # left arrow
+                "\u2022": "*",   # bullet
+                "\u00a0": " ",   # non-breaking space
+                "\u00b7": ".",   # middle dot
+            }
+
             project_root = Path(state.get("project_root", "."))
             py_files = list(project_root.glob("**/*.py"))
             if len(py_files) > 500:
-                import logging as _logging
-                _logging.getLogger(__name__).warning(
-                    "project_root has %d Python files (>500), capping fix scan at 500", len(py_files)
-                )
                 py_files = py_files[:500]
 
-            non_ascii_files = []
+            fixed_encoding_files = []
+            still_non_ascii = []
+
             for py_file in py_files:
                 try:
-                    content = py_file.read_bytes()
-                    content.decode("ascii")
+                    content_bytes = py_file.read_bytes()
+                    content_bytes.decode("ascii")
                 except UnicodeDecodeError:
-                    non_ascii_files.append(str(py_file.relative_to(project_root)))
+                    try:
+                        # Backup before fix
+                        backup and backup.backup_file(str(py_file), "Level -1", "Before encoding fix")
 
-            if non_ascii_files:
-                # Note: We can't auto-fix this without knowing the intent
-                fix_errors.append(
-                    f"Non-ASCII files need manual fix: {', '.join(non_ascii_files[:3])}"
+                        content = py_file.read_text(encoding="utf-8", errors="replace")
+                        original = content
+
+                        # Apply known replacements
+                        for char, replacement in _ASCII_MAP.items():
+                            content = content.replace(char, replacement)
+
+                        # Replace remaining non-ASCII with ?
+                        content = _re_enc.sub(r"[^\x00-\x7f]", "?", content)
+
+                        if content != original:
+                            py_file.write_text(content, encoding="utf-8")
+
+                            # Validate after fix
+                            if backup and backup.validate_file_integrity(str(py_file), "Level -1"):
+                                fixed_encoding_files.append(str(py_file.relative_to(project_root)))
+                                logger and logger.log_validation_result(
+                                    "Level -1", "Encoding fix: %s" % py_file.name, True
+                                )
+                            else:
+                                backup and backup.restore_file(str(py_file), "Level -1")
+                                still_non_ascii.append(str(py_file.relative_to(project_root)))
+                        else:
+                            still_non_ascii.append(str(py_file.relative_to(project_root)))
+                    except Exception:
+                        backup and backup.restore_file(str(py_file), "Level -1")
+                        still_non_ascii.append(str(py_file.relative_to(project_root)))
+                except Exception:
+                    pass
+
+            if fixed_encoding_files:
+                fixed_issues.append(
+                    ">> Fixed ASCII encoding in %d files: %s" % (
+                        len(fixed_encoding_files),
+                        ", ".join(fixed_encoding_files[:3]),
+                    )
                 )
-            else:
-                fixed_issues.append("✓ All Python files are ASCII-safe")
+            if still_non_ascii:
+                fix_errors.append(
+                    "Non-ASCII files still need review: %s" % ", ".join(still_non_ascii[:3])
+                )
+            if not fixed_encoding_files and not still_non_ascii:
+                fixed_issues.append(">> All Python files are ASCII-safe")
         except Exception as e:
-            fix_errors.append(f"Could not check encoding: {e}")
+            fix_errors.append("Could not check encoding: %s" % e)
 
     # Fix 3: Windows path handling (convert backslashes to forward slashes)
     if not state.get("windows_path_check") and sys.platform == "win32":

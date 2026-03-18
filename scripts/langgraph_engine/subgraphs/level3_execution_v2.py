@@ -415,6 +415,29 @@ def _run_step(
             # Fail-open: RAG errors never block pipeline
             logger.debug(f"[STEP {step_number:02d}] RAG lookup failed (non-fatal): {rag_exc}")
 
+    # --- Failure Prevention KB check (informational, non-blocking) ---
+    # Only for steps that run external commands/tools (Steps 0, 7, 8, 9, 10)
+    if step_number in {0, 7, 8, 9, 10}:
+        try:
+            kb_suggestions = state.get("failure_kb_suggestions") or []
+            user_msg = state.get("user_message", "")
+            if kb_suggestions and user_msg:
+                import re as _re_kb
+                for entry in kb_suggestions:
+                    sig = entry.get("signature", "")
+                    sig_words = [w for w in sig.lower().split() if len(w) > 3]
+                    if any(w in user_msg.lower() for w in sig_words):
+                        print(
+                            "[STEP %02d] KB WARNING: %s -> %s" % (
+                                step_number,
+                                sig[:60],
+                                entry.get("prevention", "")[:80],
+                            ),
+                            file=sys.stderr,
+                        )
+        except Exception:
+            pass  # Fail-open: KB check never blocks
+
     # --- Timeout enforcement ---
     # Load timeout table; gracefully degrade if module unavailable
     _timeouts, _StepTimeout = _get_timeout_wrapper()
@@ -616,6 +639,83 @@ def _run_step(
 # ============================================================================
 
 
+def step0_0_project_context_node(state: FlowState) -> Dict[str, Any]:
+    """Step 0.0: Pre-flight - Read project context files (README, CHANGELOG, etc.).
+
+    Reads key project files (capped 5KB each) to provide context for downstream steps.
+    Fail-open: never blocks the pipeline.
+    """
+    import time as _t
+    _start = _t.time()
+    try:
+        project_root = Path(state.get("project_root", "."))
+        context = {}
+        files_read = []
+        max_bytes = 5120  # 5KB cap per file
+
+        candidate_files = [
+            "README.md", "CHANGELOG.md", "VERSION",
+            "pyproject.toml", "package.json",
+        ]
+
+        for fname in candidate_files:
+            fpath = project_root / fname
+            if fpath.is_file():
+                try:
+                    raw = fpath.read_text(encoding="utf-8", errors="replace")
+                    context[fname] = raw[:max_bytes]
+                    files_read.append(fname)
+                except Exception:
+                    pass
+
+        elapsed = (_t.time() - _start) * 1000
+        return {
+            "step0_0_project_context": context,
+            "step0_0_files_read": files_read,
+            "step0_0_execution_time_ms": round(elapsed, 1),
+        }
+    except Exception as e:
+        elapsed = (_t.time() - _start) * 1000
+        return {
+            "step0_0_project_context": {},
+            "step0_0_files_read": [],
+            "step0_0_error": str(e),
+            "step0_0_execution_time_ms": round(elapsed, 1),
+        }
+
+
+def step0_1_initial_callgraph_node(state: FlowState) -> Dict[str, Any]:
+    """Step 0.1: Pre-flight - Capture initial call graph baseline.
+
+    Calls snapshot_call_graph() to create a pre-change baseline that Step 11
+    can diff against to detect breaking changes.
+    Fail-open: never blocks the pipeline.
+    """
+    import time as _t
+    _start = _t.time()
+    try:
+        from ..call_graph_analyzer import snapshot_call_graph
+
+        project_root = state.get("project_root", ".")
+        snapshot = snapshot_call_graph(project_root)
+
+        elapsed = (_t.time() - _start) * 1000
+        return {
+            "step0_1_initial_callgraph": snapshot,
+            "step0_1_callgraph_available": bool(snapshot),
+            "step0_1_execution_time_ms": round(elapsed, 1),
+        }
+    except Exception as e:
+        elapsed = (_t.time() - _start) * 1000
+        logger.debug("[v2] Initial callgraph snapshot skipped: %s" % str(e))
+        return {
+            "step0_1_initial_callgraph": None,
+            "step0_1_callgraph_available": False,
+            "step0_1_error": str(e),
+            "step0_1_execution_time_ms": round(elapsed, 1),
+        }
+
+
 def level3_init_node(state: FlowState) -> Dict[str, Any]:
     """
     Bridge: Map session_path (from Level 1) to session_dir (used by steps).
@@ -675,6 +775,20 @@ def level3_init_node(state: FlowState) -> Dict[str, Any]:
         result["workflow_memory_file"] = str(
             Path(session_path) / "workflow-memory.json"
         )
+
+    # Extract user preferences into pre-computed context for Steps 1, 5, 7
+    try:
+        prefs = state.get("preferences_data") or {}
+        if prefs:
+            result["user_preferences_context"] = {
+                "model_hint": prefs.get("preferred_model", ""),
+                "skill_hints": prefs.get("preferred_skills", []),
+                "complexity_threshold": prefs.get("complexity_threshold", 7),
+                "raw_keys": list(prefs.keys()),
+            }
+    except Exception:
+        pass  # Best-effort: preferences context is non-blocking
+
     return result
 
 

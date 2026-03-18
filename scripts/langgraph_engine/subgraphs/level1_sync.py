@@ -164,6 +164,48 @@ def node_session_loader(state: FlowState) -> dict:
             "session_loaded": True,
         }
 
+        # ---- Best-effort: session chaining (link to previous session) ----
+        try:
+            prev_session_id = os.environ.get("PREVIOUS_SESSION_ID", "")
+            if prev_session_id and prev_session_id != session_id:
+                try:
+                    _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "src" / "mcp"))
+                    from session_hooks import link_sessions, tag_session
+                    link_sessions(session_id, prev_session_id)
+                    result["session_parent_id"] = prev_session_id
+                except Exception:
+                    pass  # Fail-open: chaining is best-effort
+
+            # Auto-tag from user_message keywords
+            _auto_tags = []
+            _msg_lower = user_msg.lower() if user_msg else ""
+            _tag_keywords = {
+                "bugfix": ["bug", "fix", "error", "crash", "broken"],
+                "feature": ["feature", "add", "new", "implement", "create"],
+                "refactor": ["refactor", "clean", "reorganize", "restructure"],
+                "docs": ["doc", "readme", "documentation", "comment"],
+                "test": ["test", "spec", "coverage", "assert"],
+                "config": ["config", "setup", "install", "deploy"],
+            }
+            for tag, keywords in _tag_keywords.items():
+                if any(kw in _msg_lower for kw in keywords):
+                    _auto_tags.append(tag)
+            if _auto_tags:
+                result["session_tags"] = _auto_tags
+                try:
+                    from session_hooks import tag_session
+                    tag_session(session_id, ",".join(_auto_tags))
+                except Exception:
+                    pass  # Best-effort tagging
+
+            # Set PREVIOUS_SESSION_ID for next session
+            os.environ["PREVIOUS_SESSION_ID"] = session_id
+        except Exception as _chain_exc:
+            print(
+                "[LEVEL 1 SESSION_LOADER] Session chaining skipped: {}".format(_chain_exc),
+                file=sys.stderr,
+            )
+
         # ---- Best-effort: prune old sessions (optional enhancement) ----
         try:
             _pruner = _load_architecture_script("session-pruner.py")
@@ -172,6 +214,16 @@ def node_session_loader(state: FlowState) -> dict:
                 _prune_result = _pruner.prune_sessions(_sessions_dir)
                 result["session_pruning_done"] = True
                 result["session_pruning_archived"] = _prune_result.get("archived", 0)
+                # Capture pruning errors
+                _prune_errors = _prune_result.get("errors", [])
+                if _prune_errors:
+                    result["session_pruning_errors"] = _prune_errors
+                    print(
+                        "[LEVEL 1 SESSION_LOADER] Session pruning had {} errors".format(
+                            len(_prune_errors)
+                        ),
+                        file=sys.stderr,
+                    )
         except Exception as _prune_exc:
             print(
                 "[LEVEL 1 SESSION_LOADER] Session pruning skipped: {}".format(_prune_exc),
@@ -837,6 +889,21 @@ def node_context_loader(state: FlowState) -> dict:
         }
         if _detected_patterns is not None:
             result["patterns_detected"] = _detected_patterns
+
+        # ---- Best-effort: populate pattern_metadata with detailed info ----
+        try:
+            if _detected_patterns and _pattern_mod is not None:
+                if hasattr(_pattern_mod, "detect_patterns_detailed"):
+                    _detailed = _pattern_mod.detect_patterns_detailed(project_root)
+                    if _detailed:
+                        result["pattern_metadata"] = {
+                            "categories": _detailed.get("categories", []),
+                            "confidence_scores": _detailed.get("confidence_scores", {}),
+                            "pattern_count": len(_detected_patterns),
+                        }
+        except Exception:
+            pass  # Fail-open: pattern metadata is best-effort
+
         write_level_log(state, "level1", "context-loader", "OK",
                         _time_mod.time() - loader_start, {
                             "files_loaded": len(context_data.get("files_loaded", [])),

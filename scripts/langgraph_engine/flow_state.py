@@ -80,6 +80,10 @@ class FlowState(TypedDict, total=False):
 
     auto_fix_applied: List[str]        # List of auto-fixes that were applied
 
+    # Failure Prevention KB
+    failure_kb_loaded: Optional[bool]              # True if KB was parsed successfully
+    failure_kb_suggestions: Optional[List[Dict]]   # KB matches for current failures
+
     # ===========================================================================
     # LEVEL 1: SYNC SYSTEM (4 PARALLEL TASKS)
     # ===========================================================================
@@ -108,6 +112,9 @@ class FlowState(TypedDict, total=False):
     session_history: List[Dict]        # Previous session data
     session_state_data: Dict[str, Any]  # Current session state
     session_error: Optional[str]
+    session_parent_id: Optional[str]           # Parent session ID (for chaining)
+    session_tags: Optional[List[str]]          # Auto-tags from user message keywords
+    session_pruning_errors: Optional[List[str]]  # Errors from session pruning
 
     # User Preferences
     preferences_loaded: bool           # User preferences initialized
@@ -206,8 +213,23 @@ class FlowState(TypedDict, total=False):
     level2_status: str                 # OK / PARTIAL / FAILED
 
     # ===========================================================================
-    # LEVEL 3: EXECUTION SYSTEM (12 STEPS)
+    # LEVEL 3: EXECUTION SYSTEM (15 STEPS)
     # ===========================================================================
+
+    # Step 0.0: Pre-flight - Project Context
+    step0_0_project_context: Optional[Dict]        # README, CHANGELOG, VERSION, etc.
+    step0_0_files_read: Optional[List[str]]        # Files successfully read
+    step0_0_error: Optional[str]
+    step0_0_execution_time_ms: Optional[float]
+
+    # Step 0.1: Pre-flight - Initial CallGraph Snapshot
+    step0_1_initial_callgraph: Optional[Dict]      # Baseline call graph for Step 11 diff
+    step0_1_callgraph_available: Optional[bool]    # True if snapshot succeeded
+    step0_1_error: Optional[str]
+    step0_1_execution_time_ms: Optional[float]
+
+    # User Preferences Context (extracted from Level 1 preferences_data)
+    user_preferences_context: Optional[Dict]       # Pre-computed model/skill/complexity hints
 
     # Step 0: Prompt Generation
     step0_prompt: Dict                 # Prompt context and metadata
@@ -529,6 +551,7 @@ class FlowState(TypedDict, total=False):
     # Step 14: Final Summary (PHASE 2A - Renamed from existing)
     step14_summary: Optional[Dict]             # Execution summary
     step14_status: Optional[str]               # Summary generation status
+    step14_voice_sent: Optional[bool]          # Voice notification sent
     step14_execution_time_ms: Optional[float]
     step14_error: Optional[str]
 
@@ -536,33 +559,18 @@ class FlowState(TypedDict, total=False):
     level3_status: Optional[str]               # Overall Level 3 execution status
     level3_total_execution_time_ms: Optional[float]
 
-    # Step 13: Documentation Update
-    step13_updated_files: Optional[List[str]]
-    step13_execution_time_ms: Optional[float]
-    step13_error: Optional[str]
-
-    # Step 14: Final Summary
-    step14_summary: Optional[str]
-    step14_voice_sent: Optional[bool]
-    step14_execution_time_ms: Optional[float]
-    step14_error: Optional[str]
-
-    # Level 3 Overall
-    level3_status: Optional[str]
-    level3_total_execution_time_ms: Optional[float]
+    # ===========================================================================
+    # USER INTERACTION SYSTEM (FUTURE EXPANSION)
+    # ===========================================================================
+    user_interactions: Optional[List[Dict]]        # FUTURE: Log of all user Q&A during pipeline
+    pending_interactions: Optional[List[Dict]]     # FUTURE: Unanswered questions for user
 
     # ===========================================================================
-    # USER INTERACTION SYSTEM
+    # DEPENDENCY RESOLUTION (FUTURE EXPANSION)
     # ===========================================================================
-    user_interactions: Optional[List[Dict]]        # Log of all user Q&A during pipeline
-    pending_interactions: Optional[List[Dict]]     # Unanswered questions for user
-
-    # ===========================================================================
-    # DEPENDENCY RESOLUTION
-    # ===========================================================================
-    dependency_resolution: Optional[Dict]          # {internal, external, unknown deps}
-    unresolved_internal_deps: Optional[List[Dict]] # Deps needing user input for location
-    dependency_graph_enhanced: Optional[bool]      # Whether graph was enhanced with resolved deps
+    dependency_resolution: Optional[Dict]          # FUTURE: {internal, external, unknown deps}
+    unresolved_internal_deps: Optional[List[Dict]] # FUTURE: Deps needing user input for location
+    dependency_graph_enhanced: Optional[bool]      # FUTURE: Whether graph was enhanced with resolved deps
 
 
 # ==============================================================================
@@ -608,6 +616,8 @@ class StepKeys:
     UNICODE_CHECK = "unicode_check"
     ENCODING_CHECK = "encoding_check"
     WINDOWS_PATH_CHECK = "windows_path_check"
+    FAILURE_KB_LOADED = "failure_kb_loaded"
+    FAILURE_KB_SUGGESTIONS = "failure_kb_suggestions"
 
     # ------------------------------------------------------------------
     # LEVEL 1: SYNC SYSTEM
@@ -618,6 +628,9 @@ class StepKeys:
     CONTEXT_CACHE_HIT = "context_cache_hit"
     FILES_LOADED_COUNT = "files_loaded_count"
     SESSION_CHAIN_LOADED = "session_chain_loaded"
+    SESSION_PARENT_ID = "session_parent_id"
+    SESSION_TAGS = "session_tags"
+    SESSION_PRUNING_ERRORS = "session_pruning_errors"
     PATTERNS_DETECTED = "patterns_detected"
     PREFERENCES_DATA = "preferences_data"
     TOON_SAVED = "toon_saved"
@@ -638,6 +651,27 @@ class StepKeys:
     DETECTED_FRAMEWORK = "detected_framework"
     MCP_DISCOVERED_COUNT = "mcp_discovered_count"
     LEVEL2_STATUS = "level2_status"
+
+    # ------------------------------------------------------------------
+    # STEP 0.0: PRE-FLIGHT - PROJECT CONTEXT
+    # ------------------------------------------------------------------
+    STEP0_0_PROJECT_CONTEXT = "step0_0_project_context"
+    STEP0_0_FILES_READ = "step0_0_files_read"
+    STEP0_0_ERROR = "step0_0_error"
+    STEP0_0_EXECUTION_TIME_MS = "step0_0_execution_time_ms"
+
+    # ------------------------------------------------------------------
+    # STEP 0.1: PRE-FLIGHT - INITIAL CALLGRAPH
+    # ------------------------------------------------------------------
+    STEP0_1_INITIAL_CALLGRAPH = "step0_1_initial_callgraph"
+    STEP0_1_CALLGRAPH_AVAILABLE = "step0_1_callgraph_available"
+    STEP0_1_ERROR = "step0_1_error"
+    STEP0_1_EXECUTION_TIME_MS = "step0_1_execution_time_ms"
+
+    # ------------------------------------------------------------------
+    # USER PREFERENCES CONTEXT
+    # ------------------------------------------------------------------
+    USER_PREFERENCES_CONTEXT = "user_preferences_context"
 
     # ------------------------------------------------------------------
     # STEP 0: TASK ANALYSIS
