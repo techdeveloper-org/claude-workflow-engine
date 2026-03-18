@@ -543,6 +543,19 @@ class FlowState(TypedDict, total=False):
     level3_status: Optional[str]
     level3_total_execution_time_ms: Optional[float]
 
+    # ===========================================================================
+    # USER INTERACTION SYSTEM
+    # ===========================================================================
+    user_interactions: Optional[List[Dict]]        # Log of all user Q&A during pipeline
+    pending_interactions: Optional[List[Dict]]     # Unanswered questions for user
+
+    # ===========================================================================
+    # DEPENDENCY RESOLUTION
+    # ===========================================================================
+    dependency_resolution: Optional[Dict]          # {internal, external, unknown deps}
+    unresolved_internal_deps: Optional[List[Dict]] # Deps needing user input for location
+    dependency_graph_enhanced: Optional[bool]      # Whether graph was enhanced with resolved deps
+
 
 # ==============================================================================
 # STEP KEYS - Constants for flow state keys (eliminates stringly-typed access)
@@ -767,6 +780,19 @@ class StepKeys:
     ERRORS = "errors"
     WARNINGS = "warnings"
     FINAL_STATUS = "final_status"
+
+    # ------------------------------------------------------------------
+    # USER INTERACTION SYSTEM
+    # ------------------------------------------------------------------
+    USER_INTERACTIONS = "user_interactions"
+    PENDING_INTERACTIONS = "pending_interactions"
+
+    # ------------------------------------------------------------------
+    # DEPENDENCY RESOLUTION
+    # ------------------------------------------------------------------
+    DEPENDENCY_RESOLUTION = "dependency_resolution"
+    UNRESOLVED_INTERNAL_DEPS = "unresolved_internal_deps"
+    DEPENDENCY_GRAPH_ENHANCED = "dependency_graph_enhanced"
 
 
 # ==============================================================================
