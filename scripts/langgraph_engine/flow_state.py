@@ -394,6 +394,11 @@ class FlowState(TypedDict, total=False):
     step2_execution_time_ms: Optional[float]
     step2_error: Optional[str]
 
+    # Step 2: CallGraph impact analysis (pre-change)
+    step2_impact_analysis: Optional[Dict]          # CallGraph impact before change
+    step2_graph_risk_level: Optional[str]          # "low", "medium", "high"
+    step2_affected_methods: Optional[List[str]]    # Methods that could break
+
     # Step 3: Task Breakdown Validation (PHASE 2A - Renamed from step3_breakdown)
     step3_tasks_validated: Optional[List[Dict]]      # Validated task list
     step3_task_count: Optional[int]                   # Number of validated tasks
@@ -465,6 +470,11 @@ class FlowState(TypedDict, total=False):
     step10_execution_time_ms: Optional[float]
     step10_error: Optional[str]
 
+    # Step 10: CallGraph implementation context
+    step10_call_context: Optional[Dict]            # Implementation context from CallGraph
+    step10_pre_change_graph: Optional[Dict]        # Serialized CallGraph snapshot (before changes)
+    step10_suggested_test_scope: Optional[List[str]]  # Test files to run
+
     # Step 11: Pull Request & Code Review (NEW - PHASE 2B)
     step11_pr_id: str                          # GitHub PR ID
     step11_pr_url: str                         # GitHub PR URL
@@ -477,6 +487,11 @@ class FlowState(TypedDict, total=False):
     step11_status: Optional[str]               # PR status (OK/ERROR)
     step11_execution_time_ms: Optional[float]
     step11_error: Optional[str]
+
+    # Step 11: CallGraph review analysis
+    step11_impact_review: Optional[Dict]           # Post-change impact comparison
+    step11_breaking_changes: Optional[List[Dict]]  # Methods with signature changes + callers
+    step11_risk_assessment: Optional[str]          # "safe", "caution", "risky"
 
     # Step 12: Issue Closure (NEW - PHASE 2B)
     step12_issue_closed: bool                  # Issue successfully closed
@@ -618,6 +633,9 @@ class StepKeys:
     PLAN_EXECUTION = "step2_plan_execution"
     PLAN_STATUS = "step2_plan_status"
     STEP2_ERROR = "step2_error"
+    STEP2_IMPACT_ANALYSIS = "step2_impact_analysis"
+    STEP2_GRAPH_RISK_LEVEL = "step2_graph_risk_level"
+    STEP2_AFFECTED_METHODS = "step2_affected_methods"
 
     # ------------------------------------------------------------------
     # STEP 3: TASK BREAKDOWN VALIDATION
@@ -682,6 +700,9 @@ class StepKeys:
     # ------------------------------------------------------------------
     IMPLEMENTATION_STATUS = "step10_implementation_status"
     STEP10_ERROR = "step10_error"
+    STEP10_CALL_CONTEXT = "step10_call_context"
+    STEP10_PRE_CHANGE_GRAPH = "step10_pre_change_graph"
+    STEP10_SUGGESTED_TEST_SCOPE = "step10_suggested_test_scope"
 
     # ------------------------------------------------------------------
     # STEP 11: PR & CODE REVIEW
@@ -691,6 +712,9 @@ class StepKeys:
     PR_URL = "step11_pr_url"
     STEP11_STATUS = "step11_status"
     STEP11_ERROR = "step11_error"
+    STEP11_IMPACT_REVIEW = "step11_impact_review"
+    STEP11_BREAKING_CHANGES = "step11_breaking_changes"
+    STEP11_RISK_ASSESSMENT = "step11_risk_assessment"
 
     # ------------------------------------------------------------------
     # STEP 12: ISSUE CLOSURE

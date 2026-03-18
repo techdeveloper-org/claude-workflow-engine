@@ -19,9 +19,10 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Frameworks** | LangGraph 1.0.10+, LangChain, FastMCP, Qdrant |
 | **Status** | Active Development |
 | **Primary Location** | scripts/langgraph_engine/ |
-| **MCP Servers** | 12 (123 tools) |
-| **Total Python Files** | 261 |
-| **Test Files** | 47 |
+| **MCP Servers** | 12 (124 tools) |
+| **Total Python Files** | 263 |
+| **Test Files** | 49 |
+| **Call Graph** | 574 classes, 3783 methods, 213 files analyzed |
 
 ---
 
@@ -39,7 +40,7 @@ Level 2: Standards (common + conditional Java + tool opt + MCP discovery)
 Level 3: Execution (15 steps: Step 0 through Step 14)
     |-- Step 0:  Task Analysis + Prompt Generation
     |-- Step 1:  Plan Mode Decision
-    |-- Step 2:  Plan Execution (conditional, complexity-based model)
+    |-- Step 2:  Plan Execution (CallGraph impact analysis + complexity-based model)
     |-- Step 3:  Task/Phase Breakdown
     |-- Step 4:  TOON Refinement
     |-- Step 5:  Skill & Agent Selection (RAG cross-session boost)
@@ -47,8 +48,8 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
     |-- Step 7:  Final Prompt Generation (3 files)
     |-- Step 8:  GitHub Issue Creation
     |-- Step 9:  Branch Creation + Git Setup
-    |-- Step 10: Implementation Execution
-    |-- Step 11: Pull Request & Code Review (review loop)
+    |-- Step 10: Implementation Execution (CallGraph context + pre-change snapshot)
+    |-- Step 11: Pull Request & Code Review (CallGraph diff + breaking change detection)
     |-- Step 12: Issue Closure
     |-- Step 13: Documentation Update + UML Diagram Generation
     |-- Step 14: Final Summary
@@ -59,16 +60,16 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 ```
 /
 +-- scripts/                          # Pipeline scripts and hooks
-|   +-- langgraph_engine/             # Core orchestration (78 modules: 72 root + 6 subgraph files)
+|   +-- langgraph_engine/             # Core orchestration (80 modules: 74 root + 6 subgraph files)
 |   +-- architecture/                 # Active pipeline scripts (6 scripts + 1 data file)
 +-- policies/                         # 49 policy definitions (48 .md + 1 .json)
 |   +-- 01-sync-system/               # Level 1 policies
 |   +-- 02-standards-system/          # Level 2 policies
 |   +-- 03-execution-system/          # Level 3 policies (15 steps: 0-14 + failure prevention)
-+-- src/mcp/                          # 12 FastMCP servers (123 tools, 8,800+ LOC)
-+-- tests/                            # 47 test files (40 root + 2 integration + 5 other)
++-- src/mcp/                          # 12 FastMCP servers (124 tools, 9,000+ LOC)
++-- tests/                            # 49 test files (42 root + 2 integration + 5 other)
 +-- docs/                             # 40 documentation files
-+-- docs/uml/                         # Auto-generated UML diagrams (12 types)
++-- docs/uml/                         # Auto-generated UML diagrams (13 types)
 +-- rules/                            # 5 coding standard definitions
 ```
 
@@ -85,7 +86,9 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | Level 3 v2 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 15-step execution with RAG (36K) - ACTIVE |
 | Level 3 v1 | scripts/langgraph_engine/subgraphs/level3_execution.py | Original pipeline (97K) - DEPRECATED, v2 is used |
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
-| UML Generators | scripts/langgraph_engine/uml_generators.py | 12 UML diagram types (AST + LLM) |
+| Call Graph Builder | scripts/langgraph_engine/call_graph_builder.py | AST-based FQN call stack with class context |
+| Call Graph Analyzer | scripts/langgraph_engine/call_graph_analyzer.py | Pipeline impact analysis (Steps 2/10/11) |
+| UML Generators | scripts/langgraph_engine/uml_generators.py | 13 UML diagram types (CallGraph + AST + LLM) |
 | Doc Manager | scripts/langgraph_engine/level3_documentation_manager.py | Circular SDLC doc cycle (Step 0/13) |
 | Session Bridge | src/mcp/session_hooks.py | MCP direct import bridge |
 
@@ -106,7 +109,7 @@ All registered in `~/.claude/settings.json`. Version synced via `scripts/sync-ve
 | standards-loader | standards_loader_mcp_server.py | 7 | Standards (project detect, framework detect, hot-reload) |
 | skill-manager | skill_manager_mcp_server.py | 8 | Skill lifecycle (load, search, validate, rank, conflicts) |
 | vector-db | vector_db_mcp_server.py | 11 | Vector RAG (Qdrant, 4 collections, semantic search, bulk index, node decisions) |
-| uml-diagram | uml_diagram_mcp_server.py | 14 | UML generation (12 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io) |
+| uml-diagram | uml_diagram_mcp_server.py | 15 | UML generation (13 diagram types, CallGraph + AST + LLM, Mermaid/PlantUML, Kroki.io) |
 
 ### RAG Integration
 
@@ -117,6 +120,29 @@ If confidence >= step-specific threshold, RAG result replaces LLM call (saving i
 Key module: `scripts/langgraph_engine/rag_integration.py`
 Collections: `node_decisions`, `sessions`, `flow_traces`, `tool_calls`
 Default threshold: 0.82 (step-specific: 0.75-0.90)
+
+### CallGraph-Driven Pipeline Intelligence
+
+The pipeline uses a full AST-based call graph (574 classes, 3783 methods) to make
+informed decisions at critical steps instead of blind code generation:
+
+```
+Step 2 (Plan):   analyze_impact_before_change() -> risk_level, danger_zones, affected_methods
+                 Planner knows what could break BEFORE suggesting changes
+
+Step 10 (Impl):  snapshot_call_graph() + get_implementation_context()
+                 Captures pre-change state + injects caller/callee awareness
+
+Step 11 (Review): review_change_impact() -> compare before/after graphs
+                 Detects breaking changes, orphaned methods, risk assessment
+```
+
+Key module: `scripts/langgraph_engine/call_graph_analyzer.py`
+Data source: `scripts/langgraph_engine/call_graph_builder.py`
+State fields: `step2_impact_analysis`, `step10_pre_change_graph`, `step11_impact_review`
+
+UML diagrams (13 types) also consume CallGraph as single data source via adapters
+in `uml_generators.py`, replacing duplicate AST analysis.
 
 ### Execution Modes
 
@@ -159,6 +185,9 @@ pytest tests/test_*mcp*.py
 
 # Integration tests
 pytest tests/integration/
+
+# CallGraph tests (builder + analyzer + UML integration)
+pytest tests/test_call_graph_builder.py tests/test_call_graph_analyzer.py
 
 # RAG tests
 pytest tests/test_rag_integration.py

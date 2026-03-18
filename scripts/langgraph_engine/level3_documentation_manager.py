@@ -229,12 +229,18 @@ class Level3DocumentationManager:
                 self._update_readme(readme_path, state, date_str)
                 updated_files.append("README.md")
 
-            # --- UML diagrams: Refresh structural diagrams (code may have changed) ---
+            # --- UML diagrams: Refresh structural + call flow diagrams ---
             try:
                 from .uml_generators import UMLDiagramGenerator
                 uml_gen = UMLDiagramGenerator(str(self.project_root))
-                classes = uml_gen.analyzer.extract_all_classes()
-                dep_graph = uml_gen.analyzer.build_dependency_graph()
+
+                # Build CallGraph once for all diagrams
+                cg = uml_gen._get_call_graph()
+                cg_classes = uml_gen._classes_from_call_graph(cg)
+                classes = cg_classes if cg_classes else uml_gen.analyzer.extract_all_classes()
+                dep_graph = uml_gen._dep_graph_from_call_graph(cg)
+                cg_chains = uml_gen._call_chains_from_call_graph(cg)
+
                 for diagram_type, method_args in [
                     ("class-diagram",
                      lambda: uml_gen.generate_class_diagram(classes)),
@@ -242,11 +248,15 @@ class Level3DocumentationManager:
                      lambda: uml_gen.generate_package_diagram(dep_graph)),
                     ("component-diagram",
                      lambda: uml_gen.generate_component_diagram(dep_graph)),
+                    ("sequence-diagram",
+                     lambda: uml_gen.generate_sequence_diagram(cg_chains)),
+                    ("call-graph-diagram",
+                     lambda: uml_gen.generate_call_graph_diagram(cg)),
                 ]:
                     syntax = method_args()
                     uml_gen.save_diagram(diagram_type, syntax)
                     updated_files.append("docs/uml/%s.md" % diagram_type)
-                logger.info("UML: refreshed 3 structural diagrams")
+                logger.info("UML: refreshed 5 diagrams (3 structural + sequence + call graph)")
             except Exception as e:
                 logger.debug("UML refresh skipped: %s", e)
 

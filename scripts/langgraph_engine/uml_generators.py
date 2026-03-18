@@ -344,10 +344,198 @@ class UMLAstAnalyzer:
 class UMLDiagramGenerator:
     """Generate Mermaid/PlantUML syntax from analysis results."""
 
-    def __init__(self, project_root, output_dir="docs/uml"):
+    def __init__(self, project_root, output_dir="docs/uml", call_graph=None):
         self.project_root = Path(project_root)
         self.output_dir = self.project_root / output_dir
         self.analyzer = UMLAstAnalyzer(project_root)
+        self._call_graph = call_graph  # pre-built CallGraph or None (lazy)
+
+    # ------------------------------------------------------------------
+    # CallGraph integration helpers
+    # ------------------------------------------------------------------
+
+    def _get_call_graph(self):
+        """Return stored CallGraph or lazily build one.
+
+        Returns CallGraph instance or None if building fails.
+        """
+        if self._call_graph is not None:
+            return self._call_graph
+        try:
+            try:
+                from .call_graph_builder import build_call_graph
+            except ImportError:
+                from call_graph_builder import build_call_graph
+            cg = build_call_graph(str(self.project_root))
+            self._call_graph = cg
+            return cg
+        except Exception as e:
+            logger.debug("CallGraph build failed: %s", e)
+            return None
+
+    def _classes_from_call_graph(self, cg):
+        """Adapt CallGraph class/method data into _make_class_info format.
+
+        Uses analyzer.extract_classes() per file for attributes (AST-derived)
+        and merges with CallGraph method data for richer method info.
+
+        Returns list of ClassInfo dicts or None if cg has no classes.
+        """
+        if cg is None:
+            return None
+
+        # Build file -> list of class FQNs for attribute extraction
+        file_to_classes = {}
+        for fqn, cls_node in cg.classes.items():
+            fp = cls_node.get("file", "")
+            if fp not in file_to_classes:
+                file_to_classes[fp] = []
+            file_to_classes[fp].append(fqn)
+
+        # Extract attributes per file via the existing AST analyzer
+        # Map: class_name -> attributes list
+        attrs_by_name = {}
+        for rel_path in file_to_classes:
+            abs_path = self.project_root / rel_path
+            try:
+                ast_classes = self.analyzer.extract_classes(abs_path)
+                for ac in ast_classes:
+                    attrs_by_name[ac["name"]] = ac.get("attributes", [])
+            except Exception:
+                pass
+
+        results = []
+        for fqn, cls_node in cg.classes.items():
+            cls_name = cls_node.get("name", "")
+            file_path = cls_node.get("file", "")
+            bases = cls_node.get("bases", [])
+
+            # Collect methods for this class from cg.methods
+            methods = []
+            for method_fqn in cls_node.get("methods", []):
+                m = cg.methods.get(method_fqn)
+                if m is None:
+                    continue
+                methods.append(_make_method_info(
+                    name=m.get("name", ""),
+                    params=m.get("params", []),
+                    return_type=m.get("return_type", ""),
+                    visibility=m.get("visibility", "+"),
+                ))
+
+            # Merge AST-derived attributes
+            attributes = attrs_by_name.get(cls_name, [])
+
+            abs_file_path = (
+                self.project_root / file_path if file_path else ""
+            )
+            results.append(_make_class_info(
+                name=cls_name,
+                file_path=abs_file_path,
+                bases=bases,
+                methods=methods,
+                attributes=attributes,
+            ))
+
+        return results if results else None
+
+    def _dep_graph_from_call_graph(self, cg):
+        """Enrich analyzer dependency graph with cross-file CallGraph edges.
+
+        Starts with the existing AST-based dep graph and adds edges from
+        CallGraph where the caller file differs from the callee file.
+
+        Returns dep_graph dict: {module_name: set_of_deps}
+        """
+        # Always start with AST-based graph as the base
+        dep_graph = self.analyzer.build_dependency_graph()
+
+        if cg is None:
+            return dep_graph
+
+        # Add cross-file edges from CallGraph
+        for edge in cg.get_edges():
+            if edge.get("type") == "inheritance":
+                continue
+            from_fqn = edge.get("from", "")
+            to_fqn = edge.get("to", "")
+            if not from_fqn or not to_fqn:
+                continue
+
+            # FQN format: "rel/path.py::ClassName.method"
+            from_file = from_fqn.split("::")[0] if "::" in from_fqn else ""
+            to_file = to_fqn.split("::")[0] if "::" in to_fqn else ""
+
+            # Only enrich with cross-file edges
+            if not from_file or not to_file or from_file == to_file:
+                continue
+
+            from_module = Path(from_file).stem
+            to_module = Path(to_file).stem
+
+            if from_module not in dep_graph:
+                dep_graph[from_module] = set()
+            dep_graph[from_module].add(to_module)
+
+        return dep_graph
+
+    def _call_chains_from_call_graph(self, cg):
+        """Convert CallGraph edges to call_chains format.
+
+        Filters out inheritance edges and returns:
+        [{caller, callee, file, caller_fqn, callee_fqn, line, call_type}]
+
+        Returns list or None if cg has no usable edges.
+        """
+        if cg is None:
+            return None
+
+        chains = []
+        for edge in cg.get_edges():
+            if edge.get("type") == "inheritance":
+                continue
+
+            caller_fqn = edge.get("from", "")
+            callee_fqn = edge.get("to", "")
+            if not caller_fqn:
+                continue
+
+            # Extract simple names for backward compatibility
+            caller_name = (
+                caller_fqn.split("::")[-1]
+                if "::" in caller_fqn else caller_fqn
+            )
+            callee_name = (
+                callee_fqn.split("::")[-1]
+                if "::" in callee_fqn else callee_fqn
+            )
+            # Reduce dotted names to leaf
+            caller_name = (
+                caller_name.split(".")[-1]
+                if "." in caller_name else caller_name
+            )
+            callee_name = (
+                callee_name.split(".")[-1]
+                if "." in callee_name else callee_name
+            )
+
+            # Derive absolute file path from caller FQN
+            from_file = caller_fqn.split("::")[0] if "::" in caller_fqn else ""
+            abs_file = (
+                str(self.project_root / from_file) if from_file else ""
+            )
+
+            chains.append({
+                "caller": caller_name,
+                "callee": callee_name,
+                "file": abs_file,
+                "caller_fqn": caller_fqn,
+                "callee_fqn": callee_fqn,
+                "line": edge.get("line", 0),
+                "call_type": edge.get("type", "call"),
+            })
+
+        return chains if chains else None
 
     # ------------------------------------------------------------------
     # Tier 1: AST-based (no LLM)
@@ -362,7 +550,11 @@ class UMLDiagramGenerator:
         """
         if classes is None:
             if scope == "all":
-                classes = self.analyzer.extract_all_classes()
+                # Try CallGraph first; fall back to AST analyzer
+                cg = self._get_call_graph()
+                classes = self._classes_from_call_graph(cg)
+                if not classes:
+                    classes = self.analyzer.extract_all_classes()
             else:
                 scope_path = Path(scope)
                 if scope_path.is_file():
@@ -413,7 +605,8 @@ class UMLDiagramGenerator:
     def generate_package_diagram(self, dep_graph=None):
         """Generate Mermaid flowchart from module dependencies."""
         if dep_graph is None:
-            dep_graph = self.analyzer.build_dependency_graph()
+            cg = self._get_call_graph()
+            dep_graph = self._dep_graph_from_call_graph(cg)
 
         if not dep_graph:
             return "flowchart LR\n    note[No modules found]"
@@ -446,7 +639,8 @@ class UMLDiagramGenerator:
     def generate_component_diagram(self, dep_graph=None):
         """Generate Mermaid flowchart representing components."""
         if dep_graph is None:
-            dep_graph = self.analyzer.build_dependency_graph()
+            cg = self._get_call_graph()
+            dep_graph = self._dep_graph_from_call_graph(cg)
 
         if not dep_graph:
             return "flowchart TB\n    note[No components found]"
@@ -490,26 +684,42 @@ class UMLDiagramGenerator:
     # ------------------------------------------------------------------
 
     def generate_sequence_diagram(self, call_chains=None, context=""):
-        """Generate Mermaid sequenceDiagram from call chains."""
+        """Generate Mermaid sequenceDiagram from call chains.
+
+        When CallGraph is available, uses class-aware participants:
+        - Class names become participants (not raw function names)
+        - Method calls show Class.method() notation
+        - Call paths are followed for proper sequencing
+        """
         if call_chains is None:
-            # Auto-extract from main entry points
-            call_chains = []
-            for py_file in self.project_root.rglob("*.py"):
-                rel = str(py_file.relative_to(self.project_root))
-                if any(skip in rel for skip in [
-                    "__pycache__", ".venv", "test"
-                ]):
-                    continue
-                chains = self.analyzer.extract_call_chains(py_file)
-                call_chains.extend(chains[:20])
-                if len(call_chains) >= 80:
-                    break
+            # Try CallGraph first; fall back to per-file extraction
+            cg = self._get_call_graph()
+            call_chains = self._call_chains_from_call_graph(cg)
+            if not call_chains:
+                call_chains = []
+                for py_file in self.project_root.rglob("*.py"):
+                    rel = str(py_file.relative_to(self.project_root))
+                    if any(skip in rel for skip in [
+                        "__pycache__", ".venv", "test"
+                    ]):
+                        continue
+                    chains = self.analyzer.extract_call_chains(py_file)
+                    call_chains.extend(chains[:20])
+                    if len(call_chains) >= 80:
+                        break
 
         if not call_chains:
             return "sequenceDiagram\n    Note over System: No call chains found"
 
+        # Build class-aware participant mapping from FQN data
+        # If call_chains have caller_fqn/callee_fqn, use class context
+        has_fqn = any(c.get("caller_fqn") for c in call_chains)
+
+        if has_fqn:
+            return self._sequence_from_fqn_chains(call_chains, context)
+
+        # Legacy path: flat caller/callee names
         lines = ["sequenceDiagram"]
-        # Deduplicate and limit
         seen = set()
         count = 0
         for chain in call_chains:
@@ -524,6 +734,107 @@ class UMLDiagramGenerator:
             )
             count += 1
             if count >= 30:
+                break
+
+        if context:
+            enriched = self._llm_enrich(
+                "\n".join(lines), "sequence diagram", context
+            )
+            if enriched:
+                return enriched
+
+        return "\n".join(lines)
+
+    def _sequence_from_fqn_chains(self, call_chains, context=""):
+        """Build class-aware sequence diagram from FQN call chains.
+
+        Uses caller_fqn/callee_fqn to extract class participants and
+        show method calls with proper Class.method() notation.
+        """
+        lines = ["sequenceDiagram"]
+
+        # Extract participant classes/modules from FQNs
+        # FQN format: "path/file.py::ClassName.method" or "path/file.py::func"
+        participants = {}  # display_name -> order (for stable participant decl)
+        order = 0
+
+        def _participant_name(fqn):
+            """Extract class name or module name as participant."""
+            if "::" not in fqn:
+                return fqn
+            after = fqn.split("::")[-1]  # "ClassName.method" or "func"
+            if "." in after:
+                return after.split(".")[0]  # ClassName
+            # Standalone function -> use module name
+            before = fqn.split("::")[0]  # "path/file.py"
+            return Path(before).stem  # "file"
+
+        def _method_name(fqn):
+            """Extract method/function name from FQN."""
+            if "::" not in fqn:
+                return fqn
+            after = fqn.split("::")[-1]
+            if "." in after:
+                return after.split(".")[-1]
+            return after
+
+        # Pre-scan to register participants in call order
+        for chain in call_chains:
+            caller_fqn = chain.get("caller_fqn", "")
+            callee_fqn = chain.get("callee_fqn", "")
+            if not caller_fqn:
+                continue
+            cp = _participant_name(caller_fqn)
+            if cp and cp not in participants:
+                participants[cp] = order
+                order += 1
+            ep = _participant_name(callee_fqn)
+            if ep and ep not in participants:
+                participants[ep] = order
+                order += 1
+
+        # Declare participants in order
+        for name in sorted(participants, key=lambda k: participants[k]):
+            # Sanitize for Mermaid (no special chars)
+            safe = name.replace("-", "_").replace(".", "_")
+            if safe != name:
+                lines.append("    participant %s as %s" % (safe, name))
+            else:
+                lines.append("    participant %s" % safe)
+
+        # Add call arrows with method names
+        seen = set()
+        count = 0
+        for chain in call_chains:
+            caller_fqn = chain.get("caller_fqn", "")
+            callee_fqn = chain.get("callee_fqn", "")
+            if not caller_fqn or not callee_fqn:
+                continue
+
+            caller_p = _participant_name(caller_fqn).replace("-", "_").replace(".", "_")
+            callee_p = _participant_name(callee_fqn).replace("-", "_").replace(".", "_")
+            method = _method_name(callee_fqn)
+
+            if caller_p == callee_p:
+                # Self-call within same class
+                key = (caller_p, method, "self")
+                if key in seen:
+                    continue
+                seen.add(key)
+                lines.append(
+                    "    %s->>%s: %s()" % (caller_p, callee_p, method)
+                )
+            else:
+                key = (caller_p, callee_p, method)
+                if key in seen:
+                    continue
+                seen.add(key)
+                lines.append(
+                    "    %s->>%s: %s()" % (caller_p, callee_p, method)
+                )
+
+            count += 1
+            if count >= 40:
                 break
 
         if context:
@@ -610,7 +921,10 @@ class UMLDiagramGenerator:
     def generate_object_diagram(self, classes=None, context=""):
         """Generate PlantUML object diagram showing class instances."""
         if classes is None:
-            classes = self.analyzer.extract_all_classes()
+            cg = self._get_call_graph()
+            classes = self._classes_from_call_graph(cg)
+            if not classes:
+                classes = self.analyzer.extract_all_classes()
 
         class_summary = "\n".join(
             "- %s (attrs: %s)" % (
@@ -675,7 +989,8 @@ class UMLDiagramGenerator:
     def generate_communication_diagram(self, dep_graph=None, context=""):
         """Generate PlantUML communication diagram."""
         if dep_graph is None:
-            dep_graph = self.analyzer.build_dependency_graph()
+            cg = self._get_call_graph()
+            dep_graph = self._dep_graph_from_call_graph(cg)
 
         module_summary = "\n".join(
             "- %s depends on: %s" % (mod, ", ".join(sorted(deps)[:5]))
@@ -698,7 +1013,10 @@ class UMLDiagramGenerator:
     def generate_composite_structure_diagram(self, classes=None, context=""):
         """Generate PlantUML composite structure diagram."""
         if classes is None:
-            classes = self.analyzer.extract_all_classes()
+            cg = self._get_call_graph()
+            classes = self._classes_from_call_graph(cg)
+            if not classes:
+                classes = self.analyzer.extract_all_classes()
 
         class_summary = "\n".join(
             "- %s: methods=%s, attrs=%s" % (
@@ -725,17 +1043,21 @@ class UMLDiagramGenerator:
     def generate_interaction_overview(self, call_chains=None, context=""):
         """Generate PlantUML interaction overview diagram."""
         if call_chains is None:
-            call_chains = []
-            for py_file in self.project_root.rglob("*.py"):
-                rel = str(py_file.relative_to(self.project_root))
-                if any(skip in rel for skip in [
-                    "__pycache__", ".venv", "test"
-                ]):
-                    continue
-                chains = self.analyzer.extract_call_chains(py_file)
-                call_chains.extend(chains[:10])
-                if len(call_chains) >= 40:
-                    break
+            # Try CallGraph first; fall back to per-file extraction
+            cg = self._get_call_graph()
+            call_chains = self._call_chains_from_call_graph(cg)
+            if not call_chains:
+                call_chains = []
+                for py_file in self.project_root.rglob("*.py"):
+                    rel = str(py_file.relative_to(self.project_root))
+                    if any(skip in rel for skip in [
+                        "__pycache__", ".venv", "test"
+                    ]):
+                        continue
+                    chains = self.analyzer.extract_call_chains(py_file)
+                    call_chains.extend(chains[:10])
+                    if len(call_chains) >= 40:
+                        break
 
         chain_summary = "\n".join(
             "- %s calls %s" % (c["caller"], c["callee"])
@@ -755,48 +1077,287 @@ class UMLDiagramGenerator:
 
         return _plantuml_stub("interaction", "LLM generation unavailable")
 
+    def generate_call_graph_diagram(self, call_graph=None):
+        """Generate a Mermaid flowchart showing the method-level call graph.
+
+        Tier 1 diagram: AST-based, no LLM required.
+        Shows classes as subgraphs, methods as nodes, call edges between them.
+        Entry points get bold borders, high-complexity methods get red fill.
+
+        Args:
+            call_graph: Optional pre-built CallGraph object. If None, builds
+                one via _get_call_graph() lazy builder.
+
+        Returns:
+            str: Mermaid flowchart syntax string.
+        """
+        MAX_METHODS = 40
+        MAX_EDGES = 60
+
+        # Resolve CallGraph
+        if call_graph is None:
+            call_graph = self._get_call_graph()
+
+        if call_graph is None:
+            return "flowchart LR\n    note[Call graph not available]"
+
+        try:
+            lines = ["flowchart LR"]
+
+            # Group methods by parent class from CallGraph.methods dict
+            class_methods = {}  # class_name -> [(fqn, name, params_str, cyclomatic)]
+            standalone = []     # [(fqn, name, params_str, cyclomatic)]
+            node_count = 0
+
+            for fqn, m in call_graph.methods.items():
+                if node_count >= MAX_METHODS:
+                    break
+                name = m.get("name", "")
+                params = m.get("params", [])
+                params_str = ", ".join(
+                    p.split(":")[0].strip() for p in params[:3]
+                )
+                cyclomatic = m.get("cyclomatic", 1)
+                parent_cls = m.get("parent_class")
+
+                if parent_cls:
+                    # Extract class name from FQN like "mod.py::ClassName"
+                    cls_name = parent_cls.split("::")[-1] if "::" in parent_cls else parent_cls
+                    class_methods.setdefault(cls_name, []).append(
+                        (fqn, name, params_str, cyclomatic)
+                    )
+                else:
+                    standalone.append((fqn, name, params_str, cyclomatic))
+                node_count += 1
+
+            # Build FQN -> node_id mapping for edges
+            def _safe_id(fqn):
+                """Convert FQN to valid Mermaid node ID."""
+                return fqn.replace("/", "_").replace("\\", "_").replace(
+                    "::", "__").replace(".", "_").replace("-", "_")
+
+            fqn_to_nid = {}
+
+            # Write class subgraphs
+            for cls_name, methods in sorted(class_methods.items()):
+                safe_cls = cls_name.replace(".", "_").replace("-", "_")
+                lines.append(
+                    "    subgraph %s_group[%s]" % (safe_cls, cls_name)
+                )
+                for fqn, mname, params_str, _cx in methods:
+                    nid = _safe_id(fqn)
+                    fqn_to_nid[fqn] = nid
+                    lines.append(
+                        '        %s["%s(%s)"]' % (nid, mname, params_str)
+                    )
+                lines.append("    end")
+
+            # Write standalone functions
+            if standalone:
+                lines.append("    subgraph standalone_group[Functions]")
+                for fqn, fname, params_str, _cx in standalone:
+                    nid = _safe_id(fqn)
+                    fqn_to_nid[fqn] = nid
+                    lines.append(
+                        '        %s["%s(%s)"]' % (nid, fname, params_str)
+                    )
+                lines.append("    end")
+
+            # Collect callee FQNs for entry point detection
+            all_callee_fqns = set()
+            edges = call_graph.get_edges()
+
+            # Write call edges
+            edge_count = 0
+            for edge in edges:
+                if edge_count >= MAX_EDGES:
+                    break
+                if edge.get("type") == "inheritance":
+                    continue
+                from_fqn = edge.get("from", "")
+                to_fqn = edge.get("to", "")
+                all_callee_fqns.add(to_fqn)
+
+                from_nid = fqn_to_nid.get(from_fqn)
+                to_nid = fqn_to_nid.get(to_fqn)
+                if from_nid and to_nid and from_nid != to_nid:
+                    lines.append("    %s --> %s" % (from_nid, to_nid))
+                    edge_count += 1
+
+            # Style: entry points (bold border) and high-complexity (red fill)
+            all_method_data = []
+            for cls_name, methods in class_methods.items():
+                all_method_data.extend(methods)
+            all_method_data.extend(standalone)
+
+            for fqn, mname, _p, cyclomatic in all_method_data:
+                nid = fqn_to_nid.get(fqn)
+                if not nid:
+                    continue
+                is_entry = (
+                    not mname.startswith("_") and fqn not in all_callee_fqns
+                )
+                if is_entry and cyclomatic >= 5:
+                    lines.append(
+                        "    style %s stroke-width:3px,fill:#ff6666" % nid
+                    )
+                elif is_entry:
+                    lines.append(
+                        "    style %s stroke-width:3px" % nid
+                    )
+                elif cyclomatic >= 5:
+                    lines.append("    style %s fill:#ff6666" % nid)
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.warning("Call graph diagram generation failed: %s", e)
+            return "flowchart LR\n    note[Call graph not available]"
+
     # ------------------------------------------------------------------
     # Orchestration
     # ------------------------------------------------------------------
 
     def generate_all(self, scope="project"):
-        """Generate all applicable diagrams.
+        """Generate all 13 diagram types.
+
+        Calls _get_call_graph() once upfront so all individual methods share
+        the same CallGraph instance without redundant builds.
+
+        Tier 1 (AST-based, always): class, package, component, call-graph
+        Tier 2 (AST + LLM): sequence, activity, state
+        Tier 3 (LLM-powered): usecase, object, deployment, communication,
+                               composite-structure, interaction-overview
 
         Returns dict: {diagram_name: syntax_string}
         """
         results = {}
 
-        # Tier 1: Always generate (AST-based, fast)
-        try:
-            classes = self.analyzer.extract_all_classes()
-            dep_graph = self.analyzer.build_dependency_graph()
+        # Build CallGraph once upfront; cache in self._call_graph so that
+        # all generate_* calls below reuse it via _get_call_graph().
+        cg = self._get_call_graph()
 
+        # Derive shared data sources from CallGraph or AST analyzer
+        classes = []
+        dep_graph = {}
+        cg_chains = None
+
+        try:
+            # Classes: prefer CallGraph, fall back to AST
+            cg_classes = self._classes_from_call_graph(cg)
+            classes = cg_classes if cg_classes else self.analyzer.extract_all_classes()
+
+            # Dep graph: enriched from CallGraph (already falls back internally)
+            dep_graph = self._dep_graph_from_call_graph(cg)
+
+            # Call chains: prefer CallGraph
+            cg_chains = self._call_chains_from_call_graph(cg)
+        except Exception as e:
+            logger.warning("Shared data source build failed: %s", e)
+
+        # ---- Tier 1: AST-based (always generate) ----
+        try:
             results["class-diagram"] = self.generate_class_diagram(classes)
+        except Exception as e:
+            logger.debug("class-diagram failed: %s", e)
+
+        try:
             results["package-diagram"] = self.generate_package_diagram(
                 dep_graph
             )
+        except Exception as e:
+            logger.debug("package-diagram failed: %s", e)
+
+        try:
             results["component-diagram"] = self.generate_component_diagram(
                 dep_graph
             )
         except Exception as e:
-            logger.warning("Tier 1 diagram generation failed: %s", e)
+            logger.debug("component-diagram failed: %s", e)
 
-        # Tier 2: AST + LLM (may fail gracefully)
         try:
-            results["sequence-diagram"] = self.generate_sequence_diagram()
+            results["call-graph-diagram"] = self.generate_call_graph_diagram(
+                call_graph=cg
+            )
         except Exception as e:
-            logger.debug("Sequence diagram failed: %s", e)
+            logger.debug("call-graph-diagram failed: %s", e)
 
-        # Tier 3: LLM-powered (best-effort)
-        for name, method in [
-            ("usecase-diagram", self.generate_usecase_diagram),
-            ("object-diagram", lambda: self.generate_object_diagram(classes)),
-            ("deployment-diagram", self.generate_deployment_diagram),
+        # ---- Tier 2: AST + LLM hybrid (may fail gracefully) ----
+        try:
+            results["sequence-diagram"] = self.generate_sequence_diagram(
+                call_chains=cg_chains
+            )
+        except Exception as e:
+            logger.debug("sequence-diagram failed: %s", e)
+
+        try:
+            # Activity diagram: auto-detect main entry point
+            entry_code = ""
+            for entry_name in ["main", "run", "app", "start", "__main__"]:
+                for py_file in self.project_root.rglob("*.py"):
+                    rel = str(py_file.relative_to(self.project_root))
+                    if any(skip in rel for skip in [
+                        "__pycache__", ".venv", "test"
+                    ]):
+                        continue
+                    if entry_name in py_file.stem or entry_name == "__main__":
+                        try:
+                            entry_code = py_file.read_text(
+                                encoding="utf-8", errors="replace"
+                            )[:2000]
+                            break
+                        except OSError:
+                            pass
+                if entry_code:
+                    break
+            results["activity-diagram"] = self.generate_activity_diagram(
+                function_code=entry_code,
+                context="Main application entry point flow"
+            )
+        except Exception as e:
+            logger.debug("activity-diagram failed: %s", e)
+
+        try:
+            # State diagram: auto-detect from flow_state or state patterns
+            state_context = ""
+            if cg:
+                state_classes = [
+                    c.get("name", "") for c in cg.classes.values()
+                    if any(kw in c.get("name", "").lower()
+                           for kw in ["state", "status", "phase", "mode"])
+                ]
+                if state_classes:
+                    state_context = "State-like classes: %s" % ", ".join(
+                        state_classes[:10]
+                    )
+            if not state_context:
+                # Check for TypedDict or enum state patterns
+                state_context = "Pipeline states from project structure"
+            results["state-diagram"] = self.generate_state_diagram(
+                context=state_context
+            )
+        except Exception as e:
+            logger.debug("state-diagram failed: %s", e)
+
+        # ---- Tier 3: LLM-powered (best-effort) ----
+        tier3_items = [
+            ("usecase-diagram",
+             lambda: self.generate_usecase_diagram()),
+            ("object-diagram",
+             lambda: self.generate_object_diagram(classes)),
+            ("deployment-diagram",
+             lambda: self.generate_deployment_diagram()),
             ("communication-diagram",
              lambda: self.generate_communication_diagram(dep_graph)),
-        ]:
+            ("composite-structure-diagram",
+             lambda: self.generate_composite_structure_diagram(classes)),
+            ("interaction-overview-diagram",
+             lambda: self.generate_interaction_overview(cg_chains)),
+        ]
+
+        for name, method in tier3_items:
             try:
-                results[name] = method() if not callable(method) else method()
+                results[name] = method()
             except Exception as e:
                 logger.debug("%s failed: %s", name, e)
 

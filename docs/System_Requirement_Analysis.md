@@ -73,6 +73,33 @@ The system aims to:
 **Status:** ✅ In Progress
 **Related Components:** docs/
 
+### FR-CG: CallGraph-Driven Pipeline Intelligence
+
+- **Added**: 2026-03-18
+- **Priority**: High
+- **Status**: Implemented
+
+#### FR-CG-1: Call Graph Builder
+The system SHALL build a complete call graph from Python AST analysis maintaining class-method hierarchy with FQN edges, call paths, impact maps, and cyclomatic complexity.
+
+#### FR-CG-2: Pre-Change Impact Analysis (Step 2)
+The pipeline SHALL analyze call graph impact before planning to identify risk levels, danger zones (methods with 5+ callers), safe change zones, and cross-file dependencies.
+
+#### FR-CG-3: Implementation Context (Step 10)
+The pipeline SHALL provide call graph context during implementation including entry points affected, call paths through targets, and suggested test scope. A pre-change snapshot SHALL be captured for post-change comparison.
+
+#### FR-CG-4: Post-Change Review (Step 11)
+The pipeline SHALL compare pre-change and post-change call graphs during code review to detect breaking changes, orphaned methods, new/removed edges, and cyclomatic complexity changes.
+
+#### FR-CG-5: UML Diagram Generation (13 Types)
+The system SHALL generate 13 UML diagram types from call graph data:
+- Tier 1 (AST-based): Class, Package, Component, Call Graph
+- Tier 2 (AST + LLM): Sequence (class-aware), Activity, State
+- Tier 3 (LLM-powered): Use Case, Object, Deployment, Communication, Composite Structure, Interaction Overview
+
+#### FR-CG-6: Call Graph as Single Data Source
+UML diagram generation SHALL use the CallGraph as primary data source via adapter methods, falling back to direct AST analysis when CallGraph is unavailable.
+
 ---
 
 ## Non-Functional Requirements

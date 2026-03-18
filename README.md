@@ -69,12 +69,12 @@ Level 3:  EXECUTION         15 steps (Step 0-14): Full SDLC automation
 
 | Phase | Steps | What Happens |
 |-------|-------|-------------|
-| **Analysis & Planning** | 0-2 | Task analysis, complexity scoring, plan mode decision, plan execution |
+| **Analysis & Planning** | 0-2 | Task analysis, complexity scoring, plan mode decision; Step 2: CallGraph impact analysis before planning |
 | **Preparation** | 3-7 | Task breakdown, TOON refinement, skill/agent selection, prompt generation |
 | **GitHub Automation** | 8-9 | Issue creation with semantic labels, branch creation with stash safety |
-| **Implementation** | 10 | Code execution with system prompt context (95%+ quality with full context) |
-| **Review & Closure** | 11-12 | PR creation with code review loop (max 3 retries), issue closure with summary |
-| **Finalization** | 13-14 | Documentation + UML diagram generation, execution summary + voice notification |
+| **Implementation** | 10 | Code execution with system prompt context (95%+ quality with full context); pre-change snapshot + implementation context from CallGraph |
+| **Review & Closure** | 11-12 | PR creation with post-change CallGraph diff + breaking change detection, code review loop (max 3 retries), issue closure with summary |
+| **Finalization** | 13-14 | Documentation + UML diagram generation (13 types), execution summary + voice notification |
 
 ### Execution Modes
 
@@ -240,6 +240,27 @@ visit_FunctionDef("standalone")  -> FQN = "module.py::standalone" (no class, typ
 
 This simple architectural choice (NodeVisitor vs walk) is what makes the entire system work. Every other feature - impact analysis, call paths, complexity scoring - builds on this foundation of **knowing which class a method belongs to**.
 
+#### Call Graph Analyzer (Pipeline Integration)
+
+`call_graph_analyzer.py` wraps the call graph builder with four pipeline-ready functions that Steps 2, 10, and 11 call directly:
+
+| Function | Used By | What It Does |
+|----------|---------|-------------|
+| `analyze_impact_before_change(method_fqn)` | Step 2 | Pre-plan risk assessment - returns all callers, call depth, and blast radius before any code change |
+| `get_implementation_context(method_fqn)` | Step 10 | Caller/callee awareness during implementation - gives full context of what calls the target and what it calls |
+| `review_change_impact(before_snapshot, after_snapshot)` | Step 11 | Before/after graph comparison for code review - detects new call edges, removed edges, and breaking changes |
+| `snapshot_call_graph()` | Step 10 | Captures serializable call graph state for diff comparison in Step 11 |
+
+The data flow across steps:
+```
+Step 2:  analyze_impact_before_change() -> risk score -> informs plan complexity
+Step 10: snapshot_call_graph() -> saved as pre_change_snapshot
+         get_implementation_context() -> injected into implementation prompt
+Step 11: review_change_impact(pre_change_snapshot, new_snapshot) -> PR review findings
+```
+
+The single data source for all 13 UML diagram types is also the call graph - `uml_generators.py` reads the graph once and produces any diagram type from it, ensuring diagrams always reflect the actual code structure.
+
 ### LangGraph Orchestration (78 modules)
 
 - StateGraph with 200+ typed state fields
@@ -248,7 +269,7 @@ This simple architectural choice (NodeVisitor vs walk) is what makes the entire 
 - Checkpoint recovery (resume from any step after crash)
 - Signal handling (Ctrl+C graceful recovery)
 
-### 12 MCP Servers (123 tools)
+### 12 MCP Servers (124 tools)
 
 All servers use FastMCP protocol (stdio JSON-RPC), registered in `~/.claude/settings.json`:
 
@@ -265,7 +286,7 @@ All servers use FastMCP protocol (stdio JSON-RPC), registered in `~/.claude/sett
 | standards-loader | 7 | Standards (project detect, framework detect, hot-reload) |
 | skill-manager | 8 | Skill lifecycle (load, search, validate, rank, conflicts) |
 | vector-db | 11 | Vector RAG (Qdrant, 4 collections, semantic search, node decisions) |
-| uml-diagram | 14 | UML generation (12 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io rendering) |
+| uml-diagram | 15 | UML generation (13 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io rendering) |
 
 ### RAG Integration (Vector DB Decision Caching)
 
@@ -458,6 +479,7 @@ claude-insight/
 |   |   +-- flow_state.py             # TypedDict state (200+ fields)
 |   |   +-- rag_integration.py        # Vector DB decision caching
 |   |   +-- call_graph_builder.py     # Class-level call stack (FQN, impact analysis)
+|   |   +-- call_graph_analyzer.py   # Pipeline-ready analysis (impact, context, review)
 |   |   +-- subgraphs/               # Level -1, 1, 2, 3 implementations
 |   +-- architecture/                 # Helper scripts (sync, standards, execution)
 |   +-- 3-level-flow.py               # Entry point
@@ -465,11 +487,11 @@ claude-insight/
 |   +-- post-tool-tracker.py          # PostToolUse hook
 |   +-- stop-notifier.py              # Stop hook (voice notification)
 |
-+-- src/mcp/                          # 12 FastMCP servers (123 tools)
++-- src/mcp/                          # 12 FastMCP servers (124 tools)
 +-- policies/                         # 49 policy definitions
 +-- tests/                            # 48 test files (1450+ tests)
 +-- docs/                             # 40 documentation files
-+-- docs/uml/                         # Auto-generated UML diagrams (12 types)
++-- docs/uml/                         # Auto-generated UML diagrams (13 types)
 +-- rules/                            # 5 coding standard definitions
 |
 +-- VERSION                           # Single source of truth (7.5.0)
@@ -488,13 +510,13 @@ claude-insight/
 | Pipeline Levels | 4 (Level -1, 1, 2, 3) |
 | Execution Steps | 15 (Step 0 - Step 14) |
 | MCP Servers | 12 |
-| MCP Tools | 123 |
+| MCP Tools | 124 |
 | LangGraph Engine Modules | 78 (72 root + 6 subgraphs) |
 | Policy Files | 49 (48 .md + 1 .json) |
 | Test Files | 48 |
 | Test Functions | 1450+ |
 | Total Python Files | 261+ |
-| UML Diagram Types | 12 |
+| UML Diagram Types | 13 |
 | Documentation Files | 40 |
 | RAG Collections | 4 |
 | Supported Languages | 20+ |
@@ -609,7 +631,7 @@ export CLAUDE_HOME=/path/to/your/.claude
 | Version | Date | Highlights |
 |---------|------|------------|
 | **7.6.0** | 2026-03-18 | Call graph builder (class-level FQN, impact analysis, 47 tests), path standardization (30+ hardcoded paths removed, env var overrides) |
-| 7.5.0 | 2026-03-18 | UML diagram generation (12 types), 12th MCP server (uml-diagram, 14 tools), AST + LLM hybrid |
+| 7.5.0 | 2026-03-18 | UML diagram generation (13 types), 12th MCP server (uml-diagram, 15 tools), AST + LLM hybrid, call_graph_analyzer.py (4 pipeline functions) |
 | 7.5.0 | 2026-03-17 | Gap analysis fixes, all 49 policies complete, code graph analyzer, Level 1 integration |
 | 7.5.0 | 2026-03-16 | RAG integration, 11th MCP server (vector-db), cross-session learning, 109 tools |
 | 7.4.0 | 2026-03-16 | Dynamic versioning, SRS rewrite, MCP health checks |

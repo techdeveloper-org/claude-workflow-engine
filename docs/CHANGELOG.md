@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [7.6.0] - 2026-03-18
+
+### Added
+- Call graph analyzer module (call_graph_analyzer.py) with 4 pipeline-ready functions
+- 13th UML diagram type: Call Graph Diagram (method-to-method with class grouping)
+- CallGraph-driven Step 2: pre-change impact analysis with risk assessment
+- CallGraph-driven Step 10: implementation context + pre-change snapshot
+- CallGraph-driven Step 11: post-change diff with breaking change detection
+- Class-aware sequence diagrams with FQN participant mapping
+- 9 new flow_state fields for CallGraph pipeline data
+- 50 new tests (20 analyzer + 30 UML integration)
+
+### Changed
+- UML generators now use CallGraph as single data source (unified from duplicate AST)
+- generate_all() produces all 13 diagram types (was 7-8)
+- Step 13 documentation refresh now includes 5 diagrams (was 3)
+- uml-diagram MCP server expanded to 15 tools (was 14)
+
+### Architecture
+- call_graph_builder.py: AST NodeVisitor with class stack, FQN edges, call paths, impact map
+- call_graph_analyzer.py: Pipeline integration layer (impact, context, review, snapshot)
+- uml_generators.py: CallGraph adapters (_classes_from_call_graph, _dep_graph_from_call_graph, _call_chains_from_call_graph)
+- level3_execution_v2.py: Steps 2/10/11 now graph-aware
+
+---
+
 ## [Unreleased]
 
 ### Added

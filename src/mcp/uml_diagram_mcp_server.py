@@ -390,6 +390,40 @@ def generate_interaction_overview_diagram(
     }
 
 
+@mcp.tool()
+@mcp_tool_handler
+def generate_call_graph_diagram(
+    project_path: str,
+    output_dir: str = "docs/uml",
+) -> dict:
+    """Generate a Mermaid flowchart showing the project call graph.
+
+    Tier 1 diagram: AST-based, no LLM required. Classes are rendered
+    as subgraphs with methods as nodes. Call edges connect methods
+    across classes. Entry points (public methods not called by others)
+    are highlighted with bold borders. High-complexity methods
+    (cyclomatic complexity >= 5) are highlighted in red.
+
+    Limits output to 40 methods and 60 edges for readability.
+
+    Args:
+        project_path: Root path of the project to analyze.
+        output_dir: Output directory relative to project root.
+    """
+    gen = _get_generator(project_path, output_dir)
+
+    # generate_call_graph_diagram uses _get_call_graph() internally
+    # which handles lazy import and fallback to stub
+    syntax = gen.generate_call_graph_diagram()
+    path = gen.save_diagram("call-graph-diagram", syntax)
+    return {
+        "diagram_type": "call_graph",
+        "format": "mermaid",
+        "output_file": path,
+        "lines": len(syntax.split("\n")),
+    }
+
+
 # ==================================================================
 # Utility tools
 # ==================================================================

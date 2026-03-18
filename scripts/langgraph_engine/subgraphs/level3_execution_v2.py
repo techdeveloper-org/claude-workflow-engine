@@ -616,8 +616,31 @@ def step1_plan_mode_decision_node(state: FlowState) -> Dict[str, Any]:
 
 
 def step2_plan_execution_node(state: FlowState) -> Dict[str, Any]:
-    """Step 2: Plan Execution (conditional on Step 1) with full error handling."""
-    return _run_step(
+    """Step 2: Plan Execution (conditional on Step 1) with full error handling.
+
+    Injects CallGraph impact analysis before planning so the planner
+    considers ripple effects of proposed changes.
+    """
+    # --- CallGraph Impact Analysis (pre-plan) ---
+    impact_data = {}
+    try:
+        from ..call_graph_analyzer import analyze_impact_before_change
+        project_root = state.get("project_root", ".")
+        target_files = state.get("step0_target_files", [])
+        task_desc = state.get("user_message", "")
+        impact_data = analyze_impact_before_change(
+            project_root, target_files, task_desc
+        )
+        if impact_data.get("call_graph_available"):
+            logger.info(
+                "[v2] Step 2 CallGraph impact: risk=%s, affected=%d methods",
+                impact_data.get("risk_level", "unknown"),
+                len(impact_data.get("affected_methods", [])),
+            )
+    except Exception as e:
+        logger.debug("[v2] Step 2 CallGraph analysis skipped: %s", e)
+
+    result = _run_step(
         2, "Plan Execution",
         step2_plan_execution,
         state,
@@ -628,6 +651,16 @@ def step2_plan_execution_node(state: FlowState) -> Dict[str, Any]:
             "step2_total_estimated_steps": 0,
         },
     )
+
+    # Merge impact analysis into result
+    if impact_data.get("call_graph_available"):
+        result["step2_impact_analysis"] = impact_data
+        result["step2_graph_risk_level"] = impact_data.get("risk_level", "low")
+        result["step2_affected_methods"] = [
+            m.get("fqn", "") for m in impact_data.get("affected_methods", [])
+        ]
+
+    return result
 
 
 def step3_task_breakdown_node(state: FlowState) -> Dict[str, Any]:
@@ -844,7 +877,37 @@ def _build_retry_history_context(state) -> str:
 
 
 def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
-    """Step 10: Implementation Execution with LLM fallback, retry history, and full error handling."""
+    """Step 10: Implementation Execution with LLM fallback, retry history, and full error handling.
+
+    Injects CallGraph implementation context before execution and
+    snapshots the call graph for Step 11 comparison.
+    """
+    # --- CallGraph: Snapshot before change + implementation context ---
+    pre_change_graph = {}
+    call_context = {}
+    suggested_tests = []
+    try:
+        from ..call_graph_analyzer import (
+            snapshot_call_graph, get_implementation_context,
+        )
+        project_root = state.get("project_root", ".")
+        target_files = state.get("step2_files_affected", []) or state.get("step0_target_files", [])
+
+        # Snapshot current state for Step 11 diff
+        pre_change_graph = snapshot_call_graph(project_root)
+
+        # Get implementation context
+        if target_files:
+            call_context = get_implementation_context(project_root, target_files)
+            suggested_tests = call_context.get("suggested_test_scope", [])
+            if call_context.get("call_graph_available"):
+                logger.info(
+                    "[v2] Step 10 CallGraph context: %d entry points, %d test files suggested",
+                    len(call_context.get("entry_points_affected", [])),
+                    len(suggested_tests),
+                )
+    except Exception as e:
+        logger.debug("[v2] Step 10 CallGraph context skipped: %s", e)
 
     # Build retry context before execution
     retry_count = state.get("step11_retry_count", 0)
@@ -947,12 +1010,25 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
         "Step 10 executed (retry=%d)" % retry_count
     )
 
+    # Merge CallGraph data into result for Step 11
+    if pre_change_graph:
+        result["step10_pre_change_graph"] = pre_change_graph
+    if call_context.get("call_graph_available"):
+        result["step10_call_context"] = call_context
+    if suggested_tests:
+        result["step10_suggested_test_scope"] = suggested_tests
+
     return result
 
 
 def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
-    """Step 11: Pull Request & Code Review with full error handling."""
-    return _run_step(
+    """Step 11: Pull Request & Code Review with full error handling.
+
+    After the standard review, runs CallGraph impact comparison between
+    pre-change snapshot (from Step 10) and current state to detect
+    breaking changes, orphaned methods, and risk assessment.
+    """
+    result = _run_step(
         11, "Pull Request & Code Review",
         step11_pull_request_review,
         state,
@@ -963,6 +1039,51 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
             "step11_status": "ERROR",
         },
     )
+
+    # --- CallGraph: Post-change impact review ---
+    try:
+        from ..call_graph_analyzer import review_change_impact
+        project_root = state.get("project_root", ".")
+        modified_files = (
+            result.get("step10_modified_files")
+            or state.get("step10_modified_files", [])
+        )
+        pre_snapshot = state.get("step10_pre_change_graph", {})
+
+        if modified_files:
+            impact_review = review_change_impact(
+                project_root, modified_files, pre_snapshot
+            )
+            if impact_review.get("call_graph_available"):
+                result["step11_impact_review"] = impact_review
+                result["step11_risk_assessment"] = impact_review.get(
+                    "risk_assessment", "safe"
+                )
+                breaking = impact_review.get("breaking_changes", [])
+                if breaking:
+                    result["step11_breaking_changes"] = breaking
+                    # Add breaking changes to review issues
+                    existing_issues = result.get("step11_review_issues", [])
+                    for bc in breaking[:5]:
+                        existing_issues.append(
+                            "BREAKING: %s (%s, %d callers)" % (
+                                bc.get("method", ""),
+                                bc.get("reason", ""),
+                                bc.get("callers", 0),
+                            )
+                        )
+                    result["step11_review_issues"] = existing_issues
+
+                logger.info(
+                    "[v2] Step 11 CallGraph review: risk=%s, breaking=%d, orphaned=%d",
+                    impact_review.get("risk_assessment", "unknown"),
+                    len(breaking),
+                    len(impact_review.get("orphaned_methods", [])),
+                )
+    except Exception as e:
+        logger.debug("[v2] Step 11 CallGraph review skipped: %s", e)
+
+    return result
 
 
 def step12_issue_closure_node(state: FlowState) -> Dict[str, Any]:
