@@ -402,7 +402,19 @@ policies/
 | Configuration wizard | Interactive setup for first-time users | 1 day | Onboarding experience |
 | Release notes + changelog | v1.0.0 announcement | 1 day | Community awareness |
 
-#### Phase 5: Enterprise Features (Priority: LOW - Future)
+#### Phase 5: Quality Intelligence (Priority: HIGH - Next)
+
+| Task | Description | Impact |
+|------|-------------|--------|
+| SonarQube integration | Auto-scan code after implementation, parse findings, auto-create issues | Self-healing code quality |
+| Auto-fix SonarQube issues | Claude picks up scan findings and fixes bugs/vulnerabilities/smells autonomously | Zero manual quality work |
+| Unit test auto-generation | Generate language-specific unit tests for every modified method using call graph | Coverage never drops |
+| Integration test generation | Generate cross-service/API tests for modified call paths | End-to-end validation |
+| Language-aware test patterns | Python: pytest+fixtures, Java: JUnit5+Mockito, TS: Jest, Go: table-driven | Idiomatic tests per language |
+| Coverage-driven test scope | Use call graph to find untested methods and generate tests for them | Smart test targeting |
+| Quality gate enforcement | Block PR merge until SonarQube gate passes + coverage threshold met | Production-grade quality |
+
+#### Phase 6: Enterprise Features (Priority: LOW - Future)
 
 | Task | Description | Impact |
 |------|-------------|--------|
