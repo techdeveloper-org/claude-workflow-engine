@@ -1177,7 +1177,7 @@ def step8_github_issue_node(state: FlowState) -> Dict[str, Any]:
         # All retries exhausted
         raise last_exc or RuntimeError("GitHub issue creation failed after 3 retries")
 
-    return _run_step(
+    result = _run_step(
         8, "GitHub Issue Creation",
         _with_network_retry,
         state,
@@ -1189,12 +1189,51 @@ def step8_github_issue_node(state: FlowState) -> Dict[str, Any]:
         },
     )
 
+    # -- Jira Integration (after GitHub issue is created) ----------------
+    if os.environ.get("ENABLE_JIRA", "0") == "1":
+        try:
+            from level3_steps8to12_jira import Level3JiraWorkflow
+            jira_wf = Level3JiraWorkflow()
+            jira_result = jira_wf.step8_create_jira_issue(
+                title=result.get("step8_title", ""),
+                description=state.get("user_message", ""),
+                label=result.get("step8_label", "task"),
+                github_issue_url=result.get("step8_issue_url", ""),
+                github_issue_number=int(result.get("step8_issue_id", "0")),
+            )
+            result["jira_enabled"] = True
+            result["jira_issue_key"] = jira_result.get("jira_issue_key", "")
+            result["jira_issue_url"] = jira_result.get("jira_issue_url", "")
+            result["jira_issue_created"] = jira_result.get("success", False)
+            if not jira_result.get("success"):
+                result["jira_error"] = jira_result.get("error", "Unknown")
+            logger.info("[v2] Jira issue created: %s", jira_result.get("jira_issue_key", ""))
+        except Exception as e:
+            logger.warning("[v2] Jira integration failed (non-blocking): %s", str(e))
+            result["jira_enabled"] = True
+            result["jira_issue_created"] = False
+            result["jira_error"] = str(e)
+
+    return result
+
 
 def step9_branch_creation_node(state: FlowState) -> Dict[str, Any]:
     """Step 9: Branch Creation with network retry and error handling."""
 
     def _with_network_retry(st):
         """Git/GitHub calls in step 9 get exponential backoff retry."""
+        # -- Jira branch naming override (before branch creation) --------
+        jira_key = st.get("jira_issue_key", "")
+        if jira_key and st.get("jira_issue_created", False):
+            label = st.get("step8_label", "feature")
+            jira_branch = "{}/{}".format(label, jira_key.lower())
+            # Inject override into a mutable copy so the underlying step
+            # picks it up via state["step9_branch_name"] if it checks that field,
+            # or via a dedicated override key that step9_branch_creation reads.
+            st = dict(st)
+            st["step9_jira_branch_override"] = jira_branch
+            logger.info("[v2] Jira branch override: %s", jira_branch)
+
         last_exc = None
         for attempt in range(3):
             try:
@@ -1562,6 +1601,22 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
         },
     )
 
+    # -- Jira PR linking (after PR created) ------------------------------
+    jira_key = state.get("jira_issue_key", "")
+    if jira_key and state.get("jira_issue_created", False):
+        try:
+            from level3_steps8to12_jira import Level3JiraWorkflow
+            jira_wf = Level3JiraWorkflow()
+            link_result = jira_wf.step11_link_pr_and_transition(
+                jira_issue_key=jira_key,
+                pr_url=result.get("step11_pr_url", ""),
+                pr_number=int(result.get("step11_pr_id", "0")),
+            )
+            result["jira_pr_linked"] = link_result.get("linked", False)
+            result["jira_transitioned"] = link_result.get("transitioned", False)
+        except Exception as e:
+            logger.warning("[v2] Jira PR linking failed (non-blocking): %s", str(e))
+
     # --- CallGraph: Post-change impact review ---
     try:
         from ..call_graph_analyzer import review_change_impact
@@ -1691,7 +1746,7 @@ def step12_issue_closure_node(state: FlowState) -> Dict[str, Any]:
                     raise
         raise last_exc or RuntimeError("Issue closure failed after 3 retries")
 
-    return _run_step(
+    result = _run_step(
         12, "Issue Closure",
         _with_network_retry,
         state,
@@ -1700,6 +1755,24 @@ def step12_issue_closure_node(state: FlowState) -> Dict[str, Any]:
             "step12_status": "ERROR",
         },
     )
+
+    # -- Jira closure (after GitHub issue closed) ------------------------
+    jira_key = state.get("jira_issue_key", "")
+    if jira_key and state.get("jira_issue_created", False):
+        try:
+            from level3_steps8to12_jira import Level3JiraWorkflow
+            jira_wf = Level3JiraWorkflow()
+            close_result = jira_wf.step12_close_jira_issue(
+                jira_issue_key=jira_key,
+                pr_number=int(state.get("step11_pr_id", "0")),
+                files_modified=state.get("step10_modified_files", []),
+                approach_taken=state.get("step12_closing_comment", ""),
+            )
+            result["jira_issue_closed"] = close_result.get("closed", False)
+        except Exception as e:
+            logger.warning("[v2] Jira closure failed (non-blocking): %s", str(e))
+
+    return result
 
 
 def step13_docs_update_node(state: FlowState) -> Dict[str, Any]:

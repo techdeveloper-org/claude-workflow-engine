@@ -557,6 +557,17 @@ class FlowState(TypedDict, total=False):
     step12_execution_time_ms: Optional[float]
     step12_error: Optional[str]
 
+    # -- Jira Integration (optional, ENABLE_JIRA=1) -----------------------
+    jira_enabled: bool                         # Jira integration active
+    jira_project_key: Optional[str]            # Jira project key (PROJ)
+    jira_issue_key: Optional[str]              # Created Jira issue key (PROJ-123)
+    jira_issue_url: Optional[str]              # Jira issue URL
+    jira_issue_created: bool                   # Jira issue successfully created
+    jira_pr_linked: bool                       # PR linked to Jira via remote link
+    jira_transitioned: bool                    # Jira issue transitioned
+    jira_issue_closed: bool                    # Jira issue closed/Done
+    jira_error: Optional[str]                  # Last Jira error (non-blocking)
+
     # Step 13: Project Documentation (PHASE 2A - Renamed from existing)
     step13_updates_prepared: bool              # Documentation updates prepared
     step13_update_count: int                   # Number of updates
@@ -810,6 +821,17 @@ class StepKeys:
     ISSUE_CLOSED = "step12_issue_closed"
     STEP12_STATUS = "step12_status"
     STEP12_ERROR = "step12_error"
+
+    # ------------------------------------------------------------------
+    # JIRA INTEGRATION
+    # ------------------------------------------------------------------
+    JIRA_ENABLED = "jira_enabled"
+    JIRA_ISSUE_KEY = "jira_issue_key"
+    JIRA_ISSUE_URL = "jira_issue_url"
+    JIRA_ISSUE_CREATED = "jira_issue_created"
+    JIRA_PR_LINKED = "jira_pr_linked"
+    JIRA_ISSUE_CLOSED = "jira_issue_closed"
+    JIRA_ERROR = "jira_error"
 
     # ------------------------------------------------------------------
     # STEP 13: DOCUMENTATION

@@ -71,7 +71,7 @@ Level 3:  EXECUTION         15 steps (Step 0-14): Full SDLC automation
 |-------|-------|-------------|
 | **Analysis & Planning** | 0-2 | Task analysis, complexity scoring, plan mode decision; Step 2: Plan Execution + **CallGraph impact analysis** + plan validation |
 | **Preparation** | 3-7 | Step 3: Task Breakdown + **CallGraph file-to-phase mapping**; Step 4: TOON Refinement + **phase-scoped context injection**; skill/agent selection, prompt generation |
-| **GitHub Automation** | 8-9 | Issue creation with semantic labels, branch creation with stash safety |
+| **Issue & Branch Automation** | 8-9 | GitHub Issue + Jira Issue (dual, configurable), branch from Jira key (`feature/PROJ-123`), PR-to-Jira linking |
 | **Implementation** | 10 | Implementation + **CallGraph snapshot + context** + SonarQube scan + auto-test generation |
 | **Review & Closure** | 11-12 | PR + Code Review + **CallGraph diff + breaking change detection + quality gate**, review loop (max 3 retries), issue closure with summary |
 | **Finalization** | 13-14 | Documentation + UML diagram generation (13 types), execution summary + voice notification |
@@ -692,7 +692,28 @@ SonarQube is configurable via environment variables:
 
 ## Jira Integration
 
-The engine supports Jira as an alternative or complement to GitHub Issues for issue tracking in Steps 8 and 12.
+The engine supports **dual GitHub + Jira issue tracking**. When `ENABLE_JIRA=1`, every GitHub Issue automatically gets a matching Jira issue - linked, synced, and closed together. Branch names use the Jira key (`feature/PROJ-123`), PRs are linked to Jira via remote links, and transitions happen automatically (In Progress -> In Review -> Done).
+
+### Dual Workflow (GitHub + Jira)
+
+```
+Step 8:  GitHub Issue #42 created
+         +-- Jira PROJ-123 created (same title/description)
+         +-- Cross-link comment added to both
+
+Step 9:  Branch: feature/proj-123 (from Jira key, not GitHub issue number)
+
+Step 11: PR #15 created
+         +-- PR linked to Jira PROJ-123 via remote link
+         +-- Jira transitioned to "In Review"
+         +-- Commits/PR visible in Jira issue history
+
+Step 12: GitHub Issue #42 closed
+         +-- Jira PROJ-123 transitioned to "Done"
+         +-- Implementation summary added as comment
+```
+
+All Jira operations are **non-blocking** - if Jira is down, the pipeline continues with GitHub only.
 
 ### Setup
 
