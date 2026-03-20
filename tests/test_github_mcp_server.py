@@ -30,9 +30,23 @@ github_create_pr = _gh_mod.github_create_pr
 github_merge_pr = _gh_mod.github_merge_pr
 github_list_issues = _gh_mod.github_list_issues
 github_get_pr_status = _gh_mod.github_get_pr_status
-_get_repo_info = _gh_mod._get_repo_info
-_get_token = _gh_mod._get_token
-_json = _gh_mod._json
+
+# Compatibility shims: these helpers were refactored into base.clients and base.response.
+# _get_repo_info -> GitHubApiClient._parse_remote
+# _get_token     -> GitHubApiClient._resolve_token
+# _json          -> to_json (imported in the module as to_json)
+from base.clients import GitHubApiClient as _GitHubApiClient
+_get_repo_info = _GitHubApiClient._parse_remote
+_get_token = _GitHubApiClient._resolve_token
+_json = _gh_mod.to_json
+
+# Stub module-level cache attributes used by TestTokenResolution to reset state.
+# The caching is now inside GitHubApiClient; setting these on the module is a no-op
+# but prevents AttributeError on assignment.
+if not hasattr(_gh_mod, "_github_token"):
+    _gh_mod._github_token = None
+if not hasattr(_gh_mod, "_github_client"):
+    _gh_mod._github_client = None
 
 
 def _parse(result: str) -> dict:

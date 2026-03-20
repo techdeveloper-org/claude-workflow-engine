@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 7.6.0 | **Status:** Alpha | **Last Updated:** 2026-03-18
+**Version:** 1.4.1 | **Status:** Alpha | **Last Updated:** 2026-03-18
 
 ---
 
@@ -284,7 +284,7 @@ The single data source for all 13 UML diagram types is also the call graph - `um
 | UML Generators | uml_generators.py | 13 UML diagram types (AST + LLM) |
 | Doc Manager | level3_documentation_manager.py | Circular SDLC doc cycle (Step 0/13) |
 
-### LangGraph Orchestration (78 modules)
+### LangGraph Orchestration (90 modules)
 
 - StateGraph with 200+ typed state fields
 - Parallel execution via `Send()` API (Level 1: 4 concurrent tasks)
@@ -292,7 +292,7 @@ The single data source for all 13 UML diagram types is also the call graph - `um
 - Checkpoint recovery (resume from any step after crash)
 - Signal handling (Ctrl+C graceful recovery)
 
-### 15 MCP Servers (141 tools)
+### 16 MCP Servers (293 tools)
 
 All servers use FastMCP protocol (stdio JSON-RPC), registered in `~/.claude/settings.json`:
 
@@ -356,14 +356,14 @@ Auto-detects project type and loads appropriate standards:
 **Frameworks:** Flask, Django, FastAPI, Spring Boot, React, Angular, Vue, Next.js, Express
 **Tools:** Docker, Kubernetes, GitHub Actions, Jenkins
 
-### Policy System (49 policies)
+### Policy System (63 policies)
 
 ```
 policies/
-+-- 01-sync-system/        Level 1: Session, context, preferences, patterns (11 files)
-+-- 02-standards-system/   Level 2: Common + conditional standards (3 files)
-+-- 03-execution-system/   Level 3: All 15 steps + failure prevention (34 files)
-+-- testing/               Test case policies (2 files)
++-- 00-auto-fix-system/    Level -1: Unicode, encoding, paths, recovery
++-- 01-sync-system/        Level 1: Session, context, preferences, patterns
++-- 02-standards-system/   Level 2: Common + conditional standards
++-- 03-execution-system/   Level 3: All 15 steps + failure prevention
 ```
 
 ---
@@ -376,10 +376,10 @@ policies/
 |-----------|--------|---------|
 | **15-Step Pipeline** | COMPLETE | All steps produce real output (not stubs) |
 | **4-Level Architecture** | COMPLETE | Level -1 through Level 3 fully operational |
-| **11 MCP Servers** | COMPLETE | 109 tools, all tested and registered |
+| **16 MCP Servers** | COMPLETE | 293 tools, all tested and registered |
 | **RAG Integration** | COMPLETE | 4 Vector DB collections, step-specific thresholds |
 | **Hook System** | COMPLETE | Pre/post tool enforcement with blocking |
-| **Policy System** | COMPLETE | 49 policies covering all 15 steps |
+| **Policy System** | COMPLETE | 63 policies covering all 15 steps |
 | **Multi-Project Detection** | COMPLETE | 20+ languages/frameworks auto-detected |
 | **Hybrid LLM Inference** | COMPLETE | 4-provider fallback chain |
 | **Token Optimization** | COMPLETE | AST navigation, dedup, 60-85% savings |
@@ -387,8 +387,8 @@ policies/
 | **GitHub Integration** | COMPLETE | Issue, branch, PR, merge, review loop |
 | **Standards Enforcement** | COMPLETE | Common + framework-specific with 5 hooks |
 | **Cross-Session Learning** | COMPLETE | RAG pattern detection + skill selection boost |
-| **Test Suite** | COMPLETE | 46 test files, 1366+ tests, integration tests for all 15 steps |
-| **Documentation** | COMPLETE | 40 docs, architecture diagrams, guides |
+| **Test Suite** | COMPLETE | 64 test files, integration tests for all 15 steps |
+| **Documentation** | COMPLETE | 46 docs, architecture diagrams, guides |
 | **Installation** | COMPLETE | setup.py, requirements.txt, .env.example |
 
 ### REMAINING (Roadmap to v1.0.0 Production)
@@ -513,7 +513,7 @@ pytest --cov=scripts --cov-report=html tests/
 claude-insight/
 |
 +-- scripts/
-|   +-- langgraph_engine/             # Core orchestration (78 modules)
+|   +-- langgraph_engine/             # Core orchestration (90 modules)
 |   |   +-- orchestrator.py           # Main StateGraph pipeline
 |   |   +-- flow_state.py             # TypedDict state (200+ fields)
 |   |   +-- rag_integration.py        # Vector DB decision caching
@@ -526,14 +526,14 @@ claude-insight/
 |   +-- post-tool-tracker.py          # PostToolUse hook
 |   +-- stop-notifier.py              # Stop hook (voice notification)
 |
-+-- src/mcp/                          # 12 FastMCP servers (124 tools)
-+-- policies/                         # 49 policy definitions
-+-- tests/                            # 48 test files (1450+ tests)
-+-- docs/                             # 40 documentation files
++-- src/mcp/                          # 16 FastMCP servers (293 tools)
++-- policies/                         # 63 policy definitions (62 .md + 1 .json)
++-- tests/                            # 64 test files (61 root + 3 integration)
++-- docs/                             # 46 documentation files
 +-- docs/uml/                         # Auto-generated UML diagrams (13 types)
-+-- rules/                            # 5 coding standard definitions
++-- rules/                            # 10 coding standard definitions
 |
-+-- VERSION                           # Single source of truth (7.5.0)
++-- VERSION                           # Single source of truth (1.4.1)
 +-- CLAUDE.md                         # Project context for Claude Code
 +-- setup.py                          # Package installation
 +-- requirements.txt                  # Python dependencies
@@ -548,15 +548,13 @@ claude-insight/
 |--------|-------|
 | Pipeline Levels | 4 (Level -1, 1, 2, 3) |
 | Execution Steps | 15 (Step 0 - Step 14) |
-| MCP Servers | 15 (12 original + 3 focused LLM providers) |
-| MCP Tools | 141 |
-| LangGraph Engine Modules | 91+ (85 root + 6 subgraphs) |
-| Policy Files | 49 (48 .md + 1 .json) |
-| Standards Files | 10 (8 languages covered) |
-| Test Files | 54+ |
-| Test Functions | 1550+ |
-| Total Python Files | 280+ |
-| MCP Tools | 149 |
+| MCP Servers | 16 (293 tools) |
+| MCP Tools | 293 |
+| LangGraph Engine Modules | 90 (84 root + 6 subgraphs) |
+| Policy Files | 63 (62 .md + 1 .json) |
+| Standards Files | 10 |
+| Test Files | 64 (61 root + 3 integration) |
+| Total Python Files | 226 |
 | Call Graph | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 | UML Diagram Types | 13 (CallGraph-powered) |
 | Documentation Files | 40+ |

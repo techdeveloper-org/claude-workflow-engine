@@ -1,0 +1,66 @@
+# =============================================================================
+# Claude Workflow Engine - .dockerignore
+# Excludes files that must not be copied into the Docker build context.
+# Smaller context = faster builds, no accidental secret leakage.
+# =============================================================================
+
+# Version control - never include git history in images
+.git
+.gitignore
+.gitattributes
+
+# Secrets and environment - NEVER bake credentials into images
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python bytecode and cache - rebuilt inside the container
+__pycache__
+*.py[cod]
+*.pyo
+.mypy_cache
+.ruff_cache
+
+# Test runner cache
+.pytest_cache
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments - dependencies are installed via requirements.txt
+venv/
+.venv/
+env/
+.env_dir/
+
+# Documentation - not needed at runtime
+docs/
+*.md
+!README.md
+
+# IDE and OS artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# CI/CD configuration - not needed inside the image
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+
+# Local test outputs and logs
+*.log
+logs/
+*.sqlite
+*.db
+
+# Build artifacts from local development
+dist/
+build/
+*.egg-info/

@@ -2,7 +2,7 @@
 """
 3-Level Flow Engine - LangGraph Orchestration
 
-Version: 5.0.0-langgraph
+Version: 1.4.1
 Status: LangGraph-based orchestration replacing sequential execution
 
 This is the entry point script for the 3-level architecture enforcement.
@@ -75,7 +75,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-VERSION = "5.0.0-langgraph"
+VERSION = "1.4.1"
 SCRIPT_NAME = "3-level-flow.py"
 DEBUG = os.getenv("CLAUDE_DEBUG", "").lower() == "1"
 

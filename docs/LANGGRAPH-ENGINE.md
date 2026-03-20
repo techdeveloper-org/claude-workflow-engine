@@ -1,6 +1,6 @@
 # LangGraph 3-Level Flow Engine
 
-**Version:** 5.0.0-langgraph
+**Version:** 1.4.1
 **Status:** Implementation Complete (Phases 1-7)
 **Date:** 2026-03-10
 

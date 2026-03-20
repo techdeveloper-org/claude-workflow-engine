@@ -4,8 +4,8 @@
 # ============================================================================
 # LANGGRAPH ORCHESTRATION (3-Level Flow Engine)
 # ============================================================================
-langgraph==0.2.0            # StateGraph orchestration for parallel + conditional execution
-langchain-core==0.3.0       # Core primitives (TypedDict, Annotated)
+langgraph>=0.2.0,<1.0.0     # StateGraph orchestration for parallel + conditional execution
+langchain-core>=0.3.0,<1.0.0  # Core primitives (TypedDict, Annotated)
 
 # ============================================================================
 # GITHUB AUTOMATION & GIT OPERATIONS

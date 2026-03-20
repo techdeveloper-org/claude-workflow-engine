@@ -1,7 +1,7 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 7.7.0
+**Version:** 1.4.1
 **Type:** LangGraph Orchestration Pipeline with RAG
 **Last Updated:** 2026-03-18
 
@@ -16,12 +16,12 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | Property | Value |
 |----------|-------|
 | **Languages** | Python |
-| **Frameworks** | LangGraph 1.0.10+, LangChain, FastMCP, Qdrant |
+| **Frameworks** | LangGraph 0.2.0+, LangChain, FastMCP (mcp package), Qdrant |
 | **Status** | Active Development |
 | **Primary Location** | scripts/langgraph_engine/ |
-| **MCP Servers** | 16 (149 tools) |
-| **Total Python Files** | 280+ |
-| **Test Files** | 54 |
+| **MCP Servers** | 16 (293 tools) |
+| **Total Python Files** | 226 |
+| **Test Files** | 64 |
 | **Call Graph** | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 
 ---
@@ -60,18 +60,18 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 ```
 /
 +-- scripts/                          # Pipeline scripts and hooks
-|   +-- langgraph_engine/             # Core orchestration (80 modules: 74 root + 6 subgraph files)
+|   +-- langgraph_engine/             # Core orchestration (90 modules: 84 root + 6 subgraph files)
 |   +-- architecture/                 # Active pipeline scripts (6 scripts + 1 data file)
 +-- policies/                         # 63 policy definitions (62 .md + 1 .json)
 |   +-- 00-auto-fix-system/           # Level -1 policies (Unicode, encoding, paths, recovery)
 |   +-- 01-sync-system/               # Level 1 policies
 |   +-- 02-standards-system/          # Level 2 policies (+ tool optimization, MCP discovery)
 |   +-- 03-execution-system/          # Level 3 policies (15 steps + RAG, CallGraph, QualityGate, hooks)
-+-- src/mcp/                          # 12 FastMCP servers (124 tools, 9,000+ LOC)
-+-- tests/                            # 49 test files (42 root + 2 integration + 5 other)
-+-- docs/                             # 40 documentation files
++-- src/mcp/                          # 16 FastMCP servers (293 tools)
++-- tests/                            # 64 test files (61 root + 3 integration)
++-- docs/                             # 46 documentation files
 +-- docs/uml/                         # Auto-generated UML diagrams (13 types)
-+-- rules/                            # 5 coding standard definitions
++-- rules/                            # 10 coding standard definitions
 ```
 
 ### Key Components
@@ -99,7 +99,7 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | Test Generator | scripts/langgraph_engine/test_generator.py | Template-based unit tests (4 languages) |
 | Coverage Analyzer | scripts/langgraph_engine/coverage_analyzer.py | AST-based coverage, risk-prioritized |
 
-### MCP Servers (12 servers, 123 tools)
+### MCP Servers (16 servers, 293 tools)
 
 All registered in `~/.claude/settings.json`. Version synced via `scripts/sync-version.py`.
 

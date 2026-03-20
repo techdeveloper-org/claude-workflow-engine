@@ -1,0 +1,125 @@
+# =============================================================================
+# Claude Workflow Engine - docker-compose.yml
+# Version: 1.4.1
+#
+# Services:
+#   engine  - The workflow orchestration pipeline (the main application)
+#   qdrant  - Vector database for RAG decision caching (optional)
+#
+# Usage:
+#   Full stack (with Qdrant RAG):
+#     docker compose up
+#
+#   Engine only (standalone, Qdrant disabled):
+#     docker compose up engine
+#
+#   Run a specific task:
+#     docker compose run --rm engine --task "your task description"
+#
+#   View logs:
+#     docker compose logs -f engine
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # engine: Claude Workflow Engine (3-level LangGraph pipeline)
+  # ---------------------------------------------------------------------------
+  engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claude-workflow-engine
+    image: claude-workflow-engine:1.4.1
+
+    # Load all environment variables from .env file.
+    # Required vars: ANTHROPIC_API_KEY, GITHUB_TOKEN
+    # Optional vars: OLLAMA_ENDPOINT, CLAUDE_DEBUG, CLAUDE_HOOK_MODE
+    # The .env file is excluded from the image via .dockerignore.
+    env_file:
+      - .env
+
+    # Override or supplement specific environment variables here.
+    # These take precedence over values in .env.
+    environment:
+      # Point Qdrant client at the qdrant service when running as a compose stack.
+      # When running engine standalone (without qdrant), this env var is set but
+      # the engine gracefully falls back to in-memory mode if Qdrant is unreachable.
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    # Bind-mount the project directory for live development.
+    # Code changes are immediately reflected without rebuilding the image.
+    # Remove this volume for immutable production deployments.
+    volumes:
+      - .:/app
+
+    # Qdrant is listed as a dependency but is not required for the engine to start.
+    # The `service_started` condition avoids blocking if Qdrant is not started.
+    depends_on:
+      qdrant:
+        condition: service_started
+
+    # The engine is a CLI tool, not a long-running server.
+    # It exits after each pipeline run; compose will not restart it automatically.
+    restart: "no"
+
+    # Default command: show pipeline help.
+    # Override at runtime: docker compose run --rm engine --task "..."
+    command: ["--help"]
+
+    # Optional: limit resource usage
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 2g
+    #       cpus: "2.0"
+
+  # ---------------------------------------------------------------------------
+  # qdrant: Vector database for RAG decision caching
+  # Stores past LangGraph node decisions for semantic similarity lookups.
+  # Collections: node_decisions, sessions, flow_traces, tool_calls
+  #
+  # This service is optional. Start only when RAG is needed:
+  #   docker compose up qdrant
+  # The engine automatically uses RAG when QDRANT_HOST is reachable.
+  # ---------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: claude-workflow-qdrant
+    restart: unless-stopped
+
+    ports:
+      # REST API and gRPC port - accessible from the host for inspection
+      - "6333:6333"
+      # gRPC port (optional, used by qdrant-client when grpc is enabled)
+      - "6334:6334"
+
+    volumes:
+      # Persist vector collections across container restarts
+      - qdrant_storage:/qdrant/storage
+
+    # Qdrant configuration overrides (optional)
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+      # Uncomment to enable API key protection on the Qdrant REST API
+      # QDRANT__SERVICE__API_KEY: "your-qdrant-api-key"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+# =============================================================================
+# Named Volumes
+# =============================================================================
+volumes:
+  # Persists Qdrant collections (node_decisions, sessions, flow_traces, tool_calls)
+  # across container restarts. Data survives `docker compose down`.
+  # To wipe vector data: docker compose down -v
+  qdrant_storage:
+    driver: local

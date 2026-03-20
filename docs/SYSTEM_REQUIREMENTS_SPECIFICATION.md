@@ -1,4 +1,4 @@
-# Claude Workflow Engine v7.5.0 - System Requirements Specification
+# Claude Workflow Engine v1.4.1 - System Requirements Specification
 
 **Document Version:** 3.0
 **Release Date:** 2026-03-16
@@ -10,28 +10,25 @@
 
 ## 1. Executive Summary
 
-Claude Workflow Engine v7.5.0 is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It provides 11 FastMCP servers (109 tools), 75 LangGraph engine modules, 83 architecture modules, 44 policy definitions, a RAG integration layer with 4 Vector DB collections, and a comprehensive hook system for pre/post tool enforcement.
+Claude Workflow Engine v1.4.1 is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It provides 16 FastMCP servers (293 tools), 90 LangGraph engine modules, 63 policy definitions, a RAG integration layer with 4 Vector DB collections, and a comprehensive hook system for pre/post tool enforcement.
 
 ### Key Statistics
 
 | Metric | Value |
 |--------|-------|
-| **Version** | 7.5.0 |
+| **Version** | 1.4.1 |
 | **Pipeline Levels** | 4 (Level -1, Level 1, Level 2, Level 3) |
 | **Execution Steps** | 15 (Step 0 through Step 14) |
-| **MCP Servers** | 11 |
-| **MCP Tools** | 109 |
-| **LangGraph Engine Modules** | 75 (70 root + 5 subgraphs) |
-| **Architecture Modules** | 83 |
-| **Policy Files** | 44 (43 .md + 1 .json) |
-| **Test Files** | 45 |
-| **Total Python Files** | 258 |
-| **MCP Server LOC** | 8,400+ |
-| **Total Project LOC** | ~95,000+ |
+| **MCP Servers** | 16 |
+| **MCP Tools** | 293 |
+| **LangGraph Engine Modules** | 90 (84 root + 6 subgraphs) |
+| **Policy Files** | 63 (62 .md + 1 .json) |
+| **Test Files** | 64 (61 root + 3 integration) |
+| **Total Python Files** | 226 |
 | **RAG Collections** | 4 |
 | **LLM Providers** | 4 (Ollama, Claude CLI, Anthropic API, OpenAI) |
-| **Coding Standards** | 5 rule files |
-| **Documentation Files** | 40 |
+| **Coding Standards** | 10 rule files |
+| **Documentation Files** | 46 |
 
 ---
 
@@ -126,7 +123,7 @@ Level 3: 15-Step Execution Pipeline (Step 0-14)
 RESULT (flow-trace.json + session finalized)
 ```
 
-### 3.2 MCP Server Architecture (11 Servers, 109 Tools)
+### 3.2 MCP Server Architecture (16 Servers, 293 Tools)
 
 All servers use FastMCP framework, communicate via stdio, and are registered in `~/.claude/settings.json`.
 
@@ -143,6 +140,11 @@ All servers use FastMCP framework, communicate via stdio, and are registered in 
 | 9 | **standards-loader** | standards_loader_mcp_server.py | 7 | Standards discovery (project type detect, framework detect, load from 4 sources with priority, conflict resolve, hot-reload, list available) |
 | 10 | **skill-manager** | skill_manager_mcp_server.py | 8 | Skill lifecycle (load all/single, search by keyword/tag, validate capabilities, rank by relevance, conflict detect, agent load) |
 | 11 | **vector-db** | vector_db_mcp_server.py | 11 | Vector RAG (Qdrant backend, 4 collections, semantic search, bulk index, node decision storage, similar lookup, collection stats) |
+| 12 | **uml-diagram** | uml_diagram_mcp_server.py | 30 | UML generation (13 diagram types: class, package, component, sequence, activity, state, ER, deployment, use-case, CallGraph, timeline, mind-map, data-flow; AST + LLM + Mermaid/PlantUML, Kroki.io render) |
+| 13 | **llm-router** | llm_router_mcp_server.py | 8 | Intelligent LLM routing (selects best provider based on task type, complexity, and availability; no direct LLM calls) |
+| 14 | **ollama-provider** | ollama_mcp_server.py | 10 | Local Ollama GPU inference (model management, generation, health check; stdlib-only, no SDK) |
+| 15 | **anthropic-provider** | anthropic_mcp_server.py | 8 | Anthropic Claude API direct access (Claude model generation, health, cost estimation) |
+| 16 | **openai-provider** | openai_mcp_server.py | 8 | OpenAI GPT direct access (text generation, health, model list, cost estimation; stdlib-only) |
 
 ### 3.3 RAG Integration Architecture
 
@@ -185,24 +187,24 @@ Vector DB Collections (Qdrant):
 ```
 claude-insight/
 +-- scripts/                          # Pipeline scripts and hooks
-|   +-- langgraph_engine/             # Core orchestration (76 modules: 70 root + 6 subgraph files)
+|   +-- langgraph_engine/             # Core orchestration (90 modules: 84 root + 6 subgraph files)
 |   |   +-- orchestrator.py           # Main StateGraph pipeline
 |   |   +-- flow_state.py             # FlowState TypedDict
 |   |   +-- rag_integration.py        # RAG layer
-|   |   +-- subgraphs/               # 5 subgraph modules
-|   +-- architecture/                 # Architecture system (83 modules)
-+-- policies/                         # 44 policy definitions
+|   |   +-- subgraphs/               # 6 subgraph modules
+|   +-- architecture/                 # Active pipeline scripts
++-- policies/                         # 63 policy definitions (62 .md + 1 .json)
+|   +-- 00-auto-fix-system/           # Level -1 policies
 |   +-- 01-sync-system/               # Level 1 policies
 |   +-- 02-standards-system/          # Level 2 policies
 |   +-- 03-execution-system/          # Level 3 policies (15 steps: 0-14)
-|   +-- testing/                      # Test case policies
-+-- src/mcp/                          # 11 FastMCP servers (109 tools, 8,400+ LOC)
++-- src/mcp/                          # 16 FastMCP servers (293 tools)
 |   +-- session_hooks.py              # Bridge: direct Python import for MCP tools
-+-- tests/                            # 45 test files
-|   +-- integration/                  # 2 integration test suites
-+-- docs/                             # 40 documentation files
-+-- rules/                            # 5 coding standard definitions
-+-- VERSION                           # Single source of truth (7.5.0)
++-- tests/                            # 64 test files (61 root + 3 integration)
+|   +-- integration/                  # 3 integration test files
++-- docs/                             # 46 documentation files
++-- rules/                            # 10 coding standard definitions
++-- VERSION                           # Single source of truth (1.4.1)
 ```
 
 ---
@@ -397,7 +399,7 @@ claude-insight/
 
 ---
 
-## 6. LangGraph Engine Modules (75 total)
+## 6. LangGraph Engine Modules (90 total)
 
 ### 6.1 Core Modules
 
@@ -466,17 +468,18 @@ claude-insight/
 
 ## 8. Test Coverage
 
-### 8.1 Test Files (45 total)
+### 8.1 Test Files (64 total)
 
 | Category | Files | Purpose |
 |----------|-------|---------|
-| MCP Server Tests | 10 | Individual server validation |
-| Integration Tests | 5 | Cross-component testing |
-| Engine Tests | 4 | LangGraph engine validation |
-| Feature Tests | 12 | Specific feature testing |
-| Robustness Tests | 4 | Error handling, retry, failure |
-| Full Pipeline | 2 | End-to-end 15-step + failure scenarios |
-| Utility Tests | 8 | Architecture, session, standards |
+| MCP Server Tests | 14 | Individual server validation (git, github, session, enforcement, llm, token, pre-tool, post-tool, standards, skill, vector-db, uml, base clients/decorators/persistence) |
+| Integration Tests | 3 | End-to-end pipeline and failure scenarios (tests/integration/) |
+| LangGraph Engine Tests | 8 | Orchestration, levels -1/1/2/3, v2, documentation manager |
+| CallGraph Tests | 2 | Call graph builder and analyzer |
+| Feature Tests | 14 | RAG, UML, step11 review, task modules, enhancements, new components, cache, checkpoint |
+| Robustness & Hook Tests | 8 | Error infrastructure, recovery, retry, pre/post tool enforcer, stop notifier |
+| Utility & Root Tests | 8 | Architecture smoke, root scripts, session, skill management, standards, parallel mode, policies, prompt generator, window isolation |
+| Runner / Config | 7 | conftest.py, quick_test.py, run_all_tests.py and legacy test scripts |
 
 ### 8.2 Integration Test Suites
 

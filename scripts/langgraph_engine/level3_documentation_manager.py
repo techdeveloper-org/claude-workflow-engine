@@ -23,6 +23,8 @@ _DOC_FILES = ["SRS.md", "README.md", "CLAUDE.md", "CHANGELOG.md"]
 _SRS_ALTERNATES = [
     "SRS.md", "System_Requirement_Analysis.md",
     "docs/SRS.md", "docs/System_Requirement_Analysis.md",
+    "SYSTEM_REQUIREMENTS_SPECIFICATION.md",
+    "docs/SYSTEM_REQUIREMENTS_SPECIFICATION.md",
 ]
 
 
