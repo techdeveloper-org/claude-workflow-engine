@@ -1,6 +1,16 @@
 # CI Pipeline - Claude Workflow Engine
 # Triggers on push to main and pull requests targeting main.
 # Runs two parallel jobs: test (matrix: Python 3.8/3.10/3.12) and lint (ruff).
+#
+# CONFIGURABLE: Control via GitHub repo variables (Settings > Variables > Actions):
+#   ENABLE_CI       = true/false  (master switch, default: true)
+#   ENABLE_TESTS    = true/false  (run test job, default: true)
+#   ENABLE_LINT     = true/false  (run lint job, default: true)
+#   ENABLE_COVERAGE = true/false  (run coverage report, default: true)
+#
+# To disable CI entirely: set ENABLE_CI=false in repo variables.
+# To skip just tests: set ENABLE_TESTS=false (lint still runs).
+# To skip just lint: set ENABLE_LINT=false (tests still run).
 
 name: CI
 
@@ -9,6 +19,21 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual trigger with overrides
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Run test suite"
+        type: boolean
+        default: true
+      run_lint:
+        description: "Run linter"
+        type: boolean
+        default: true
+      run_coverage:
+        description: "Generate coverage report"
+        type: boolean
+        default: true
 
 # Minimal permissions - read-only access to repository contents.
 permissions:
@@ -16,12 +41,45 @@ permissions:
 
 jobs:
 
+  # ─── Gate: Check if CI is enabled ──────────────────────────────────────────
+  # Reads ENABLE_CI repo variable. If false, all downstream jobs are skipped.
+  check-enabled:
+    name: Check CI flags
+    runs-on: ubuntu-latest
+    outputs:
+      ci_enabled: ${{ steps.flags.outputs.ci_enabled }}
+      tests_enabled: ${{ steps.flags.outputs.tests_enabled }}
+      lint_enabled: ${{ steps.flags.outputs.lint_enabled }}
+      coverage_enabled: ${{ steps.flags.outputs.coverage_enabled }}
+    steps:
+      - id: flags
+        run: |
+          # Master switch (default: true if not set)
+          CI_FLAG="${{ vars.ENABLE_CI }}"
+          echo "ci_enabled=${CI_FLAG:-true}" >> "$GITHUB_OUTPUT"
+
+          # Per-job flags (respect workflow_dispatch inputs if provided)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tests_enabled=${{ inputs.run_tests }}" >> "$GITHUB_OUTPUT"
+            echo "lint_enabled=${{ inputs.run_lint }}" >> "$GITHUB_OUTPUT"
+            echo "coverage_enabled=${{ inputs.run_coverage }}" >> "$GITHUB_OUTPUT"
+          else
+            TESTS_FLAG="${{ vars.ENABLE_TESTS }}"
+            LINT_FLAG="${{ vars.ENABLE_LINT }}"
+            COV_FLAG="${{ vars.ENABLE_COVERAGE }}"
+            echo "tests_enabled=${TESTS_FLAG:-true}" >> "$GITHUB_OUTPUT"
+            echo "lint_enabled=${LINT_FLAG:-true}" >> "$GITHUB_OUTPUT"
+            echo "coverage_enabled=${COV_FLAG:-true}" >> "$GITHUB_OUTPUT"
+          fi
+
   # ─── Job 1: Test ──────────────────────────────────────────────────────────
   # Runs pytest across three Python versions using a matrix strategy.
   # Full test run uses continue-on-error because some tests require external
   # services (Qdrant, Ollama, GitHub API) that are not available in CI.
   test:
     name: Test (Python ${{ matrix.python-version }})
+    needs: check-enabled
+    if: needs.check-enabled.outputs.ci_enabled == 'true' && needs.check-enabled.outputs.tests_enabled == 'true'
     runs-on: ubuntu-latest
 
     strategy:
@@ -55,8 +113,9 @@ jobs:
         run: pytest tests/ -x --tb=short -q
 
       # Generate a coverage report when pytest-cov is available.
-      # Skipped silently if the package is not installed.
+      # Controlled by ENABLE_COVERAGE flag (default: true).
       - name: Generate coverage report
+        if: needs.check-enabled.outputs.coverage_enabled == 'true'
         continue-on-error: true
         run: pytest tests/ --tb=short -q --cov=scripts --cov=src --cov-report=term-missing
 
@@ -65,6 +124,8 @@ jobs:
   # and PEP 8 violations. Line-length (E501) is ignored per project style.
   lint:
     name: Lint (ruff)
+    needs: check-enabled
+    if: needs.check-enabled.outputs.ci_enabled == 'true' && needs.check-enabled.outputs.lint_enabled == 'true'
     runs-on: ubuntu-latest
 
     steps:
