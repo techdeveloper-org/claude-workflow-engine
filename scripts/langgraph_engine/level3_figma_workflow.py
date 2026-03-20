@@ -445,6 +445,100 @@ class Level3FigmaWorkflow:
             logger.warning("[FigmaWorkflow] step11_design_review failed: %s", exc)
             return {"success": False, "reason": str(exc)}
 
+    # ------------------------------------------------------------------
+    # Step 10: Comment on Figma that implementation started
+    # ------------------------------------------------------------------
+
+    def step10_implementation_started(
+        self,
+        file_key: str,
+        components: Optional[List[Dict]] = None,
+    ) -> Dict[str, Any]:
+        """Add comment to Figma file that implementation has started.
+
+        Called at the beginning of Step 10 (Implementation).
+
+        Args:
+            file_key: Figma file key.
+            components: List of components being implemented.
+
+        Returns:
+            Dict with success (bool), comment_id.
+        """
+        logger.info("[FigmaWorkflow] Step 10 - Implementation started for file: %s", file_key)
+
+        if not _is_figma_enabled() or not _is_figma_configured():
+            return {"success": False, "reason": "Figma not enabled/configured"}
+
+        figma = self._get_tools()
+        if figma is None:
+            return {"success": False, "reason": "Figma MCP server unavailable"}
+
+        try:
+            comp_names = ""
+            if components:
+                names = [c.get("name", "") for c in components[:10] if c.get("name")]
+                if names:
+                    comp_names = " Components: " + ", ".join(names)
+
+            message = "Implementation started.{}".format(comp_names)
+            result = figma.figma_add_comment(file_key=file_key, message=message)
+            return {
+                "success": True,
+                "comment_id": result.get("comment_id", ""),
+            }
+        except Exception as exc:
+            logger.warning("[FigmaWorkflow] step10 comment failed: %s", exc)
+            return {"success": False, "reason": str(exc)}
+
+    # ------------------------------------------------------------------
+    # Step 12: Comment on Figma that implementation is complete
+    # ------------------------------------------------------------------
+
+    def step12_implementation_complete(
+        self,
+        file_key: str,
+        pr_number: int = 0,
+        pr_url: str = "",
+    ) -> Dict[str, Any]:
+        """Add comment to Figma file that implementation is complete.
+
+        Called during Step 12 (Issue Closure).
+
+        Args:
+            file_key: Figma file key.
+            pr_number: PR number.
+            pr_url: PR URL.
+
+        Returns:
+            Dict with success (bool), comment_id.
+        """
+        logger.info("[FigmaWorkflow] Step 12 - Implementation complete for file: %s", file_key)
+
+        if not _is_figma_enabled() or not _is_figma_configured():
+            return {"success": False, "reason": "Figma not enabled/configured"}
+
+        figma = self._get_tools()
+        if figma is None:
+            return {"success": False, "reason": "Figma MCP server unavailable"}
+
+        try:
+            parts = ["Implementation complete."]
+            if pr_number:
+                parts.append("PR #{}".format(pr_number))
+            if pr_url:
+                parts.append(pr_url)
+            message = " ".join(parts)
+
+            result = figma.figma_add_comment(file_key=file_key, message=message)
+            return {
+                "success": True,
+                "comment_id": result.get("comment_id", ""),
+            }
+        except Exception as exc:
+            logger.warning("[FigmaWorkflow] step12 comment failed: %s", exc)
+            return {"success": False, "reason": str(exc)}
+
 
 # ---------------------------------------------------------------------------
 # Private formatting helpers

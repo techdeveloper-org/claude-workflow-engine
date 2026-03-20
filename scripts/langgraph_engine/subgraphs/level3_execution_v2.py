@@ -1386,6 +1386,29 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
     Injects CallGraph implementation context before execution and
     snapshots the call graph for Step 11 comparison.
     """
+    # -- Jira: Transition to In Progress --
+    jira_key = state.get("jira_issue_key", "")
+    if jira_key and state.get("jira_issue_created", False):
+        try:
+            from level3_steps8to12_jira import Level3JiraWorkflow
+            jira_wf = Level3JiraWorkflow()
+            jira_wf.step10_start_progress(jira_issue_key=jira_key)
+        except Exception as e:
+            logger.warning("Jira Step 10 transition failed: %s", str(e))
+
+    # -- Figma: Comment implementation started --
+    figma_key = state.get("figma_file_key", "")
+    if figma_key and state.get("figma_enabled", False):
+        try:
+            from level3_figma_workflow import Level3FigmaWorkflow
+            figma_wf = Level3FigmaWorkflow()
+            figma_wf.step10_implementation_started(
+                file_key=figma_key,
+                components=state.get("figma_components", []),
+            )
+        except Exception as e:
+            logger.warning("Figma Step 10 comment failed: %s", str(e))
+
     # --- CallGraph: Snapshot before change + implementation context ---
     pre_change_graph = {}
     call_context = {}
@@ -1668,6 +1691,20 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
         except Exception as e:
             logger.warning("[v2] Jira PR linking failed (non-blocking): %s", str(e))
 
+    # -- Jira: Post-merge update --
+    if result.get("step11_merged") and jira_key:
+        try:
+            from level3_steps8to12_jira import Level3JiraWorkflow
+            jira_wf = Level3JiraWorkflow()
+            jira_wf.step11_post_merge_update(
+                jira_issue_key=jira_key,
+                pr_number=int(result.get("step11_pr_id", "0")),
+                pr_url=result.get("step11_pr_url", ""),
+                branch_name=state.get("step9_branch_name", ""),
+            )
+        except Exception as e:
+            logger.warning("Jira post-merge update failed: %s", str(e))
+
     # --- CallGraph: Post-change impact review ---
     try:
         from ..call_graph_analyzer import review_change_impact
@@ -1851,6 +1888,20 @@ def step12_issue_closure_node(state: FlowState) -> Dict[str, Any]:
             result["jira_issue_closed"] = close_result.get("closed", False)
         except Exception as e:
             logger.warning("[v2] Jira closure failed (non-blocking): %s", str(e))
+
+    # -- Figma: Comment implementation complete --
+    figma_key = state.get("figma_file_key", "")
+    if figma_key and state.get("figma_enabled", False):
+        try:
+            from level3_figma_workflow import Level3FigmaWorkflow
+            figma_wf = Level3FigmaWorkflow()
+            figma_wf.step12_implementation_complete(
+                file_key=figma_key,
+                pr_number=int(state.get("step11_pr_id", "0")),
+                pr_url=state.get("step11_pr_url", ""),
+            )
+        except Exception as e:
+            logger.warning("Figma Step 12 comment failed: %s", str(e))
 
     return result
 

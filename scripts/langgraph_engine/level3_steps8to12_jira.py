@@ -35,6 +35,7 @@ LABEL_TO_JIRA_TYPE = {
 # Transition name candidates (tried in order, case-insensitive)
 IN_REVIEW_TRANSITIONS = ["In Review", "In Progress", "Start Review", "Code Review"]
 DONE_TRANSITIONS = ["Done", "Closed", "Resolved", "Complete"]
+IN_PROGRESS_TRANSITIONS = ["In Progress", "Start Progress", "Begin Work", "Working"]
 
 
 # ---------------------------------------------------------------------------
@@ -302,6 +303,65 @@ class Level3JiraWorkflow:
         return branch_name
 
     # ------------------------------------------------------------------
+    # Step 10: Transition Jira to In Progress
+    # ------------------------------------------------------------------
+
+    def step10_start_progress(
+        self,
+        jira_issue_key: str,
+    ) -> Dict[str, Any]:
+        """Transition Jira issue to In Progress when implementation starts.
+
+        Called at the beginning of Step 10 (Implementation).
+
+        Args:
+            jira_issue_key: Jira issue key.
+
+        Returns:
+            Dict with transitioned (bool), success (bool).
+        """
+        logger.info(
+            "[JiraWorkflow] Step 10 - Start progress on %s", jira_issue_key
+        )
+
+        if not _is_jira_enabled():
+            return {"success": False, "reason": "Jira integration not enabled"}
+
+        if not jira_issue_key:
+            return {"success": False, "reason": "No jira_issue_key provided"}
+
+        jira = self._get_tools()
+        if jira is None:
+            return {"success": False, "reason": "Jira MCP server unavailable"}
+
+        step_start = time.time()
+
+        # Transition to "In Progress"
+        transition_result = self._try_transition(
+            jira_issue_key, IN_PROGRESS_TRANSITIONS, jira
+        )
+
+        # Add comment
+        try:
+            jira.jira_add_comment(
+                issue_key=jira_issue_key,
+                body="Implementation started.",
+            )
+        except Exception as exc:
+            logger.warning(
+                "[JiraWorkflow] Could not add progress comment to %s: %s",
+                jira_issue_key, exc
+            )
+
+        return {
+            "success": transition_result.get("transitioned", False),
+            "transitioned": transition_result.get("transitioned", False),
+            "transition_name": transition_result.get("transition_name", ""),
+            "jira_issue_key": jira_issue_key,
+            "execution_time_ms": (time.time() - step_start) * 1000,
+        }
+
+    # ------------------------------------------------------------------
     # Step 11: Link PR and transition to In Review
     # ------------------------------------------------------------------
 
@@ -394,6 +454,60 @@ class Level3JiraWorkflow:
             "jira_issue_key": jira_issue_key,
             "execution_time_ms": (time.time() - step_start) * 1000,
         }
+
+    # ------------------------------------------------------------------
+    # Step 11 (post-merge): Update Jira with merge details
+    # ------------------------------------------------------------------
+
+    def step11_post_merge_update(
+        self,
+        jira_issue_key: str,
+        pr_number: int,
+        pr_url: str,
+        branch_name: str = "",
+    ) -> Dict[str, Any]:
+        """Update Jira after PR is merged.
+
+        Called in Step 11 after a successful merge.
+
+        Args:
+            jira_issue_key: Jira issue key.
+            pr_number: Merged PR number.
+            pr_url: PR URL.
+            branch_name: Branch that was merged.
+
+        Returns:
+            Dict with success (bool).
+        """
+        logger.info(
+            "[JiraWorkflow] Step 11 - Post-merge update for %s (PR #%d)",
+            jira_issue_key, pr_number
+        )
+
+        if not _is_jira_enabled() or not jira_issue_key:
+            return {"success": False, "reason": "Jira disabled or no key"}
+
+        jira = self._get_tools()
+        if jira is None:
+            return {"success": False, "reason": "Jira MCP server unavailable"}
+
+        try:
+            comment_parts = ["PR #{} merged successfully.".format(pr_number)]
+            if branch_name:
+                comment_parts.append("Branch: {}".format(branch_name))
+            if pr_url:
+                comment_parts.append("URL: {}".format(pr_url))
+            jira.jira_add_comment(
+                issue_key=jira_issue_key,
+                body="\n".join(comment_parts),
+            )
+            return {"success": True, "jira_issue_key": jira_issue_key}
+        except Exception as exc:
+            logger.warning(
+                "[JiraWorkflow] Post-merge comment failed for %s: %s",
+                jira_issue_key, exc
+            )
+            return {"success": False, "reason": str(exc)}
 
     # ------------------------------------------------------------------
     # Step 12: Close Jira issue with implementation summary
