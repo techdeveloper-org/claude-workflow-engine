@@ -4,12 +4,13 @@ GitHub integration adapter.
 Wraps Level3GitHubWorkflow (level3_steps8to12_github.py) behind the
 AbstractIntegration lifecycle interface.
 
-GitHub is always-on; its 'enabled' flag defaults to True.
+GitHub CI is enabled when ENABLE_CI=true/1 in the environment.
 
 Version: 1.4.1
 """
 
 import logging
+import os
 from typing import Any, Dict
 
 from .base import AbstractIntegration, IntegrationState
@@ -101,7 +102,7 @@ class GitHubIntegration(AbstractIntegration):
         try:
             title = context.get("issue_title", context.get("title", ""))
             description = context.get("issue_description", context.get("description", ""))
-            label = context.get("label", "feature")
+            label = context.get("label", os.environ.get("GITHUB_DEFAULT_LABEL", "feature"))
 
             result = workflow.step8_create_github_issue(
                 title=title,

@@ -10,6 +10,7 @@ Version: 1.4.1
 """
 
 import logging
+import os
 from typing import Any, Dict
 
 from .base import AbstractIntegration, IntegrationState
@@ -96,7 +97,7 @@ class JiraIntegration(AbstractIntegration):
             result = workflow.step8_create_jira_issue(
                 title=context.get("title", context.get("issue_title", "")),
                 description=context.get("description", context.get("issue_description", "")),
-                label=context.get("label", "task"),
+                label=context.get("label", os.environ.get("JIRA_DEFAULT_ISSUE_TYPE", "task")),
                 github_issue_url=context.get("github_issue_url", ""),
                 github_issue_number=int(context.get("github_issue_number", 0)),
             )
@@ -139,7 +140,7 @@ class JiraIntegration(AbstractIntegration):
         try:
             jira_branch = workflow.step9_get_branch_name(
                 jira_issue_key=self._artifact_id,
-                label=context.get("label", "feature"),
+                label=context.get("label", os.environ.get("JIRA_DEFAULT_BRANCH_PREFIX", "feature")),
             )
             return {
                 "success": bool(jira_branch),
