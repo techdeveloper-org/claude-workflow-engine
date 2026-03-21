@@ -65,6 +65,7 @@ flake8>=6.0.0
 black>=23.0.0
 isort>=5.11.0
 mypy>=1.0.0
+pre-commit>=3.6.0           # Git hook framework (runs ruff, black, isort on commit)
 
 # Security
 bandit>=1.7.5

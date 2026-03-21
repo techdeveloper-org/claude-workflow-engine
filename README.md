@@ -479,7 +479,9 @@ policies/
 
 **Setup pre-commit locally (one-time):**
 ```bash
-pip install pre-commit
+make install                # recommended — installs deps + hooks together
+# OR manually:
+pip install -r requirements.txt
 pre-commit install          # hooks fire on every git commit
 pre-commit run --all-files  # run once on existing codebase
 ```
@@ -529,12 +531,22 @@ pre-commit run --all-files  # run once on existing codebase
 ### Installation
 
 ```bash
-git clone https://github.com/techdeveloper-org/claude-insight.git
-cd claude-insight
-pip install -r requirements.txt
+git clone https://github.com/techdeveloper-org/claude-workflow-engine.git
+cd claude-workflow-engine
+make install          # installs deps + activates git hooks in one shot
 cp .env.example .env
 # Edit .env with your API keys
 ```
+
+`make install` runs two things automatically:
+1. `pip install -r requirements.txt` — all Python dependencies including `pre-commit`
+2. `pre-commit install` — activates the git hooks so ruff/black/isort run on every `git commit`
+
+> **No `make`?** Run manually:
+> ```bash
+> pip install -r requirements.txt
+> pre-commit install
+> ```
 
 ### Running the Pipeline
 
