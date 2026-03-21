@@ -1011,7 +1011,7 @@ All external integrations are **disabled by default**. Enable only what you need
 | `ENABLE_FIGMA` | `0` | 3, 7, 10, 11, 12 | **Design-to-code pipeline.** Extracts components (Step 3), injects design tokens into prompts (Step 7), posts progress comments on Figma frames (Steps 10/12), and adds design fidelity checklist to code review (Step 11). Requires `FIGMA_ACCESS_TOKEN` and `FIGMA_FILE_KEY`. |
 | `ENABLE_JENKINS` | `0` | 11 | **Jenkins CI/CD build validation.** Triggers a Jenkins build on PR creation (Step 11) and waits for the result before merging. Requires `JENKINS_URL`, `JENKINS_USER`, `JENKINS_TOKEN`, `JENKINS_JOB_NAME`. |
 | `ENABLE_SONARQUBE` | `0` | 10 | **Static analysis + auto-fix loop.** Runs a SonarQube scan after implementation (Step 10). If issues are found, the pipeline attempts auto-fixes and re-scans before continuing. Requires `SONARQUBE_URL`, `SONARQUBE_TOKEN`, `SONARQUBE_PROJECT_KEY`. |
-| `ENABLE_CI` | `true` | 11 | **GitHub Actions CI pipeline.** Enables the `.github/workflows/` CI pipeline on PRs. Set to `false` to skip CI checks entirely (e.g., for hotfixes). |
+| `ENABLE_CI` | `false` | 11 | **GitHub Actions CI pipeline.** Enables the `.github/workflows/` CI pipeline on PRs. Set to `true` to enable CI checks on every PR. |
 
 **Quick enable example:**
 
@@ -1021,7 +1021,7 @@ ENABLE_JIRA=1
 ENABLE_FIGMA=1
 ENABLE_JENKINS=0   # not using Jenkins
 ENABLE_SONARQUBE=0 # not using SonarQube
-ENABLE_CI=true
+ENABLE_CI=false
 ```
 
 > All flags default to `0` (disabled). The pipeline runs fine without any of them — GitHub-only workflow is the baseline.

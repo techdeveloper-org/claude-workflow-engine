@@ -195,7 +195,7 @@ All integrations are configurable via environment variables (default: disabled):
 | `ENABLE_JENKINS` | `0` | Jenkins build validation (Step 11) |
 | `ENABLE_SONARQUBE` | `0` | SonarQube scan after implementation (Step 10) |
 | `ENABLE_FIGMA` | `0` | Figma design-to-code extraction (Steps 3,7,11) |
-| `ENABLE_CI` | `true` | GitHub Actions CI pipeline |
+| `ENABLE_CI` | `false` | GitHub Actions CI pipeline |
 
 ### Integration Lifecycle (Create -> Update -> Close)
 

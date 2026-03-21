@@ -16,12 +16,12 @@ from typing import Any, Dict, List
 # ---------------------------------------------------------------------------
 
 # Each entry maps an integration name to its environment variable and default.
-# github is always enabled (ENABLE_CI defaults to 'true').
+# All integrations default to disabled. Set ENABLE_CI=true to enable GitHub Actions CI.
 INTEGRATION_FLAGS: Dict[str, Dict[str, Any]] = {
     "github": {
-        "enabled": True,
+        "enabled": False,
         "env_var": "ENABLE_CI",
-        "default": "true",
+        "default": "false",
     },
     "jira": {
         "enabled": False,

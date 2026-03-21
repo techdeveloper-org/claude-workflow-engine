@@ -130,7 +130,7 @@ All integrations are disabled by default. Enable via `.env`:
 | **Jira** | `ENABLE_JIRA=1` | Dual GitHub+Jira issue tracking, PR linking, workflow transitions |
 | **Jenkins** | `ENABLE_JENKINS=1` | Build validation before PR merge |
 | **SonarQube** | `ENABLE_SONARQUBE=1` | Code quality scan after implementation |
-| **GitHub Actions CI** | `ENABLE_CI=true` | Automated tests and linting on push |
+| **GitHub Actions CI** | `ENABLE_CI=false` | Automated tests and linting on push (default: disabled) |
 
 ---
 
