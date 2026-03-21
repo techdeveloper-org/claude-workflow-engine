@@ -1417,3 +1417,32 @@ def get_impact_analysis(project_path, target_fqn):
         "affected_count": len(affected),
         "call_paths_through_target": relevant_paths[:20],
     }
+
+
+# =========================================================================
+# Backward compatibility: parsers/ package
+# =========================================================================
+#
+# The language-specific parsing logic has been extracted into the
+# parsers/ sub-package alongside this module:
+#
+#   parsers/__init__.py        - ParserRegistry (Abstract Factory)
+#   parsers/base.py            - AbstractLanguageParser + _VisitorResult
+#   parsers/graph_model.py     - CallGraph, make_class_node, make_method_node,
+#                                make_call_edge
+#   parsers/config.py          - MAX_FILES, MAX_FILE_SIZE_KB, SUPPORTED_EXTENSIONS
+#   parsers/python_parser.py   - PythonASTParser  (.py  - full AST)
+#   parsers/java_parser.py     - JavaRegexParser  (.java - regex)
+#   parsers/typescript_parser.py - TypeScriptRegexParser (.ts, .tsx - regex)
+#   parsers/kotlin_parser.py   - KotlinRegexParser (.kt  - regex)
+#
+# CallGraphBuilder._analyze_file() continues to use _RegexVisitor and the
+# inline _analyze_java/_analyze_typescript/_analyze_kotlin methods defined
+# above for internal builds.  New callers should use ParserRegistry from the
+# parsers/ package directly.
+#
+# Example:
+#   from scripts.langgraph_engine.parsers import ParserRegistry
+#   parser = ParserRegistry.get_parser(".java")
+#   visitor = parser.parse_file_to_visitor(file_path, content, rel_path)
+# =========================================================================

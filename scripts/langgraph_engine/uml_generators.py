@@ -1554,3 +1554,34 @@ def _plantuml_stub(diagram_type, message):
         "@startuml\nnote \"%s: %s\" as N1\n@enduml"
         % (diagram_type, message)
     )
+
+
+# ======================================================================
+# Backward-compatibility shim
+# ======================================================================
+# The diagram generation logic above has been refactored into the
+# diagrams/ subpackage (Strategy + Factory patterns).  This file is
+# kept as the legacy entry point so that existing callers that import
+# UMLDiagramGenerator or the module-level helpers directly continue to
+# work without any changes.
+#
+# New code should use the diagrams package instead:
+#
+#   from langgraph_engine.diagrams import DiagramFactory
+#   gen = DiagramFactory.create("class")
+#   markup = gen.generate(analysis_data)
+#
+# The concrete generator modules are:
+#   diagrams/class_diagram.py       -> ClassDiagramGenerator
+#   diagrams/sequence_diagram.py    -> SequenceDiagramGenerator
+#   diagrams/activity_diagram.py    -> ActivityDiagramGenerator
+#   diagrams/state_diagram.py       -> StateDiagramGenerator
+#   diagrams/component_diagram.py   -> ComponentDiagramGenerator
+#   diagrams/package_diagram.py     -> PackageDiagramGenerator
+#   diagrams/usecase_diagram.py     -> UsecaseDiagramGenerator
+#   diagrams/object_diagram.py      -> ObjectDiagramGenerator
+#   diagrams/deployment_diagram.py  -> DeploymentDiagramGenerator
+#   diagrams/communication_diagram.py -> CommunicationDiagramGenerator
+#   diagrams/composite_diagram.py   -> CompositeDiagramGenerator
+#   diagrams/interaction_diagram.py -> InteractionDiagramGenerator
+# ======================================================================
