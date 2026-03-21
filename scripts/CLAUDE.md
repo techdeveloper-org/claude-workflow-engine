@@ -1,134 +1,91 @@
-#  - Claude-Specific Context
+# Claude Workflow Engine - Scripts Directory Context
 
-**Project:** 
-**Version:** # Version Information
-**Type:** General Python Project
-**Last Updated:** 2026-03-11
+**Project:** Claude Workflow Engine
+**Version:** 1.5.0
+**Type:** LangGraph Orchestration Pipeline with RAG
+**Last Updated:** 2026-03-21
 
----
-
-## Project Overview
-
- is a software project with complete functionality.
-
-### Quick Info
-
-| Property | Value |
-|----------|-------|
-| **Languages** | Python |
-| **Frameworks** |  |
-| **Status** | Active Development |
-| **Primary Location** | src/ |
+> For full project context, architecture, and development guidelines see the root `CLAUDE.md`.
 
 ---
 
-## Architecture & Structure
+## Scripts Directory Overview
 
-### Directory Layout
+This directory contains the pipeline entry point, hook scripts, and the core `langgraph_engine/` package.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `3-level-flow.py` | Main pipeline entry point |
+| `pre-tool-enforcer.py` | PreToolUse hook — blocks Write/Edit until Level 1/2 complete |
+| `post-tool-tracker.py` | PostToolUse hook — progress tracking, GitHub integration |
+| `stop-notifier.py` | Stop hook — voice notification on session end |
+| `sync-version.py` | Syncs version from VERSION file to all MCP servers |
+| `CHANGELOG.md` | Full project changelog |
+| `System_Requirement_Analysis.md` | SRS document |
+
+### langgraph_engine/ Package Structure (v1.5.0)
 
 ```
-/
-├── src/ → Source code
-├── tests/ → Tests
-└── docs/ → Documentation
+langgraph_engine/
++-- core/           # Cross-cutting: LazyLoader, ErrorHandler, NodeResult, create_step_node
++-- state/          # FlowState, StepKeys, reducers, ToonObject, WorkflowContextOptimizer
++-- routing/        # Routing functions split by pipeline level
++-- helper_nodes/   # Helper node functions split by concern
++-- diagrams/       # Strategy Pattern: DiagramFactory + 13 UML generators
++-- parsers/        # Abstract Factory: ParserRegistry + 4 language parsers
++-- sonarqube/      # Facade: api_client + lightweight + aggregator + auto_fixer
++-- integrations/   # Lifecycle: AbstractIntegration + GitHub/Jira/Figma/Jenkins
++-- pipeline_builder.py  # Builder: PipelineBuilder chainable API
++-- orchestrator.py      # Main StateGraph construction
++-- flow_state.py        # Compat shim -> state/
++-- uml_generators.py    # Compat shim -> diagrams/
++-- call_graph_builder.py # Compat shim -> parsers/
++-- subgraphs/           # Level -1, 1, 2, 3 implementations
 ```
 
-### Key Components
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| Core | Main logic | (To be detailed) |
-
----
-
-## Development Guidelines
-
-### Code Style
-
-- **Language:** Python
-- **Format:** Follow PEP 8 / standard conventions
-- **Linter:** Use project linters
-- **Testing:** All new code requires tests
-
-### Running the Project
+### Running the Pipeline
 
 ```bash
-See CLAUDE.md for run instructions
+# From project root:
+python scripts/3-level-flow.py --task "your task description"
+
+# Hook mode (Steps 0-9 only):
+CLAUDE_HOOK_MODE=1 python scripts/3-level-flow.py --task "fix login bug"
+
+# Full mode (all 15 steps):
+CLAUDE_HOOK_MODE=0 python scripts/3-level-flow.py --task "add user profile feature"
 ```
 
 ### Testing
 
 ```bash
+# All tests (from project root):
 pytest tests/
+
+# Core modularization tests:
+pytest tests/test_call_graph_builder.py tests/test_call_graph_analyzer.py tests/test_cache_system.py
+
+# MCP server tests:
+pytest tests/test_*mcp*.py
+```
+
+### Adding a New Pipeline Level
+
+```python
+# 1. Create subgraph in subgraphs/my_level.py
+# 2. Add routing in routing/my_level_routes.py
+# 3. Register in pipeline_builder.py:
+class PipelineBuilder:
+    def add_my_level(self):
+        # add nodes + edges
+        return self
+
+# 4. Use it:
+PipelineBuilder().add_level_minus1().add_level1().add_my_level().build()
 ```
 
 ---
 
-## Important Patterns & Conventions
-
-### Code Organization
-
-- Services for business logic
-- Models for data structures
-- Controllers/Routes for request handling
-- Utils for helper functions
-- Tests parallel project structure
-
-### Naming Conventions
-
-- Files: snake_case.py
-- Classes: PascalCase
-- Functions/Methods: snake_case
-- Constants: UPPER_SNAKE_CASE
-
-### Common Tasks
-
-#### Adding a New Feature
-
-1. Create issue on GitHub
-2. Create feature branch: `git checkout -b feature/issue-XXX-feature-name`
-3. Implement feature with tests
-4. Update relevant documentation
-5. Submit pull request
-6. Get approval and merge
-
----
-
-## Dependencies
-
-- (No items)
-
----
-
-## Configuration
-
-See environment variables in `.env.example`:
-- Database connection settings
-- API keys
-- Service endpoints
-- Debug modes
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-**Issue:** Module not found
-- **Solution:** Ensure virtual environment is activated and dependencies installed
-
-**Issue:** Tests failing
-- **Solution:** Run with verbose flag: ` -v`
-
----
-
-## Support
-
-- **GitHub Issues:** Report bugs and request features
-- **Documentation:** See README.md and SRS.md
-- **Discussion:** GitHub Discussions for general questions
-
----
-
-**Last Updated:** 2026-03-11
-**Next Review:** 2026-03-11
+**Last Updated:** 2026-03-21

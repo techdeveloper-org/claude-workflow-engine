@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 1.4.1 | **Status:** Alpha | **Last Updated:** 2026-03-18
+**Version:** 1.5.0 | **Status:** Alpha | **Last Updated:** 2026-03-21
 
 ---
 
@@ -407,7 +407,7 @@ policies/
 
 ## Current Status: What's Built vs What's Remaining
 
-### BUILT (v7.6.0 - Alpha)
+### BUILT (v1.5.0 - Alpha)
 
 | Component | Status | Details |
 |-----------|--------|---------|
@@ -430,6 +430,7 @@ policies/
 | **Test Suite** | COMPLETE | 69+ test files, integration tests for all 15 steps |
 | **Documentation** | COMPLETE | 46 docs, architecture diagrams, guides |
 | **Installation** | COMPLETE | setup.py, requirements.txt, .env.example |
+| **Modular Architecture** | COMPLETE | 9 packages: core, state, routing, helper_nodes, diagrams, parsers, sonarqube, integrations, pipeline_builder |
 
 ### REMAINING (Roadmap to v1.0.0 Production)
 
@@ -550,16 +551,26 @@ pytest --cov=scripts --cov-report=html tests/
 ## Directory Structure
 
 ```
-claude-insight/
+claude-workflow-engine/
 |
 +-- scripts/
-|   +-- langgraph_engine/             # Core orchestration (92 modules)
+|   +-- langgraph_engine/             # Core orchestration (155+ modules)
+|   |   +-- core/                     # [v1.5] LazyLoader, ErrorHandler, NodeResult, create_step_node
+|   |   +-- state/                    # [v1.5] FlowState, StepKeys, reducers, ToonObject, optimizer
+|   |   +-- routing/                  # [v1.5] All routing functions split by level
+|   |   +-- helper_nodes/             # [v1.5] Helper node functions split by concern
+|   |   +-- diagrams/                 # [v1.5] Strategy: DiagramFactory + 13 UML generators
+|   |   +-- parsers/                  # [v1.5] Abstract Factory: 4 language parsers (Py/Java/TS/Kotlin)
+|   |   +-- sonarqube/                # [v1.5] Facade: api_client + lightweight + aggregator + auto_fixer
+|   |   +-- integrations/             # [v1.5] Lifecycle: GitHub/Jira/Figma/Jenkins adapters
+|   |   +-- pipeline_builder.py       # [v1.5] Builder: PipelineBuilder chainable API
 |   |   +-- orchestrator.py           # Main StateGraph pipeline
-|   |   +-- flow_state.py             # TypedDict state (200+ fields)
+|   |   +-- flow_state.py             # Compat shim -> state/ package
 |   |   +-- rag_integration.py        # Vector DB decision caching
-|   |   +-- call_graph_builder.py     # Class-level call stack (FQN, impact analysis)
-|   |   +-- call_graph_analyzer.py   # Pipeline-ready analysis (impact, context, review)
-|   |   +-- subgraphs/               # Level -1, 1, 2, 3 implementations
+|   |   +-- call_graph_builder.py     # Compat shim -> parsers/ package
+|   |   +-- call_graph_analyzer.py    # Pipeline-ready analysis (impact, context, review)
+|   |   +-- uml_generators.py         # Compat shim -> diagrams/ package
+|   |   +-- subgraphs/                # Level -1, 1, 2, 3 implementations
 |   +-- architecture/                 # Helper scripts (sync, standards, execution)
 |   +-- 3-level-flow.py               # Entry point
 |   +-- pre-tool-enforcer.py          # PreToolUse hook
@@ -573,7 +584,7 @@ claude-insight/
 +-- docs/uml/                         # Auto-generated UML diagrams (13 types)
 +-- rules/                            # 10 coding standard definitions
 |
-+-- VERSION                           # Single source of truth (1.4.1)
++-- VERSION                           # Single source of truth (1.5.0)
 +-- CLAUDE.md                         # Project context for Claude Code
 +-- setup.py                          # Package installation
 +-- requirements.txt                  # Python dependencies
@@ -590,11 +601,11 @@ claude-insight/
 | Execution Steps | 15 (Step 0 - Step 14) |
 | MCP Servers | 19 (323 tools) |
 | MCP Tools | 323 |
-| LangGraph Engine Modules | 92+ (86 root + 6 subgraphs) |
+| LangGraph Engine Modules | 155+ (86 root + 6 subgraphs + 9 packages) |
 | Policy Files | 63 (62 .md + 1 .json) |
 | Standards Files | 10 |
 | Test Files | 69+ |
-| Total Python Files | 295+ |
+| Total Python Files | 360+ |
 | Call Graph | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 | UML Diagram Types | 13 (CallGraph-powered) |
 | Documentation Files | 46 |
