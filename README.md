@@ -470,22 +470,36 @@ policies/
 
 ---
 
+### ✅ RECENTLY COMPLETED
+
+| Component | Details |
+|-----------|---------|
+| **Coverage Threshold Enforcement** | `.coveragerc` + `pytest.ini` created. CI enforces 50% minimum via `--cov-fail-under=50`. `continue-on-error` removed from coverage step. Threshold ratchets up as coverage improves. |
+| **Pre-commit Hooks** | `.pre-commit-config.yaml` created with 4 hook sets: file hygiene (`pre-commit-hooks` v4.6.0), linting (`ruff` — same rules as CI), formatting (`black` line-length=120), import sorting (`isort` black-profile). Run `pre-commit install` once after cloning. |
+
+**Setup pre-commit locally (one-time):**
+```bash
+pip install pre-commit
+pre-commit install          # hooks fire on every git commit
+pre-commit run --all-files  # run once on existing codebase
+```
+
+---
+
 ### 🔲 REMAINING
 
 #### Priority: HIGH
 
 | Task | Why Not Done Yet | Effort |
 |------|-----------------|--------|
-| **Coverage threshold enforcement** | `pytest-cov` is installed but no enforced minimum threshold configured in `pytest.ini` or CI | 1 hr |
-| **Input validation layer** | User prompts not sanitized — length limits, injection prevention missing at pipeline entry | 3 hrs |
-| **Pre-commit hooks** | `.pre-commit-config.yaml` doesn't exist — no lint/format/type-check before commit | 1 hr |
+| **Input validation layer** | User prompts not sanitized at pipeline entry — length limits, injection prevention, unicode edge cases | 3 hrs |
 
 #### Priority: MEDIUM
 
 | Task | Why Not Done Yet | Effort |
 |------|-----------------|--------|
 | **Multi-project real-world testing** | Tested on this repo only — needs 10+ different project types (Python, Java, JS, Go, Rust) | 1 week |
-| **Load testing** | No baseline for concurrent executions — what happens with 10+ parallel pipelines? | 2 days |
+| **Load testing** | No baseline for concurrent executions — what breaks with 10+ parallel pipelines? | 2 days |
 | **Checkpoint disaster drill** | Recovery code exists but never stress-tested (kill at each step, verify resume) | 1 day |
 | **Version auto-bump on merge** | `sync-version.py` exists but not wired into CI to auto-bump on merge to main | 2 hrs |
 

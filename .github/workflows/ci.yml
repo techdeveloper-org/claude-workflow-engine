@@ -115,12 +115,12 @@ jobs:
         continue-on-error: true
         run: pytest tests/ -x --tb=short -q
 
-      # Generate a coverage report when pytest-cov is available.
+      # Generate coverage report and enforce 50% minimum threshold.
+      # Threshold is configured in .coveragerc (fail_under = 50).
       # Controlled by ENABLE_COVERAGE flag (default: true).
-      - name: Generate coverage report
+      - name: Coverage report + threshold enforcement
         if: needs.check-enabled.outputs.coverage_enabled == 'true'
-        continue-on-error: true
-        run: pytest tests/ --tb=short -q --cov=scripts --cov=src --cov-report=term-missing
+        run: pytest tests/ --tb=short -q --cov=scripts --cov=src --cov-report=term-missing --cov-fail-under=50
 
   # ─── Job 2: Lint ──────────────────────────────────────────────────────────
   # Runs ruff on scripts/ and src/ to catch syntax errors, undefined names,

@@ -1,0 +1,26 @@
+[run]
+source =
+    scripts/langgraph_engine
+    src
+omit =
+    */tests/*
+    */__pycache__/*
+    */conftest*
+    scripts/langgraph_engine/subgraphs/*_v1.py
+    src/mcp/session_hooks.py
+    src/mcp/mcp_errors.py
+
+[report]
+fail_under = 50
+show_missing = True
+precision = 2
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    pass
+
+[html]
+directory = htmlcov
