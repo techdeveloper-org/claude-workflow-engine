@@ -1001,6 +1001,33 @@ Level 2 also runs linter validation (ruff/flake8) when available - violations fe
 
 All configuration is done through environment variables in `.env` (copy from `.env.example`). No hardcoded paths exist anywhere in the codebase - everything resolves through `path_resolver.py`.
 
+### Integration Flags
+
+All external integrations are **disabled by default**. Enable only what you need by setting these flags in your `.env` file. Each flag is independent — you can enable Jira without Figma, Jenkins without SonarQube, etc.
+
+| Flag | Default | Steps Affected | What It Does |
+|------|---------|---------------|-------------|
+| `ENABLE_JIRA` | `0` | 8, 9, 11, 12 | **Dual GitHub + Jira issue tracking.** When enabled, every GitHub Issue gets a matching Jira issue — linked, synced, and closed together. Branch names use the Jira key (`feature/PROJ-123`). Requires `JIRA_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY`. |
+| `ENABLE_FIGMA` | `0` | 3, 7, 10, 11, 12 | **Design-to-code pipeline.** Extracts components (Step 3), injects design tokens into prompts (Step 7), posts progress comments on Figma frames (Steps 10/12), and adds design fidelity checklist to code review (Step 11). Requires `FIGMA_ACCESS_TOKEN` and `FIGMA_FILE_KEY`. |
+| `ENABLE_JENKINS` | `0` | 11 | **Jenkins CI/CD build validation.** Triggers a Jenkins build on PR creation (Step 11) and waits for the result before merging. Requires `JENKINS_URL`, `JENKINS_USER`, `JENKINS_TOKEN`, `JENKINS_JOB_NAME`. |
+| `ENABLE_SONARQUBE` | `0` | 10 | **Static analysis + auto-fix loop.** Runs a SonarQube scan after implementation (Step 10). If issues are found, the pipeline attempts auto-fixes and re-scans before continuing. Requires `SONARQUBE_URL`, `SONARQUBE_TOKEN`, `SONARQUBE_PROJECT_KEY`. |
+| `ENABLE_CI` | `true` | 11 | **GitHub Actions CI pipeline.** Enables the `.github/workflows/` CI pipeline on PRs. Set to `false` to skip CI checks entirely (e.g., for hotfixes). |
+
+**Quick enable example:**
+
+```bash
+# In your .env file — enable only what you use:
+ENABLE_JIRA=1
+ENABLE_FIGMA=1
+ENABLE_JENKINS=0   # not using Jenkins
+ENABLE_SONARQUBE=0 # not using SonarQube
+ENABLE_CI=true
+```
+
+> All flags default to `0` (disabled). The pipeline runs fine without any of them — GitHub-only workflow is the baseline.
+
+---
+
 ### Pipeline Settings
 
 | Variable | Default | What It Does |
