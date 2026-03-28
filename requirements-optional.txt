@@ -1,0 +1,11 @@
+# Optional dependencies — install only when the specific feature is needed.
+# These are NOT included in requirements.txt due to dependency conflicts.
+#
+# CONFLICT NOTE: TTS>=0.22.0 pulls gruut==2.2.3 which requires networkx<3.0.0,
+# conflicting with the core networkx>=3.1 requirement (call graph analysis).
+# Install in an isolated environment or after removing networkx>=3.1 constraint.
+
+# ============================================================================
+# VOICE / TTS (Text-to-Speech) — used by stop-notifier.py for session alerts
+# ============================================================================
+TTS>=0.22.0                 # Coqui TTS - neural voice synthesis (notifications)

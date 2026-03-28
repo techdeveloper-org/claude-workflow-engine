@@ -364,13 +364,19 @@ See environment variables in `.env.example`:
 
 ---
 
-**Last Updated:** 2026-03-21
+**Last Updated:** 2026-03-28
 
 
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: Production Readiness Sprint (complexity 9/10)
-- **Skill**: docker, kubernetes, python-core, testing-core
-- **Agent**: devops-engineer, python-backend-engineer, security-defense-architect, qa-testing-agent
+- **Task**: CI Fix Sprint — lint errors (13 ruff F401/E702/F841) + dependency conflict (TTS/networkx)
+- **Skill**: python-core, automation-engineer
+- **Agent**: automation-engineer, python-backend-engineer
 - **Date**: 2026-03-28
+
+## Dependency Notes
+
+- `TTS>=0.22.0` (Coqui TTS) moved to `requirements-optional.txt` — conflicts with `networkx>=3.1` via `gruut==2.2.3` transitive dep.
+- Install voice notifications separately: `pip install -r requirements-optional.txt`
+- CI auto-trigger disabled — workflow runs on `workflow_dispatch` only (manual trigger via GitHub Actions UI).

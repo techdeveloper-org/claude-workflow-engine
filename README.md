@@ -802,7 +802,7 @@ policies/
 | **CLI Interface** | `cwe run/setup/status/health/version/doctor` — fully functional |
 | **Setup Wizard** | Interactive first-time configuration (`scripts/setup_wizard.py`) |
 | **Docker** | `Dockerfile` + `docker-compose.yml` — one-command deployment |
-| **GitHub Actions CI** | `.github/workflows/ci.yml` — configurable matrix (Python 3.8/3.10/3.12), lint, tests |
+| **GitHub Actions CI** | `.github/workflows/ci.yml` — configurable matrix (Python 3.10/3.12), lint, tests. Auto-trigger disabled; runs on `workflow_dispatch` only. |
 | **Version Sync** | `scripts/sync-version.py` — syncs VERSION to all 20 MCP servers |
 | **Test Suite** | 74 test files covering MCP servers, pipeline steps, integrations, security, e2e, load |
 | **Coverage Setup** | `pytest-cov` + `coverage` in requirements.txt |
@@ -848,6 +848,9 @@ make install                # recommended — installs deps + hooks together
 pip install -r requirements.txt
 pre-commit install          # hooks fire on every git commit
 pre-commit run --all-files  # run once on existing codebase
+
+# Optional: voice notifications (TTS — installs separately due to networkx conflict)
+pip install -r requirements-optional.txt
 ```
 
 ---

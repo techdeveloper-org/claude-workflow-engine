@@ -49,7 +49,10 @@ watchdog>=3.0.0             # File system watcher (standards hot-reload)
 # ============================================================================
 # VOICE / TTS (Text-to-Speech)
 # ============================================================================
-TTS>=0.22.0                 # Coqui TTS - neural voice synthesis (notifications)
+# TTS removed from core requirements: gruut==2.2.3 (transitive dep of TTS>=0.22.0)
+# requires networkx>=2.5.0,<3.0.0 which conflicts with networkx>=3.1 (call graph).
+# Install separately when voice notifications are needed:
+#   pip install -r requirements-optional.txt
 
 # ============================================================================
 # DEVELOPMENT & TESTING

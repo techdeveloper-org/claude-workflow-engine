@@ -15,11 +15,12 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  # Manual trigger with overrides
+  # Auto-trigger disabled — run manually via GitHub Actions UI > "Run workflow".
+  # To re-enable: uncomment the push/pull_request blocks below.
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
   workflow_dispatch:
     inputs:
       run_tests:
