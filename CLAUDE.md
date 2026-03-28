@@ -84,7 +84,7 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 +-- tests/                            # 69 test files
 +-- docs/                             # 46 documentation files
 +-- docs/uml/                         # Auto-generated UML diagrams (13 types)
-+-- rules/                            # 10 coding standard definitions
++-- rules/                            # 12 coding standard definitions (incl. doc governance + docstrings-only)
 ```
 
 ### Key Components
@@ -370,9 +370,9 @@ See environment variables in `.env.example`:
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: CI Fix Sprint — lint errors (13 ruff F401/E702/F841) + dependency conflict (TTS/networkx)
-- **Skill**: python-core, automation-engineer
-- **Agent**: automation-engineer, python-backend-engineer
+- **Task**: Level 2 Standards Sprint — add documentation governance rule + docstrings-only rule (rules/11 + rules/12)
+- **Skill**: python-core, java-spring-boot-microservices, typescript-core, kotlin-core
+- **Agent**: python-backend-engineer
 - **Date**: 2026-03-28
 
 ## Dependency Notes

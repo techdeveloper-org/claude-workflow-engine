@@ -1385,10 +1385,13 @@ The pipeline loads language-specific coding standards and injects them into prom
 | Rust | 08-rust-standards.md | 517 | Ownership, Result/Option, unsafe |
 | Swift | 09-swift-standards.md | 616 | Optionals, SwiftUI, protocols |
 | Kotlin | 10-kotlin-standards.md | 531 | Coroutines, sealed classes, Compose |
+| All (doc governance) | 11-documentation-files.md | — | Permitted root docs: SRS.md, README.md, CLAUDE.md, VERSION, CHANGELOG.md only |
+| All (code comments) | 12-docstrings-only.md | — | Docstrings required; inline explanatory comments banned (Python/Java/TypeScript/Kotlin) |
 
-**Total: 6,204 lines of standards across 10 files, 8 languages.**
+**Total: 6,204+ lines of standards across 12 files, 8 languages.**
 
-Level 2 also runs linter validation (ruff/flake8) when available - violations feed into Step 11 code review.
+Level 2 also runs linter validation (ruff/flake8) when available — violations feed into Step 11 code review.
+Rules 11 and 12 are enforced on every session: rule 11 gates doc commits, rule 12 gates all new/modified functions.
 
 ---
 
