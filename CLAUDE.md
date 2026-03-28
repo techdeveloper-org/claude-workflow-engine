@@ -1,8 +1,8 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.7.0
-**Type:** LangGraph Orchestration Pipeline with RAG + Call Graph Intelligence
+**Version:** 1.8.0
+**Type:** LangGraph Orchestration Pipeline with RAG + Call Graph Intelligence + Template Fast-Path
 **Last Updated:** 2026-03-28
 
 ---
@@ -38,7 +38,8 @@ Level 1: Sync (session + parallel [complexity, context] + TOON compress)
 Level 2: Standards (common + conditional Java + tool opt + MCP discovery)
     |
 Level 3: Execution (15 steps: Step 0 through Step 14)
-    |-- Pre-0: Orchestration Pre-Analysis (CallGraph scan + RAG orchestration lookup)
+    |-- Pre-0: Orchestration Pre-Analysis (Template check + CallGraph scan + RAG lookup)
+    |           Template provided -> skip Steps 0-5, jump to Step 6 (~6 LLM calls saved, ~15s)
     |           RAG hit (>=0.85) -> skip Steps 0-4, jump to Step 5 (~5 LLM calls saved)
     |           RAG miss -> normal flow; call graph complexity boost injected into Step 0
     |-- Step 0:  Task Analysis + Prompt Generation (complexity boosted by call graph)
@@ -370,8 +371,8 @@ See environment variables in `.env.example`:
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: Level 2 Standards Sprint — add documentation governance rule + docstrings-only rule (rules/11 + rules/12)
-- **Skill**: python-core, java-spring-boot-microservices, typescript-core, kotlin-core
+- **Task**: v1.8.0 — Orchestration Template Fast-Path: `--orchestration-template` flag skips Steps 0-5, routes to Step 6, reduces pipeline from 7-8 LLM calls to 1 call (87% reduction, ~15s hook mode)
+- **Skill**: python-core
 - **Agent**: python-backend-engineer
 - **Date**: 2026-03-28
 

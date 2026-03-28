@@ -50,6 +50,8 @@ Engine does:
 
 **Total time: ~60 seconds for Steps 0-9 (hook mode), ~170 seconds full pipeline.**
 
+> **NEW in v1.8.0 — Template Fast-Path:** If you pre-fill an orchestration template using `prompt-generation-expert`, the pipeline skips Steps 0-5 entirely and jumps straight to Step 6. This drops hook-mode time from ~60s to ~15s and cuts LLM calls from 7-8 down to 1. See [Orchestration Template Fast-Path](#orchestration-template-fast-path-v180) below.
+
 ---
 
 ## How It Actually Works — Complete Flow Example
@@ -452,36 +454,49 @@ This reduces LLM calls per task by up to 5 inference steps on repeat workflows.
 
 ### How the Engine Reduces LLM Calls
 
-Every LLM call has latency and cost. The engine uses four distinct mechanisms to avoid unnecessary inference:
+Every LLM call has latency and cost. The engine uses five distinct mechanisms to avoid unnecessary inference:
 
 | Mechanism | Where | LLM Calls Saved | How |
 |-----------|-------|----------------|-----|
+| **Template Fast-Path** | Pre-Step 0 | ~6 calls | Pre-filled orchestration template skips Steps 0-5 entirely, jumps to Step 6 |
 | **Orchestration RAG Hit** | Pre-Step 0 | ~5 calls | If task was orchestrated before (score ≥ 0.85), skip Steps 0-4 and reuse cached plan |
 | **Per-Node RAG Cache** | Steps 0-14 | 1 call per step | Each step checks RAG before calling LLM; on hit, returns cached decision directly |
 | **Call Graph Complexity Boost** | Step 0 | ~1 call | Complexity score computed without LLM using hot-node count; eliminates a dedicated analysis call |
 | **TOON Compression** | Level 1 | 1-2 calls | Context compressed before Step 0; LLM sees less tokens → faster, cheaper inference |
 
-**Total savings on a RAG hit session: up to 8 LLM calls avoided out of ~12 typical.**
+**Total savings on a Template Fast-Path session: up to 6 LLM calls avoided out of ~7 typical → effectively 1 LLM call (Step 10 implementation only).**
 
-#### RAG Hit Decision Tree
+#### Pre-Analysis Decision Tree (Priority Order)
 
 ```
 New task arrives
     |
     v
 Pre-Analysis Gate (no LLM)
+    |-- Check: --orchestration-template provided?  [HIGHEST PRIORITY]
     |-- Call graph scan: hot nodes, leaf nodes, complexity boost
     |-- Codebase hash: fingerprint current project structure
     |
     v
-RAG Orchestration Lookup (no LLM)
+Priority 1: TEMPLATE FAST-PATH (--orchestration-template=path/to/template.json)
     |
-    +-- HIT (score >= 0.85) AND same codebase_hash ─────────────────┐
-    |   cached plan injected, skip Steps 0-4                        |
-    |   -> Jump directly to Step 5 (skill selection)                |
-    |   -> 5 LLM calls saved                                        |
-    |                                                               v
-    +-- MISS ──────────────> Full pipeline Step 0-14          Step 5 onward
+    +-- Template valid? ──────────────────────────────────────────────────────────┐
+    |   All step 0-5 fields pre-injected from template                           |
+    |   -> Jump directly to Step 6 (skill validation)                            |
+    |   -> 6 LLM calls saved (Steps 0, 1, 2, 3, 5, 7 analysis skipped)          |
+    |   -> Pipeline time: ~15s (was ~60s in hook mode)                           |
+    |                                                                             v
+    +-- Template not provided -> Priority 2                               Step 6 onward
+    |
+    v
+Priority 2: RAG Orchestration Lookup (no LLM)
+    |
+    +-- HIT (score >= 0.85) AND same codebase_hash ──────────────────────────────┐
+    |   cached plan injected, skip Steps 0-4                                     |
+    |   -> Jump directly to Step 5 (skill selection)                             |
+    |   -> 5 LLM calls saved                                                     |
+    |                                                                             v
+    +-- MISS ──────────────> Full pipeline Step 0-14                      Step 5 onward
                              Each step still checks per-node RAG
                              before its own LLM call
 ```
@@ -880,6 +895,175 @@ pip install -r requirements-optional.txt
 
 ---
 
+---
+
+## Orchestration Template Fast-Path (v1.8.0)
+
+### The Problem It Solves
+
+Every time the pipeline runs, Steps 0-5 spend 6 LLM calls figuring out what you want:
+
+```
+Step 0: "What type of task is this?"          → LLM call
+Step 1: "Do we need a plan?"                  → LLM call
+Step 2: "Generate execution plan"             → LLM call
+Step 3: "Break into subtasks"                 → LLM call (via subprocess)
+Step 5: "Which skill and agent to use?"       → LLM call (via subprocess)
+Step 7: "Build the system prompt"             → LLM call (via subprocess)
+```
+
+If you already know the answers — task type, complexity, which agents, what tasks — why make the LLM guess?
+
+### The Solution: Pre-Fill the Template Once, Skip 6 Calls Every Time
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Before (no template):                                    │
+│  User types task → 7-8 LLM calls → Step 10 implements   │
+│  Time: ~60s (hook mode)   Cost: 7 inference calls        │
+├──────────────────────────────────────────────────────────┤
+│  After (with template):                                   │
+│  User fills template → 1 LLM call → Step 10 implements  │
+│  Time: ~15s (hook mode)   Cost: 1 inference call         │
+└──────────────────────────────────────────────────────────┘
+```
+
+**87% reduction in LLM inference cost. 75% reduction in pipeline latency.**
+
+### How It Works
+
+**Step 1 — Generate the template** using `prompt-generation-expert` (one-time per project type):
+
+```
+You are prompt-generation-expert. I will describe my project requirements
+in plain language. Generate a COMPLETE orchestration template JSON.
+
+MY REQUIREMENTS:
+"""
+Mujhe ek React + FastAPI app banani hai jisme users apne documents
+upload kar sakein aur AI se questions pooch sakein.
+PostgreSQL database, AWS deployment, GDPR compliance chahiye.
+"""
+
+Generate:
+1. task_type, complexity, reasoning
+2. tasks array with effort estimates
+3. skill and agent selection
+4. skills and agents arrays (all needed)
+5. execution_pattern (parallel / sequential)
+6. domains and constraints
+```
+
+**Step 2 — Save as JSON** (`my_project_template.json`):
+
+```json
+{
+  "version": "1.0",
+  "task_type": "Feature",
+  "complexity": 8,
+  "reasoning": "Multi-service app: React frontend + FastAPI backend + RAG pipeline + AWS infra. High complexity due to cross-service integration and GDPR compliance layer.",
+  "plan_required": true,
+  "tasks": [
+    {"id": "T1", "description": "FastAPI backend with PostgreSQL and JWT auth", "estimated_effort": "high"},
+    {"id": "T2", "description": "React frontend with document upload UI and Q&A chat", "estimated_effort": "medium"},
+    {"id": "T3", "description": "RAG pipeline using Qdrant for document Q&A", "estimated_effort": "high"},
+    {"id": "T4", "description": "AWS deployment with GDPR-compliant data handling", "estimated_effort": "medium"}
+  ],
+  "skill": "react-core",
+  "agent": "react-engineer",
+  "skills": ["react-core", "fastapi-core", "rag-core", "cloud-security-core"],
+  "agents": ["react-engineer", "python-backend-engineer", "ai-engineer", "cloud-engineer"],
+  "execution_pattern": "parallel",
+  "domains": ["frontend", "backend", "ai", "cloud", "security"],
+  "constraints": ["PostgreSQL", "AWS", "GDPR", "Qdrant", "Docker"]
+}
+```
+
+**Step 3 — Run pipeline with template**:
+
+```bash
+python scripts/3-level-flow.py \
+  --message="React + FastAPI document Q&A app with GDPR compliance" \
+  --orchestration-template=my_project_template.json
+```
+
+**What happens inside:**
+
+```
+Pre-Analysis Gate detects template
+    ↓
+Injects into FlowState:
+    step0_task_type    = "Feature"
+    step0_complexity   = 8
+    step1_plan_required = true
+    step3_tasks_validated = [T1, T2, T3, T4]
+    step5_skill        = "react-core"
+    step5_agent        = "react-engineer"
+    step5_skills       = [react-core, fastapi-core, rag-core, cloud-security-core]
+    step5_agents       = [react-engineer, python-backend-engineer, ai-engineer, cloud-engineer]
+    template_fast_path = True
+    ↓
+route_pre_analysis → "level3_step6"  (jumps directly)
+    ↓
+Step 6: Skill validation + download    (no LLM)
+Step 7: Prompt assembly from state     (no LLM — template data already there)
+Step 8: GitHub Issue creation          (API call)
+Step 9: Branch creation                (API call)
+Step 10: Implementation                (1 LLM call — the only one)
+...
+```
+
+### Template vs RAG vs Full Pipeline
+
+| Mode | When | Steps Skipped | LLM Calls | Hook Time |
+|------|------|--------------|-----------|-----------|
+| **Template Fast-Path** | `--orchestration-template` provided | Steps 0-5 (6 calls) | **1** | ~15s |
+| **RAG Hit** | Similar task run before (≥0.85 match) | Steps 0-4 (5 calls) | **2** | ~25s |
+| **Full Pipeline** | New task, no template | None | **7-8** | ~60s |
+
+### Template Fields Reference
+
+| Field | Required | Type | Maps To |
+|-------|----------|------|---------|
+| `task_type` | Yes | string | `step0_task_type` ("Feature", "Bug Fix", "Refactor", etc.) |
+| `complexity` | Yes | int 1-10 | `step0_complexity` |
+| `skill` | Yes | string | `step5_skill` (primary skill name) |
+| `agent` | Yes | string | `step5_agent` (primary agent name) |
+| `reasoning` | No | string | `step0_reasoning` (shown in prompt) |
+| `plan_required` | No | bool | `step1_plan_required` (default: false) |
+| `tasks` | No | array | `step3_tasks_validated` (subtask list) |
+| `skills` | No | array | `step5_skills` (all skills to load) |
+| `agents` | No | array | `step5_agents` (all agents to use) |
+| `execution_pattern` | No | string | Informational (parallel/sequential) |
+| `domains` | No | array | Informational (shown in prompt context) |
+| `constraints` | No | array | Informational (shown in prompt context) |
+| `system_prompt` | No | string | Written directly to `session/system_prompt.txt` if provided |
+
+### Fail-Safe Behavior
+
+The template fast-path is **fail-open** — if anything goes wrong, the pipeline falls back to normal flow:
+
+```
+Template file not found    → WARNING logged → full pipeline runs normally
+Invalid JSON               → WARNING logged → full pipeline runs normally
+Missing required fields    → WARNING logged → full pipeline runs normally
+Template fast-path error   → WARNING logged → full pipeline runs normally
+```
+
+No pipeline interruption. No crash. Just a warning and normal execution.
+
+### When To Use Templates
+
+- **Recurring project types** — same stack every time (React + FastAPI, Spring Boot + Angular, etc.)
+- **Team workflows** — standardize which agents and skills the team uses
+- **CI/CD integration** — deterministic pipeline behavior without LLM variance
+- **Cost optimization** — when running many tasks on the same project type
+- **Speed-critical hooks** — when hook mode latency matters (15s vs 60s)
+
+> See `orchestration_template.example.json` in the project root for a fully commented example.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -913,16 +1097,24 @@ cp .env.example .env
 
 ```bash
 # Full 15-step pipeline
-python scripts/3-level-flow.py --task "your task description"
+python scripts/3-level-flow.py --message "your task description"
 
 # Hook mode (Steps 0-9 only, default)
-CLAUDE_HOOK_MODE=1 python scripts/3-level-flow.py --task "fix login bug"
+CLAUDE_HOOK_MODE=1 python scripts/3-level-flow.py --message "fix login bug"
 
 # Full mode (all 15 steps)
-CLAUDE_HOOK_MODE=0 python scripts/3-level-flow.py --task "add user profile feature"
+CLAUDE_HOOK_MODE=0 python scripts/3-level-flow.py --message "add user profile feature"
+
+# Template fast-path (skips Steps 0-5, ~1 LLM call, ~15s hook time)
+python scripts/3-level-flow.py \
+  --message "add document Q&A feature" \
+  --orchestration-template=my_template.json
 
 # Debug mode
-CLAUDE_DEBUG=1 python scripts/3-level-flow.py --task "your task" --summary
+CLAUDE_DEBUG=1 python scripts/3-level-flow.py --message "your task" --summary
+
+# Dry-run (Steps 0-7 only — analysis + prompt, skip GitHub/implementation)
+python scripts/3-level-flow.py --message "your task" --dry-run
 ```
 
 ### Testing

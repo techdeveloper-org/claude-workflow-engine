@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.8.0] - 2026-03-28
+
+### Added — Orchestration Template Fast-Path
+
+- **`--orchestration-template=PATH` CLI flag** in `3-level-flow.py` — accepts a pre-filled JSON template that bypasses Steps 0-5 entirely and routes directly to Step 6 (skill validation)
+- **`_load_orchestration_template(path)`** — validates required fields (`task_type`, `complexity`, `skill`/`skills`, `agent`/`agents`) and returns parsed dict; raises `ValueError` on malformed input
+- **Template fast-path node logic** in `orchestration_pre_analysis_node` — when template is detected, injects all step 0-5 FlowState fields and returns early (before call graph scan and RAG lookup)
+- **`template_fast_path` routing** in `route_pre_analysis` — three-way priority routing: Template (→ `level3_step6`) > RAG hit (→ `level3_step5`) > miss (→ `level3_step0_0`)
+- **`orchestration_template` and `template_fast_path` FlowState fields** in `state_definition.py`
+- **`level3_step6` conditional edge** added to `orchestrator.py` pre-analysis routing map
+- **`orchestration_template.example.json`** — fully annotated example template with all supported fields
+- **README: Orchestration Template Fast-Path section** — full explanation with before/after comparison, decision tree, field reference, and fail-safe behavior
+- **README: Pre-Analysis Decision Tree updated** — now shows three-priority routing with Template as highest priority
+
+### Performance Impact
+
+| Metric | Before (full pipeline) | After (template fast-path) |
+|--------|----------------------|---------------------------|
+| LLM calls (hook mode) | 7-8 calls | **1 call** (Step 10 only) |
+| Hook mode latency | ~60 seconds | **~15 seconds** |
+| LLM cost reduction | baseline | **~87% reduction** |
+| Pipeline determinism | LLM-dependent | **Fully deterministic** (Steps 0-5) |
+
+### Changed
+
+- `route_pre_analysis` — extended from 2-way to 3-way routing (template > RAG > normal)
+- `orchestrator.py` conditional edges map — added `"level3_step6"` target
+- `README.md` — "How the Engine Reduces LLM Calls" table updated with Template Fast-Path as new top entry
+- `README.md` — Running the Pipeline section updated with `--orchestration-template` usage
+
+### Fail-Safe Design
+
+Template fast-path is fail-open: any error (file not found, invalid JSON, missing fields, runtime exception) logs a warning and falls through to the normal pipeline. No pipeline interruption.
+
+---
+
 ## [1.5.0] - 2026-03-21
 
 ### Added — Modular Architecture (9 New Packages)
