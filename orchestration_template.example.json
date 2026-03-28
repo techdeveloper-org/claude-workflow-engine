@@ -1,0 +1,52 @@
+{
+  "_comment": "Orchestration Template — fill this using prompt-generation-expert, then pass via --orchestration-template",
+  "_usage": "python scripts/3-level-flow.py --message='<task>' --orchestration-template=my_template.json",
+  "_saves": "~6 LLM calls (Steps 0-5 skipped, pipeline jumps to Step 6)",
+
+  "version": "1.0",
+
+  "task_type": "Feature",
+  "complexity": 7,
+  "reasoning": "Multi-service integration requiring frontend + backend + AI components with cloud deployment and compliance constraints.",
+  "plan_required": true,
+
+  "tasks": [
+    {
+      "id": "T1",
+      "description": "Setup FastAPI backend with PostgreSQL and auth endpoints",
+      "estimated_effort": "high",
+      "files": ["backend/main.py", "backend/models.py", "backend/auth.py"]
+    },
+    {
+      "id": "T2",
+      "description": "Build React frontend with document upload UI and Q&A interface",
+      "estimated_effort": "medium",
+      "files": ["frontend/src/App.tsx", "frontend/src/components/Upload.tsx"]
+    },
+    {
+      "id": "T3",
+      "description": "Implement RAG pipeline using Qdrant for document Q&A",
+      "estimated_effort": "high",
+      "files": ["backend/rag_pipeline.py", "backend/vector_store.py"]
+    },
+    {
+      "id": "T4",
+      "description": "AWS deployment configuration with GDPR-compliant data handling",
+      "estimated_effort": "medium",
+      "files": ["k8s/deployment.yaml", "terraform/main.tf"]
+    }
+  ],
+
+  "skill": "react-core",
+  "agent": "react-engineer",
+
+  "skills": ["react-core", "fastapi-core", "rag-core", "cloud-security-core"],
+  "agents": ["react-engineer", "python-backend-engineer", "ai-engineer", "cloud-engineer"],
+
+  "execution_pattern": "parallel",
+
+  "domains": ["frontend", "backend", "ai", "cloud", "security"],
+  "constraints": ["PostgreSQL", "AWS", "GDPR", "Qdrant vector DB", "Docker"],
+
+  "system_prompt": ""
+}

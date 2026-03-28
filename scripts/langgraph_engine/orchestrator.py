@@ -1161,6 +1161,7 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_edge("level2_optimize_context", "level3_init")
 
     # Pre-analysis gate: call graph scan + RAG orchestration lookup
+    # On template fast-path (--orchestration-template): jumps to level3_step6, skipping steps 0-5
     # On RAG hit (confidence >= 0.85): jumps to level3_step5, skipping steps 0-4
     # On miss: falls through to level3_step0_0 (normal pre-flight flow)
     graph.add_node("level3_pre_analysis", orchestration_pre_analysis_node)
@@ -1171,6 +1172,7 @@ def create_flow_graph(hook_mode: bool = False):
         {
             "level3_step0_0": "level3_step0_0",
             "level3_step5": "level3_step5",
+            "level3_step6": "level3_step6",
         },
     )
 

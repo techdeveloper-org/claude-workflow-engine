@@ -212,6 +212,9 @@ class FlowState(TypedDict, total=False):
     skip_architecture: Optional[bool]  # True -> bypass Step 2 (plan execution)
     skip_consensus: Optional[bool]  # True -> bypass consensus validation
     pre_analysis_execution_time_ms: Optional[float]
+    # Orchestration Template fast-path (--orchestration-template CLI flag)
+    orchestration_template: Optional[Dict]  # Pre-filled template from prompt-generation-expert
+    template_fast_path: Optional[bool]  # True -> skip Steps 0-5, jump to Step 6
     step0_complexity_boosted: Optional[bool]  # True if boost was applied by call graph
     step0_complexity_boost_source: Optional[str]  # Source of boost: "call_graph"
 

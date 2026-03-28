@@ -2058,7 +2058,65 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
         "rag_orchestration_cached_plan": {},
         "skip_architecture": False,
         "skip_consensus": False,
+        "template_fast_path": False,
     }
+
+    # --- 0. Orchestration Template Fast-Path (highest priority) ---
+    # If user provided --orchestration-template, bypass ALL LLM analysis (Steps 0-5)
+    # and jump directly to Step 6 (skill validation + download).
+    template = state.get("orchestration_template") or {}
+    if template:
+        try:
+            # Map template fields -> FlowState step outputs
+            result["step0_task_type"] = template.get("task_type", "General Task")
+            result["step0_complexity"] = int(template.get("complexity", 5))
+            result["step0_reasoning"] = template.get("reasoning", "Pre-filled via orchestration template")
+            result["step0_tasks"] = {
+                "count": len(template.get("tasks", [])),
+                "tasks": template.get("tasks", []),
+            }
+            result["step0_task_count"] = len(template.get("tasks", []))
+            result["step1_plan_required"] = bool(template.get("plan_required", False))
+            result["step3_tasks_validated"] = template.get("tasks", [])
+            # Single skill/agent (primary) + multi lists
+            result["step5_skill"] = template.get("skill") or (template.get("skills") or [""])[0]
+            result["step5_agent"] = template.get("agent") or (template.get("agents") or [""])[0]
+            result["step5_skills"] = template.get("skills") or ([template["skill"]] if template.get("skill") else [])
+            result["step5_agents"] = template.get("agents") or ([template["agent"]] if template.get("agent") else [])
+            # If system_prompt provided, write it to session dir so Step 10 can use it directly
+            system_prompt_text = template.get("system_prompt", "")
+            if system_prompt_text:
+                try:
+                    session_dir = state.get("session_dir", "")
+                    if session_dir:
+                        sp_file = Path(session_dir) / "system_prompt.txt"
+                        sp_file.parent.mkdir(parents=True, exist_ok=True)
+                        sp_file.write_text(system_prompt_text, encoding="utf-8")
+                        result["step7_system_prompt_file"] = str(sp_file)
+                        result["step7_system_prompt_loaded"] = True
+                        logger.info("[v2] Template system_prompt written to %s", sp_file)
+                except Exception as sp_err:
+                    logger.debug("[v2] Template system_prompt write skipped: %s", sp_err)
+            # Mark fast-path active
+            result["template_fast_path"] = True
+            result["skip_architecture"] = True
+            result["skip_consensus"] = True
+            elapsed = (_t.time() - _start) * 1000
+            result["pre_analysis_execution_time_ms"] = round(elapsed, 1)
+            print(
+                "[PRE-ANALYSIS] TEMPLATE FAST-PATH: task_type=%s complexity=%d skill=%s agent=%s -> jumping to Step 6"
+                % (result["step0_task_type"], result["step0_complexity"], result["step5_skill"], result["step5_agent"]),
+                file=sys.stderr,
+            )
+            logger.info(
+                "[v2] Template fast-path active: %s complexity=%d -> level3_step6",
+                result["step0_task_type"],
+                result["step0_complexity"],
+            )
+            return result
+        except Exception as tmpl_exc:
+            logger.warning("[v2] Template fast-path failed, falling back to normal flow: %s", tmpl_exc)
+            result["template_fast_path"] = False
 
     # --- 1. Call Graph Scan ---
     try:
@@ -2161,12 +2219,18 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
 def route_pre_analysis(state: FlowState) -> str:
     """Route after orchestration_pre_analysis_node.
 
+    TEMPLATE FAST-PATH (highest priority, template_fast_path=True):
+        -> "level3_step6"  (skill validation, bypassing steps 0-5 entirely)
+
     RAG HIT (confidence >= 0.85, skip_architecture set):
         -> "level3_step5"  (skill selection, bypassing steps 0-4)
 
     RAG MISS or call graph unavailable:
         -> "level3_step0_0"  (normal pre-flight flow)
     """
+    if state.get("template_fast_path"):
+        logger.info("[v2] Pre-analysis route: TEMPLATE FAST-PATH -> level3_step6")
+        return "level3_step6"
     if state.get("rag_orchestration_hit") and state.get("skip_architecture"):
         logger.info("[v2] Pre-analysis route: RAG HIT -> level3_step5")
         return "level3_step5"

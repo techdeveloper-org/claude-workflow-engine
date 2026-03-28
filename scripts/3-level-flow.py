@@ -187,6 +187,41 @@ def _capture_user_message() -> str:
     return user_message
 
 
+def _load_orchestration_template(path: str) -> dict:
+    """Load and validate an orchestration template JSON file.
+
+    Required fields: task_type, complexity, skill (or skills), agent (or agents)
+    Optional fields: reasoning, plan_required, tasks, execution_pattern,
+                     domains, constraints, system_prompt
+
+    Returns the template dict, or raises ValueError on validation failure.
+    """
+    template_path = Path(path)
+    if not template_path.exists():
+        raise ValueError(f"Orchestration template not found: {path}")
+    try:
+        template = json.loads(template_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in orchestration template: {e}")
+
+    # Validate required fields
+    missing = []
+    if not template.get("task_type"):
+        missing.append("task_type")
+    if template.get("complexity") is None:
+        missing.append("complexity")
+    has_skill = template.get("skill") or template.get("skills")
+    has_agent = template.get("agent") or template.get("agents")
+    if not has_skill:
+        missing.append("skill / skills")
+    if not has_agent:
+        missing.append("agent / agents")
+    if missing:
+        raise ValueError(f"Orchestration template missing required fields: {', '.join(missing)}")
+
+    return template
+
+
 def run_langgraph_engine(session_id: str = "", project_root: str = "", user_message: str = "") -> dict:
     """Execute the LangGraph 3-level flow engine.
 
@@ -227,6 +262,21 @@ def run_langgraph_engine(session_id: str = "", project_root: str = "", user_mess
 
     # Create initial state (session_id now immutable via Annotated reducer)
     initial_state = create_initial_state(session_id, project_root, user_message)
+
+    # Inject orchestration template if provided (fast-path: skips Steps 0-5)
+    template_path = os.environ.get("CLAUDE_ORCHESTRATION_TEMPLATE", "").strip()
+    if template_path:
+        try:
+            template = _load_orchestration_template(template_path)
+            initial_state["orchestration_template"] = template
+            if DEBUG:
+                print(
+                    f"[DEBUG] Orchestration template loaded: {template.get('task_type')} "
+                    f"complexity={template.get('complexity')} "
+                    f"skill={template.get('skill') or template.get('skills')}"
+                )
+        except ValueError as tmpl_err:
+            print(f"[WARN] Orchestration template ignored: {tmpl_err}", file=sys.stderr)
 
     # CRITICAL FIX: Store user_message in env var so Step 0 can access it
     # (LangGraph strips immutable fields between nodes due to reducer limitations)
@@ -349,6 +399,10 @@ def main():
             elif arg.startswith("--message="):
                 user_message = arg.split("=", 1)[1]
                 print("[DEBUG]   -> user_message=...", file=sys.stderr)
+            elif arg.startswith("--orchestration-template="):
+                tmpl_path = arg.split("=", 1)[1]
+                os.environ["CLAUDE_ORCHESTRATION_TEMPLATE"] = tmpl_path
+                print(f"[DEBUG]   -> orchestration_template={tmpl_path}", file=sys.stderr)
             elif arg in ("--summary", "-s"):
                 DEBUG = True
                 print("[DEBUG]   -> DEBUG=True", file=sys.stderr)
@@ -359,12 +413,15 @@ def main():
                 print(f"{SCRIPT_NAME} - LangGraph 3-Level Flow Engine v{VERSION}")
                 print("Usage: python 3-level-flow.py [options]")
                 print("Options:")
-                print("  --session-id=ID    Session identifier")
-                print("  --project=PATH     Project directory")
-                print("  --message=MSG      User message/task")
-                print("  --summary,-s       Print summary output")
-                print("  --dry-run          Run Steps 0-7 only (analysis + prompt), skip GitHub/implementation")
-                print("  --help,-h          Show this help")
+                print("  --session-id=ID               Session identifier")
+                print("  --project=PATH                Project directory")
+                print("  --message=MSG                 User message/task")
+                print("  --orchestration-template=PATH Pre-filled template JSON (skips Steps 0-5)")
+                print("  --summary,-s                  Print summary output")
+                print(
+                    "  --dry-run                     Run Steps 0-7 only (analysis + prompt), skip GitHub/implementation"
+                )
+                print("  --help,-h                     Show this help")
                 sys.exit(0)
 
         # Run engine (user_message auto-captured from stdin if not provided)
