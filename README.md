@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 1.7.0 | **Status:** Alpha | **Last Updated:** 2026-03-28
+**Version:** 1.8.1 | **Status:** Alpha | **Last Updated:** 2026-03-31
 
 ---
 
@@ -681,31 +681,43 @@ The single data source for all 13 UML diagram types is also the call graph - `um
 - Checkpoint recovery (resume from any step after crash)
 - Signal handling (Ctrl+C graceful recovery)
 
-### 19 MCP Servers (323 tools)
+### 20 MCP Servers (328 tools) — v1.8.1 Individual Repos
 
-All servers use FastMCP protocol (stdio JSON-RPC), registered in `~/.claude/settings.json`:
+All servers use FastMCP protocol (stdio JSON-RPC), registered in `~/.claude/settings.json`.
+As of v1.8.1, each server lives in its own private repo under
+[`techdeveloper-org`](https://github.com/techdeveloper-org) for independent versioning and reuse.
 
-| Server | File | Tools | Purpose |
+#### In-Engine Servers (tightly coupled — stay in `src/mcp/`)
+
+| Server | Location | Tools | Purpose |
+|--------|----------|-------|---------|
+| session-mgr | src/mcp/session_mcp_server.py | 14 | Session lifecycle — imported in-process by session_hooks.py |
+| vector-db | src/mcp/vector_db_mcp_server.py | 11 | Qdrant RAG — imported via sys.path by rag_integration.py |
+
+#### Extracted Servers (each in own repo, path: `mcp-{name}/server.py`)
+
+| Server | Repo | Tools | Purpose |
 |--------|------|-------|---------|
-| git-ops | git_mcp_server.py | 14 | Git operations (branch, commit, push, pull, stash, diff, fetch, cleanup) |
-| github-api | github_mcp_server.py | 12 | GitHub (issue, PR, merge, label, build validate, full merge cycle) |
-| session-mgr | session_mcp_server.py | 14 | Session lifecycle (create, chain, tag, accumulate, finalize, work items) |
-| policy-enforcement | enforcement_mcp_server.py | 11 | Policy compliance, flow-trace, module health, system health |
-| llm-router | llm_router_mcp_server.py | 4 | Intelligent LLM routing, step classification, model selection |
-| llm-provider | llm_mcp_server.py | 8 | LLM access (4 providers, hybrid GPU-first, model selection) (legacy, kept for backward compat) |
-| ollama-provider | ollama_mcp_server.py | 5 | Local Ollama GPU inference, model discovery, pull |
-| anthropic-provider | anthropic_mcp_server.py | 4 | Direct Anthropic Claude API, cost estimation |
-| openai-provider | openai_mcp_server.py | 4 | Direct OpenAI GPT API, cost estimation |
-| token-optimizer | token_optimization_mcp_server.py | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
-| pre-tool-gate | pre_tool_gate_mcp_server.py | 8 | Pre-tool validation (8 policy checks, skill hints) |
-| post-tool-tracker | post_tool_tracker_mcp_server.py | 6 | Post-tool tracking (progress, commit readiness, stats) |
-| standards-loader | standards_loader_mcp_server.py | 7 | Standards (project detect, framework detect, hot-reload) |
-| skill-manager | skill_manager_mcp_server.py | 8 | Skill lifecycle (load, search, validate, rank, conflicts) |
-| vector-db | vector_db_mcp_server.py | 11 | Vector RAG (Qdrant, 4 collections, semantic search, node decisions) |
-| uml-diagram | uml_diagram_mcp_server.py | 15 | UML generation (13 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io rendering) |
-| jira-api | jira_mcp_server.py | 10 | Jira (create/get/search/transition issues, add comments, link PRs, Cloud + Server) |
-| jenkins-api | jenkins_mcp_server.py | 10 | Jenkins CI/CD (trigger/abort builds, console output, job info, queue, build polling) |
-| figma-api | figma_mcp_server.py | 10 | Figma (file info, components, component sets, design tokens, named styles, design review) |
+| git-ops | [mcp-git-ops](https://github.com/techdeveloper-org/mcp-git-ops) | 14 | Git (branch, commit, push, pull, stash, diff, fetch, cleanup) |
+| github-api | [mcp-github-api](https://github.com/techdeveloper-org/mcp-github-api) | 12 | GitHub (issue, PR, merge, label, build validate, full merge cycle) |
+| policy-enforcement | [mcp-policy-enforcement](https://github.com/techdeveloper-org/mcp-policy-enforcement) | 11 | Policy compliance, flow-trace, module health, system health |
+| llm-router | [mcp-llm-router](https://github.com/techdeveloper-org/mcp-llm-router) | 4 | Intelligent LLM routing, step classification, model selection |
+| llm-provider | [mcp-llm-provider](https://github.com/techdeveloper-org/mcp-llm-provider) | 8 | LLM access (4 providers, hybrid GPU-first, model selection) |
+| ollama-provider | [mcp-ollama-provider](https://github.com/techdeveloper-org/mcp-ollama-provider) | 5 | Local Ollama GPU inference, model discovery, pull |
+| anthropic-provider | [mcp-anthropic-provider](https://github.com/techdeveloper-org/mcp-anthropic-provider) | 4 | Direct Anthropic Claude API, cost estimation |
+| openai-provider | [mcp-openai-provider](https://github.com/techdeveloper-org/mcp-openai-provider) | 4 | Direct OpenAI GPT API, cost estimation |
+| token-optimizer | [mcp-token-optimizer](https://github.com/techdeveloper-org/mcp-token-optimizer) | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
+| pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 8 | Pre-tool validation (8 policy checks, skill hints) |
+| post-tool-tracker | [mcp-post-tool-tracker](https://github.com/techdeveloper-org/mcp-post-tool-tracker) | 6 | Post-tool tracking (progress, commit readiness, stats) |
+| standards-loader | [mcp-standards-loader](https://github.com/techdeveloper-org/mcp-standards-loader) | 7 | Standards (project detect, framework detect, hot-reload) |
+| skill-manager | [mcp-skill-manager](https://github.com/techdeveloper-org/mcp-skill-manager) | 8 | Skill lifecycle (load, search, validate, rank, conflicts) |
+| uml-diagram | [mcp-uml-diagram](https://github.com/techdeveloper-org/mcp-uml-diagram) | 15 | UML generation (13 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io) |
+| drawio-diagram | [mcp-drawio-diagram](https://github.com/techdeveloper-org/mcp-drawio-diagram) | 5 | Draw.io editable diagrams (12 types, .drawio files, shareable URLs) |
+| jira-api | [mcp-jira-api](https://github.com/techdeveloper-org/mcp-jira-api) | 10 | Jira (create/search/transition issues, link PRs, Cloud + Server) |
+| jenkins-ci | [mcp-jenkins-ci](https://github.com/techdeveloper-org/mcp-jenkins-ci) | 10 | Jenkins CI/CD (trigger/abort builds, console output, queue, polling) |
+| figma-api | [mcp-figma](https://github.com/techdeveloper-org/mcp-figma) | 10 | Figma (file info, components, design tokens, styles, design review) |
+
+> **Shared base:** [mcp-base](https://github.com/techdeveloper-org/mcp-base) — MCPResponse builder, @mcp_tool_handler, AtomicJsonStore, LazyClient. Each server includes a `base/` copy.
 
 ### RAG Integration (Vector DB Decision Caching)
 
@@ -792,7 +804,7 @@ policies/
 |-----------|---------|
 | **15-Step Pipeline** | All steps produce real output (not stubs). Steps 0–14 fully wired. |
 | **4-Level Architecture** | Level -1 → Level 1 → Level 2 → Level 3, fully operational |
-| **20 MCP Servers** | 328 tools: git, github, session, policy, llm, llm-router, ollama, anthropic, openai, token-optimizer, pre-tool-gate, post-tool-tracker, standards-loader, skill-manager, vector-db, uml-diagram, drawio, jira, jenkins, figma |
+| **20 MCP Servers** | 328 tools — 2 in-engine (src/mcp/), 18 extracted to individual repos under techdeveloper-org (v1.8.1) |
 | **LLM Provider Routing** | Official Anthropic SDK (auto-retry, typed errors). 4 providers: Ollama · Anthropic · Claude CLI · OpenAI. Specific provider → Ollama fallback by default. |
 | **GitHub Integration** | Issue, branch, PR, merge, review loop (Steps 8–12) |
 | **Jira Integration** | Dual issue tracking, full lifecycle: Create→InProgress→InReview→Done (Steps 8–12) |
@@ -818,7 +830,7 @@ policies/
 | **Setup Wizard** | Interactive first-time configuration (`scripts/setup_wizard.py`) |
 | **Docker** | `Dockerfile` + `docker-compose.yml` — one-command deployment |
 | **GitHub Actions CI** | `.github/workflows/ci.yml` — configurable matrix (Python 3.10/3.12), lint, tests. Auto-trigger disabled; runs on `workflow_dispatch` only. |
-| **Version Sync** | `scripts/sync-version.py` — syncs VERSION to all 20 MCP servers |
+| **Version Sync** | `scripts/sync-version.py` — syncs VERSION to in-engine MCP servers (v1.8.1: extracted servers have own versioning in their repos) |
 | **Test Suite** | 74 test files covering MCP servers, pipeline steps, integrations, security, e2e, load |
 | **Coverage Setup** | `pytest-cov` + `coverage` in requirements.txt |
 | **Documentation** | 44+ docs, SRS, CHANGELOG, guides, deployment guide, troubleshooting guide, ADRs, runbooks |
@@ -1164,7 +1176,7 @@ claude-workflow-engine/
 |   +-- post-tool-tracker.py          # PostToolUse hook
 |   +-- stop-notifier.py              # Stop hook (voice notification)
 |
-+-- src/mcp/                          # 19 FastMCP servers (323 tools)
++-- src/mcp/                          # 2 in-engine servers (session, vector-db) + bridge (session_hooks)
 +-- policies/                         # 63 policy definitions (62 .md + 1 .json)
 +-- tests/                            # 69 test files
 +-- docs/                             # 46 documentation files
@@ -1186,8 +1198,8 @@ claude-workflow-engine/
 |--------|-------|
 | Pipeline Levels | 4 (Level -1, 1, 2, 3) |
 | Execution Steps | 15 (Step 0 - Step 14) |
-| MCP Servers | 19 (323 tools) |
-| MCP Tools | 323 |
+| MCP Servers | 20 (328 tools) — 2 in-engine + 18 separate repos |
+| MCP Tools | 328 |
 | LangGraph Engine Modules | 155+ (86 root + 6 subgraphs + 9 packages) |
 | Policy Files | 63 (62 .md + 1 .json) |
 | Standards Files | 10 |
@@ -1406,7 +1418,7 @@ Add to `~/.claude/settings.json`:
   "mcpServers": {
     "jira-api": {
       "command": "python",
-      "args": ["path/to/src/mcp/jira_mcp_server.py"],
+      "args": ["path/to/mcp-jira-api/server.py"],
       "env": {
         "JIRA_URL": "https://your-domain.atlassian.net",
         "JIRA_USER": "your-email@company.com",
@@ -1470,7 +1482,7 @@ Add to `~/.claude/settings.json`:
   "mcpServers": {
     "jenkins-api": {
       "command": "python",
-      "args": ["path/to/src/mcp/jenkins_mcp_server.py"],
+      "args": ["path/to/mcp-jenkins-ci/server.py"],
       "env": {
         "JENKINS_URL": "https://jenkins.your-company.com",
         "JENKINS_USER": "your-username",
