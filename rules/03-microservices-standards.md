@@ -866,3 +866,25 @@ class ProductService {
 ---
 
 **ENFORCEMENT:** These standards are MANDATORY for all Spring Boot microservices. Violations caught during code review and pre-commit hooks.
+
+**SEE ALSO (Rules 13-32 -- Spring Boot deep-dive standards):**
+- 13-spring-cloud-infrastructure.md -- Config Server, Eureka, gateway, retry/failover (expands Section 2)
+- 14-entity-design-patterns.md -- @DynamicInsert, sequence IDs, optimistic locking (expands Section 7)
+- 15-dto-form-separation.md -- Form vs Dto packages, immutability, serialization (expands Sections 4-5)
+- 16-validation-sequence-pattern.md -- Ordered validation groups, @Validated vs @Valid (expands Section 5)
+- 17-api-response-wrapper.md -- ApiResponseDto envelope, status propagation (expands Section 4)
+- 18-service-layer-conventions.md -- Interface+Impl+Helper triple, transaction placement (expands Section 6)
+- 19-exception-handling-hierarchy.md -- Exception hierarchy, CommonExceptionHandler, HTTP mapping (expands Section 9)
+- 20-inter-service-communication.md -- Feign via gateway, contextId, circuit breaker (expands Section 13)
+- 21-caching-strategy.md -- L1+L2 hybrid, TTL tiers, financial data exceptions
+- 22-common-library-design.md -- common-lib structure, provided scope, base classes
+- 23-enum-as-domain-model.md -- State machine enums, isTerminal(), canTransitionTo()
+- 24-constants-organization.md -- ServiceMessageConstants, ValidationMessageConstants, ApiConstants
+- 25-jpa-auditing-pattern.md -- AuditorAwareImpl, @EnableJpaAuditing, @CreatedBy
+- 26-openapi-documentation.md -- @Tag, @Operation, @ApiResponses, JWT security scheme
+- 27-centralized-logging.md -- Logback HTTP appender, async batching, MDC (expands Section 10)
+- 28-test-coverage-enforcement.md -- JaCoCo 100% per-package, JUnit 5 naming (expands Section 12)
+- 29-container-deployment.md -- Dockerfile, non-root user, JVM container flags, HEALTHCHECK
+- 30-maven-build-conventions.md -- Parent POM, plugin stack, dependency scoping
+- 31-security-authentication.md -- Spring Security stateless, JWT filter chain, CORS
+- 32-repository-conventions.md -- JpaRepository<E,Serializable>, JPQL, Sort/Pageable (expands Section 8)

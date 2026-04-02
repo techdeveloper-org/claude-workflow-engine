@@ -15,17 +15,19 @@ Optimization features (Task #6):
 - OOM safeguard: total load budget enforced across all files
 """
 
-import sys
 import json
-import time as _time_mod
 import subprocess
-from pathlib import Path
+import sys
+import time as _time_mod
 from datetime import datetime
+from pathlib import Path
 
 try:
     import sys as _sys
+
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "src"))
     from utils.path_resolver import get_session_logs_dir, get_telemetry_dir
+
     _LEVEL1_SESSION_LOGS_DIR = get_session_logs_dir()
     _LEVEL1_TELEMETRY_DIR = get_telemetry_dir()
 except ImportError:
@@ -33,7 +35,8 @@ except ImportError:
     _LEVEL1_TELEMETRY_DIR = Path.home() / ".claude" / "logs" / "telemetry"
 
 try:
-    from langgraph.graph import StateGraph, START, END  # noqa: F401
+    from langgraph.graph import END, START, StateGraph  # noqa: F401
+
     _LANGGRAPH_AVAILABLE = True
 except ImportError:
     _LANGGRAPH_AVAILABLE = False
@@ -43,13 +46,15 @@ from ..step_logger import write_level_log
 
 try:
     import toons
+
     _TOONS_AVAILABLE = True
 except ImportError:
     _TOONS_AVAILABLE = False
 
 # Level 1 new modules (graceful import fallback)
 try:
-    from ..complexity_calculator import calculate_complexity, should_plan, calculate_graph_complexity  # noqa: F401
+    from ..complexity_calculator import calculate_complexity, calculate_graph_complexity, should_plan  # noqa: F401
+
     _COMPLEXITY_CALCULATOR_AVAILABLE = True
 except ImportError:
     _COMPLEXITY_CALCULATOR_AVAILABLE = False
@@ -57,20 +62,24 @@ except ImportError:
     def calculate_graph_complexity(*args, **kwargs):
         return 0, {}, 0.0
 
+
 try:
     from ..context_cache import ContextCache
+
     _CONTEXT_CACHE_AVAILABLE = True
 except ImportError:
     _CONTEXT_CACHE_AVAILABLE = False
 
 try:
     from ..context_deduplicator import deduplicate_context
+
     _DEDUPLICATOR_AVAILABLE = True
 except ImportError:
     _DEDUPLICATOR_AVAILABLE = False
 
 try:
     from ..toon_schema import validate_toon
+
     _TOON_SCHEMA_AVAILABLE = True
 except ImportError:
     _TOON_SCHEMA_AVAILABLE = False
@@ -81,6 +90,7 @@ except ImportError:
 # Scripts in scripts/architecture/01-sync-system/ are not a Python package.
 # Use importlib.util.spec_from_file_location for dynamic import.
 # ============================================================================
+
 
 def _load_architecture_script(script_name: str):
     """Dynamically load a script from scripts/architecture/01-sync-system/.
@@ -97,10 +107,8 @@ def _load_architecture_script(script_name: str):
     """
     try:
         import importlib.util
-        script_path = (
-            Path(__file__).parent.parent.parent /
-            "architecture" / "01-sync-system" / script_name
-        )
+
+        script_path = Path(__file__).parent.parent.parent / "architecture" / "01-sync-system" / script_name
         if not script_path.exists():
             return None
         # Convert filename to a valid Python module name
@@ -119,21 +127,23 @@ def _load_architecture_script(script_name: str):
 # NODE 1: SESSION LOADER (MUST BE FIRST)
 # ============================================================================
 
+
 def node_session_loader(state: FlowState) -> dict:
     """Create and load session in ~/.claude/logs/sessions/{session_id}/.
 
     This MUST run first - creates the session container for this execution.
     """
-    import uuid
     import sys
+    import uuid
 
     _step_start = _time_mod.time()
     try:
-        # Debug: Check project_root before doing anything
-        print(f"[LEVEL 1 SESSION_LOADER] state['project_root'] at entry: '{state.get('project_root', 'MISSING')}'", file=sys.stderr)
+        # Debug: Check project_root before doing anything (ASCII-safe for Windows cp1252 terminals)
+        _root_repr = str(state.get("project_root", "MISSING")).encode("ascii", errors="replace").decode("ascii")
+        print("[LEVEL 1 SESSION_LOADER] state['project_root'] at entry: '{}'".format(_root_repr), file=sys.stderr)
 
         # Generate unique session ID
-        session_id = f"session-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+        session_id = "session-{}-{}".format(datetime.now().strftime("%Y%m%d-%H%M%S"), uuid.uuid4().hex[:8])
 
         # Create session folder: ~/.claude/logs/sessions/{session_id}/
         session_path = _LEVEL1_SESSION_LOGS_DIR / session_id
@@ -142,16 +152,19 @@ def node_session_loader(state: FlowState) -> dict:
         # Save session metadata
         # user_message: try state first, then env var fallback (set by run_langgraph_engine)
         import os
+
         user_msg = state.get("user_message", "") or os.environ.get("CURRENT_USER_MESSAGE", "")
 
         session_meta = {
-            "session_id": session_id,
-            "created_at": datetime.now().isoformat(),
+            "metadata": {
+                "session_id": session_id,
+                "created_at": datetime.now().isoformat(),
+            },
             "user_message": user_msg,
         }
 
         meta_file = session_path / "session.json"
-        with open(meta_file, 'w', encoding='utf-8') as f:
+        with open(meta_file, "w", encoding="utf-8") as f:
             json.dump(session_meta, f, indent=2)
 
         # Set env var so Level 3 infra can find session_id
@@ -170,6 +183,7 @@ def node_session_loader(state: FlowState) -> dict:
                 try:
                     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "src" / "mcp"))
                     from session_hooks import link_sessions, tag_session
+
                     link_sessions(session_id, prev_session_id)
                     result["session_parent_id"] = prev_session_id
                 except Exception:
@@ -193,6 +207,7 @@ def node_session_loader(state: FlowState) -> dict:
                 result["session_tags"] = _auto_tags
                 try:
                     from session_hooks import tag_session
+
                     tag_session(session_id, ",".join(_auto_tags))
                 except Exception:
                     pass  # Best-effort tagging
@@ -219,9 +234,7 @@ def node_session_loader(state: FlowState) -> dict:
                 if _prune_errors:
                     result["session_pruning_errors"] = _prune_errors
                     print(
-                        "[LEVEL 1 SESSION_LOADER] Session pruning had {} errors".format(
-                            len(_prune_errors)
-                        ),
+                        "[LEVEL 1 SESSION_LOADER] Session pruning had {} errors".format(len(_prune_errors)),
                         file=sys.stderr,
                     )
         except Exception as _prune_exc:
@@ -251,6 +264,7 @@ def node_session_loader(state: FlowState) -> dict:
         try:
             import json as _json_tel
             import time as _time_tel
+
             _sid_tel = state.get("session_id", result.get("session_id", ""))
             if _sid_tel:
                 _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -277,6 +291,7 @@ def node_session_loader(state: FlowState) -> dict:
         try:
             import json as _json_tel
             import time as _time_tel
+
             _sid_tel = state.get("session_id", result.get("session_id", ""))
             if _sid_tel:
                 _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -298,6 +313,7 @@ def node_session_loader(state: FlowState) -> dict:
 # ============================================================================
 # NODE 2: COMPLEXITY CALCULATION (PARALLEL with context_loader)
 # ============================================================================
+
 
 def node_complexity_calculation(state: FlowState) -> dict:
     """Analyze project structure and calculate complexity.
@@ -321,7 +337,11 @@ def node_complexity_calculation(state: FlowState) -> dict:
 
             # Combine: simple (30%) + graph (70%) when graph available
             if graph_score > 0:
-                simple_scaled = round(simple_score * 2.5)  # scale 1-10 to 1-25
+                # Clamp graph_score to valid domain before use in formula
+                graph_score = max(1, min(25, graph_score))
+                # Linear interpolation [1,10] -> [1,25] so simple_score=1 maps to 1 (not 2)
+                # Formula: 1 + (simple_score - 1) * (24 / 9)
+                simple_scaled = max(1, min(25, round(1 + (simple_score - 1) * (24.0 / 9))))
                 combined = round((simple_scaled * 0.3) + (graph_score * 0.7))
                 combined = max(1, min(25, combined))
             else:
@@ -339,12 +359,12 @@ def node_complexity_calculation(state: FlowState) -> dict:
                 "architecture": {},
                 "complexity_calculated": True,
             }
-            write_level_log(state, "level1", "complexity-calculation", "OK",
-                            _time_mod.time() - _step_start, result)
+            write_level_log(state, "level1", "complexity-calculation", "OK", _time_mod.time() - _step_start, result)
             # Telemetry
             try:
                 import json as _json_tel
                 import time as _time_tel
+
                 _sid_tel = state.get("session_id", result.get("session_id", ""))
                 if _sid_tel:
                     _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -364,9 +384,11 @@ def node_complexity_calculation(state: FlowState) -> dict:
 
         # --- Legacy path: try the old architecture script ---
         complexity_script = (
-            Path(__file__).parent.parent.parent /
-            "architecture" / "03-execution-system" / "04-model-selection" /
-            "complexity-calculator.py"
+            Path(__file__).parent.parent.parent
+            / "architecture"
+            / "03-execution-system"
+            / "04-model-selection"
+            / "complexity-calculator.py"
         )
 
         if complexity_script.exists():
@@ -390,6 +412,7 @@ def node_complexity_calculation(state: FlowState) -> dict:
                     try:
                         import json as _json_tel
                         import time as _time_tel
+
                         _sid_tel = state.get("session_id", "")
                         if _sid_tel:
                             _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -419,12 +442,12 @@ def node_complexity_calculation(state: FlowState) -> dict:
             "architecture": {},
             "complexity_calculated": True,
         }
-        write_level_log(state, "level1", "complexity-calculation", "OK",
-                        _time_mod.time() - _step_start, result)
+        write_level_log(state, "level1", "complexity-calculation", "OK", _time_mod.time() - _step_start, result)
         # Telemetry
         try:
             import json as _json_tel
             import time as _time_tel
+
             _sid_tel = state.get("session_id", result.get("session_id", ""))
             if _sid_tel:
                 _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -448,12 +471,14 @@ def node_complexity_calculation(state: FlowState) -> dict:
             "complexity_error": str(e),
             "complexity_score": 5,  # Safe default
         }
-        write_level_log(state, "level1", "complexity-calculation", "FAILED",
-                        _time_mod.time() - _step_start, None, str(e))
+        write_level_log(
+            state, "level1", "complexity-calculation", "FAILED", _time_mod.time() - _step_start, None, str(e)
+        )
         # Telemetry
         try:
             import json as _json_tel
             import time as _time_tel
+
             _sid_tel = state.get("session_id", result.get("session_id", ""))
             if _sid_tel:
                 _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -486,17 +511,17 @@ CONTEXT_TIMEOUT_PER_FILE = 30
 CONTEXT_TIMEOUT_TOTAL = 120
 
 # Memory limits
-MAX_FILE_SIZE = 1_000_000       # 1 MB: files bigger than this are streamed
-MAX_TOTAL_SIZE = 10_000_000     # 10 MB total loaded bytes across all files
+MAX_FILE_SIZE = 1_000_000  # 1 MB: files bigger than this are streamed
+MAX_TOTAL_SIZE = 10_000_000  # 10 MB total loaded bytes across all files
 
 # Context usage thresholds (per context-management-policy.md)
-CONTEXT_THRESHOLD_WARNING = 0.70   # 70% - log warning
-CONTEXT_THRESHOLD_HIGH = 0.85     # 85% - log high warning, consider streaming
+CONTEXT_THRESHOLD_WARNING = 0.70  # 70% - log warning
+CONTEXT_THRESHOLD_HIGH = 0.85  # 85% - log high warning, consider streaming
 CONTEXT_THRESHOLD_EMERGENCY = 0.95  # 95% - stop loading, trigger cleanup
 
 # Streaming: files larger than this threshold are read in chunks to avoid OOM
-STREAMING_THRESHOLD = 1_000_000   # 1 MB
-STREAMING_CHUNK_SIZE = 65_536     # 64 KB per read chunk
+STREAMING_THRESHOLD = 1_000_000  # 1 MB
+STREAMING_CHUNK_SIZE = 65_536  # 64 KB per read chunk
 
 # Max content per file sent to TOON (5 KB snippet)
 MAX_CONTENT_CHARS = 5000
@@ -523,8 +548,8 @@ def _stream_file_head(
     Raises:
         Exception: On file read errors (not caught here - caller handles)
     """
-    collected: list = []
-    collected_len: int = 0
+    collected = []
+    collected_len = 0
 
     with open(str(file_path), "r", encoding="utf-8", errors="ignore") as fh:
         while collected_len < max_chars:
@@ -573,8 +598,8 @@ def _read_file_with_timeout(
     if not isinstance(file_path, Path):
         file_path = Path(file_path)
 
-    result: list = [None]
-    exc: list = [None]
+    result = [None]
+    exc = [None]
 
     def _reader():
         try:
@@ -592,9 +617,7 @@ def _read_file_with_timeout(
     if thread.is_alive():
         # Thread is still blocked - the read timed out
         # Mark timeout in result so caller can detect partial success
-        raise TimeoutError(
-            "File read timed out after {}s: {}".format(timeout_seconds, file_path)
-        )
+        raise TimeoutError("File read timed out after {}s: {}".format(timeout_seconds, file_path))
 
     if exc[0] is not None:
         raise exc[0]
@@ -631,9 +654,15 @@ def node_context_loader(state: FlowState) -> dict:
 
     try:
         project_root = Path(state.get("project_root", "."))
+        # session_path is written by node_session_loader, which is sequenced BEFORE
+        # the parallel pair (node_complexity_calculation || node_context_loader).
+        # This is an intentional sequential dependency on node_session_loader, NOT
+        # a dependency on node_complexity_calculation (the true parallel partner).
         session_path = Path(state.get("session_path", ""))
 
-        print("[LEVEL 1 CONTEXT LOADER] project_root: {}".format(project_root), file=sys.stderr)
+        # Gap5 fix: ASCII-encode path strings before printing to stderr (cp1252-safe)
+        _root_repr = str(project_root).encode("ascii", errors="replace").decode("ascii")
+        print("[LEVEL 1 CONTEXT LOADER] project_root: {}".format(_root_repr), file=sys.stderr)
         print("[LEVEL 1 CONTEXT LOADER] exists: {}".format(project_root.exists()), file=sys.stderr)
         sys.stderr.flush()
 
@@ -645,17 +674,22 @@ def node_context_loader(state: FlowState) -> dict:
                 if cached is not None:
                     elapsed_ms = int((time.time() - loader_start) * 1000)
                     print(
-                        "[LEVEL 1 CONTEXT LOADER] Cache HIT - skipping filesystem scan"
-                        " ({}ms)".format(elapsed_ms),
+                        "[LEVEL 1 CONTEXT LOADER] Cache HIT - skipping filesystem scan" " ({}ms)".format(elapsed_ms),
                         file=sys.stderr,
                     )
                     cache_stats = ContextCache.get_session_stats()
-                    write_level_log(state, "level1", "context-loader", "OK",
-                                    _time_mod.time() - loader_start, {
-                                        "files_loaded": len(cached.get("files_loaded", [])),
-                                        "cache_hit": True,
-                                        "load_time_ms": elapsed_ms,
-                                    })
+                    write_level_log(
+                        state,
+                        "level1",
+                        "context-loader",
+                        "OK",
+                        _time_mod.time() - loader_start,
+                        {
+                            "files_loaded": len(cached.get("files_loaded", [])),
+                            "cache_hit": True,
+                            "load_time_ms": elapsed_ms,
+                        },
+                    )
                     _cache_hit_result = {
                         "context_data": cached,
                         "context_loaded": True,
@@ -674,6 +708,7 @@ def node_context_loader(state: FlowState) -> dict:
                     try:
                         import json as _json_tel
                         import time as _time_tel
+
                         _sid_tel = state.get("session_id", "")
                         if _sid_tel:
                             _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -697,7 +732,7 @@ def node_context_loader(state: FlowState) -> dict:
                 )
 
         # ---- Fresh load ----
-        context_data: dict = {
+        context_data = {
             "srs": None,
             "readme": None,
             "claude_md": None,
@@ -706,9 +741,9 @@ def node_context_loader(state: FlowState) -> dict:
 
         total_loaded_bytes = 0
         load_start = time.time()
-        skipped_files: list = []
-        load_warnings: list = []
-        streamed_files: list = []
+        skipped_files = []
+        load_warnings = []
+        streamed_files = []
 
         # Candidate files: (glob_pattern, context_data_key, display_label)
         candidates = [
@@ -735,8 +770,8 @@ def node_context_loader(state: FlowState) -> dict:
                     load_warnings.append(msg)
                     break
 
-                # Find matching files in root only (no recursive glob)
-                matched = list(project_root.glob(glob_pattern))
+                # Find matching files in root only (no recursive glob); skip directories
+                matched = [m for m in project_root.glob(glob_pattern) if m.is_file()]
                 if not matched:
                     continue
 
@@ -750,9 +785,7 @@ def node_context_loader(state: FlowState) -> dict:
 
                 # --- Total memory budget guard ---
                 if total_loaded_bytes >= MAX_TOTAL_SIZE:
-                    msg = "Total load limit ({} bytes) reached, returning partial context".format(
-                        MAX_TOTAL_SIZE
-                    )
+                    msg = "Total load limit ({} bytes) reached, returning partial context".format(MAX_TOTAL_SIZE)
                     print("[CONTEXT LOADER] " + msg, file=sys.stderr)
                     load_warnings.append(msg)
                     break
@@ -760,11 +793,8 @@ def node_context_loader(state: FlowState) -> dict:
                 # --- Memory pressure: use streaming for large files ---
                 use_streaming = file_size >= STREAMING_THRESHOLD
                 if use_streaming:
-                    msg = (
-                        "{} is large ({} bytes >= {}B threshold) - "
-                        "using streaming read".format(
-                            label, file_size, STREAMING_THRESHOLD
-                        )
+                    msg = "{} is large ({} bytes >= {}B threshold) - " "using streaming read".format(
+                        label, file_size, STREAMING_THRESHOLD
                     )
                     print("[CONTEXT LOADER] " + msg, file=sys.stderr)
                     load_warnings.append(msg)
@@ -780,11 +810,8 @@ def node_context_loader(state: FlowState) -> dict:
                     )
                 except TimeoutError:
                     # Timeout: skip this file, continue with others (partial context)
-                    msg = (
-                        "Timeout ({:.0f}s) reading {} - file skipped, "
-                        "continuing with remaining files".format(
-                            CONTEXT_TIMEOUT_PER_FILE, label
-                        )
+                    msg = "Timeout ({:.0f}s) reading {} - file skipped, " "continuing with remaining files".format(
+                        CONTEXT_TIMEOUT_PER_FILE, label
                     )
                     print("[CONTEXT LOADER] WARNING: " + msg, file=sys.stderr)
                     load_warnings.append(msg)
@@ -936,17 +963,24 @@ def node_context_loader(state: FlowState) -> dict:
         except Exception:
             pass  # Fail-open: pattern metadata is best-effort
 
-        write_level_log(state, "level1", "context-loader", "OK",
-                        _time_mod.time() - loader_start, {
-                            "files_loaded": len(context_data.get("files_loaded", [])),
-                            "total_bytes": total_loaded_bytes,
-                            "cache_hit": False,
-                            "load_time_ms": elapsed_ms,
-                        })
+        write_level_log(
+            state,
+            "level1",
+            "context-loader",
+            "OK",
+            _time_mod.time() - loader_start,
+            {
+                "files_loaded": len(context_data.get("files_loaded", [])),
+                "total_bytes": total_loaded_bytes,
+                "cache_hit": False,
+                "load_time_ms": elapsed_ms,
+            },
+        )
         # Telemetry
         try:
             import json as _json_tel
             import time as _time_tel
+
             _sid_tel = state.get("session_id", result.get("session_id", ""))
             if _sid_tel:
                 _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -979,12 +1013,12 @@ def node_context_loader(state: FlowState) -> dict:
             "context_load_time_ms": elapsed_ms,
             "context_streamed_files": [],
         }
-        write_level_log(state, "level1", "context-loader", "FAILED",
-                        _time_mod.time() - loader_start, None, str(e))
+        write_level_log(state, "level1", "context-loader", "FAILED", _time_mod.time() - loader_start, None, str(e))
         # Telemetry
         try:
             import json as _json_tel
             import time as _time_tel
+
             _sid_tel = state.get("session_id", result.get("session_id", ""))
             if _sid_tel:
                 _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -1008,7 +1042,8 @@ def node_context_loader(state: FlowState) -> dict:
 # Subtask 4: validate compression integrity; fallback to raw context on failure
 # ============================================================================
 
-def _verify_toon_integrity(toon: dict, original_context: dict) -> bool:
+
+def _verify_toon_integrity(toon, original_context):
     """Verify that the compressed TOON preserves essential data from original context.
 
     Checks:
@@ -1060,7 +1095,7 @@ def _verify_toon_integrity(toon: dict, original_context: dict) -> bool:
         return False
 
 
-def _decompress_toon(toon: dict) -> dict:
+def _decompress_toon(toon):
     """Reconstruct a minimal context dict from a TOON object for integrity checking."""
     ctx = toon.get("context", {})
     files_list = ctx.get("files", [])
@@ -1080,8 +1115,10 @@ def node_toon_compression(state: FlowState) -> dict:
 
     After successful compression:
     - Verbose data saved to disk as TOON
-    - Memory variables cleared
+    - context_data set to None in this node (raw content freed from FlowState)
     - Only compact TOON remains in memory
+    - Remaining verbose fields (srs, readme, claude_md, project_graph, architecture)
+      are cleared by cleanup_level1_memory which runs after level1_merge_node.
 
     TOON object includes:
     - session_id
@@ -1095,6 +1132,9 @@ def node_toon_compression(state: FlowState) -> dict:
         session_path = Path(state.get("session_path", ""))
         context_data = state.get("context_data", {})
         complexity_score = state.get("complexity_score", 5)
+        # combined_complexity_score is on a 1-25 scale (simple*0.3 + graph*0.7 after linear scaling).
+        # May be None if graph-based analysis was skipped (e.g. no NetworkX/Lizard).
+        combined_complexity_score = state.get("combined_complexity_score")
         session_id = state.get("session_id", "")
         files_loaded = context_data.get("files_loaded", [])
 
@@ -1107,6 +1147,7 @@ def node_toon_compression(state: FlowState) -> dict:
             "timestamp": datetime.now().isoformat(),
             "version": "1.0.0",
             "complexity_score": complexity_score,
+            "combined_complexity_score": combined_complexity_score,  # 1-25 scale; None if not calculated
             "files_loaded_count": len(files_loaded),
             "context": {
                 "files": files_loaded,
@@ -1125,7 +1166,7 @@ def node_toon_compression(state: FlowState) -> dict:
         integrity_ok = _verify_toon_integrity(toon_object, context_data)
 
         # (b) Schema validation via toon_schema module
-        schema_errors: list = []
+        schema_errors = []
         if _TOON_SCHEMA_AVAILABLE:
             schema_valid, schema_errors = validate_toon(toon_object)
             if not schema_valid:
@@ -1175,18 +1216,26 @@ def node_toon_compression(state: FlowState) -> dict:
             "toon_schema_valid": integrity_ok,
             "toon_schema_errors": schema_errors,
             "toon_version": toon_object.get("version", "1.0.0"),
-            "clear_verbose_memory": True,
+            # Clear the largest field immediately after TOON is built
+            "context_data": None,
         }
-        write_level_log(state, "level1", "toon-compression", "OK",
-                        _time_mod.time() - _step_start, {
-                            "toon_saved": True,
-                            "schema_valid": integrity_ok,
-                            "compression_ratio": len(files_loaded),
-                        })
+        write_level_log(
+            state,
+            "level1",
+            "toon-compression",
+            "OK",
+            _time_mod.time() - _step_start,
+            {
+                "toon_saved": True,
+                "schema_valid": integrity_ok,
+                "compression_ratio": len(files_loaded),
+            },
+        )
         # Telemetry
         try:
             import json as _json_tel
             import time as _time_tel
+
             _sid_tel = state.get("session_id", result.get("session_id", ""))
             if _sid_tel:
                 _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -1206,8 +1255,7 @@ def node_toon_compression(state: FlowState) -> dict:
 
     except Exception as e:
         print("[TOON COMPRESSION] ERROR: {}".format(e), file=sys.stderr)
-        write_level_log(state, "level1", "toon-compression", "FAILED",
-                        _time_mod.time() - _step_start, None, str(e))
+        write_level_log(state, "level1", "toon-compression", "FAILED", _time_mod.time() - _step_start, None, str(e))
         _err_result = {
             "toon_saved": False,
             "toon_error": str(e),
@@ -1220,6 +1268,7 @@ def node_toon_compression(state: FlowState) -> dict:
         try:
             import json as _json_tel
             import time as _time_tel
+
             _sid_tel = state.get("session_id", "")
             if _sid_tel:
                 _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -1242,45 +1291,74 @@ def node_toon_compression(state: FlowState) -> dict:
 # MERGE NODE - Final Level 1 output
 # ============================================================================
 
+
 def level1_merge_node(state: FlowState) -> dict:
     """Merge all Level 1 data and prepare for Level 2.
 
     OUTPUT: Only TOON object (contains session_id, complexity_score, files_loaded_count + context)
     CLEARED: All verbose variables from memory
+
+    NOTE on level1_complete=True for PARTIAL status:
+    Even when level1_status=="PARTIAL" (e.g. context failed to load but complexity
+    succeeded), level1_complete is INTENTIONALLY set to True.  This ensures the
+    pipeline does not deadlock at the Level 1 gate.  Downstream steps receive
+    level1_status=="PARTIAL" so they can adapt accordingly.  Do NOT change
+    level1_complete to False on PARTIAL -- that would halt the entire pipeline.
     """
     _step_start = _time_mod.time()
+    # Determine Level 1 completion status based on both parallel branch results
+    _complexity_ok = bool(state.get("complexity_calculated", False))
+    _context_ok = bool(state.get("context_loaded", False))
+    _level1_status = "OK" if (_complexity_ok and _context_ok) else "PARTIAL"
+
+    # Gap1 fix: emit observable warning when PARTIAL so operators can detect degraded state
+    if _level1_status == "PARTIAL":
+        print(
+            "[LEVEL 1 MERGE] PARTIAL: complexity_ok={} context_ok={}".format(_complexity_ok, _context_ok),
+            file=sys.stderr,
+        )
+
     # Build final Level 1 output
     updates = {
         "level1_complete": True,
-        "level1_context_toon": state.get("toon_object", {}),  # ✓ TOON has everything inside
+        "level1_status": _level1_status,
+        "level1_context_toon": state.get("toon_object", {}),  # TOON has everything inside
     }
 
     # Signal memory cleanup - these variables should be cleared from memory
     # (not from disk, just from RAM variables)
     cleanup_signals = {
         "clear_memory": [
-            "context_data",      # Full context dict
-            "srs",               # Raw SRS content
-            "readme",            # Raw README content
-            "claude_md",         # Raw CLAUDE.md content
-            "complexity_score",  # Now in TOON object
-            "files_loaded_count",# Now in TOON object
-            "project_graph",     # Large graph object
-            "architecture",      # Large architecture object
+            "context_data",  # Full context dict
+            "srs",  # Raw SRS content
+            "readme",  # Raw README content
+            "claude_md",  # Raw CLAUDE.md content
+            # Note: complexity_score is intentionally RETAINED in state for Level 3 access
+            "files_loaded_count",  # Summarised in TOON
+            "project_graph",  # Large graph object
+            "architecture",  # Large architecture object
         ]
     }
 
     updates.update(cleanup_signals)
 
-    write_level_log(state, "level1", "merge", "OK", _time_mod.time() - _step_start, {
-        "level1_complete": True,
-        "toon_present": bool(state.get("toon_object")),
-        "context_percentage": state.get("context_percentage", 0),
-    })
+    write_level_log(
+        state,
+        "level1",
+        "merge",
+        "OK",
+        _time_mod.time() - _step_start,
+        {
+            "level1_complete": True,
+            "toon_present": bool(state.get("toon_object")),
+            "context_percentage": state.get("context_percentage", 0),
+        },
+    )
     # Telemetry
     try:
         import json as _json_tel
         import time as _time_tel
+
         _sid_tel = state.get("session_id", updates.get("session_id", ""))
         if _sid_tel:
             _tdir_tel = _LEVEL1_TELEMETRY_DIR
@@ -1302,6 +1380,7 @@ def level1_merge_node(state: FlowState) -> dict:
 # ============================================================================
 # HELPER: Actual memory cleanup function (called separately)
 # ============================================================================
+
 
 def cleanup_level1_memory(state: FlowState) -> dict:
     """Actually remove verbose variables from state.
@@ -1330,9 +1409,11 @@ def cleanup_level1_memory(state: FlowState) -> dict:
         value = state.get(field)
         if value:
             if isinstance(value, dict):
-                cleanup_summary[f"{field}_size_bytes"] = len(str(value).encode('utf-8'))
+                cleanup_summary["{}_size_bytes".format(field)] = len(str(value).encode("utf-8"))
             elif isinstance(value, (str, bytes)):
-                cleanup_summary[f"{field}_size_bytes"] = len(str(value).encode('utf-8') if isinstance(value, str) else value)
+                cleanup_summary["{}_size_bytes".format(field)] = len(
+                    str(value).encode("utf-8") if isinstance(value, str) else value
+                )
 
     # Verify TOON object is in state and has required fields
     toon = state.get("level1_context_toon", {})
@@ -1342,17 +1423,18 @@ def cleanup_level1_memory(state: FlowState) -> dict:
         cleanup_summary["toon_has_complexity_score"] = "complexity_score" in toon
         cleanup_summary["toon_has_files_loaded_count"] = "files_loaded_count" in toon
 
-    # Log cleanup status
+    # Log cleanup status (ASCII-safe prints for Windows cp1252 terminals)
     if os.getenv("CLAUDE_DEBUG") == "1":
         import sys
+
         print("\n[LEVEL 1 CLEANUP]", file=sys.stderr)
-        print(f"  Clearing {len(cleanup_summary['fields_cleared'])} verbose fields...", file=sys.stderr)
+        print("  Clearing {} verbose fields...".format(len(cleanup_summary["fields_cleared"])), file=sys.stderr)
         for field in cleanup_summary["fields_cleared"]:
-            if f"{field}_size_bytes" in cleanup_summary:
-                size_kb = cleanup_summary[f"{field}_size_bytes"] / 1024
-                print(f"    ✓ {field}: {size_kb:.1f}KB freed", file=sys.stderr)
-        print(f"  TOON object preserved: {list(toon.keys())}", file=sys.stderr)
-        print("  ✓ Memory cleanup complete\n", file=sys.stderr)
+            if "{}_size_bytes".format(field) in cleanup_summary:
+                size_kb = cleanup_summary["{}_size_bytes".format(field)] / 1024
+                print("    {} {:.1f}KB freed".format(field, size_kb), file=sys.stderr)
+        print("  TOON object preserved: {}".format(list(toon.keys())), file=sys.stderr)
+        print("  Memory cleanup complete\n", file=sys.stderr)
 
     # ---- Best-effort: estimate context window usage after cleanup ----
     _context_monitor_result = {}

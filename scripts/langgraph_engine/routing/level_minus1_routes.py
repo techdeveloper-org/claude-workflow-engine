@@ -39,6 +39,9 @@ def route_after_level_minus1_user_choice(state: FlowState) -> Literal["fix_level
         retry_count = state.get(StepKeys.LEVEL_MINUS1_RETRY_COUNT, 0)
         if retry_count < _MAX_LEVEL_MINUS1_ATTEMPTS:
             return "fix_level_minus1"
+        # Max attempts reached: ask node set choice="force_continue"; fall through below
 
-    # Default: continue to Level 1 (start with session loader)
+    # "force_continue": max-attempts path (ask node sets this when retry_count >= 3)
+    # "skip": user explicitly chose to proceed without fixing
+    # default/unknown: continue safely to Level 1
     return "level1_session"

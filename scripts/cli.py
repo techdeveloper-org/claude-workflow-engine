@@ -16,8 +16,8 @@ Version: 1.4.1
 import argparse
 import json
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -37,7 +37,7 @@ def cmd_run(args):
     """
     task = args.task or (" ".join(args.task_words) if args.task_words else "")
     if not task:
-        print("Error: No task provided. Usage: cwe run \"fix the bug\"")
+        print('Error: No task provided. Usage: cwe run "fix the bug"')
         sys.exit(1)
 
     mode = "0" if args.mode == "full" else "1"
@@ -104,8 +104,9 @@ def cmd_status(args):
     if session_file.exists():
         try:
             data = json.loads(session_file.read_text(encoding="utf-8"))
-            print(f"  Session ID: {data.get('session_id', 'unknown')}")
-            print(f"  Created: {data.get('created_at', 'unknown')}")
+            _meta = data.get("metadata", {})
+            print(f"  Session ID: {_meta.get('session_id', data.get('session_id', 'unknown'))}")
+            print(f"  Created: {_meta.get('created_at', data.get('created_at', 'unknown'))}")
         except Exception:
             pass
 
@@ -122,9 +123,7 @@ def cmd_health(args):
     checks = []
 
     # Python version
-    py_ver = (
-        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-    )
+    py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     ok = sys.version_info >= (3, 8)
     checks.append(("Python >= 3.8", py_ver, ok))
 
@@ -144,11 +143,7 @@ def cmd_health(args):
             text=True,
             timeout=5,
         )
-        ver = (
-            result.stdout.strip().split("\n")[0]
-            if result.returncode == 0
-            else "not found"
-        )
+        ver = result.stdout.strip().split("\n")[0] if result.returncode == 0 else "not found"
         checks.append(("GitHub CLI (gh)", ver, result.returncode == 0))
     except (FileNotFoundError, subprocess.TimeoutExpired):
         checks.append(("GitHub CLI (gh)", "not installed", False))
@@ -182,11 +177,13 @@ def cmd_health(args):
 
     # .env file
     env_file = Path(__file__).resolve().parent.parent / ".env"
-    checks.append((
-        ".env file",
-        "exists" if env_file.exists() else "missing (copy from .env.example)",
-        env_file.exists(),
-    ))
+    checks.append(
+        (
+            ".env file",
+            "exists" if env_file.exists() else "missing (copy from .env.example)",
+            env_file.exists(),
+        )
+    )
 
     # Print results
     passed = 0
@@ -233,8 +230,7 @@ def cmd_doctor(args):
             print(f"  MCP servers registered: {registered}")
             if registered < 12:
                 issues.append(
-                    f"Only {registered} MCP servers registered (expected 12+). "
-                    "Run 'cwe setup' to register all."
+                    f"Only {registered} MCP servers registered (expected 12+). " "Run 'cwe setup' to register all."
                 )
         except Exception as exc:
             issues.append(f"Cannot read settings.json: {exc}")
@@ -254,9 +250,7 @@ def cmd_doctor(args):
                 if (time.time() - s.stat().st_mtime) > 7 * 86400:
                     stale_count += 1
         if stale_count > 50:
-            issues.append(
-                f"{stale_count} stale sessions (>7 days). Consider archiving."
-            )
+            issues.append(f"{stale_count} stale sessions (>7 days). Consider archiving.")
         print(f"  Sessions: {total_count} total, {stale_count} stale (>7d)")
 
     # Check for non-ASCII characters in langgraph_engine Python files
@@ -271,10 +265,7 @@ def cmd_doctor(args):
             except Exception:
                 pass
         if non_ascii > 0:
-            issues.append(
-                f"{non_ascii} Python files contain non-ASCII characters "
-                "(Windows cp1252 risk)."
-            )
+            issues.append(f"{non_ascii} Python files contain non-ASCII characters " "(Windows cp1252 risk).")
         print(f"  Encoding check: {non_ascii} files with non-ASCII chars")
     else:
         print("  Encoding check: langgraph_engine directory not found")
@@ -308,9 +299,7 @@ def main():
         description="Claude Workflow Engine - Full SDLC Automation",
         epilog="Run 'cwe <command> --help' for command-specific help.",
     )
-    parser.add_argument(
-        "--version", "-v", action="store_true", help="Show version"
-    )
+    parser.add_argument("--version", "-v", action="store_true", help="Show version")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -325,17 +314,13 @@ def main():
         default="hook",
         help="Execution mode: hook (Steps 0-9) or full (Steps 0-14)",
     )
-    run_parser.add_argument(
-        "--debug", "-d", action="store_true", help="Enable debug logging"
-    )
+    run_parser.add_argument("--debug", "-d", action="store_true", help="Enable debug logging")
     run_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Dry run (Steps 0-7 only, skip GitHub/implementation)",
     )
-    run_parser.add_argument(
-        "--summary", "-s", action="store_true", help="Show execution summary"
-    )
+    run_parser.add_argument("--summary", "-s", action="store_true", help="Show execution summary")
     run_parser.set_defaults(func=cmd_run)
 
     # cwe setup
@@ -347,9 +332,7 @@ def main():
     status_parser.set_defaults(func=cmd_status)
 
     # cwe health
-    health_parser = subparsers.add_parser(
-        "health", help="Check dependencies and services"
-    )
+    health_parser = subparsers.add_parser("health", help="Check dependencies and services")
     health_parser.set_defaults(func=cmd_health)
 
     # cwe version

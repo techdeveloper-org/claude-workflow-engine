@@ -329,7 +329,7 @@ class TestRouteAfterMerge(unittest.TestCase):
         self.assertEqual(result, "ask_level_minus1_fix")
 
 
-class TestFixLevelMinus1Issues:
+class TestFixLevelMinus1Issues(unittest.TestCase):
     """Tests for the fix_level_minus1_issues() function."""
 
     def test_fix_unicode_sets_flag(self):
@@ -341,50 +341,55 @@ class TestFixLevelMinus1Issues:
             "project_root": ".",
         }
         result = fix_level_minus1_issues(state)
-        assert "level_minus1_fixes_applied" in result
-        assert result.get("level_minus1_ready_to_retry") is True
+        self.assertIn("level_minus1_fixes_applied", result)
+        self.assertTrue(result.get("level_minus1_ready_to_retry"))
 
-    def test_fix_path_backslashes(self, tmp_path):
+    def test_fix_path_backslashes(self):
         """Path fixer should convert backslashes to forward slashes."""
-        # Create a Python file with backslash paths
-        py_file = tmp_path / "test_paths.py"
-        py_file.write_text('path = "C:\\\\Users\\\\test"\n', encoding="utf-8")
+        import tempfile
 
-        state = {
-            "unicode_check": True,
-            "encoding_check": True,
-            "windows_path_check": False,
-            "project_root": str(tmp_path),
-        }
-        result = fix_level_minus1_issues(state)
-        assert isinstance(result, dict)
+        with tempfile.TemporaryDirectory() as td:
+            py_file = Path(td) / "test_paths.py"
+            py_file.write_text('path = "C:\\\\Users\\\\test"\n', encoding="utf-8")
+            state = {
+                "unicode_check": True,
+                "encoding_check": True,
+                "windows_path_check": False,
+                "project_root": td,
+            }
+            result = fix_level_minus1_issues(state)
+        self.assertIsInstance(result, dict)
 
-    def test_fix_preserves_escape_sequences(self, tmp_path):
+    def test_fix_preserves_escape_sequences(self):
         """Path fixer should NOT convert \\n, \\t, \\r to forward slashes."""
-        py_file = tmp_path / "test_escapes.py"
-        py_file.write_text('msg = "hello\\nworld\\ttab"\n', encoding="utf-8")
+        import tempfile
 
-        state = {
-            "unicode_check": True,
-            "encoding_check": True,
-            "windows_path_check": False,
-            "project_root": str(tmp_path),
-        }
-        fix_level_minus1_issues(state)
-        # Verify file still has escape sequences intact
-        content = py_file.read_text(encoding="utf-8")
-        assert "\\n" in content or "hello" in content
+        with tempfile.TemporaryDirectory() as td:
+            py_file = Path(td) / "test_escapes.py"
+            py_file.write_text('msg = "hello\\nworld\\ttab"\n', encoding="utf-8")
+            state = {
+                "unicode_check": True,
+                "encoding_check": True,
+                "windows_path_check": False,
+                "project_root": td,
+            }
+            fix_level_minus1_issues(state)
+            content = py_file.read_text(encoding="utf-8")
+        self.assertTrue("\\n" in content or "hello" in content)
 
-    def test_fix_empty_project(self, tmp_path):
+    def test_fix_empty_project(self):
         """Fix on empty project should not crash."""
-        state = {
-            "unicode_check": True,
-            "encoding_check": True,
-            "windows_path_check": False,
-            "project_root": str(tmp_path),
-        }
-        result = fix_level_minus1_issues(state)
-        assert isinstance(result, dict)
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            state = {
+                "unicode_check": True,
+                "encoding_check": True,
+                "windows_path_check": False,
+                "project_root": td,
+            }
+            result = fix_level_minus1_issues(state)
+        self.assertIsInstance(result, dict)
 
     def test_fix_all_checks_pass(self):
         """When all checks pass, fix should be a no-op."""
@@ -395,7 +400,7 @@ class TestFixLevelMinus1Issues:
             "project_root": ".",
         }
         result = fix_level_minus1_issues(state)
-        assert isinstance(result, dict)
+        self.assertIsInstance(result, dict)
 
 
 if __name__ == "__main__":

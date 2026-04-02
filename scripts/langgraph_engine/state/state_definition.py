@@ -96,6 +96,9 @@ class FlowState(TypedDict, total=False):
     context_error: Optional[str]
     context_metadata: Dict[str, Any]  # Additional context metadata
 
+    # Raw context dict (set by context_loader, cleared to None by toon_compression)
+    context_data: Optional[Dict]  # {srs, readme, claude_md, files_loaded} -- freed after TOON built
+
     # Context loader detail fields (Subtasks 3, 5, 6, 7, 8)
     context_skipped_files: Optional[List[str]]  # Files skipped due to size/timeout
     context_load_warnings: Optional[List[str]]  # Warnings from loader
@@ -129,6 +132,7 @@ class FlowState(TypedDict, total=False):
     # Level 1 merge result
     level1_status: str  # OK / PARTIAL / FAILED
     level1_context_toon: Optional[Dict]  # TOON-formatted context from Level 1 (for Level 3)
+    clear_memory: Optional[List]  # Signal list of field names to clear (written by merge node)
 
     # Level 1 TOON schema validation result
     toon_schema_valid: Optional[bool]  # True if TOON passed validate_toon()
@@ -144,7 +148,9 @@ class FlowState(TypedDict, total=False):
     graph_complexity_score: Optional[int]  # 1-25 graph-based score
     graph_metrics: Optional[Dict]  # density, centrality, coupling, etc.
     cyclomatic_complexity_avg: Optional[float]  # average cyclomatic complexity
-    combined_complexity_score: Optional[int]  # final combined 1-25 score
+    combined_complexity_score: Optional[
+        int
+    ]  # final combined 1-25 score (NOT 1-10 -- see CLAUDE.md Key Components table)
 
     # Level 1 caching
     context_cache_hit: Optional[bool]  # True if cache was valid and used

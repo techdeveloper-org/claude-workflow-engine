@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 1.8.1 | **Status:** Alpha | **Last Updated:** 2026-03-31
+**Version:** 1.8.2 | **Status:** Alpha | **Last Updated:** 2026-04-02
 
 ---
 
@@ -831,9 +831,9 @@ policies/
 | **Docker** | `Dockerfile` + `docker-compose.yml` — one-command deployment |
 | **GitHub Actions CI** | `.github/workflows/ci.yml` — configurable matrix (Python 3.10/3.12), lint, tests. Auto-trigger disabled; runs on `workflow_dispatch` only. |
 | **Version Sync** | `scripts/sync-version.py` — syncs VERSION to in-engine MCP servers (v1.8.1: extracted servers have own versioning in their repos) |
-| **Test Suite** | 74 test files covering MCP servers, pipeline steps, integrations, security, e2e, load |
+| **Test Suite** | 75 test files covering MCP servers, pipeline steps, integrations, security, e2e, load |
 | **Coverage Setup** | `pytest-cov` + `coverage` in requirements.txt |
-| **Documentation** | 44+ docs, SRS, CHANGELOG, guides, deployment guide, troubleshooting guide, ADRs, runbooks |
+| **Documentation** | 47 docs, SRS, CHANGELOG, guides, deployment guide, troubleshooting guide, ADRs, runbooks |
 
 ---
 
@@ -1178,10 +1178,10 @@ claude-workflow-engine/
 |
 +-- src/mcp/                          # 2 in-engine servers (session, vector-db) + bridge (session_hooks)
 +-- policies/                         # 63 policy definitions (62 .md + 1 .json)
-+-- tests/                            # 69 test files
-+-- docs/                             # 46 documentation files
++-- tests/                            # 75 test files
++-- docs/                             # 47 documentation files
 +-- docs/uml/                         # Auto-generated UML diagrams (13 types)
-+-- rules/                            # 10 coding standard definitions
++-- rules/                            # 34 coding standard definitions
 |
 +-- VERSION                           # Single source of truth (1.5.0)
 +-- CLAUDE.md                         # Project context for Claude Code
@@ -1202,12 +1202,12 @@ claude-workflow-engine/
 | MCP Tools | 328 |
 | LangGraph Engine Modules | 155+ (86 root + 6 subgraphs + 9 packages) |
 | Policy Files | 63 (62 .md + 1 .json) |
-| Standards Files | 10 |
-| Test Files | 69+ |
-| Total Python Files | 360+ |
+| Standards Files | 34 |
+| Test Files | 75 |
+| Total Python Files | 295+ |
 | Call Graph | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 | UML Diagram Types | 13 (CallGraph-powered) |
-| Documentation Files | 46 |
+| Documentation Files | 47 |
 | RAG Collections | 4 (Qdrant vector DB) |
 | Supported Languages | 20+ |
 | Supported Frameworks | 15+ |
@@ -1249,7 +1249,7 @@ No other AI coding tool automates the full Software Development Life Cycle. Here
 | **Quality gate enforcement** | Yes (4 gates, configurable) | No | No | No | No |
 | **Tool call optimization (60-85% savings)** | Yes (4-layer system) | No | No | No | No |
 | **Cross-session RAG learning** | Yes (Qdrant, 4 collections) | No | No | No | No |
-| **Multi-language standards (8 langs)** | Yes (3,400+ lines of rules) | No | No | No | No |
+| **Multi-language standards (8 langs)** | Yes (34 rule files, 5,000+ lines) | No | No | No | No |
 | **Dependency resolution (5 build systems)** | Yes (Python/Java/Node/Go/Rust) | No | No | No | No |
 | **Smart user interaction** | Yes (6 step-specific Q&A) | No | No | No | No |
 | **Pipeline telemetry** | Yes (per-step JSONL) | No | No | No | No |

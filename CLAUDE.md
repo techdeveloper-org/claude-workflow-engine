@@ -1,9 +1,9 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.8.1
+**Version:** 1.8.2
 **Type:** LangGraph Orchestration Pipeline with RAG + Call Graph Intelligence + Template Fast-Path
-**Last Updated:** 2026-03-31
+**Last Updated:** 2026-04-02
 
 ---
 
@@ -20,8 +20,8 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Status** | Active Development |
 | **Primary Location** | scripts/langgraph_engine/ |
 | **MCP Servers** | 20 total: 2 in-engine + 18 separate repos (328 tools) |
-| **Total Python Files** | 375+ |
-| **Test Files** | 74 |
+| **Total Python Files** | 295+ |
+| **Test Files** | 75 |
 | **Call Graph** | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 
 ---
@@ -82,10 +82,10 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 |   +-- 02-standards-system/          # Level 2 policies (+ tool optimization, MCP discovery)
 |   +-- 03-execution-system/          # Level 3 policies (15 steps + RAG, CallGraph, QualityGate, hooks)
 +-- src/mcp/                          # 2 in-engine MCP servers + shared bridge (session, vector-db, session_hooks, base/)
-+-- tests/                            # 69 test files
-+-- docs/                             # 46 documentation files
++-- tests/                            # 75 test files
++-- docs/                             # 47 documentation files
 +-- docs/uml/                         # Auto-generated UML diagrams (13 types)
-+-- rules/                            # 12 coding standard definitions (incl. doc governance + docstrings-only)
++-- rules/                            # 34 coding standard definitions (incl. doc governance + docstrings-only + microservices patterns)
 ```
 
 ### Key Components
@@ -106,7 +106,7 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | RAG Integration | scripts/langgraph_engine/rag_integration.py | Vector DB decision caching + orchestration-level plan cache |
 | Pre-Analysis Node | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | orchestration_pre_analysis_node: CallGraph scan + RAG lookup before Step 0 |
 | Level -1 | scripts/langgraph_engine/subgraphs/level_minus1.py | Auto-fix enforcement |
-| Level 1 | scripts/langgraph_engine/subgraphs/level1_sync.py | Session/context sync + TOON |
+| Level 1 | scripts/langgraph_engine/subgraphs/level1_sync.py | Session/context sync + TOON. Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple×0.3 + graph×0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale — do NOT treat it as 1-10.** |
 | Level 2 | scripts/langgraph_engine/subgraphs/level2_standards.py | Standards loading |
 | Level 3 v2 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 15-step execution with RAG - ACTIVE |
 | Level 3 v1 | scripts/langgraph_engine/subgraphs/level3_execution.py | Original pipeline - DEPRECATED |
@@ -383,16 +383,16 @@ See environment variables in `.env.example`:
 
 ---
 
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-04-02
 
 
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: v1.8.1 — Extract 18 MCP servers to individual private repos under techdeveloper-org. Each repo: server.py + base/ copy + README + CLAUDE.md + requirements.txt. settings.json updated to new paths. claude-workflow-engine src/mcp/ now contains only 2 in-engine servers (session, vector-db) + bridge (session_hooks.py).
-- **Skill**: python-core
+- **Task**: v1.8.2 — Add 22 microservices coding standards (rules 13-34), fix Level 1 complexity scaling (linear interpolation 1-10 to 1-25), session metadata nesting, ASCII-safe cp1252 prints, TOON combined_complexity_score inclusion, Level -1 routing comments, test fixes (unittest.TestCase base class).
+- **Skill**: python-core, java-spring-boot-microservices
 - **Agent**: python-backend-engineer
-- **Date**: 2026-03-31
+- **Date**: 2026-04-02
 
 ## Dependency Notes
 
