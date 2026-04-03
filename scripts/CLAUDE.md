@@ -1,7 +1,7 @@
 # Claude Workflow Engine - Scripts Directory Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.11.0
+**Version:** 1.12.0
 **Type:** LangGraph Orchestration Pipeline with RAG
 **Last Updated:** 2026-04-03
 
@@ -18,14 +18,19 @@ This directory contains the pipeline entry point, hook scripts, and the core `la
 | File | Purpose |
 |------|---------|
 | `3-level-flow.py` | Main pipeline entry point |
-| `pre-tool-enforcer.py` | PreToolUse hook — blocks Write/Edit until Level 1/2 complete |
-| `post-tool-tracker.py` | PostToolUse hook — progress tracking, GitHub integration |
-| `stop-notifier.py` | Stop hook — voice notification on session end |
-| `sync-version.py` | Syncs version from VERSION file to all MCP servers |
+| `pre-tool-enforcer.py` | PreToolUse hook entry point (shim -> pre_tool_enforcer/) |
+| `post-tool-tracker.py` | PostToolUse hook entry point (shim -> post_tool_tracker/) |
+| `stop-notifier.py` | Stop hook entry point (shim -> stop_notifier/) |
+| `ide_paths.py` | Path constants — imported by hook packages as bare module |
+| `project_session.py` | Session utilities — imported by hook packages as bare module |
+| `policy_tracking_helper.py` | Policy tracking — imported by hook packages as bare module |
+| `setup/` | One-time environment setup scripts (setup_wizard.py, install-auto-hooks.sh, etc.) |
+| `bin/` | Windows .bat operational launchers |
+| `tools/` | Developer utilities: sync-version.py, release.py, metrics-emitter.py, voice-notifier.py, etc. |
 | `/CHANGELOG.md` | Full project changelog (root) |
 | `/SRS.md` | System Requirements Specification (root) |
 
-### langgraph_engine/ Package Structure (v1.11.0)
+### langgraph_engine/ Package Structure (v1.12.0)
 
 ```
 langgraph_engine/

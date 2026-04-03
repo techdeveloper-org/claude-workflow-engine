@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 1.11.0 | **Status:** Alpha | **Last Updated:** 2026-04-03
+**Version:** 1.12.0 | **Status:** Alpha | **Last Updated:** 2026-04-03
 
 ---
 
@@ -1202,11 +1202,11 @@ claude-workflow-engine/
 | Execution Steps | 15 (Step 0 - Step 14) |
 | MCP Servers | 20 (328 tools) — all in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories) |
 | MCP Tools | 328 |
-| LangGraph Engine Modules | 155+ (86 root + 6 subgraphs + 9 packages) |
+| LangGraph Engine Modules | 90+ (root modules + 9 canonical packages, no shim layer) |
 | Policy Files | 63 (62 .md + 1 .json) |
 | Standards Files | 34 |
 | Test Files | 75 |
-| Total Python Files | 295+ |
+| Total Python Files | 225+ |
 | Call Graph | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 | UML Diagram Types | 13 (CallGraph-powered) |
 | Documentation Files | 47 |
