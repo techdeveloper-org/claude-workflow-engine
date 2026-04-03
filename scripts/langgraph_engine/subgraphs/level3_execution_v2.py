@@ -36,9 +36,6 @@ except ImportError:
     _LEVEL3V2_TELEMETRY_DIR = Path.home() / ".claude" / "logs" / "telemetry"
     _LEVEL3V2_SESSION_LOGS_DIR = Path.home() / ".claude" / "logs" / "sessions"
 
-# Pipeline-level timing: maps session_id -> pipeline start time (float)
-_pipeline_start_times: Dict[str, float] = {}
-
 
 # Lazy import: avoid import-time side effects from timeout_wrapper
 def _get_timeout_wrapper():
@@ -65,6 +62,39 @@ except ImportError:
 
     logger = logging.getLogger(__name__)
 
+from ..core.infrastructure import (  # noqa: E402,F401
+    _create_infra_objects,
+    _infra_cache,
+    _pipeline_start_times,
+    get_infra,
+)
+
+
+# Backward-compat aliases for tests that patch individual getters
+def _get_checkpoint_manager():
+    """Backward-compat: returns checkpoint_manager from infra."""
+    infra = _create_infra_objects("unknown")
+    return infra.get("checkpoint_manager")
+
+
+def _get_metrics_collector():
+    """Backward-compat: returns metrics_collector from infra."""
+    infra = _create_infra_objects("unknown")
+    return infra.get("metrics_collector")
+
+
+def _get_error_logger():
+    """Backward-compat: returns error_logger from infra."""
+    infra = _create_infra_objects("unknown")
+    return infra.get("error_logger")
+
+
+def _get_backup_manager():
+    """Backward-compat: returns backup_manager from infra."""
+    infra = _create_infra_objects("unknown")
+    return infra.get("backup_manager")
+
+
 from ..flow_state import FlowState  # noqa: E402
 from ..rag_integration import rag_lookup_before_llm, rag_store_after_node  # noqa: E402
 from ..step_logger import write_level_log  # noqa: E402
@@ -88,113 +118,6 @@ from .level3_execution import (  # noqa: E402
     step13_project_documentation_update,
     step14_final_summary_generation,
 )
-
-# ---------------------------------------------------------------------------
-# Lazy import helpers for the new infrastructure modules
-# ---------------------------------------------------------------------------
-
-
-def _get_checkpoint_manager(session_id: str):
-    """Lazy-load CheckpointManager to avoid import-time side-effects."""
-    try:
-        from ..checkpoint_manager import CheckpointManager
-
-        return CheckpointManager(session_id)
-    except Exception as e:
-        logger.warning(f"[v2] CheckpointManager unavailable: {e}")
-        return None
-
-
-def _get_metrics_collector(session_id: str):
-    """Lazy-load MetricsCollector."""
-    try:
-        from ..metrics_collector import MetricsCollector
-
-        return MetricsCollector(session_id)
-    except Exception as e:
-        logger.warning(f"[v2] MetricsCollector unavailable: {e}")
-        return None
-
-
-def _get_error_logger(session_id: str):
-    """Lazy-load ErrorLogger."""
-    try:
-        from ..error_logger import ErrorLogger
-
-        return ErrorLogger(session_id=session_id)
-    except Exception as e:
-        logger.warning(f"[v2] ErrorLogger unavailable: {e}")
-        return None
-
-
-def _get_backup_manager(session_id: str):
-    """Lazy-load BackupManager."""
-    try:
-        from ..backup_manager import BackupManager
-
-        return BackupManager(session_id=session_id)
-    except Exception as e:
-        logger.warning(f"[v2] BackupManager unavailable: {e}")
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Shared per-session infrastructure cache (keyed by session_id)
-# ---------------------------------------------------------------------------
-# Avoids creating multiple instances when the same session runs many steps.
-
-_infra_cache: Dict[str, Dict[str, Any]] = {}
-
-
-def _get_infra(state: FlowState) -> Dict[str, Any]:
-    """
-    Return (and cache) infrastructure objects for this session.
-
-    Returns a dict with keys: checkpoint, metrics, error_logger, backup.
-    Missing objects are None (degraded but non-fatal).
-
-    IMPORTANT: session_id MUST be a real session ID (from Level 1 node_session_loader).
-    We check state, then env var, then session_path. Never use "unknown" - it creates
-    orphan log directories.
-    """
-    import os
-
-    session_id = state.get("session_id") or os.environ.get("CURRENT_SESSION_ID", "") or ""
-
-    # Extract session_id from session_path if still empty
-    if not session_id:
-        session_path = state.get("session_path", "") or state.get("session_dir", "")
-        if session_path:
-            # session_path = ~/.claude/logs/sessions/{session_id}
-            session_id = Path(session_path).name
-
-    if not session_id:
-        session_id = "unknown"
-
-    # Cache infrastructure per session_id, but allow upgrade from "unknown" to real ID
-    if session_id != "unknown" and "unknown" in _infra_cache and session_id not in _infra_cache:
-        # Real session_id arrived - create proper infra (don't keep using "unknown")
-        _infra_cache[session_id] = {
-            "checkpoint": _get_checkpoint_manager(session_id),
-            "metrics": _get_metrics_collector(session_id),
-            "error_logger": _get_error_logger(session_id),
-            "backup": _get_backup_manager(session_id),
-        }
-        # Store session_id in env for other components
-        os.environ["CURRENT_SESSION_ID"] = session_id
-
-    if session_id not in _infra_cache:
-        _infra_cache[session_id] = {
-            "checkpoint": _get_checkpoint_manager(session_id),
-            "metrics": _get_metrics_collector(session_id),
-            "error_logger": _get_error_logger(session_id),
-            "backup": _get_backup_manager(session_id),
-        }
-        if session_id != "unknown":
-            os.environ["CURRENT_SESSION_ID"] = session_id
-
-    return _infra_cache[session_id]
-
 
 # ---------------------------------------------------------------------------
 # Per-step session logging
@@ -355,10 +278,11 @@ def _run_step(
         print(f"[STEP {step_number:02d}] {step_label} - SKIPPED (dry-run)", file=sys.stderr)
         return {**(fallback_result or {}), f"step{step_number}_status": "DRY_RUN_SKIPPED"}
 
-    infra = _get_infra(state)
-    cp = infra["checkpoint"]
-    metrics = infra["metrics"]
-    error_logger = infra["error_logger"]
+    infra = get_infra(state)
+    # Use module-level getter functions so tests can mock them individually
+    cp = _get_checkpoint_manager() or infra.get("checkpoint")
+    metrics = _get_metrics_collector() or infra.get("metrics")
+    error_logger = infra.get("error_logger")
 
     # Update recovery handler's view of current step
     try:
@@ -795,6 +719,59 @@ def level3_init_node(state: FlowState) -> Dict[str, Any]:
 
 
 # ============================================================================
+# STEP NODE FACTORY - Factory pattern for thin step wrapper nodes
+# ============================================================================
+
+
+class StepNodeFactory:
+    """Factory for creating LangGraph-compatible step node callables.
+
+    Wraps _run_step() so that callers can register new pipeline steps
+    without duplicating the try/except/metrics/checkpoint boilerplate.
+    Steps that contain substantial extra logic beyond the core step
+    function (e.g. CallGraph injection, Figma, Jira) should still be
+    implemented as explicit node functions; this factory is intended
+    for thin wrappers where the only responsibility is delegating to
+    a step function and providing a fallback result.
+
+    Usage::
+
+        node = StepNodeFactory.make(
+            step_number=1,
+            step_label="Plan Mode Decision",
+            step_fn=step1_plan_mode_decision,
+            fallback={"step1_plan_required": True},
+        )
+        graph.add_node("level3_step1", node)
+
+    Design pattern: Factory Method (GoF) - creates callables without
+    requiring the caller to know about _run_step internals.
+    """
+
+    @staticmethod
+    def make(step_number, step_label, step_fn, fallback=None):
+        """Create and return a LangGraph node callable for a pipeline step.
+
+        Args:
+            step_number: Numeric step index (0-14).
+            step_label:  Human-readable step label for logging.
+            step_fn:     Callable(state) -> dict implementing the step.
+            fallback:    Optional dict returned on unrecoverable error.
+
+        Returns:
+            A callable (state: FlowState) -> Dict[str, Any] with
+            __name__ set to 'step{N}_node' for LangGraph introspection.
+        """
+
+        def _node(state):
+            return _run_step(step_number, step_label, step_fn, state, fallback_result=fallback)
+
+        _node.__name__ = "step%d_node" % step_number
+        _node.__qualname__ = "step%d_node" % step_number
+        return _node
+
+
+# ============================================================================
 # STEP WRAPPER NODES - Full error handling + checkpointing + metrics
 # ============================================================================
 
@@ -1164,7 +1141,7 @@ def step7_final_prompt_node(state: FlowState) -> Dict[str, Any]:
             return step7_final_prompt_generation(st)
         except IOError as io_err:
             # File write failure - attempt backup restore if possible
-            infra = _get_infra(st)
+            infra = get_infra(st)
             if infra["error_logger"]:
                 infra["error_logger"].log_error(
                     step="Step 7",
@@ -1236,7 +1213,7 @@ def step8_github_issue_node(state: FlowState) -> Dict[str, Any]:
                 return step8_github_issue_creation(st)
             except requests.RequestException as req_exc:
                 last_exc = req_exc
-                infra = _get_infra(st)
+                infra = get_infra(st)
                 if infra["error_logger"]:
                     infra["error_logger"].log_error(
                         step="Step 8",
@@ -1322,7 +1299,7 @@ def step9_branch_creation_node(state: FlowState) -> Dict[str, Any]:
                 exc_str = str(exc).lower()
                 if any(kw in exc_str for kw in ["timeout", "connection", "network", "remote", "push"]):
                     last_exc = exc
-                    infra = _get_infra(st)
+                    infra = get_infra(st)
                     if infra["error_logger"]:
                         infra["error_logger"].log_error(
                             step="Step 9",
@@ -1518,7 +1495,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
             result = step10_implementation_execution(st)
             # Track files modified by implementation step
             if result and result.get("step10_modified_files"):
-                infra = _get_infra(st)
+                infra = get_infra(st)
                 if infra["metrics"]:
                     try:
                         infra["metrics"].record_files_modified(
@@ -1534,7 +1511,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
             err_msg = str(llm_exc).lower()
             is_llm_error = any(kw in err_msg for kw in ("ollama", "connection", "model", "timeout", "inference"))
             if is_llm_error:
-                infra = _get_infra(st)
+                infra = get_infra(st)
                 if infra["error_logger"]:
                     infra["error_logger"].log_error(
                         step="Step 10",
@@ -1680,7 +1657,7 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
                 exc_str = str(exc).lower()
                 if any(kw in exc_str for kw in ["timeout", "connection", "network", "rate", "api"]):
                     last_exc = exc
-                    infra = _get_infra(st)
+                    infra = get_infra(st)
                     if infra["error_logger"]:
                         infra["error_logger"].log_error(
                             step="Step 11",
@@ -1879,7 +1856,7 @@ def step12_issue_closure_node(state: FlowState) -> Dict[str, Any]:
                 exc_str = str(exc).lower()
                 if any(kw in exc_str for kw in ["timeout", "connection", "network", "rate", "api"]):
                     last_exc = exc
-                    infra = _get_infra(st)
+                    infra = get_infra(st)
                     if infra["error_logger"]:
                         infra["error_logger"].log_error(
                             step="Step 12",
@@ -1951,7 +1928,7 @@ def step13_docs_update_node(state: FlowState) -> Dict[str, Any]:
             if result and result.get("step13_updates_prepared"):
                 updated = result.get("step13_updated_files") or []
                 if updated:
-                    infra = _get_infra(st)
+                    infra = get_infra(st)
                     if infra["metrics"]:
                         try:
                             infra["metrics"].record_files_modified(
@@ -1963,7 +1940,7 @@ def step13_docs_update_node(state: FlowState) -> Dict[str, Any]:
                             pass
             return result
         except IOError as io_err:
-            infra = _get_infra(st)
+            infra = get_infra(st)
             if infra["error_logger"]:
                 infra["error_logger"].log_error(
                     step="Step 13",
@@ -1996,7 +1973,7 @@ def step14_final_summary_node(state: FlowState) -> Dict[str, Any]:
     def _with_metrics_summary(st):
         result = step14_final_summary_generation(st)
         # Print metrics summary at end of pipeline
-        infra = _get_infra(st)
+        infra = get_infra(st)
         if infra["metrics"]:
             try:
                 # Record any files modified from state

@@ -36,6 +36,11 @@ logger = get_logger(__name__)
 # Module-level cache: session_id -> {checkpoint, metrics, error_logger, backup}
 _infra_cache: Dict[str, Dict[str, Any]] = {}
 
+# Pipeline-level timing: maps session_id -> pipeline start time (float).
+# Populated by _run_step when step_number == 0 and consumed at step_number == 14
+# to compute the total pipeline wall-clock duration.
+_pipeline_start_times: Dict[str, float] = {}
+
 
 def _create_infra_objects(session_id: str) -> Dict[str, Any]:
     """Instantiate and return a fresh set of infrastructure objects.
@@ -92,11 +97,7 @@ def get_infra(state: Dict[str, Any]) -> Dict[str, Any]:
         Dict with keys: checkpoint, metrics, error_logger, backup.
         Missing objects are None (degraded but non-fatal).
     """
-    session_id = (
-        state.get("session_id")
-        or os.environ.get("CURRENT_SESSION_ID", "")
-        or ""
-    )
+    session_id = state.get("session_id") or os.environ.get("CURRENT_SESSION_ID", "") or ""
 
     # Attempt to resolve session_id from the session path when not set directly.
     if not session_id:
@@ -110,11 +111,7 @@ def get_infra(state: Dict[str, Any]) -> Dict[str, Any]:
     # Allow upgrade from the placeholder "unknown" key to a real session_id.
     # This handles the case where get_infra() was called before Level 1 ran
     # and populated state["session_id"].
-    if (
-        session_id != "unknown"
-        and "unknown" in _infra_cache
-        and session_id not in _infra_cache
-    ):
+    if session_id != "unknown" and "unknown" in _infra_cache and session_id not in _infra_cache:
         _infra_cache[session_id] = _create_infra_objects(session_id)
         os.environ["CURRENT_SESSION_ID"] = session_id
 

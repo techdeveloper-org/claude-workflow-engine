@@ -34,14 +34,18 @@ infrastructure
 
     clear_infra_cache - removes cached infrastructure for a given session
     or clears the entire cache (useful in tests).
+
+    _pipeline_start_times - module-level dict mapping session_id to the
+    wall-clock time.time() when Step 0 started for that session.  Used
+    to compute the total pipeline duration when Step 14 completes.
 """
 
+from .error_handler import NodeResult, node_error_handler, safe_execute
+from .infrastructure import _pipeline_start_times, clear_infra_cache, get_infra
+from .integration_hook import create_integration_hook
 from .lazy_loader import LazyLoader
 from .logger_factory import get_logger
-from .error_handler import node_error_handler, safe_execute, NodeResult
-from .integration_hook import create_integration_hook
-from .infrastructure import get_infra, clear_infra_cache
-from .step_decorator import create_step_node, StepExecutionContext
+from .step_decorator import StepExecutionContext, create_step_node
 
 __all__ = [
     # lazy_loader
@@ -57,6 +61,7 @@ __all__ = [
     # infrastructure
     "get_infra",
     "clear_infra_cache",
+    "_pipeline_start_times",
     # step_decorator
     "create_step_node",
     "StepExecutionContext",
