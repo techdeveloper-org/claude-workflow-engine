@@ -15,6 +15,7 @@ from .api_client import detect_sonar_installation, get_project_measures, get_qua
 from .auto_fixer import SonarAutoFixer
 from .config import get_sonar_config
 from .lightweight_scanner import run_basic_scan
+from .orchestrator import create_issues_for_findings, scan_and_report  # noqa: F401
 from .result_aggregator import aggregate_scan_result  # noqa: F401
 from .result_aggregator import categorize_findings, generate_fix_prompt
 
