@@ -1,9 +1,9 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.8.2
+**Version:** 1.11.0
 **Type:** LangGraph Orchestration Pipeline with RAG + Call Graph Intelligence + Template Fast-Path
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-03
 
 ---
 
@@ -20,7 +20,7 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Status** | Active Development |
 | **Primary Location** | scripts/langgraph_engine/ |
 | **MCP Servers** | 20 total: 2 in-engine + 18 separate repos (328 tools) |
-| **Total Python Files** | 295+ |
+| **Total Python Files** | 310+ |
 | **Test Files** | 75 |
 | **Call Graph** | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 
@@ -73,11 +73,11 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 |   |   +-- parsers/                  # Abstract Factory: 4 language parsers (Py/Java/TS/Kotlin)
 |   |   +-- integrations/             # Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins
 |   |   +-- pipeline_builder.py       # Builder Pattern: PipelineBuilder chainable API
-|   |   +-- subgraphs/               # Level -1, 1, 2, 3 subgraph implementations
-|   |   +-- level_minus1/            # [v1.9] Level -1 Auto-Fix package (policies/)
-|   |   +-- level1_sync/             # [v1.9] Level 1 Sync package (3 modules + policies/ + architecture/)
-|   |   +-- level2_standards/        # [v1.9] Level 2 Standards package (2 modules + policies/ + architecture/)
-|   |   +-- level3_execution/        # [v1.9] Level 3 Execution package (15 modules + sonarqube/ + policies/ + architecture/)
+|   |   +-- subgraphs/               # [v1.11] Backward-compat shim bridge (all levels migrated)
+|   |   +-- level_minus1/            # [v1.9] Level -1 Auto-Fix package (nodes, merge, recovery, policies/)
+|   |   +-- level1_sync/             # [v1.11] Level 1 Sync package (9 modules + policies/ + architecture/)
+|   |   +-- level2_standards/        # [v1.11] Level 2 Standards package (7 modules + policies/ + architecture/)
+|   |   +-- level3_execution/        # [v1.11] Level 3 Execution package (20+ modules + steps/ + v2_nodes/ + sonarqube/ + policies/ + architecture/)
 |   |   +-- [60+ shared modules]     # Cross-level: LLM, caching, metrics, git, state, etc.
 |   +-- architecture/                 # generate_system_diagram.py (shared utility)
 +-- policies/                         # README pointing to level packages (policies moved into level_*/policies/)
@@ -94,7 +94,7 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | Orchestrator | scripts/langgraph_engine/orchestrator.py | Main StateGraph pipeline |
-| Flow State | scripts/langgraph_engine/flow_state.py | Backward-compat shim → re-exports from state/ |
+| Flow State | scripts/langgraph_engine/flow_state.py | Backward-compat shim -> re-exports from state/ |
 | State Package | scripts/langgraph_engine/state/ | FlowState, StepKeys, reducers, ToonObject, optimizer |
 | Core Package | scripts/langgraph_engine/core/ | LazyLoader, get_logger, node_error_handler, NodeResult, create_step_node |
 | Routing Package | scripts/langgraph_engine/routing/ | All 7 routing functions split by level |
@@ -105,20 +105,20 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | SonarQube Package | scripts/langgraph_engine/sonarqube/ | Facade: api_client, lightweight, aggregator, auto_fixer |
 | Integrations Package | scripts/langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
 | RAG Integration | scripts/langgraph_engine/rag_integration.py | Vector DB decision caching + orchestration-level plan cache |
+| Level -1 | scripts/langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical; subgraphs/level_minus1.py is shim) |
+| Level 1 | scripts/langgraph_engine/level1_sync/ | Session/context sync + TOON (canonical; subgraphs/level1_sync/ is shim). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
+| Level 2 | scripts/langgraph_engine/level2_standards/ | Standards loading (canonical; subgraphs/level2_standards.py is shim) |
+| Level 3 v2 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 15-step execution with RAG - ACTIVE (bridged via level3_execution/v2_nodes/) |
+| Level 3 v1 | scripts/langgraph_engine/level3_execution/steps/ | v1 steps (DEPRECATED, bridged from subgraphs/level3_execution/steps/) |
 | Pre-Analysis Node | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | orchestration_pre_analysis_node: CallGraph scan + RAG lookup before Step 0 |
-| Level -1 | scripts/langgraph_engine/subgraphs/level_minus1.py | Auto-fix enforcement |
-| Level 1 | scripts/langgraph_engine/subgraphs/level1_sync.py | Session/context sync + TOON. Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple×0.3 + graph×0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale — do NOT treat it as 1-10.** |
-| Level 2 | scripts/langgraph_engine/subgraphs/level2_standards.py | Standards loading |
-| Level 3 v2 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 15-step execution with RAG - ACTIVE |
-| Level 3 v1 | scripts/langgraph_engine/subgraphs/level3_execution.py | Original pipeline - DEPRECATED |
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
-| Call Graph Builder | scripts/langgraph_engine/call_graph_builder.py | AST-based FQN call stack (compat shim → parsers/) |
+| Call Graph Builder | scripts/langgraph_engine/call_graph_builder.py | AST-based FQN call stack (compat shim -> parsers/) |
 | Call Graph Analyzer | scripts/langgraph_engine/call_graph_analyzer.py | Pipeline impact analysis (Steps 2/10/11) |
-| UML Generators | scripts/langgraph_engine/uml_generators.py | Compat shim → diagrams/DiagramFactory |
+| UML Generators | scripts/langgraph_engine/uml_generators.py | Compat shim -> diagrams/DiagramFactory |
 | Doc Manager | scripts/langgraph_engine/level3_documentation_manager.py | Circular SDLC doc cycle (Step 0/13) |
 | Session Bridge | src/mcp/session_hooks.py | MCP direct import bridge |
 | Metrics Aggregator | scripts/langgraph_engine/metrics_aggregator.py | Session/step/LLM/tool stats from logs |
-| SonarQube Scanner | scripts/langgraph_engine/sonarqube_scanner.py | Legacy entry point → sonarqube/ package |
+| SonarQube Scanner | scripts/langgraph_engine/sonarqube_scanner.py | Legacy entry point -> sonarqube/ package |
 | Quality Gate | scripts/langgraph_engine/quality_gate.py | 4-gate merge enforcement |
 | Test Generator | scripts/langgraph_engine/test_generator.py | Template-based unit tests (4 languages) |
 | Jira Workflow | scripts/langgraph_engine/level3_steps8to12_jira.py | Dual GitHub+Jira integration (Steps 8/9/11/12) |
@@ -137,12 +137,12 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | Secrets Scanner | scripts/secrets_check.py | CI gate: 6 regex patterns, exit 1 on finding |
 | Pin Requirements | scripts/pin_requirements.py | Generates requirements.pinned.txt + requirements.bounds.txt |
 
-### MCP Servers (20 servers, 328 tools) — v1.8.1 Extracted to Separate Repos
+### MCP Servers (20 servers, 328 tools) -- v1.8.1 Extracted to Separate Repos
 
 All registered in `~/.claude/settings.json`. Each server now lives in its own private GitHub repo
 under `techdeveloper-org`. Settings point to `mcp-{name}/server.py` in the local workspace.
 
-#### In-Engine Servers (still in `src/mcp/` — tightly coupled to pipeline internals)
+#### In-Engine Servers (still in `src/mcp/` -- tightly coupled to pipeline internals)
 
 | Server | File | Tools | Purpose | Why In-Engine |
 |--------|------|-------|---------|---------------|
@@ -195,9 +195,9 @@ Default threshold: 0.82 (step-specific: 0.75-0.90)
 bypassing Steps 0-4 entirely and saving ~5 LLM calls per session.
 
 **RAG Cross-Project Guard (v1.6.1 NEW):**
-Every payload stored in `node_decisions` includes a `codebase_hash` — a 12-char SHA1
+Every payload stored in `node_decisions` includes a `codebase_hash` -- a 12-char SHA1
 fingerprint of the sorted list of top-level Python module file names.  During lookup,
-if the query hash differs from the stored hash, the similarity score is penalised ×0.65,
+if the query hash differs from the stored hash, the similarity score is penalised x0.65,
 effectively blocking false positives where two identically-worded tasks from different
 projects (e.g. "Add login to dashboard" in Project A vs Project B) would otherwise match
 at 0.95+ and inject the wrong blueprint.  Empty hashes (unavailable codebase) are treated
@@ -230,8 +230,8 @@ After Step 10 writes files, state flag `call_graph_stale = True` is set.
 this flag and silently rebuilds the graph when stale rather than returning a pre-implementation
 cached snapshot.  This prevents multi-phase implementations from using a Phase-0 graph for
 Phase-C decisions after Phase-B has already modified files.  The function falls back through
-priority order: fresh scan (if stale) → step10_pre_change_graph → step2_impact_analysis →
-pre_analysis_result → fresh scan (nothing cached).
+priority order: fresh scan (if stale) -> step10_pre_change_graph -> step2_impact_analysis ->
+pre_analysis_result -> fresh scan (nothing cached).
 
 UML diagrams (13 types) also consume CallGraph as single data source via adapters
 in `uml_generators.py`, replacing duplicate AST analysis.
@@ -384,19 +384,19 @@ See environment variables in `.env.example`:
 
 ---
 
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-03
 
 
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: v1.8.2 — Add 22 microservices coding standards (rules 13-34), fix Level 1 complexity scaling (linear interpolation 1-10 to 1-25), session metadata nesting, ASCII-safe cp1252 prints, TOON combined_complexity_score inclusion, Level -1 routing comments, test fixes (unittest.TestCase base class).
-- **Skill**: python-core, java-spring-boot-microservices
+- **Task**: v1.11.0 -- Level-based package consolidation: migrate Level 1 (6 modules), Level 2 (monolith split into 4 modules), Level 3 (bridge packages for steps/v2_nodes/execution_v2). Fix F821 issues in Level 1 node modules (add proper imports for _time_mod, write_level_log, datetime). Convert subgraphs/ to backward-compat shim layer. Update CLAUDE.md directory layout.
+- **Skill**: python-core
 - **Agent**: python-backend-engineer
-- **Date**: 2026-04-02
+- **Date**: 2026-04-03
 
 ## Dependency Notes
 
-- `TTS>=0.22.0` (Coqui TTS) moved to `requirements-optional.txt` — conflicts with `networkx>=3.1` via `gruut==2.2.3` transitive dep.
+- `TTS>=0.22.0` (Coqui TTS) moved to `requirements-optional.txt` -- conflicts with `networkx>=3.1` via `gruut==2.2.3` transitive dep.
 - Install voice notifications separately: `pip install -r requirements-optional.txt`
-- CI auto-trigger disabled — workflow runs on `workflow_dispatch` only (manual trigger via GitHub Actions UI).
+- CI auto-trigger disabled -- workflow runs on `workflow_dispatch` only (manual trigger via GitHub Actions UI).

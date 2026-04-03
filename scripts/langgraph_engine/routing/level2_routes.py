@@ -7,7 +7,7 @@ based on detected project type (Java vs non-Java).
 from typing import Literal
 
 from ..flow_state import FlowState, StepKeys
-from ..subgraphs.level2_standards import detect_project_type
+from ..level2_standards import detect_project_type
 
 
 def route_standards_loading(state: FlowState) -> Literal["level2_java_standards", "level2_merge"]:
