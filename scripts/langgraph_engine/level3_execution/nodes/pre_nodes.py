@@ -1,7 +1,7 @@
 # ruff: noqa: F821
 """Level 3 v2 step node wrapper.
 
-Extracted from level3_execution_v2.py for modularity.
+Extracted from level3_execution/subgraph.py for modularity.
 Windows-safe: ASCII only.
 """
 import os

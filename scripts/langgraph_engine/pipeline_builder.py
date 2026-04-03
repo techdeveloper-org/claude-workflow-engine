@@ -47,17 +47,8 @@ from .helper_nodes.standards_helpers import (
     apply_integration_step13,
 )
 
-# Routing functions
-from .routing import (
-    route_after_level_minus1,
-    route_after_level_minus1_user_choice,
-    route_after_step1_decision,
-    route_after_step11_review,
-    route_standards_loading,
-)
-
-# Level 1 subgraph nodes
-from .subgraphs.level1_sync import (
+# Level 1 nodes
+from .level1_sync import (
     cleanup_level1_memory,
     level1_merge_node,
     node_complexity_calculation,
@@ -66,8 +57,8 @@ from .subgraphs.level1_sync import (
     node_toon_compression,
 )
 
-# Level 2 subgraph nodes
-from .subgraphs.level2_standards import (
+# Level 2 nodes
+from .level2_standards import (
     level2_merge_node,
     node_common_standards,
     node_java_standards,
@@ -75,10 +66,10 @@ from .subgraphs.level2_standards import (
     node_tool_optimization_standards,
 )
 
-# Level 3 subgraph nodes (v2 active)
-from .subgraphs.level3_execution_v2 import level3_init_node
-from .subgraphs.level3_execution_v2 import level3_merge_node as level3_v2_merge_node
-from .subgraphs.level3_execution_v2 import (
+# Level 3 nodes (v2 active)
+from .level3_execution.subgraph import level3_init_node
+from .level3_execution.subgraph import level3_merge_node as level3_v2_merge_node
+from .level3_execution.subgraph import (
     orchestration_pre_analysis_node,
     route_pre_analysis,
     step0_0_project_context_node,
@@ -100,14 +91,23 @@ from .subgraphs.level3_execution_v2 import (
     step14_final_summary_node,
 )
 
-# Level -1 subgraph nodes
-from .subgraphs.level_minus1 import (
+# Level -1 nodes
+from .level_minus1 import (
     ask_level_minus1_fix,
     fix_level_minus1_issues,
     level_minus1_merge_node,
     node_encoding_validation,
     node_unicode_fix,
     node_windows_path_check,
+)
+
+# Routing functions
+from .routing import (
+    route_after_level_minus1,
+    route_after_level_minus1_user_choice,
+    route_after_step1_decision,
+    route_after_step11_review,
+    route_standards_loading,
 )
 
 

@@ -73,11 +73,10 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 |   |   +-- parsers/                  # Abstract Factory: 4 language parsers (Py/Java/TS/Kotlin)
 |   |   +-- integrations/             # Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins
 |   |   +-- pipeline_builder.py       # Builder Pattern: PipelineBuilder chainable API
-|   |   +-- subgraphs/               # [v1.11] Backward-compat shim bridge (all levels migrated)
 |   |   +-- level_minus1/            # [v1.9] Level -1 Auto-Fix package (nodes, merge, recovery, policies/)
 |   |   +-- level1_sync/             # [v1.11] Level 1 Sync package (9 modules + policies/ + architecture/)
 |   |   +-- level2_standards/        # [v1.11] Level 2 Standards package (7 modules + policies/ + architecture/)
-|   |   +-- level3_execution/        # [v1.11] Level 3 Execution package (20+ modules + steps/ + v2_nodes/ + sonarqube/ + policies/ + architecture/)
+|   |   +-- level3_execution/        # [v1.11] Level 3 Execution package (20+ modules + nodes/ + subgraph.py + sonarqube/ + policies/ + architecture/)
 |   |   +-- [60+ shared modules]     # Cross-level: LLM, caching, metrics, git, state, etc.
 |   +-- architecture/                 # generate_system_diagram.py (shared utility)
 +-- policies/                         # README pointing to level packages (policies moved into level_*/policies/)
@@ -105,24 +104,24 @@ Level 3: Execution (15 steps: Step 0 through Step 14)
 | SonarQube Package | scripts/langgraph_engine/sonarqube/ | Facade: api_client, lightweight, aggregator, auto_fixer |
 | Integrations Package | scripts/langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
 | RAG Integration | scripts/langgraph_engine/rag_integration.py | Vector DB decision caching + orchestration-level plan cache |
-| Level -1 | scripts/langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical; subgraphs/level_minus1.py is shim) |
-| Level 1 | scripts/langgraph_engine/level1_sync/ | Session/context sync + TOON (canonical; subgraphs/level1_sync/ is shim). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
-| Level 2 | scripts/langgraph_engine/level2_standards/ | Standards loading (canonical; subgraphs/level2_standards.py is shim) |
-| Level 3 v2 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 15-step execution with RAG - ACTIVE (bridged via level3_execution/v2_nodes/) |
-| Level 3 v1 | scripts/langgraph_engine/level3_execution/steps/ | v1 steps (DEPRECATED, bridged from subgraphs/level3_execution/steps/) |
-| Pre-Analysis Node | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | orchestration_pre_analysis_node: CallGraph scan + RAG lookup before Step 0 |
+| Level -1 | scripts/langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical) |
+| Level 1 | scripts/langgraph_engine/level1_sync/ | Session/context sync + TOON (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
+| Level 2 | scripts/langgraph_engine/level2_standards/ | Standards loading (canonical) |
+| Level 3 | scripts/langgraph_engine/level3_execution/subgraph.py | 15-step execution with RAG - ACTIVE (nodes in level3_execution/nodes/) |
+| Level 3 v1 steps | scripts/langgraph_engine/level3_execution/steps/ | v1 steps (DEPRECATED) |
+| Pre-Analysis Node | scripts/langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan + RAG lookup before Step 0 |
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
 | Call Graph Builder | scripts/langgraph_engine/call_graph_builder.py | AST-based FQN call stack (compat shim -> parsers/) |
 | Call Graph Analyzer | scripts/langgraph_engine/call_graph_analyzer.py | Pipeline impact analysis (Steps 2/10/11) |
 | UML Generators | scripts/langgraph_engine/uml_generators.py | Compat shim -> diagrams/DiagramFactory |
-| Doc Manager | scripts/langgraph_engine/level3_documentation_manager.py | Circular SDLC doc cycle (Step 0/13) |
+| Doc Manager | scripts/langgraph_engine/level3_execution/documentation_manager.py | Circular SDLC doc cycle (Step 0/13) |
 | Session Bridge | src/mcp/session_hooks.py | MCP direct import bridge |
 | Metrics Aggregator | scripts/langgraph_engine/metrics_aggregator.py | Session/step/LLM/tool stats from logs |
 | SonarQube Scanner | scripts/langgraph_engine/sonarqube_scanner.py | Legacy entry point -> sonarqube/ package |
 | Quality Gate | scripts/langgraph_engine/quality_gate.py | 4-gate merge enforcement |
 | Test Generator | scripts/langgraph_engine/test_generator.py | Template-based unit tests (4 languages) |
-| Jira Workflow | scripts/langgraph_engine/level3_steps8to12_jira.py | Dual GitHub+Jira integration (Steps 8/9/11/12) |
-| Figma Workflow | scripts/langgraph_engine/level3_figma_workflow.py | Design-to-code (components, tokens, review) |
+| Jira Workflow | scripts/langgraph_engine/level3_execution/steps8to12_jira.py | Dual GitHub+Jira integration (Steps 8/9/11/12) |
+| Figma Workflow | scripts/langgraph_engine/level3_execution/figma_workflow.py | Design-to-code (components, tokens, review) |
 | Health Server | scripts/health_server.py | Stdlib HTTP: GET /health + GET /readiness (daemon thread) |
 | DB Migrate | scripts/db_migrate.py | Idempotent Qdrant collection bootstrap + index creation |
 | Secrets Manager | scripts/langgraph_engine/secrets_manager.py | Startup secrets validation + AWS SM integration + rotation hints |
@@ -393,7 +392,7 @@ See environment variables in `.env.example`:
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: v1.11.0 -- Level-based package consolidation: migrate Level 1 (6 modules), Level 2 (monolith split into 4 modules), Level 3 (bridge packages for steps/v2_nodes/execution_v2). Fix F821 issues in Level 1 node modules (add proper imports for _time_mod, write_level_log, datetime). Convert subgraphs/ to backward-compat shim layer. Update CLAUDE.md directory layout.
+- **Task**: v1.12.0 -- Surgical shim cleanup: delete subgraphs/ shim layer, rename v2_nodes/ -> nodes/ and execution_v2.py -> subgraph.py, delete 8 root-level level3_*.py shims, redirect orchestrator.py + pipeline_builder.py to canonical imports. Zero functional change.
 - **Skill**: python-core
 - **Agent**: python-backend-engineer
 - **Date**: 2026-04-03

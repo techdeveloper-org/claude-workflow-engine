@@ -1,6 +1,6 @@
 """Shared per-session infrastructure cache.
 
-Extracted from scripts/langgraph_engine/subgraphs/level3_execution_v2.py where
+Extracted from scripts/langgraph_engine/level3_execution/subgraph.py where
 the same pattern (_infra_cache dict + _get_infra function) existed as a
 module-level private.  Moving it here makes the cache reusable across all
 pipeline levels (Level -1, 1, 2, 3) without duplication.

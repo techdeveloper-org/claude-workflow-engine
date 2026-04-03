@@ -4,8 +4,8 @@ Canonical location for Level 3 code analysis, quality gates, testing,
 documentation, GitHub/Jira/Figma workflows, code review, and step execution.
 
 Sub-packages:
-- steps/: v1 step implementations (DEPRECATED - use v2_nodes/ instead)
-- v2_nodes/: v2 step wrapper nodes (ACTIVE)
+- steps/: v1 step implementations (DEPRECATED - use nodes/ instead)
+- nodes/: v2 step wrapper nodes (ACTIVE)
 - sonarqube/: SonarQube integration (api_client, scanner, auto_fixer)
 - architecture/: Architecture analysis scripts
 - policies/: Level 3 execution policies
@@ -30,5 +30,5 @@ Level-specific modules:
 - integration_test_generator: Integration test generation
 - routing: Routing functions and merge node
 - helpers: Shared helpers and script runner
-- execution_v2: v2 subgraph builder
+- subgraph: v2 subgraph builder
 """

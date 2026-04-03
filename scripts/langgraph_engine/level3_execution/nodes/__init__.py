@@ -1,7 +1,7 @@
 # ruff: noqa: F401
 """Level 3 v2 step node wrappers package.
 
-Extracted from level3_execution_v2.py. Each module contains
+Extracted from level3_execution/subgraph.py. Each module contains
 step wrapper nodes that call _run_step() from the parent.
 """
 

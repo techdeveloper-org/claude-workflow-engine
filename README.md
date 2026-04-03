@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 1.8.2 | **Status:** Alpha | **Last Updated:** 2026-04-02
+**Version:** 1.11.0 | **Status:** Alpha | **Last Updated:** 2026-04-03
 
 ---
 

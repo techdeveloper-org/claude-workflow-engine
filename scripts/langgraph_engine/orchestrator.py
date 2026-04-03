@@ -39,12 +39,7 @@ except ImportError:
 
 from .checkpointer import CheckpointerManager
 from .flow_state import FlowState, StepKeys, WorkflowContextOptimizer
-
-# Level -1 routing functions (canonical definitions live in routing/)
-from .routing import route_after_level_minus1, route_after_level_minus1_user_choice
-from .standard_selector import select_standards
-from .standards_integration import apply_standards_at_step
-from .subgraphs.level1_sync import (
+from .level1_sync import (
     cleanup_level1_memory,
     level1_merge_node,
     node_complexity_calculation,
@@ -52,7 +47,7 @@ from .subgraphs.level1_sync import (
     node_session_loader,
     node_toon_compression,
 )
-from .subgraphs.level2_standards import (
+from .level2_standards import (
     detect_project_type,
     level2_merge_node,
     node_common_standards,
@@ -60,9 +55,9 @@ from .subgraphs.level2_standards import (
     node_mcp_plugin_discovery,
     node_tool_optimization_standards,
 )
-from .subgraphs.level3_execution_v2 import level3_init_node
-from .subgraphs.level3_execution_v2 import level3_merge_node as level3_v2_merge_node
-from .subgraphs.level3_execution_v2 import (
+from .level3_execution.subgraph import level3_init_node
+from .level3_execution.subgraph import level3_merge_node as level3_v2_merge_node
+from .level3_execution.subgraph import (
     orchestration_pre_analysis_node,
     route_pre_analysis,
     step0_0_project_context_node,
@@ -83,9 +78,7 @@ from .subgraphs.level3_execution_v2 import (
     step13_docs_update_node,
     step14_final_summary_node,
 )
-
-# Import all nodes from subgraphs
-from .subgraphs.level_minus1 import (
+from .level_minus1 import (
     ask_level_minus1_fix,
     fix_level_minus1_issues,
     level_minus1_merge_node,
@@ -93,6 +86,11 @@ from .subgraphs.level_minus1 import (
     node_unicode_fix,
     node_windows_path_check,
 )
+
+# Level -1 routing functions (canonical definitions live in routing/)
+from .routing import route_after_level_minus1, route_after_level_minus1_user_choice
+from .standard_selector import select_standards
+from .standards_integration import apply_standards_at_step
 
 
 def route_context_threshold(state: FlowState) -> Literal["level2_emergency_archive", "level2_common_standards"]:

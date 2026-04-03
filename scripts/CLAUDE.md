@@ -1,9 +1,9 @@
 # Claude Workflow Engine - Scripts Directory Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.5.0
+**Version:** 1.11.0
 **Type:** LangGraph Orchestration Pipeline with RAG
-**Last Updated:** 2026-03-21
+**Last Updated:** 2026-04-03
 
 > For full project context, architecture, and development guidelines see the root `CLAUDE.md`.
 
@@ -25,7 +25,7 @@ This directory contains the pipeline entry point, hook scripts, and the core `la
 | `/CHANGELOG.md` | Full project changelog (root) |
 | `/SRS.md` | System Requirements Specification (root) |
 
-### langgraph_engine/ Package Structure (v1.5.0)
+### langgraph_engine/ Package Structure (v1.11.0)
 
 ```
 langgraph_engine/
@@ -41,11 +41,12 @@ langgraph_engine/
 +-- flow_state.py        # Compat shim -> state/
 +-- uml_generators.py    # Compat shim -> diagrams/
 +-- call_graph_builder.py # Compat shim -> parsers/
-+-- subgraphs/           # Level -1, 1, 2, 3 subgraph implementations
 +-- level_minus1/        # Level -1 package (policies/)
 +-- level1_sync/         # Level 1 package (3 modules + policies/ + architecture/)
 +-- level2_standards/    # Level 2 package (2 modules + policies/ + architecture/)
-+-- level3_execution/    # Level 3 package (15 modules + sonarqube/ + policies/ + architecture/)
++-- level3_execution/    # Level 3 package (subgraph.py + nodes/ + sonarqube/ + policies/ + architecture/)
+|   +-- subgraph.py      # v2 subgraph builder (canonical entry point)
+|   +-- nodes/           # v2 step wrapper nodes (orchestration, pre_nodes, step_wrappers_*)
 +-- [60+ shared modules] # Cross-level utilities (LLM, caching, metrics, git, etc.)
 ```
 
@@ -78,7 +79,7 @@ pytest tests/test_*mcp*.py
 ### Adding a New Pipeline Level
 
 ```python
-# 1. Create subgraph in subgraphs/my_level.py
+# 1. Create level package in langgraph_engine/my_level/
 # 2. Add routing in routing/my_level_routes.py
 # 3. Register in pipeline_builder.py:
 class PipelineBuilder:
@@ -92,4 +93,4 @@ PipelineBuilder().add_level_minus1().add_level1().add_my_level().build()
 
 ---
 
-**Last Updated:** 2026-03-21
+**Last Updated:** 2026-04-03
