@@ -2,6 +2,10 @@
 
 Canonical location: langgraph_engine/level1_sync/routing.py
 Windows-safe: ASCII only, no Unicode characters.
+
+CHANGE LOG (v1.15.0):
+  level1_context_toon removed from level1_merge_node output (TOON node removed).
+  toon_present and toon_object references removed from merge log.
 """
 
 import os
@@ -22,9 +26,6 @@ from .helpers import _LEVEL1_TELEMETRY_DIR, _load_architecture_script, _time_mod
 
 def level1_merge_node(state):
     """Merge all Level 1 data and prepare for Level 2.
-
-    OUTPUT: Only TOON object (contains session_id, complexity_score, files_loaded_count + context)
-    CLEARED: All verbose variables from memory
 
     NOTE on level1_complete=True for PARTIAL status:
     Even when level1_status=="PARTIAL" (e.g. context failed to load but complexity
@@ -50,7 +51,6 @@ def level1_merge_node(state):
     updates = {
         "level1_complete": True,
         "level1_status": _level1_status,
-        "level1_context_toon": state.get("toon_object", {}),  # TOON has everything inside
     }
 
     # Signal memory cleanup - these variables should be cleared from memory
@@ -62,7 +62,7 @@ def level1_merge_node(state):
             "readme",  # Raw README content
             "claude_md",  # Raw CLAUDE.md content
             # Note: complexity_score is intentionally RETAINED in state for Level 3 access
-            "files_loaded_count",  # Summarised in TOON
+            "files_loaded_count",  # Summarised by complexity/context nodes
             "project_graph",  # Large graph object
             "architecture",  # Large architecture object
         ]
@@ -78,7 +78,6 @@ def level1_merge_node(state):
         _time_mod.time() - _step_start,
         {
             "level1_complete": True,
-            "toon_present": bool(state.get("toon_object")),
             "context_percentage": state.get("context_percentage", 0),
         },
     )
@@ -128,7 +127,6 @@ def cleanup_level1_memory(state):
             "project_graph",
             "architecture",
         ],
-        "toon_preserved": True,  # Confirm TOON is NOT cleared
     }
 
     # Calculate approximate sizes for verification
@@ -142,14 +140,6 @@ def cleanup_level1_memory(state):
                     str(value).encode("utf-8") if isinstance(value, str) else value
                 )
 
-    # Verify TOON object is in state and has required fields
-    toon = state.get("level1_context_toon", {})
-    if toon:
-        cleanup_summary["toon_fields"] = list(toon.keys())
-        cleanup_summary["toon_has_session_id"] = "session_id" in toon
-        cleanup_summary["toon_has_complexity_score"] = "complexity_score" in toon
-        cleanup_summary["toon_has_files_loaded_count"] = "files_loaded_count" in toon
-
     # Log cleanup status (ASCII-safe prints for Windows cp1252 terminals)
     if os.getenv("CLAUDE_DEBUG") == "1":
         print("\n[LEVEL 1 CLEANUP]", file=sys.stderr)
@@ -158,7 +148,6 @@ def cleanup_level1_memory(state):
             if "{}_size_bytes".format(field) in cleanup_summary:
                 size_kb = cleanup_summary["{}_size_bytes".format(field)] / 1024
                 print("    {} {:.1f}KB freed".format(field, size_kb), file=sys.stderr)
-        print("  TOON object preserved: {}".format(list(toon.keys())), file=sys.stderr)
         print("  Memory cleanup complete\n", file=sys.stderr)
 
     # ---- Best-effort: estimate context window usage after cleanup ----

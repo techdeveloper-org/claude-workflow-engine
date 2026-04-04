@@ -13,6 +13,13 @@ Usage:
         .add_level3(hook_mode=True)
         .build()
     )
+
+CHANGE LOG (v1.15.0):
+  node_toon_compression removed from level1_sync import.
+  add_level1() TOON node + edges replaced with direct parallel merge:
+    level1_complexity -> level1_merge
+    level1_context -> level1_merge
+  Pre-analysis comment updated: RAG orchestration lookup removed.
 """
 
 try:
@@ -44,7 +51,6 @@ from .level1_sync import (
     node_complexity_calculation,
     node_context_loader,
     node_session_loader,
-    node_toon_compression,
 )
 
 # Level 2 nodes
@@ -176,7 +182,8 @@ class PipelineBuilder:
     def add_level1(self) -> "PipelineBuilder":
         """Wire Level 1 context sync nodes and edges.
 
-        Flow: session -> parallel(complexity, context) -> toon -> merge -> cleanup
+        Flow: session -> parallel(complexity, context) -> merge -> cleanup
+        Both complexity and context feed directly into merge (v1.15.0).
         """
         g = self._graph
 
@@ -184,7 +191,6 @@ class PipelineBuilder:
         g.add_node("level1_session", node_session_loader)
         g.add_node("level1_complexity", node_complexity_calculation)
         g.add_node("level1_context", node_context_loader)
-        g.add_node("level1_toon_compression", node_toon_compression)
         g.add_node("level1_merge", level1_merge_node)
         g.add_node("level1_cleanup", cleanup_level1_memory)
 
@@ -192,12 +198,11 @@ class PipelineBuilder:
         g.add_edge("level1_session", "level1_complexity")
         g.add_edge("level1_session", "level1_context")
 
-        # Both join at toon
-        g.add_edge("level1_complexity", "level1_toon_compression")
-        g.add_edge("level1_context", "level1_toon_compression")
+        # Both feed directly into merge (no TOON intermediate step)
+        g.add_edge("level1_complexity", "level1_merge")
+        g.add_edge("level1_context", "level1_merge")
 
-        # toon -> merge -> cleanup
-        g.add_edge("level1_toon_compression", "level1_merge")
+        # merge -> cleanup
         g.add_edge("level1_merge", "level1_cleanup")
 
         self._levels_added.append("level1")
@@ -283,9 +288,9 @@ class PipelineBuilder:
         g.add_node("level3_init", level3_init_node)
         g.add_edge("level2_optimize_context", "level3_init")
 
-        # Pre-analysis gate: call graph scan + RAG orchestration lookup
-        # On RAG hit (confidence >= 0.85): jumps to level3_step8, skipping steps 0-4
-        # On miss: falls through to level3_step0_0 (normal pre-flight flow)
+        # Pre-analysis gate: call graph scan
+        # Template fast-path (--orchestration-template): jumps directly to level3_step8
+        # Normal path: falls through to level3_step0_0 (pre-flight flow)
         g.add_node("level3_pre_analysis", orchestration_pre_analysis_node)
         g.add_edge("level3_init", "level3_pre_analysis")
         g.add_conditional_edges(

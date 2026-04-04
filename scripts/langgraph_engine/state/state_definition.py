@@ -16,6 +16,12 @@ Organized into logical sections:
   - Integrations (Jira, Figma)
   - Workflow Memory & Context Optimization
   - Pipeline & Output
+
+CHANGE LOG (v1.15.0):
+  Removed TOON fields: toon_integrity_ok, level1_context_toon, toon_schema_valid,
+    toon_schema_errors, toon_version (TOON compression node removed from pipeline).
+  Removed RAG orchestration fields: rag_orchestration_hit, rag_orchestration_confidence,
+    rag_orchestration_cached_plan (orchestration-level RAG removed from pre-analysis).
 """
 
 from typing import Annotated, Any, Dict, List, Optional, TypedDict
@@ -85,9 +91,9 @@ class FlowState(TypedDict, total=False):
     encoding_nonascii_files: List[str]  # files with non-ASCII content
 
     # ===========================================================================
-    # LEVEL 1: SYNC SYSTEM (4 PARALLEL TASKS)
+    # LEVEL 1: SYNC SYSTEM (3 PARALLEL TASKS: session + complexity + context)
     # ===========================================================================
-    # All 4 tasks run in parallel, then merge
+    # All tasks run in parallel (complexity + context), then merge
 
     # Context Management
     context_loaded: bool  # Successfully loaded context
@@ -96,8 +102,8 @@ class FlowState(TypedDict, total=False):
     context_error: Optional[str]
     context_metadata: Dict[str, Any]  # Additional context metadata
 
-    # Raw context dict (set by context_loader, cleared to None by toon_compression)
-    context_data: Optional[Dict]  # {srs, readme, claude_md, files_loaded} -- freed after TOON built
+    # Raw context dict (set by context_loader, cleared by cleanup node)
+    context_data: Optional[Dict]  # {srs, readme, claude_md, files_loaded} -- freed after merge
 
     # Context loader detail fields (Subtasks 3, 5, 6, 7, 8)
     context_skipped_files: Optional[List[str]]  # Files skipped due to size/timeout
@@ -106,9 +112,6 @@ class FlowState(TypedDict, total=False):
     context_cache_hit: Optional[bool]  # True if cache was used
     context_cache_age_hours: Optional[float]  # Age of cache entry used
     context_cache_key: Optional[str]  # Cache key (MD5 of project path)
-
-    # Toon compression integrity
-    toon_integrity_ok: Optional[bool]  # True if compression integrity verified
 
     # Session Management
     session_chain_loaded: bool  # Session chain initialized
@@ -131,15 +134,9 @@ class FlowState(TypedDict, total=False):
 
     # Level 1 merge result
     level1_status: str  # OK / PARTIAL / FAILED
-    level1_context_toon: Optional[Dict]  # TOON-formatted context from Level 1 (for Level 3)
     clear_memory: Optional[List]  # Signal list of field names to clear (written by merge node)
 
-    # Level 1 TOON schema validation result
-    toon_schema_valid: Optional[bool]  # True if TOON passed validate_toon()
-    toon_schema_errors: Optional[List[str]]  # Validation error messages (empty list = valid)
-    toon_version: Optional[str]  # TOON schema version used ("1.0.0")
-
-    # Level 1 complexity (also stored inside TOON but kept in state for quick access)
+    # Level 1 complexity (kept in state for quick access by downstream nodes)
     complexity_score: Optional[int]  # 1-10 score from complexity_calculator
     complexity_calculated: Optional[bool]  # Whether calculation succeeded
     complexity_error: Optional[str]  # Error if calculation failed
@@ -225,11 +222,8 @@ class FlowState(TypedDict, total=False):
     # Orchestration Pre-Analysis Gate (runs before Step 0.0)
     pre_analysis_result: Optional[Dict]  # Raw result from get_orchestration_context()
     call_graph_metrics: Optional[Dict]  # hot_nodes, leaf_nodes, dependency_order, boost
-    rag_orchestration_hit: Optional[bool]  # True if orchestration-level RAG hit (>=0.85)
-    rag_orchestration_confidence: Optional[float]  # RAG match confidence score
-    rag_orchestration_cached_plan: Optional[Dict]  # Cached step0-5 plan from RAG
-    skip_architecture: Optional[bool]  # True -> bypass Step 2 (plan execution)
-    skip_consensus: Optional[bool]  # True -> bypass consensus validation
+    skip_architecture: Optional[bool]  # True -> bypass Step 2 (plan execution) [template fast-path]
+    skip_consensus: Optional[bool]  # True -> bypass consensus validation [template fast-path]
     pre_analysis_execution_time_ms: Optional[float]
     # Orchestration Template fast-path (--orchestration-template CLI flag)
     orchestration_template: Optional[Dict]  # Pre-filled template from prompt-generation-expert

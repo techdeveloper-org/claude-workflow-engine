@@ -9,6 +9,12 @@ MetricsCollector, ErrorLogger, level3_execution step functions,
 loguru, subprocess) are mocked before import.
 
 ASCII-safe, UTF-8 encoded - Windows cp1252 compatible.
+
+CHANGE LOG (v1.15.0):
+  Removed test_run_step_rag_hit -- per-node RAG short-circuit removed from _run_step.
+  Removed test_run_step_rag_miss -- per-node RAG short-circuit removed from _run_step.
+  Removed _rag.rag_lookup_before_llm and _rag.rag_store_after_node stubs.
+  Removed rag_lookup_before_llm.return_value = None from setUp calls.
 """
 
 import sys
@@ -79,10 +85,8 @@ _step_logger = _stub("langgraph_engine.step_logger")
 _step_logger.write_level_log = MagicMock()
 _step_logger._summarize_result = MagicMock(return_value={})
 
-# rag_integration stub (RAG miss by default)
+# rag_integration stub (get_rag_layer only -- lookup/store functions removed in v1.15.0)
 _rag = _stub("langgraph_engine.rag_integration")
-_rag.rag_store_after_node = MagicMock()
-_rag.rag_lookup_before_llm = MagicMock(return_value=None)
 _rag.get_rag_layer = MagicMock(return_value=None)
 
 # Infrastructure module stubs
@@ -337,7 +341,6 @@ class TestRunStep(unittest.TestCase):
 
     def setUp(self):
         _clear_infra_cache()
-        _rag.rag_lookup_before_llm.return_value = None
 
     def test_run_step_success(self):
         """Returns step result dict on successful execution."""
@@ -379,38 +382,6 @@ class TestRunStep(unittest.TestCase):
                 fallback_result={},
             )
         self.assertIn("step99_error", result)
-
-    def test_run_step_rag_hit(self):
-        """Returns RAG cached result when rag_hit=True."""
-        _rag.rag_lookup_before_llm.return_value = {
-            "rag_hit": True,
-            "decision": {"step0_task_type": "BugFix", "step0_complexity": 3},
-            "confidence": 0.95,
-        }
-
-        called = []
-
-        def _step(st):
-            called.append(True)
-            return {"step0_task_type": "NewFeature"}
-
-        result = _run_step(0, "Task Analysis", _step, _state())
-        # RAG cached value should be returned
-        self.assertEqual(result.get("step0_task_type"), "BugFix")
-        self.assertFalse(called, "Step fn should NOT be called on RAG hit")
-
-    def test_run_step_rag_miss(self):
-        """Falls through to step function on RAG miss."""
-        _rag.rag_lookup_before_llm.return_value = None
-        called = []
-
-        def _step(st):
-            called.append(True)
-            return {"step0_task_type": "NewFeature"}
-
-        result = _run_step(0, "Task Analysis", _step, _state())
-        self.assertTrue(called, "Step fn SHOULD be called on RAG miss")
-        self.assertEqual(result.get("step0_task_type"), "NewFeature")
 
     def test_run_step_checkpoint_saved(self):
         """Checkpoint is saved after a successful step."""
@@ -483,7 +454,6 @@ class TestStep0TaskAnalysisNode(unittest.TestCase):
 
     def setUp(self):
         _clear_infra_cache()
-        _rag.rag_lookup_before_llm.return_value = None
 
     def test_step0_node_returns_task_analysis(self):
         """Returns step0_task_type and step0_complexity on success."""
@@ -515,7 +485,6 @@ class TestStep8NetworkRetry(unittest.TestCase):
 
     def setUp(self):
         _clear_infra_cache()
-        _rag.rag_lookup_before_llm.return_value = None
         _exec_mod.step8_github_issue_creation.side_effect = None
 
     def tearDown(self):

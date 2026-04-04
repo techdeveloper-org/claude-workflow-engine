@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 1.14.0 | **Status:** Alpha | **Last Updated:** 2026-04-04
+**Version:** 1.15.0 | **Status:** Alpha | **Last Updated:** 2026-04-04
 
 ---
 
@@ -34,15 +34,13 @@ Engine does:
   Level 1:  Session sync + complexity score (combined_complexity_score, 1-25 scale)
   Level 2:  Standards loading (Python + framework-specific)
 
-  Pre-0:   Call graph scan + RAG lookup
-           -> RAG hit (>=0.85)? Skip Step 0 entirely, jump to Step 8
-           -> Miss? Continue to Step 0 with fresh call graph data
+  Pre-0:   Call graph scan (hot nodes, danger zones, complexity boost)
 
   Step 0:  Task Analysis v2 -- PromptGen + Orchestrator (2 subprocess calls, ~15s total)
   |
   |  [What was before v1.13.0 -- 6 separate subprocess calls:]
   |    Step 0: task analysis, Step 1: plan mode decision,
-  |    Step 3: phase breakdown, Step 4: TOON refinement,
+  |    Step 3: phase breakdown, Step 4: refinement,
   |    Step 5: skill/agent selection, Step 6: validation,
   |    Step 7: final prompt generation
   |
@@ -121,63 +119,32 @@ STEP 2: Codebase Fingerprint (for cross-project guard)
   → codebase_hash = SHA1(sorted .py files)[:12]
   → codebase_hash = "a7f3c2b9e1d4"
 
-STEP 3: RAG Orchestration Lookup
-  ├─ Search: "orchestration_plan auth-service Fix the login timeout bug a7f3c2b9"
-  ├─ Check: codebase_hash = "a7f3c2b9e1d4" (does it match stored?)
-  ├─ Search results:
-  │  └─ Similar past task: "Fix authentication timeout" (score: 0.88)
-  │     ├─ Same codebase_hash ✓ (no penalty)
-  │     ├─ Same task_type: "bug_fix" ✓
-  │     └─ Cached plan available:
-  │        ├─ agent: "python-backend-engineer"
-  │        ├─ skills: ["python-core", "testing-core"]
-  │        ├─ complexity: 7/10
-  │        └─ step5_skill: "python-core" (already decided!)
-  │
-  └─ DECISION: RAG HIT (score 0.88 >= 0.85 threshold)
-     → Set skip_architecture = True
-     → Set skip_consensus = True
-     → Skip Steps 0-4, jump directly to Step 5
-     → LLM calls saved: 5 inference calls
-
 OUTPUT: {
   "call_graph_metrics": {
     "hot_nodes": [SessionManager.validate, AuthService.check_expiry, TokenCache.get],
     "complexity_boost": 2,
     "affected_modules": ["auth", "session", "cache"]
   },
-  "rag_orchestration_hit": true,
-  "rag_orchestration_confidence": 0.88,
-  "rag_orchestration_cached_plan": {
-    "step0_task_type": "bug_fix",
-    "step0_complexity": 7,
-    "step5_skill": "python-core",
-    "step5_agent": "python-backend-engineer"
-  },
-  "skip_architecture": true,
-  "skip_consensus": true
+  "codebase_hash": "a7f3c2b9e1d4"
 }
 ```
 
-#### Phase 2: Analysis (Conditional on RAG)
+#### Phase 2: Analysis (Step 0)
 
 ```
-RAG HIT → SKIP STEPS 0-4 (normally would cost 3 LLM calls)
-          Use cached plan directly
-
-IF RAG MISS (for completeness):
-  Step 0: Task Analysis LLM (would receive call graph context)
+Step 0: Task Analysis v2 -- 2 subprocess calls (claude CLI)
+  Call 1 -- prompt-gen-expert-caller: fills orchestration_system_prompt.txt template
     INPUT: {
       task: "Fix the login timeout bug",
       hot_nodes: ["SessionManager.validate (12 callers)", ...],
       affected_modules: ["auth", "session"],
-      call_paths: [SessionManager -> AuthService -> TokenCache]
+      combined_complexity_score: 17  (1-25 scale)
     }
-    OUTPUT: {
-      task_type: "bug_fix",
-      complexity: 7,
-      reasoning: "Timeout bug in hot-node SessionManager.validate() - affects 12 callers, risky change"
-    }
+    OUTPUT: complete orchestration prompt (agents, phases, contracts)
+
+  Call 2 -- orchestrator-agent-caller: executes the plan
+    → solution-architect -> consensus -> agents -> QA
+    OUTPUT: full implementation plan stored in state["orchestrator_result"]
 ```
 
 #### Phase 3: Skill Selection (Step 5) — With RAG Boost
@@ -315,17 +282,14 @@ Step 12: Merge & Close
 EXECUTION SUMMARY:
 
 LLM Calls Used:    4 (out of 12 typical)
-  ├─ Pre-0:      0 (call graph scan + RAG, no LLM)
-  ├─ Step 0-4:   0 (RAG hit, cached plan)
-  ├─ Step 5:     1 (skill selection, minimal context)
-  ├─ Step 7:     1 (prompt refinement, call graph data pre-injected)
+  ├─ Pre-0:      0 (call graph scan, no LLM)
+  ├─ Step 0:     2 (subprocess: prompt-gen + orchestrator)
   ├─ Step 10:    1 (implementation, structured context)
   └─ Step 11:    1 (review, pre-change snapshot available)
 
-LLM Calls Saved:   8 calls (67% reduction)
-  ├─ Orchestration RAG:        ~5 calls (Steps 0-4)
-  ├─ Per-node RAG caching:     ~2 calls (per-step checks)
-  └─ Call graph determinism:   ~1 call (no re-analysis)
+LLM Calls Saved:   8 calls via call graph determinism
+  ├─ Template Fast-Path:       2 subprocess calls (Step 0 bypassed)
+  └─ Call graph complexity:    deterministic (no extra LLM call needed)
 
 Execution Time:    ~45 seconds (Hook Mode: Pre-0, Step 0, Steps 8-9)
   ├─ Pre-0:  1.2s (call graph scan)
@@ -350,7 +314,7 @@ This is the **complete end-to-end flow** — from user prompt to merged PR, with
 ```
 Level -1: AUTO-FIX         3 checks: Unicode, encoding, paths
     |
-Level 1:  CONTEXT SYNC     Session + parallel [complexity, context] + TOON compress
+Level 1:  CONTEXT SYNC     Session + parallel [complexity, context]
     |
 Level 2:  STANDARDS         Common + conditional Java + tool optimization + MCP discovery
     |
@@ -361,7 +325,7 @@ Level 3:  EXECUTION         8 active steps (Pre-0, Step 0, Steps 8-14): Full SDL
 
 | Phase | Steps | What Happens |
 |-------|-------|-------------|
-| **Pre-Analysis Gate** | Pre-0 | Call graph scan + orchestration-level RAG lookup (threshold 0.85); on cache hit, skips Step 0 and jumps to Step 8 |
+| **Pre-Analysis Gate** | Pre-0 | Call graph scan: hot nodes, danger zones, complexity boost injected into Step 0 context |
 | **Analysis & Planning** | 0 | Task analysis v2: prompt-gen-expert (template fill) + orchestrator-agent (full plan) -- 2 claude CLI subprocess calls. Figma extraction/injection included in template when ENABLE_FIGMA=1 |
 | **Issue & Branch** | 8-9 | GitHub Issue + **Jira Issue** (dual, cross-linked); Branch from **Jira key** (`feature/PROJ-123`) |
 | **Implementation** | 10 | Implementation + CallGraph snapshot; **Jira -> "In Progress"**; **Figma "started" comment** |
@@ -470,17 +434,16 @@ When the engine breaks a task into subtasks, the call graph tells it:
 - Which classes are tightly coupled (change one, must change the other)
 - What the full call chain looks like from user input to database write
 
-**4. Orchestration Pre-Analysis Gate (Pre-Step 0) — NEW in v1.6.0**
+**4. Orchestration Pre-Analysis Gate (Pre-Step 0) — introduced in v1.6.0**
 
-Before any LLM call is made, the engine now runs a two-step gate:
+Before any LLM call is made, the engine runs a call graph scan:
 1. **Call graph scan** — `get_orchestration_context()` extracts hot nodes (5+ callers), leaf nodes, affected modules, and a topological dependency order
-2. **Orchestration RAG lookup** — checks if a similar task has been orchestrated before (threshold 0.85); on cache hit, the entire planning phase (Steps 0-4) is skipped and the cached agent roster + skill plan is reused directly at Step 5
+2. **Complexity boost** — computed deterministically without LLM:
+   - Hot nodes found → `complexity += 2` (max 10)
+   - All-leaf nodes only → `complexity -= 1` (min 1)
+3. **Codebase hash** — `SHA1(sorted .py files)[:12]` for cross-project guard
 
-Complexity is also auto-boosted without an LLM call:
-- Hot nodes found → `complexity += 2` (max 10)
-- All-leaf nodes only → `complexity -= 1` (min 1)
-
-This reduces LLM calls per task by up to 5 inference steps on repeat workflows.
+This data is injected into the Step 0 orchestration template so the LLM gets call graph context pre-loaded.
 
 ---
 
@@ -491,10 +454,7 @@ Every LLM call has latency and cost. The engine uses five distinct mechanisms to
 | Mechanism | Where | Calls Saved | How |
 |-----------|-------|------------|-----|
 | **Template Fast-Path** | Pre-Step 0 | 2 subprocess calls | Pre-filled orchestration template skips Step 0 entirely, jumps to Step 8 |
-| **Orchestration RAG Hit** | Pre-Step 0 | 2 subprocess calls | If task was orchestrated before (score >= 0.85), skip Step 0 and jump to Step 8 |
-| **Per-Node RAG Cache** | Steps 8-14 | 1 call per step | Each step checks RAG before calling LLM; on hit, returns cached decision directly |
 | **Call Graph Complexity Boost** | Pre-0 | deterministic | Complexity score computed without LLM using hot-node count; no extra call needed |
-| **TOON Compression** | Level 1 | 1-2 calls | Context compressed before Step 0; LLM sees less tokens in downstream steps |
 
 **Total savings on a Template Fast-Path session: Step 0 bypassed (2 subprocess calls avoided), execution starts directly at Step 8.**
 
@@ -513,39 +473,27 @@ Pre-Analysis Gate (no LLM)
 Priority 1: TEMPLATE FAST-PATH (--orchestration-template=path/to/template.json)
     |
     +-- Template valid? ──────────────────────────────────────────────────────────┐
-    |   All step 0-5 fields pre-injected from template                           |
-    |   -> Jump directly to Step 6 (skill validation)                            |
-    |   -> 6 LLM calls saved (Steps 0, 1, 2, 3, 5, 7 analysis skipped)          |
-    |   -> Pipeline time: ~15s (was ~60s in hook mode)                           |
+    |   Step 0 bypassed entirely                                                 |
+    |   -> Jump directly to Step 8                                               |
+    |   -> 2 subprocess calls saved (planning time ~0s)                          |
     |                                                                             v
-    +-- Template not provided -> Priority 2                               Step 6 onward
+    +-- Template not provided -> Full pipeline                             Step 8 onward
     |
     v
-Priority 2: RAG Orchestration Lookup (no LLM)
-    |
-    +-- HIT (score >= 0.85) AND same codebase_hash ──────────────────────────────┐
-    |   cached plan injected, skip Steps 0-4                                     |
-    |   -> Jump directly to Step 5 (skill selection)                             |
-    |   -> 5 LLM calls saved                                                     |
-    |                                                                             v
-    +-- MISS ──────────────> Full pipeline Step 0-14                      Step 5 onward
-                             Each step still checks per-node RAG
-                             before its own LLM call
+Full Pipeline: Step 0 (2 subprocess calls: prompt-gen + orchestrator) -> Steps 8-14
 ```
 
 #### Cross-Project Guard (v1.6.1) — Preventing False Positives
 
-Without a project fingerprint, two identically-worded tasks in different codebases would match:
+The codebase hash fingerprints the project so call graph data is never confused across codebases:
 
 ```
-Project A: "Add login to dashboard"  -> stored with score 0.95
-Project B: "Add login to dashboard"  -> RAG lookup returns Project A's blueprint! WRONG
+Project A: "Add login to dashboard"  -> call graph hash "202e89f7b6c8"
+Project B: "Add login to dashboard"  -> call graph hash "9a3f12b8c041"
 
 Fix: codebase_hash = SHA1(sorted top-level .py file names)[:12]
-     Project A hash: "202e89f7b6c8"
-     Project B hash: "9a3f12b8c041"
-     Score penalty: 0.95 × 0.65 = 0.62 → below 0.85 threshold → RAG MISS
-     Result: Project B runs full pipeline, gets its own correct blueprint
+     Different hashes → different call graph contexts → separate analysis paths
+     Result: Project B always gets fresh call graph analysis, not Project A's
 ```
 
 #### Stale Graph Guard (v1.6.1) — Preventing Wrong Context After Implementation

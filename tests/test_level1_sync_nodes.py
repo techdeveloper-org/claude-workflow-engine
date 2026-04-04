@@ -1,20 +1,26 @@
-"""Tests for scripts/langgraph_engine/subgraphs/level1_sync.py
+"""Tests for Level 1 Sync Package node functions.
 
 Covers: node_session_loader, node_complexity_calculation, node_context_loader,
-        node_toon_compression, level1_merge_node, cleanup_level1_memory,
-        and the parallel topology contract.
+        level1_merge_node, cleanup_level1_memory, and the parallel topology contract.
 
 All tests are offline (no real filesystem I/O beyond tempdir, no LangGraph,
 no Qdrant, no external services).  Each test sets up a minimal FlowState dict
-and patches only the external dependencies that the node under test actually
-calls.
+and patches only the external dependencies that the node under test actually calls.
 
 Python 3.8+ compatible - no walrus operator, no match, no | union types.
 ASCII-only source (cp1252 safe for Windows terminals).
+
+CHANGE LOG (v1.15.0):
+  Fixed deprecated import path: subgraphs/level1_sync.py -> level1_sync/ package.
+  Each submodule (session_loader, complexity_calculator, context_loader, routing)
+  is imported individually; patch.object targets the specific submodule that owns
+  the attribute being patched.
+  Removed TestNodeToonCompression and TestNodeToonCompressionSchemaPath (TOON removed).
+  Removed test_toon_preserved_flag from TestCleanupLevel1Memory (TOON field gone).
+  Removed toon_object from level1_merge_node state dicts (no longer referenced).
 """
 
 import importlib
-import importlib.util
 import json
 import sys
 import tempfile
@@ -24,10 +30,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
-# Bootstrap: insert scripts/ into sys.path so that
-# "import langgraph_engine.subgraphs.level1_sync" resolves correctly.
-# Relative imports inside level1_sync (from ..flow_state etc.) require
-# the module to be imported as part of the langgraph_engine package.
+# Bootstrap: insert scripts/ into sys.path so package imports resolve.
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -38,9 +41,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 
 def _stub_module(name, **attrs):
-    """Register a stub module in sys.modules if not already present.
-    Returns the module (new or existing).
-    """
+    """Register a stub module in sys.modules if not already present."""
     if name not in sys.modules:
         mod = types.ModuleType(name)
         for k, v in attrs.items():
@@ -50,8 +51,8 @@ def _stub_module(name, **attrs):
 
 
 # ---------------------------------------------------------------------------
-# Stub heavy optional dependencies BEFORE importing the package.
-# Order matters: parent packages must be registered before children.
+# Stub heavy optional dependencies BEFORE importing level1_sync modules.
+# Order: parent packages must be registered before children.
 # ---------------------------------------------------------------------------
 
 _stub_module("langgraph")
@@ -63,82 +64,52 @@ _stub_module(
 )
 _stub_module("toons", dumps=json.dumps)
 
-# langgraph_engine package stubs (parent first)
-_stub_module("langgraph_engine")
+# langgraph_engine package WITH __path__ so sub-package imports resolve
+_le_pkg = _stub_module("langgraph_engine")
+_le_pkg.__path__ = [str(_SCRIPTS_DIR / "langgraph_engine")]
+_le_pkg.__package__ = "langgraph_engine"
 
 # flow_state: FlowState is just dict in tests
 _flow_state_mod = _stub_module("langgraph_engine.flow_state")
 _flow_state_mod.FlowState = dict  # type: ignore
 
-# step_logger: write_level_log is a no-op
-_step_logger_mod = _stub_module("langgraph_engine.step_logger")
-_step_logger_mod.write_level_log = MagicMock()
+# step_logger: empty stub -> helpers.py falls back to no-op write_level_log
+_stub_module("langgraph_engine.step_logger")
 
-# subgraphs package stub (needed for the relative import chain)
-_stub_module("langgraph_engine.subgraphs")
-
-# Optional feature modules - stub them WITHOUT the expected functions so that
-# the graceful try/except ImportError blocks in level1_sync fire and set
-# _COMPLEXITY_CALCULATOR_AVAILABLE=False etc.  Intentionally empty stubs.
+# Top-level complexity_calculator: empty stub -> ImportError in helpers.py ->
+# _COMPLEXITY_CALCULATOR_AVAILABLE=False (tests patch when needed)
 _stub_module("langgraph_engine.complexity_calculator")
-_stub_module("langgraph_engine.context_cache")
-_stub_module("langgraph_engine.context_deduplicator")
-_stub_module("langgraph_engine.toon_schema")
 
-# utils stub (used by path_resolver import at module top)
-_stub_module("utils")
-_stub_module(
-    "utils.path_resolver",
-    get_session_logs_dir=MagicMock(return_value=Path(tempfile.mkdtemp()) / "sessions"),
-    get_telemetry_dir=MagicMock(return_value=Path(tempfile.mkdtemp()) / "telemetry"),
-)
+# utils stub (path_resolver is imported by helpers.py; real file exists in src/)
+# No stub needed -- helpers.py falls back gracefully if import fails.
+
 
 # ---------------------------------------------------------------------------
-# Import the module under test.
-# We must use importlib with the correct package so relative imports work.
+# Import each level1_sync submodule now that stubs are registered.
+# Each submodule is stored separately so patch.object targets the right owner.
 # ---------------------------------------------------------------------------
 
-_L1_SPEC = importlib.util.spec_from_file_location(
-    "langgraph_engine.subgraphs.level1_sync",
-    str(_SCRIPTS_DIR / "langgraph_engine" / "subgraphs" / "level1_sync.py"),
-    submodule_search_locations=[],
-)
-_L1_MOD = importlib.util.module_from_spec(_L1_SPEC)
-# Set __package__ so relative imports (from ..flow_state) resolve correctly
-_L1_MOD.__package__ = "langgraph_engine.subgraphs"
-sys.modules["langgraph_engine.subgraphs.level1_sync"] = _L1_MOD
-_L1_SPEC.loader.exec_module(_L1_MOD)
+_l1_session = importlib.import_module("langgraph_engine.level1_sync.session_loader")
+_l1_complexity = importlib.import_module("langgraph_engine.level1_sync.complexity_calculator")
+_l1_context = importlib.import_module("langgraph_engine.level1_sync.context_loader")
+_l1_routing = importlib.import_module("langgraph_engine.level1_sync.routing")
 
-_L1 = _L1_MOD
+# Ensure calculate_complexity sentinel exists for tests that patch it
+if not hasattr(_l1_complexity, "calculate_complexity"):
+    _l1_complexity.calculate_complexity = MagicMock(return_value=5)
+if not hasattr(_l1_complexity, "should_plan"):
+    _l1_complexity.should_plan = MagicMock(return_value=False)
 
-# ---------------------------------------------------------------------------
-# Post-import sentinel injection:
-# When _COMPLEXITY_CALCULATOR_AVAILABLE=False (our default), the module's
-# try/except only defines calculate_graph_complexity as a fallback stub.
-# calculate_complexity and should_plan have NO fallback in the module.
-# We add them as sentinels here so patch.object can find and replace them
-# in tests that simulate the calculator-available path.
-# ---------------------------------------------------------------------------
-if not hasattr(_L1, "calculate_complexity"):
-    _L1.calculate_complexity = MagicMock(return_value=5)
-if not hasattr(_L1, "should_plan"):
-    _L1.should_plan = MagicMock(return_value=False)
-# validate_toon has no fallback when _TOON_SCHEMA_AVAILABLE=False; add sentinel
-# so patch.object can find it in tests that exercise the schema-available path.
-if not hasattr(_L1, "validate_toon"):
-    _L1.validate_toon = MagicMock(return_value=(True, []))
+# Convenience function aliases
+node_session_loader = _l1_session.node_session_loader
+node_complexity_calculation = _l1_complexity.node_complexity_calculation
+node_context_loader = _l1_context.node_context_loader
+level1_merge_node = _l1_routing.level1_merge_node
+cleanup_level1_memory = _l1_routing.cleanup_level1_memory
 
-# Convenience aliases
-node_session_loader = _L1.node_session_loader
-node_complexity_calculation = _L1.node_complexity_calculation
-node_context_loader = _L1.node_context_loader
-node_toon_compression = _L1.node_toon_compression
-level1_merge_node = _L1.level1_merge_node
-cleanup_level1_memory = _L1.cleanup_level1_memory
-_verify_toon_integrity = _L1._verify_toon_integrity
-_decompress_toon = _L1._decompress_toon
-_stream_file_head = _L1._stream_file_head
-_read_file_with_timeout = _L1._read_file_with_timeout
+# Helper function aliases (live in context_loader)
+_stream_file_head = _l1_context._stream_file_head
+_read_file_with_timeout = _l1_context._read_file_with_timeout
 
 
 # ---------------------------------------------------------------------------
@@ -173,10 +144,10 @@ class TestNodeSessionLoader(unittest.TestCase):
         if state is None:
             state = _minimal_state()
         with tempfile.TemporaryDirectory() as tmpdir:
-            _L1._LEVEL1_SESSION_LOGS_DIR = Path(tmpdir) / "sessions"
-            _L1._LEVEL1_TELEMETRY_DIR = Path(tmpdir) / "telemetry"
-            with patch.object(_L1, "write_level_log", MagicMock()):
-                with patch.object(_L1, "_load_architecture_script", return_value=None):
+            _l1_session._LEVEL1_SESSION_LOGS_DIR = Path(tmpdir) / "sessions"
+            _l1_session._LEVEL1_TELEMETRY_DIR = Path(tmpdir) / "telemetry"
+            with patch.object(_l1_session, "write_level_log", MagicMock()):
+                with patch.object(_l1_session, "_load_architecture_script", return_value=None):
                     return node_session_loader(state)
 
     def test_returns_session_id(self):
@@ -213,8 +184,8 @@ class TestNodeComplexityCalculation(unittest.TestCase):
     """Tests for node_complexity_calculation."""
 
     def _run(self, state):
-        with patch.object(_L1, "write_level_log", MagicMock()):
-            with patch.object(_L1, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
+        with patch.object(_l1_complexity, "write_level_log", MagicMock()):
+            with patch.object(_l1_complexity, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
                 return node_complexity_calculation(state)
 
     def test_returns_complexity_score(self):
@@ -230,16 +201,15 @@ class TestNodeComplexityCalculation(unittest.TestCase):
     def test_complexity_calculated_flag(self):
         """complexity_calculated must be True when calculation succeeds."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "main.py").write_text("pass\n")
             result = self._run(_minimal_state(project_root=tmpdir))
         self.assertTrue(result.get("complexity_calculated"))
 
     def test_combined_score_uses_calculator_when_available(self):
         """When _COMPLEXITY_CALCULATOR_AVAILABLE, combined_complexity_score is 1-25."""
-        # Both functions must be patched at the module level because the node
-        # calls them via direct name reference (calculate_complexity(...) etc.)
-        with patch.object(_L1, "_COMPLEXITY_CALCULATOR_AVAILABLE", True):
-            with patch.object(_L1, "calculate_complexity", return_value=5):
-                with patch.object(_L1, "calculate_graph_complexity", return_value=(10, {}, 3.0)):
+        with patch.object(_l1_complexity, "_COMPLEXITY_CALCULATOR_AVAILABLE", True):
+            with patch.object(_l1_complexity, "calculate_complexity", return_value=5):
+                with patch.object(_l1_complexity, "calculate_graph_complexity", return_value=(10, {}, 3.0)):
                     with tempfile.TemporaryDirectory() as tmpdir:
                         result = self._run(_minimal_state(project_root=tmpdir))
         combined = result.get("combined_complexity_score")
@@ -251,7 +221,7 @@ class TestNodeComplexityCalculation(unittest.TestCase):
 
     def test_fallback_heuristic_on_missing_calculator(self):
         """When _COMPLEXITY_CALCULATOR_AVAILABLE=False, falls back to .py file count."""
-        with patch.object(_L1, "_COMPLEXITY_CALCULATOR_AVAILABLE", False):
+        with patch.object(_l1_complexity, "_COMPLEXITY_CALCULATOR_AVAILABLE", False):
             with tempfile.TemporaryDirectory() as tmpdir:
                 for i in range(5):
                     (Path(tmpdir) / "m{}.py".format(i)).write_text("pass")
@@ -280,11 +250,11 @@ class TestNodeContextLoader(unittest.TestCase):
         return root
 
     def _run(self, state):
-        with patch.object(_L1, "write_level_log", MagicMock()):
-            with patch.object(_L1, "_CONTEXT_CACHE_AVAILABLE", False):
-                with patch.object(_L1, "_DEDUPLICATOR_AVAILABLE", False):
-                    with patch.object(_L1, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
-                        with patch.object(_L1, "_load_architecture_script", return_value=None):
+        with patch.object(_l1_context, "write_level_log", MagicMock()):
+            with patch.object(_l1_context, "_CONTEXT_CACHE_AVAILABLE", False):
+                with patch.object(_l1_context, "_DEDUPLICATOR_AVAILABLE", False):
+                    with patch.object(_l1_context, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
+                        with patch.object(_l1_context, "_load_architecture_script", return_value=None):
                             return node_context_loader(state)
 
     def test_loads_readme_and_claude_md(self):
@@ -298,7 +268,7 @@ class TestNodeContextLoader(unittest.TestCase):
         self.assertIsNotNone(ctx.get("claude_md"))
 
     def test_directory_not_loaded_as_file(self):
-        """A directory matching the glob must not be returned as context (Gap 4 guard)."""
+        """A directory matching the glob must not be returned as context."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             # Create a directory named README.md to trigger the .is_file() guard
@@ -324,117 +294,7 @@ class TestNodeContextLoader(unittest.TestCase):
 
 
 # ===========================================================================
-# 4. TestNodeToonCompression
-# ===========================================================================
-
-
-class TestNodeToonCompression(unittest.TestCase):
-    """Tests for node_toon_compression and its integrity helpers."""
-
-    def _make_context_data(self, srs=None, readme="# R", claude_md="# C"):
-        files = []
-        if srs:
-            files.append("SRS")
-        if readme:
-            files.append("README")
-        if claude_md:
-            files.append("CLAUDE.md")
-        return {
-            "srs": srs,
-            "readme": readme,
-            "claude_md": claude_md,
-            "files_loaded": files,
-        }
-
-    def _run(self, state):
-        with patch.object(_L1, "write_level_log", MagicMock()):
-            with patch.object(_L1, "_TOON_SCHEMA_AVAILABLE", False):
-                with patch.object(_L1, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
-                    return node_toon_compression(state)
-
-    def test_toon_saved_true_on_success(self):
-        """toon_saved must be True when compression succeeds."""
-        ctx = self._make_context_data()
-        state = _minimal_state(
-            session_id="session-test-abc",
-            complexity_score=5,
-            context_data=ctx,
-        )
-        result = self._run(state)
-        self.assertTrue(result.get("toon_saved"))
-
-    def test_toon_object_has_required_fields(self):
-        """Compressed toon_object must have session_id, complexity_score, files_loaded_count, context."""
-        ctx = self._make_context_data()
-        state = _minimal_state(
-            session_id="session-test-abc",
-            complexity_score=3,
-            context_data=ctx,
-        )
-        result = self._run(state)
-        toon = result.get("toon_object", {})
-        for field in ["session_id", "complexity_score", "files_loaded_count", "context"]:
-            self.assertIn(field, toon, "toon_object missing field: {}".format(field))
-
-    def test_context_data_cleared_after_compression(self):
-        """context_data must be set to None in the returned dict."""
-        ctx = self._make_context_data()
-        state = _minimal_state(
-            session_id="session-test-abc",
-            complexity_score=5,
-            context_data=ctx,
-        )
-        result = self._run(state)
-        self.assertIsNone(result.get("context_data"))
-
-    def test_integrity_check_ok(self):
-        """_verify_toon_integrity returns True for a well-formed TOON."""
-        original = self._make_context_data()
-        toon = {
-            "session_id": "session-test-abc",
-            "complexity_score": 5,
-            "files_loaded_count": len(original["files_loaded"]),
-            "context": {
-                "srs": bool(original["srs"]),
-                "readme": bool(original["readme"]),
-                "claude_md": bool(original["claude_md"]),
-            },
-        }
-        self.assertTrue(_verify_toon_integrity(toon, original))
-
-    def test_integrity_check_fails_on_missing_session_id(self):
-        """_verify_toon_integrity must return False when session_id is absent."""
-        original = self._make_context_data()
-        toon = {
-            "complexity_score": 5,
-            "files_loaded_count": len(original["files_loaded"]),
-            "context": {},
-        }
-        self.assertFalse(_verify_toon_integrity(toon, original))
-
-    def test_fallback_on_integrity_failure(self):
-        """When integrity check fails, raw_fallback key must appear in toon context.
-
-        Integrity fails when session_id is empty string: _verify_toon_integrity
-        checks `if not toon.get('session_id', '').strip(): return False`.
-        Passing session_id='' in state causes the node to produce an empty-string
-        session_id in the TOON, triggering the raw-fallback branch.
-        """
-        ctx = self._make_context_data(readme="# R", claude_md="# C")
-        # session_id="" forces empty-string in TOON -> integrity check fails
-        state = _minimal_state(
-            session_id="",
-            complexity_score=5,
-            context_data=ctx,
-        )
-        result = self._run(state)
-        toon = result.get("toon_object", {})
-        ctx_out = toon.get("context", {})
-        self.assertIn("raw_fallback", ctx_out)
-
-
-# ===========================================================================
-# 5. TestLevel1MergeNodeGap (Gap 1 observable PARTIAL warning)
+# 4. TestLevel1MergeNodeGap (Gap 1 observable PARTIAL warning)
 # ===========================================================================
 
 
@@ -442,8 +302,8 @@ class TestLevel1MergeNodeGap(unittest.TestCase):
     """Tests for level1_merge_node - focuses on Gap 1 (PARTIAL observable warning)."""
 
     def _run(self, state):
-        with patch.object(_L1, "write_level_log", MagicMock()):
-            with patch.object(_L1, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
+        with patch.object(_l1_routing, "write_level_log", MagicMock()):
+            with patch.object(_l1_routing, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
                 return level1_merge_node(state)
 
     def test_ok_status_when_both_branches_succeed(self):
@@ -451,12 +311,6 @@ class TestLevel1MergeNodeGap(unittest.TestCase):
         state = _minimal_state(
             complexity_calculated=True,
             context_loaded=True,
-            toon_object={
-                "session_id": "s",
-                "complexity_score": 5,
-                "files_loaded_count": 0,
-                "context": {},
-            },
         )
         result = self._run(state)
         self.assertEqual(result.get("level1_status"), "OK")
@@ -466,7 +320,6 @@ class TestLevel1MergeNodeGap(unittest.TestCase):
         state = _minimal_state(
             complexity_calculated=True,
             context_loaded=False,
-            toon_object={},
         )
         result = self._run(state)
         self.assertEqual(result.get("level1_status"), "PARTIAL")
@@ -476,7 +329,6 @@ class TestLevel1MergeNodeGap(unittest.TestCase):
         state = _minimal_state(
             complexity_calculated=False,
             context_loaded=True,
-            toon_object={},
         )
         result = self._run(state)
         self.assertEqual(result.get("level1_status"), "PARTIAL")
@@ -492,10 +344,7 @@ class TestLevel1MergeNodeGap(unittest.TestCase):
         state = _minimal_state(
             complexity_calculated=True,
             context_loaded=False,
-            toon_object={},
         )
-        # Patch sys.stderr globally; level1_merge_node uses print(..., file=sys.stderr)
-        # which looks up sys.stderr at call time.
         with patch("sys.stderr", new_callable=io.StringIO) as mock_err:
             self._run(state)
             output = mock_err.getvalue()
@@ -506,7 +355,6 @@ class TestLevel1MergeNodeGap(unittest.TestCase):
         state = _minimal_state(
             complexity_calculated=True,
             context_loaded=True,
-            toon_object={},
         )
         result = self._run(state)
         self.assertIn("clear_memory", result)
@@ -515,7 +363,7 @@ class TestLevel1MergeNodeGap(unittest.TestCase):
 
 
 # ===========================================================================
-# 6. TestCleanupLevel1Memory
+# 5. TestCleanupLevel1Memory
 # ===========================================================================
 
 
@@ -523,7 +371,7 @@ class TestCleanupLevel1Memory(unittest.TestCase):
     """Tests for cleanup_level1_memory."""
 
     def _run(self, state):
-        with patch.object(_L1, "_load_architecture_script", return_value=None):
+        with patch.object(_l1_routing, "_load_architecture_script", return_value=None):
             return cleanup_level1_memory(state)
 
     def test_verbose_fields_set_to_none(self):
@@ -535,12 +383,6 @@ class TestCleanupLevel1Memory(unittest.TestCase):
             claude_md="# CLAUDE",
             project_graph={"nodes": []},
             architecture={"layers": []},
-            level1_context_toon={
-                "session_id": "s1",
-                "complexity_score": 5,
-                "files_loaded_count": 0,
-                "context": {},
-            },
         )
         result = self._run(state)
         for field in ["context_data", "srs", "readme", "claude_md"]:
@@ -549,34 +391,25 @@ class TestCleanupLevel1Memory(unittest.TestCase):
                 "Expected {} to be None after cleanup, got: {}".format(field, result.get(field)),
             )
 
-    def test_toon_preserved_flag(self):
-        """cleanup_level1_memory must report toon_preserved=True in summary."""
-        state = _minimal_state(
-            level1_context_toon={
-                "session_id": "s1",
-                "complexity_score": 5,
-                "files_loaded_count": 0,
-                "context": {},
-            },
-        )
-        result = self._run(state)
-        summary = result.get("level1_cleanup_summary", {})
-        self.assertTrue(summary.get("toon_preserved"))
-
     def test_size_bytes_recorded_for_non_empty_fields(self):
         """Cleanup summary must include *_size_bytes for non-empty fields."""
         state = _minimal_state(
             context_data={"files_loaded": ["README"]},
             readme="hello world",
-            level1_context_toon={},
         )
         result = self._run(state)
         summary = result.get("level1_cleanup_summary", {})
         self.assertIn("readme_size_bytes", summary)
 
+    def test_cleanup_summary_present(self):
+        """Cleanup must return level1_cleanup_summary for audit trail."""
+        state = _minimal_state(context_data={"files_loaded": []})
+        result = self._run(state)
+        self.assertIn("level1_cleanup_summary", result)
+
 
 # ===========================================================================
-# 7. TestParallelTopology
+# 6. TestParallelTopology
 # ===========================================================================
 
 
@@ -588,8 +421,8 @@ class TestParallelTopology(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = _minimal_state(project_root=tmpdir)
             state.pop("context_loaded", None)
-            with patch.object(_L1, "write_level_log", MagicMock()):
-                with patch.object(_L1, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
+            with patch.object(_l1_complexity, "write_level_log", MagicMock()):
+                with patch.object(_l1_complexity, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
                     result = node_complexity_calculation(state)
         self.assertIn("complexity_score", result)
 
@@ -598,11 +431,11 @@ class TestParallelTopology(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             state = _minimal_state(project_root=tmpdir)
             state.pop("complexity_calculated", None)
-            with patch.object(_L1, "write_level_log", MagicMock()):
-                with patch.object(_L1, "_CONTEXT_CACHE_AVAILABLE", False):
-                    with patch.object(_L1, "_DEDUPLICATOR_AVAILABLE", False):
-                        with patch.object(_L1, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
-                            with patch.object(_L1, "_load_architecture_script", return_value=None):
+            with patch.object(_l1_context, "write_level_log", MagicMock()):
+                with patch.object(_l1_context, "_CONTEXT_CACHE_AVAILABLE", False):
+                    with patch.object(_l1_context, "_DEDUPLICATOR_AVAILABLE", False):
+                        with patch.object(_l1_context, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
+                            with patch.object(_l1_context, "_load_architecture_script", return_value=None):
                                 result = node_context_loader(state)
         self.assertIn("context_loaded", result)
 
@@ -611,17 +444,16 @@ class TestParallelTopology(unittest.TestCase):
         state = _minimal_state(
             complexity_calculated=True,
             # context branch did NOT complete (no context_loaded key)
-            toon_object={},
         )
-        with patch.object(_L1, "write_level_log", MagicMock()):
-            with patch.object(_L1, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
+        with patch.object(_l1_routing, "write_level_log", MagicMock()):
+            with patch.object(_l1_routing, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
                 result = level1_merge_node(state)
         self.assertIn("level1_complete", result)
         self.assertTrue(result["level1_complete"])
 
 
 # ===========================================================================
-# 8. TestStreamFileHead
+# 7. TestStreamFileHead
 # ===========================================================================
 
 
@@ -671,7 +503,7 @@ class TestStreamFileHead(unittest.TestCase):
 
 
 # ===========================================================================
-# 9. TestReadFileWithTimeout
+# 8. TestReadFileWithTimeout
 # ===========================================================================
 
 
@@ -711,57 +543,6 @@ class TestReadFileWithTimeout(unittest.TestCase):
         tf_path = Path(tempfile.mkdtemp()) / "nonexistent_file_xyz.txt"
         with self.assertRaises(Exception):
             _read_file_with_timeout(tf_path, timeout_seconds=5)
-
-
-# ===========================================================================
-# 10. TestNodeToonCompressionSchemaPath
-# ===========================================================================
-
-
-class TestNodeToonCompressionSchemaPath(unittest.TestCase):
-    """Tests node_toon_compression with _TOON_SCHEMA_AVAILABLE=True."""
-
-    def _run(self, state, schema_return):
-        with patch.object(_L1, "write_level_log", MagicMock()):
-            with patch.object(_L1, "_TOON_SCHEMA_AVAILABLE", True):
-                with patch.object(_L1, "validate_toon", return_value=schema_return):
-                    with patch.object(_L1, "_LEVEL1_TELEMETRY_DIR", _tmp_telemetry()):
-                        return node_toon_compression(state)
-
-    def _make_state(self):
-        return _minimal_state(
-            session_id="session-schema-test",
-            complexity_score=4,
-            context_data={
-                "srs": None,
-                "readme": "# R",
-                "claude_md": "# C",
-                "files_loaded": ["README", "CLAUDE.md"],
-            },
-        )
-
-    def test_schema_valid_true_on_pass(self):
-        """toon_schema_valid is True when validate_toon returns (True, [])."""
-        result = self._run(self._make_state(), schema_return=(True, []))
-        self.assertTrue(result.get("toon_schema_valid"))
-        self.assertEqual(result.get("toon_schema_errors"), [])
-
-    def test_schema_errors_propagated_on_fail(self):
-        """When validate_toon returns (False, errors), toon_schema_valid is False
-        and raw_fallback appears in the toon context."""
-        errors = ["missing required field: project_name"]
-        result = self._run(self._make_state(), schema_return=(False, errors))
-        self.assertFalse(result.get("toon_schema_valid"))
-        toon = result.get("toon_object", {})
-        self.assertIn("raw_fallback", toon.get("context", {}))
-
-    def test_combined_complexity_score_in_toon(self):
-        """combined_complexity_score from state is stored in toon_object."""
-        state = self._make_state()
-        state["combined_complexity_score"] = 18
-        result = self._run(state, schema_return=(True, []))
-        toon = result.get("toon_object", {})
-        self.assertEqual(toon.get("combined_complexity_score"), 18)
 
 
 if __name__ == "__main__":

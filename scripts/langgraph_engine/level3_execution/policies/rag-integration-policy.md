@@ -1,18 +1,18 @@
 # RAG Integration Policy
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Priority:** CRITICAL
 **Status:** ACTIVE
-**Updated:** 2026-03-18
+**Updated:** 2026-04-04
 
 ---
 
 ## Purpose
 
 Defines how the RAG (Retrieval-Augmented Generation) layer caches and retrieves pipeline
-decisions using Qdrant Vector DB. Every LangGraph node stores its decision; before LLM
-calls, the pipeline checks RAG for similar past decisions to save inference time and
-improve consistency.
+decisions using Qdrant Vector DB. Session summaries and flow traces are stored for
+cross-session learning. The `RAGLayer` class provides `store()` and `lookup()` methods
+for any pipeline node.
 
 ---
 
@@ -43,21 +43,19 @@ improve consistency.
 
 ## RAG-Eligible Steps
 
-Only decision-making steps use RAG lookup. Implementation steps (10+) do NOT cache
-because their output depends on specific code context.
+Only decision-making steps that call LLMs use RAG lookup. Implementation steps
+(10+) do NOT cache because their output depends on specific code context.
+Steps 1-7 were removed from the active graph in v1.13.0.
 
 | Step | Eligible | Threshold | Rationale |
 |------|----------|-----------|-----------|
-| 0 (Task Analysis) | YES | 0.82 | Task classification is repeatable |
-| 1 (Task Breakdown) | YES | 0.80 | Similar tasks break down similarly |
-| 2 (Plan Decision) | YES | 0.85 | Complexity scoring is deterministic |
-| 3 (Phase Breakdown) | NO | - | Depends on specific task details |
-| 4 (TOON Refinement) | NO | - | Depends on current context |
-| 5 (Skill Selection) | YES | 0.78 | Skills match file types reliably |
-| 6 (Skill Validation) | NO | - | Validation is cheap, no LLM |
-| 7 (Prompt Generation) | YES | 0.85 | Similar tasks produce similar prompts |
-| 8 (Progress Tracking) | YES | 0.75 | Progress patterns are repeatable |
-| 9-14 | NO | - | Execution steps, context-dependent |
+| 0 (Task Analysis) | YES | 0.85 | Task classification is repeatable |
+| 8 (GitHub Issue Creation) | YES | 0.78 | Issue label/template selection |
+| 11 (PR Review) | YES | 0.85 | Review criteria are consistent |
+| 13 (Documentation) | YES | 0.80 | Doc update patterns are repeatable |
+| 14 (Summary) | YES | 0.75 | Summary patterns are simple |
+| Pre-Analysis (orchestration) | NO | - | RAG lookup removed in v1.15.0 |
+| 9-12 (execution) | NO | - | Execution steps, context-dependent |
 
 **Default threshold:** 0.82
 
@@ -111,19 +109,16 @@ ELSE:
 
 ## Cross-Session Learning
 
-### Pattern Detection
+### Session Summary Storage
 
-- When Step 5 (Skill Selection) runs, RAG checks if the same skill was selected
-  for similar file types across 3+ sessions
-- If pattern confidence > 0.90, boost that skill's ranking
-- Enables: "learning" from past sessions without explicit memory
+- At pipeline end (output_node), `RAGLayer.store_session_summary()` records the full
+  session outcome in the `sessions` collection
+- Includes: task_type, skill, agent, final_status, user_prompt summary
 
-### Session Boost
+### Flow Trace Storage
 
-```
-skill_score = base_score + (rag_boost * pattern_confidence)
-rag_boost = 0.15  # 15% boost for cross-session patterns
-```
+- `RAGLayer.store_flow_trace()` records per-level status in `flow_traces`
+- Levels: level_minus1, level1, level2
 
 ---
 
@@ -154,7 +149,7 @@ rag_boost = 0.15  # 15% boost for cross-session patterns
 |--------|--------|
 | RAG lookup latency | < 50ms |
 | Token savings per hit | 500-2000 tokens |
-| Cache hit rate (mature system) | 40-60% on eligible steps |
+| Cache hit rate (mature system) | 20-40% on eligible steps |
 | Storage per session | ~5KB |
 
 ---
@@ -165,3 +160,12 @@ rag_boost = 0.15  # 15% boost for cross-session patterns
 - **MCP Server:** `src/mcp/vector_db_mcp_server.py` (11 tools)
 - **Vector DB:** Qdrant (localhost, default port 6333)
 - **Embedding Model:** sentence-transformers (configurable)
+
+---
+
+## Change Log
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.0.0 | 2026-03-18 | Initial policy with per-node RAG cache for steps 0,1,2,5,7,8 |
+| 1.1.0 | 2026-04-04 | Removed orchestration-level RAG (pre-analysis gate); removed per-node RAG from _run_step; steps 1,2,5,7 removed from eligible list (removed from active graph v1.13.0) |

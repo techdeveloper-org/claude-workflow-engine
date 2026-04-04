@@ -20,8 +20,7 @@ CHANGE LOG (v1.13.0):
   consolidated LLM call (orchestration template). Steps 8-14 are unchanged.
   route_after_step1_decision local function removed (step1 no longer exists).
   apply_integration_step1/2/3/4/5/6/7 removed (hooks only needed for live steps).
-  route_pre_analysis conditional edges updated: both fast-path and RAG-hit now
-  route to "level3_step8" (was "level3_step6" and "level3_step5" respectively).
+  route_pre_analysis updated: template fast-path routes to "level3_step8".
 
 CHANGE LOG (v1.14.0):
   Step 0 caller scripts use claude CLI subprocess (not direct LLM API calls).
@@ -30,6 +29,12 @@ CHANGE LOG (v1.14.0):
   removed; Step 0 now routes directly to Step 8.
   Direct edge: level3_step0 -> level3_step8.
   Active step count: Pre-0, 0.0, 0.1, 0, 8, 9, [10-14] = 8 active steps.
+
+CHANGE LOG (v1.15.0):
+  TOON compression node removed from Level 1 graph.
+  level1_complexity and level1_context now feed level1_merge directly (parallel).
+  node_toon_compression import removed.
+  Pre-analysis comment updated: RAG orchestration lookup removed.
 """
 
 import sys
@@ -62,7 +67,6 @@ from .level1_sync import (
     node_complexity_calculation,
     node_context_loader,
     node_session_loader,
-    node_toon_compression,
 )
 from .level2_standards import (
     detect_project_type,
@@ -687,7 +691,6 @@ def _save_pipeline_execution_log(state: FlowState, final_status: str) -> None:
                 log_lines.append(f"- Combined Score: {combined}/25")
         log_lines.append(f"- Context Files: {state.get(StepKeys.FILES_LOADED_COUNT, 0)}")
         log_lines.append(f"- Cache Hit: {state.get(StepKeys.CONTEXT_CACHE_HIT, False)}")
-        log_lines.append(f"- TOON: {'OK' if state.get(StepKeys.TOON_SAVED) else 'FAILED'}")
         log_lines.append("")
 
         # Level 2
@@ -803,6 +806,10 @@ def create_flow_graph(hook_mode: bool = False):
         Step 2 (plan execution) removed from pipeline (v1.14.0).
         route_pre_analysis targets updated to "level3_step8" for both fast paths.
         Standards hooks for removed steps are no longer registered.
+
+    CHANGE LOG (v1.15.0):
+        TOON compression node removed from Level 1 graph.
+        level1_complexity and level1_context now feed level1_merge directly.
     """
     if not _LANGGRAPH_AVAILABLE:
         raise RuntimeError(
@@ -874,16 +881,12 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_edge("level1_session", "level1_complexity")
     graph.add_edge("level1_session", "level1_context")
 
-    # Step 3: TOON compression (after both complexity and context complete)
-    graph.add_node("level1_toon_compression", node_toon_compression)
-    graph.add_edge("level1_complexity", "level1_toon_compression")
-    graph.add_edge("level1_context", "level1_toon_compression")
-
-    # Step 4: Merge Level 1 results
+    # Step 3: Merge Level 1 results (complexity + context both feed merge directly)
     graph.add_node("level1_merge", level1_merge_node)
-    graph.add_edge("level1_toon_compression", "level1_merge")
+    graph.add_edge("level1_complexity", "level1_merge")
+    graph.add_edge("level1_context", "level1_merge")
 
-    # Step 5: Memory cleanup (clear verbose variables)
+    # Step 4: Memory cleanup (clear verbose variables)
     graph.add_node("level1_cleanup", cleanup_level1_memory)
     graph.add_edge("level1_merge", "level1_cleanup")
 
@@ -942,10 +945,9 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_node("level3_init", level3_init_node)
     graph.add_edge("level2_optimize_context", "level3_init")
 
-    # Pre-analysis gate: call graph scan + RAG orchestration lookup
+    # Pre-analysis gate: call graph scan
     # Template fast-path (--orchestration-template): jumps directly to level3_step8
-    # RAG hit (confidence >= 0.85): jumps directly to level3_step8
-    # On miss: falls through to level3_step0_0 (normal pre-flight flow)
+    # Normal path: falls through to level3_step0_0 (pre-flight flow)
     graph.add_node("level3_pre_analysis", orchestration_pre_analysis_node)
     graph.add_edge("level3_init", "level3_pre_analysis")
     graph.add_conditional_edges(

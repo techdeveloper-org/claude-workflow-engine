@@ -10,8 +10,8 @@ Design patterns used
 --------------------
 Decorator Pattern (GoF):
     create_step_node wraps step functions with cross-cutting concerns (dry-run
-    guard, RAG short-circuit, timing, metrics, checkpointing, telemetry, RAG
-    storage, workflow memory) without modifying the wrapped function itself.
+    guard, timing, metrics, checkpointing, telemetry, workflow memory) without
+    modifying the wrapped function itself.
 
 Template Method Pattern (GoF):
     The standard step execution workflow is fixed in _execute_step_with_infra().
@@ -25,11 +25,18 @@ Factory Pattern (GoF):
 Class design
 ------------
 StepExecutionContext encapsulates the mutable per-step execution state (timing,
-infrastructure references, RAG helpers) that is passed between the helper
-methods inside _execute_step_with_infra().  This keeps the factory function
-itself free of local variable soup and makes unit testing straightforward:
-callers can construct a StepExecutionContext with mock objects and call its
-methods directly.
+infrastructure references) that is passed between the helper methods inside
+_execute_step_with_infra().  This keeps the factory function itself free of
+local variable soup and makes unit testing straightforward: callers can
+construct a StepExecutionContext with mock objects and call its methods directly.
+
+CHANGE LOG (v1.15.0):
+  _RAG_ELIGIBLE_STEPS constant removed.
+  try_rag_lookup() method removed from StepExecutionContext.
+  store_rag_decision() method removed from StepExecutionContext.
+  record_rag_hit_metric() method removed from StepExecutionContext.
+  RAG short-circuit block removed from _execute_step_with_infra() step 2.
+  Per-node RAG cache (Feature 2) fully removed from this module.
 """
 
 import functools
@@ -39,7 +46,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Dict, Optional
 
 from .infrastructure import get_infra
 from .logger_factory import get_logger
@@ -49,10 +56,6 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-# RAG-eligible steps: these make LLM calls whose result can be short-circuited
-# by a cached vector-DB decision when confidence >= step threshold.
-_RAG_ELIGIBLE_STEPS: Set[int] = {0, 1, 2, 5, 7, 8}
 
 # Telemetry directory under the user home (mirrors level3_execution/subgraph.py).
 _TELEMETRY_DIR = Path.home() / ".claude" / "logs" / "telemetry"
@@ -122,83 +125,6 @@ class StepExecutionContext:
         return time.time() - self.start_time
 
     # ------------------------------------------------------------------
-    # RAG helpers
-    # ------------------------------------------------------------------
-
-    def try_rag_lookup(self) -> Optional[Dict[str, Any]]:
-        """Attempt a RAG lookup for this step; return cached decision or None.
-
-        Returns None on any error (fail-open: RAG never blocks the pipeline).
-        When a cached decision is found the returned dict already contains
-        RAG metadata keys (step{n}_rag_hit, step{n}_rag_confidence,
-        step{n}_execution_time_ms) plus the original execution_time_ms.
-        """
-        if self.step_number not in _RAG_ELIGIBLE_STEPS:
-            return None
-        try:
-            from ..rag_integration import rag_lookup_before_llm
-
-            user_msg = self.state.get("user_message", "") or ""
-            rag_query = "%s %s" % (self.step_label, user_msg[:200])
-            step_key = "step%d" % self.step_number
-            rag_result = rag_lookup_before_llm(
-                step=step_key,
-                query=rag_query,
-                state=dict(self.state),
-            )
-            if rag_result and rag_result.get("rag_hit"):
-                duration_s = self.elapsed_s
-                cached = dict(rag_result.get("decision", {}))
-                confidence = float(rag_result.get("confidence", 0.0))
-                cached["step%d_rag_hit" % self.step_number] = True
-                cached["step%d_rag_confidence" % self.step_number] = confidence
-                cached["step%d_execution_time_ms" % self.step_number] = duration_s * 1000
-                print(
-                    "[STEP %02d] %s - RAG HIT (confidence=%.2f, %.0fms)"
-                    % (
-                        self.step_number,
-                        self.step_label,
-                        confidence,
-                        duration_s * 1000,
-                    ),
-                    file=sys.stderr,
-                )
-                logger.info(
-                    "[STEP %02d] %s - RAG HIT (confidence=%.2f)"
-                    % (
-                        self.step_number,
-                        self.step_label,
-                        confidence,
-                    )
-                )
-                return cached
-            else:
-                print(
-                    "[STEP %02d] %s - RAG MISS" % (self.step_number, self.step_label),
-                    file=sys.stderr,
-                )
-        except Exception as exc:
-            logger.debug("[STEP %02d] RAG lookup failed (non-fatal): %s" % (self.step_number, exc))
-        return None
-
-    def store_rag_decision(self, result: Dict[str, Any]) -> None:
-        """Store the step result in Vector DB for future RAG lookups.
-
-        Non-blocking: all errors are silently swallowed.
-        """
-        try:
-            from ..rag_integration import rag_store_after_node
-
-            step_key = "step%d" % self.step_number
-            rag_store_after_node(
-                step=step_key,
-                decision=result or {},
-                state=dict(self.state),
-            )
-        except Exception:
-            pass  # RAG storage is never fatal
-
-    # ------------------------------------------------------------------
     # Metrics helpers
     # ------------------------------------------------------------------
 
@@ -228,18 +154,6 @@ class StepExecutionContext:
                     error_type=type(exc).__name__,
                     recovery="Fallback result returned",
                     message=str(exc),
-                )
-            except Exception:
-                pass
-
-    def record_rag_hit_metric(self, duration_s: float) -> None:
-        """Record a RAG_HIT metric for this step."""
-        if self.metrics:
-            try:
-                self.metrics.record_step(
-                    step=self.step_number,
-                    duration=duration_s,
-                    status="RAG_HIT",
                 )
             except Exception:
                 pass
@@ -385,11 +299,10 @@ def _execute_step_with_infra(
     Workflow
     --------
     1. Dry-run guard (steps >= 8 when CLAUDE_DRY_RUN=1).
-    2. RAG short-circuit lookup.
-    3. Invoke step_fn(state).
-    4. On success: record metric, save checkpoint, write telemetry, store RAG
-       decision, save workflow memory.
-    5. On failure: log error, record metric, save failure checkpoint, write
+    2. Invoke step_fn(state).
+    3. On success: record metric, save checkpoint, write telemetry,
+       save workflow memory.
+    4. On failure: log error, record metric, save failure checkpoint, write
        telemetry, return fallback.
 
     Args:
@@ -418,22 +331,15 @@ def _execute_step_with_infra(
     print("\n[STEP %02d] %s - START" % (n, label), file=sys.stderr)
     logger.info("\n[STEP %02d] %s - START" % (n, label))
 
-    # 2. RAG short-circuit
-    rag_cached = ctx.try_rag_lookup()
-    if rag_cached is not None:
-        ctx.record_rag_hit_metric(ctx.elapsed_s)
-        ctx.write_telemetry("RAG_HIT", ctx.elapsed_ms, rag_cached)
-        return rag_cached
-
-    # 3. Execute step function
+    # 2. Execute step function
     try:
         result = step_fn(ctx.state)
         duration_s = ctx.elapsed_s
 
-        # 4a. Record success metric
+        # 3a. Record success metric
         ctx.record_success(duration_s)
 
-        # 4b. Save checkpoint
+        # 3b. Save checkpoint
         ctx.save_success_checkpoint(result or {})
 
         print(
@@ -442,13 +348,10 @@ def _execute_step_with_infra(
         )
         logger.info("[STEP %02d] %s - OK (%.0fms)" % (n, label, duration_s * 1000))
 
-        # 4c. Write telemetry
+        # 3c. Write telemetry
         ctx.write_telemetry("OK", duration_s * 1000, result)
 
-        # 4d. Store node decision in Vector DB
-        ctx.store_rag_decision(result or {})
-
-        # 4e. Save workflow memory
+        # 3d. Save workflow memory
         ctx.save_workflow_memory("SUCCESS")
 
         # Inject execution time into result
@@ -461,13 +364,13 @@ def _execute_step_with_infra(
     except Exception as exc:
         duration_s = ctx.elapsed_s
 
-        # 5a. Structured error log
+        # 4a. Structured error log
         ctx.log_structured_error(exc, fallback_result)
 
-        # 5b. Record failure metric
+        # 4b. Record failure metric
         ctx.record_failure(duration_s, exc)
 
-        # 5c. Save failure checkpoint
+        # 4c. Save failure checkpoint
         ctx.save_failure_checkpoint(fallback_result, exc)
 
         print(
@@ -476,7 +379,7 @@ def _execute_step_with_infra(
         )
         logger.error("[STEP %02d] %s - FAILED: %s" % (n, label, exc))
 
-        # 5d. Write telemetry
+        # 4d. Write telemetry
         ctx.write_telemetry("ERROR", duration_s * 1000, None)
 
         # Build error return
@@ -507,19 +410,17 @@ def create_step_node(
 
     The created node includes:
     - Dry-run guard (skips steps >= 8 when CLAUDE_DRY_RUN=1)
-    - RAG short-circuit (returns cached decision when confidence >= threshold)
     - Execution timing
     - Success/failure metrics via MetricsCollector
     - Checkpoint persistence via CheckpointManager
     - Structured error logging via ErrorLogger
     - JSONL telemetry append
-    - Vector DB RAG storage of the step decision
     - Workflow memory write for resume support
 
     Args:
         step_number:     Numeric step index (0-14).  Used for checkpoint
-                         naming, dry-run guard, RAG eligibility, and state
-                         key construction (e.g. ``step3_error``).
+                         naming, dry-run guard, and state key construction
+                         (e.g. ``step3_error``).
         step_label:      Human-readable label for log messages
                          (e.g. ``"STEP 3 - Task Breakdown"``).
         step_fn:         The step implementation.  Signature:

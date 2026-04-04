@@ -1,7 +1,7 @@
 # Claude Workflow Engine - Scripts Directory Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.14.0
+**Version:** 1.15.0
 **Type:** LangGraph Orchestration Pipeline with RAG
 **Last Updated:** 2026-04-04
 
@@ -30,7 +30,7 @@ This directory contains the pipeline entry point, hook scripts, and the core `la
 | `/CHANGELOG.md` | Full project changelog (root) |
 | `/SRS.md` | System Requirements Specification (root) |
 
-### langgraph_engine/ Package Structure (v1.14.0)
+### langgraph_engine/ Package Structure (v1.15.0)
 
 ```
 langgraph_engine/
@@ -48,12 +48,30 @@ langgraph_engine/
 +-- call_graph_builder.py # Compat shim -> parsers/
 +-- level_minus1/        # Level -1 package (policies/)
 +-- level1_sync/         # Level 1 package (3 modules + policies/ + architecture/)
++--                      # NOTE: toon_compression.py remains on disk (deprecated, not imported)
 +-- level2_standards/    # Level 2 package (2 modules + policies/ + architecture/)
 +-- level3_execution/    # Level 3 package (subgraph.py + nodes/ + sonarqube/ + policies/ + architecture/)
 |   +-- subgraph.py      # v2 subgraph builder (canonical entry point)
 |   +-- nodes/           # v2 step wrapper nodes (orchestration, pre_nodes, step_wrappers_*)
 +-- [60+ shared modules] # Cross-level utilities (LLM, caching, metrics, git, etc.)
 ```
+
+### v1.15.0 Changes
+
+Three features removed:
+
+1. **Orchestration RAG Hit (Pre-Step 0)** -- `rag_lookup_orchestration()` / `rag_store_orchestration()` removed from
+   `rag_integration.py`. `RAG_ORCHESTRATION_THRESHOLD` removed. `route_pre_analysis()` no longer has a RAG-hit
+   branch. State fields `rag_orchestration_hit/confidence/cached_plan` removed from FlowState.
+
+2. **Per-Node RAG Cache (Steps 8-14)** -- `_RAG_ELIGIBLE_STEPS` removed from `subgraph.py` and `step_decorator.py`.
+   `rag_lookup_before_llm()` / `rag_store_after_node()` removed from `rag_integration.py`. LLM calls now always
+   execute without RAG short-circuit. `RAGLayer.lookup()` / `.store()` remain available for explicit use.
+
+3. **TOON Compression (Level 1)** -- `node_toon_compression` removed from graph in `orchestrator.py` and
+   `pipeline_builder.py`. `level1_complexity` and `level1_context` now feed directly into `level1_merge`.
+   `toon_compression.py` stays on disk (deprecated). `ToonObject` class and `WorkflowContextOptimizer` kept
+   (used for step-to-step workflow memory, not Level 1 compression).
 
 ### Running the Pipeline
 
@@ -79,6 +97,9 @@ pytest tests/test_call_graph_builder.py tests/test_call_graph_analyzer.py tests/
 
 # MCP server tests:
 pytest tests/test_*mcp*.py
+
+# RAG tests (v1.15.0 -- TestRAGLookupInRunStep removed):
+pytest tests/test_rag_integration.py -v
 ```
 
 ### Adding a New Pipeline Level

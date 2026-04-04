@@ -2,6 +2,10 @@
 
 Extracted from orchestrator.py. Handles the final output_node which synthesizes
 the prompt, saves the execution log, stores RAG data, and accumulates session info.
+
+CHANGE LOG (v1.15.0):
+  Removed TOON log line from _save_pipeline_execution_log() Level 1 section
+  (TOON compression node removed from pipeline).
 """
 
 import sys
@@ -9,8 +13,10 @@ from pathlib import Path
 
 try:
     import sys as _sys
+
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "src"))
     from utils.path_resolver import get_claude_home
+
     _OUTPUT_HELPERS_CLAUDE_HOME = get_claude_home()
 except ImportError:
     _OUTPUT_HELPERS_CLAUDE_HOME = Path.home() / ".claude"
@@ -50,10 +56,11 @@ def synthesize_prompt_with_flow_data(state: FlowState) -> dict:
         import importlib.util
 
         # Import PromptGenerator from prompt-generation-policy.py
-        scripts_path = Path(__file__).parent.parent.parent / "architecture" / "03-execution-system" / "00-prompt-generation"
+        scripts_path = (
+            Path(__file__).parent.parent.parent / "architecture" / "03-execution-system" / "00-prompt-generation"
+        )
         spec = importlib.util.spec_from_file_location(
-            "prompt_generation_policy",
-            scripts_path / "prompt-generation-policy.py"
+            "prompt_generation_policy", scripts_path / "prompt-generation-policy.py"
         )
         pg_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(pg_module)
@@ -102,21 +109,19 @@ def synthesize_prompt_with_flow_data(state: FlowState) -> dict:
                 "selected_agents": state.get(StepKeys.AGENTS, []),
                 "skill_definition": state.get(StepKeys.SKILL_DEFINITION, ""),
                 "agent_definition": state.get(StepKeys.AGENT_DEFINITION, ""),
-            }
+            },
         }
 
         # SYNTHESIS: Create comprehensive prompt
         # Priority: user_message > user_message_original > env var CURRENT_USER_MESSAGE
         import os
+
         user_msg = (
             state.get(StepKeys.USER_MESSAGE)
             or state.get(StepKeys.USER_MESSAGE_ORIGINAL)
             or os.environ.get("CURRENT_USER_MESSAGE", "")
         )
-        synthesis_result = generator.synthesize_with_flow_data(
-            user_msg,
-            flow_data
-        )
+        synthesis_result = generator.synthesize_with_flow_data(user_msg, flow_data)
 
         return {
             "synthesized_prompt": synthesis_result.get("synthesized_prompt", ""),
@@ -124,7 +129,7 @@ def synthesize_prompt_with_flow_data(state: FlowState) -> dict:
                 "original_message": synthesis_result.get("original_message"),
                 "context_level": synthesis_result.get("context_level"),
                 "data_used": synthesis_result.get("data_used"),
-            }
+            },
         }
 
     except Exception as e:
@@ -132,7 +137,7 @@ def synthesize_prompt_with_flow_data(state: FlowState) -> dict:
         # Fallback: return original message
         return {
             "synthesized_prompt": state.get(StepKeys.USER_MESSAGE, ""),
-            "synthesis_metadata": {"status": "fallback"}
+            "synthesis_metadata": {"status": "fallback"},
         }
 
 
@@ -156,7 +161,7 @@ def output_node(state: FlowState) -> dict:
             msg = f"Starting {task_type} task, complexity {complexity} out of 10."
             if skill:
                 msg += f" Using {skill} skill."
-            start_flag.write_text(msg, encoding='utf-8')
+            start_flag.write_text(msg, encoding="utf-8")
     except Exception:
         pass
 
@@ -190,6 +195,7 @@ def output_node(state: FlowState) -> dict:
         if session_dir:
             try:
                 from datetime import datetime
+
                 quick_summary = (
                     f"Pipeline: {final_status} | "
                     f"Task: {state.get(StepKeys.TASK_TYPE, '?')} | "
@@ -200,13 +206,14 @@ def output_node(state: FlowState) -> dict:
                     f"Time: {datetime.now().strftime('%H:%M:%S')}"
                 )
                 summary_file = Path(session_dir) / "execution-summary.txt"
-                summary_file.write_text(quick_summary, encoding='utf-8')
+                summary_file.write_text(quick_summary, encoding="utf-8")
             except Exception:
                 pass
 
     # VECTOR DB RAG - Store session summary for cross-session learning
     try:
         from ..rag_integration import get_rag_layer
+
         rag = get_rag_layer(
             session_id=state.get(StepKeys.SESSION_ID, ""),
             project_root=state.get(StepKeys.PROJECT_ROOT, ""),
@@ -249,6 +256,7 @@ def output_node(state: FlowState) -> dict:
         if str(_src_mcp_dir) not in sys.path:
             sys.path.insert(0, str(_src_mcp_dir))
         from session_hooks import accumulate_request
+
         accumulate_request(
             session_id=state.get(StepKeys.SESSION_ID, ""),
             prompt=state.get(StepKeys.USER_MESSAGE, "")[:300],
@@ -317,7 +325,6 @@ def _save_pipeline_execution_log(state: FlowState, final_status: str) -> None:
                 log_lines.append(f"- Combined Score: {combined}/25")
         log_lines.append(f"- Context Files: {state.get(StepKeys.FILES_LOADED_COUNT, 0)}")
         log_lines.append(f"- Cache Hit: {state.get(StepKeys.CONTEXT_CACHE_HIT, False)}")
-        log_lines.append(f"- TOON: {'OK' if state.get(StepKeys.TOON_SAVED) else 'FAILED'}")
         log_lines.append("")
 
         # Level 2

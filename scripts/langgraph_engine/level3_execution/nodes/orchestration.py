@@ -5,10 +5,16 @@ Extracted from level3_execution/subgraph.py for modularity.
 Windows-safe: ASCII only.
 
 CHANGE LOG (v1.13.0):
-  route_pre_analysis: both template_fast_path and RAG hit now route to
-  "level3_step8" (previously routed to "level3_step6" and "level3_step5").
+  route_pre_analysis: template_fast_path now routes to "level3_step8"
+  (previously routed to "level3_step6" and "level3_step5").
   Steps 5-7 no longer exist in the graph; Step 8 is the new post-Step-0 target.
   route_to_plan_or_breakdown removed (Step 1 no longer exists in graph).
+
+CHANGE LOG (v1.15.0):
+  Removed RAG orchestration lookup from orchestration_pre_analysis_node.
+  Removed rag_orchestration_hit, rag_orchestration_confidence,
+  rag_orchestration_cached_plan state writes and route_pre_analysis RAG branch.
+  Call graph scan and template fast-path remain intact.
 """
 import sys
 from pathlib import Path
@@ -28,18 +34,17 @@ except ImportError:
 
 
 def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
-    """Pre-analysis gate: call graph context + RAG orchestration lookup.
+    """Pre-analysis gate: call graph context scan.
 
-    Executes BEFORE Step 0.0 (project context). Two responsibilities:
+    Executes BEFORE Step 0.0 (project context). Responsibilities:
 
     1. Call graph scan: identify hot nodes (5+ callers) and leaf nodes
        (0 callers). Results are stored as call_graph_metrics so Step 0
        can adjust its complexity score without an extra LLM call.
 
-    2. RAG orchestration lookup: check if a similar past task's agent
-       roster and phase plan can be reused (threshold 0.85).  On hit,
-       skip_architecture and skip_consensus flags are set so route_pre_analysis
-       can bypass Step 0 and jump directly to Step 8 (GitHub issue creation).
+    2. Orchestration Template Fast-Path: if user provided
+       --orchestration-template, inject pre-filled fields and route
+       directly to Step 8 (GitHub issue creation), bypassing Step 0.
 
     Always fail-open: any exception returns empty metrics without blocking
     the pipeline.
@@ -51,11 +56,6 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "pre_analysis_result": {},
         "call_graph_metrics": {},
-        "rag_orchestration_hit": False,
-        "rag_orchestration_confidence": 0.0,
-        "rag_orchestration_cached_plan": {},
-        "skip_architecture": False,
-        "skip_consensus": False,
         "template_fast_path": False,
     }
 
@@ -103,8 +103,6 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
                     logger.debug("[v2] Template system_prompt write skipped: %s", sp_err)
             # Mark fast-path active
             result["template_fast_path"] = True
-            result["skip_architecture"] = True
-            result["skip_consensus"] = True
             elapsed = (_t.time() - _start) * 1000
             result["pre_analysis_execution_time_ms"] = round(elapsed, 1)
             print(
@@ -151,76 +149,7 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
     except Exception as cg_exc:
         logger.debug("[v2] Pre-analysis call graph scan skipped: %s", cg_exc)
 
-    # --- 2. RAG Orchestration Lookup ---
-    try:
-        from ..rag_integration import rag_lookup_orchestration
-
-        task_desc = state.get("user_message", "")
-        # Simple project name from path tail
-        proj_root = state.get("project_root", "") or ""
-        proj_name = proj_root.replace("\\", "/").rstrip("/").split("/")[-1]
-
-        # Lightweight structural fingerprint to prevent cross-project RAG false positives.
-        try:
-            from ..rag_integration import _compute_codebase_hash as _cbh
-
-            _codebase_hash = _cbh(proj_root)
-        except Exception:
-            _codebase_hash = ""
-
-        context = {
-            "project": proj_name,
-            "task_hash": str(hash(task_desc[:100]) & 0xFFFFFF),
-            "framework": state.get("detected_framework", ""),
-            "codebase_hash": _codebase_hash,
-        }
-        rag_result = rag_lookup_orchestration(
-            task=task_desc,
-            context=context,
-            state=dict(state),
-        )
-        if rag_result.get("hit"):
-            confidence = rag_result.get("confidence", 0.0)
-            cached = rag_result.get("cached_plan", {})
-            result["rag_orchestration_hit"] = True
-            result["rag_orchestration_confidence"] = confidence
-            result["rag_orchestration_cached_plan"] = cached
-            result["skip_architecture"] = True
-            result["skip_consensus"] = True
-            # Inject cached step0 data so downstream steps receive correct context
-            for key in (
-                "step0_task_type",
-                "step0_complexity",
-                "step0_reasoning",
-                "step1_plan_required",
-                "step3_tasks_validated",
-                "step5_skill",
-                "step5_agent",
-                "step5_skills",
-                "step5_agents",
-                "step6_skill_ready",
-                "step7_execution_prompt",
-                "step7_prompt_saved",
-            ):
-                if cached.get(key) is not None:
-                    result[key] = cached[key]
-            # Ensure skill-readiness defaults are set on RAG hit
-            result.setdefault("step6_skill_ready", True)
-            result.setdefault("step6_agent_ready", True)
-            result.setdefault("step7_prompt_saved", bool(result.get("step7_execution_prompt")))
-            print(
-                "[PRE-ANALYSIS] RAG HIT (confidence=%.2f) - jumping to Step 8" % confidence,
-                file=sys.stderr,
-            )
-            logger.info(
-                "[v2] Pre-analysis RAG HIT confidence=%.2f source_session=%s -> level3_step8",
-                confidence,
-                rag_result.get("session_id", ""),
-            )
-        else:
-            print("[PRE-ANALYSIS] RAG MISS - running full pipeline", file=sys.stderr)
-    except Exception as rag_exc:
-        logger.debug("[v2] Pre-analysis RAG lookup skipped: %s", rag_exc)
+    print("[PRE-ANALYSIS] running full pipeline", file=sys.stderr)
 
     elapsed = (_t.time() - _start) * 1000
     result["pre_analysis_execution_time_ms"] = round(elapsed, 1)
@@ -233,17 +162,11 @@ def route_pre_analysis(state: FlowState) -> str:
     TEMPLATE FAST-PATH (highest priority, template_fast_path=True):
         -> "level3_step8"  (GitHub issue creation, bypassing Step 0 entirely)
 
-    RAG HIT (confidence >= 0.85, skip_architecture set):
-        -> "level3_step8"  (GitHub issue creation, bypassing Step 0)
-
-    RAG MISS or call graph unavailable:
-        -> "level3_step0_0"  (normal pre-flight flow through Step 0)
+    Normal path:
+        -> "level3_step0_0"  (pre-flight flow through Step 0)
     """
     if state.get("template_fast_path"):
         logger.info("[v2] Pre-analysis route: TEMPLATE FAST-PATH -> level3_step8")
-        return "level3_step8"
-    if state.get("rag_orchestration_hit") and state.get("skip_architecture"):
-        logger.info("[v2] Pre-analysis route: RAG HIT -> level3_step8")
         return "level3_step8"
     return "level3_step0_0"
 

@@ -1,7 +1,7 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.14.0
+**Version:** 1.15.0
 **Type:** LangGraph Orchestration Pipeline with RAG + Call Graph Intelligence + Template Fast-Path
 **Last Updated:** 2026-04-04
 
@@ -33,7 +33,7 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 ```
 Level -1: Auto-Fix (3 checks: Unicode, encoding, paths)
     |
-Level 1: Sync (session + parallel [complexity, context] + TOON compress)
+Level 1: Sync (session + parallel [complexity, context] -> merge)
     |     Outputs: combined_complexity_score [1-25] (simple x 0.3 + graph x 0.7)
     |     NOTE: combined_complexity_score is on a 1-25 scale -- do NOT treat as 1-10
     |
@@ -41,11 +41,10 @@ Level 2: Standards (common + conditional Java + tool opt + MCP discovery)
     |
 Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
     |
-    |-- Pre-0: Orchestration Pre-Analysis (unchanged)
+    |-- Pre-0: Orchestration Pre-Analysis
     |           CallGraph scan -> hot_nodes, danger_zones, complexity_boost -> state
-    |           RAG lookup (threshold 0.85) -> hit? skip Step 0, jump to Step 8
     |           Template fast-path detected? -> skip Step 0, jump to Step 8
-    |           Miss -> continue to Step 0 with call graph data already in state
+    |           Normal path -> continue to Step 0 with call graph data already in state
     |
     |-- Step 0: Task Analysis v2 -- PromptGen + Orchestrator        [v1.14.0]
     |   |
@@ -101,6 +100,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | v1.12.0 | 15 | ~6 | ~75s | Original -- Steps 0-7 each called LLM separately |
 | v1.13.0 | 9 | ~2 (subprocess) | ~30s | Removed Steps 1,3,4,5,6,7 |
 | **v1.14.0** | **8** | **2 (subprocess)** | **~15s** | Step 0 = template fill + orchestrator (claude CLI subprocess) |
+| **v1.15.0** | **8** | **2 (subprocess)** | **~15s** | TOON compression removed from Level 1; orchestration RAG and per-node RAG removed |
 
 ### Directory Layout
 
@@ -162,13 +162,13 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | Parsers Package | scripts/langgraph_engine/parsers/ | Abstract Factory: ParserRegistry + 4 language parsers |
 | SonarQube Package | scripts/langgraph_engine/level3_execution/sonarqube/ | Facade: api_client, lightweight, aggregator, auto_fixer |
 | Integrations Package | scripts/langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
-| RAG Integration | scripts/langgraph_engine/rag_integration.py | Vector DB decision caching + orchestration-level plan cache |
+| RAG Integration | scripts/langgraph_engine/rag_integration.py | Vector DB session/flow trace storage; node-level lookup/store for eligible steps |
 | Level -1 | scripts/langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical) |
-| Level 1 | scripts/langgraph_engine/level1_sync/ | Session/context sync + TOON (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
+| Level 1 | scripts/langgraph_engine/level1_sync/ | Session/context sync (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
 | Level 2 | scripts/langgraph_engine/level2_standards/ | Standards loading (canonical) |
-| Level 3 | scripts/langgraph_engine/level3_execution/subgraph.py | 8-step active execution (Pre-0, Step 0, Steps 8-14) with RAG - ACTIVE (nodes in level3_execution/nodes/) |
+| Level 3 | scripts/langgraph_engine/level3_execution/subgraph.py | 8-step active execution (Pre-0, Step 0, Steps 8-14) -- ACTIVE (nodes in level3_execution/nodes/) |
 | Level 3 v1 steps | scripts/langgraph_engine/level3_execution/steps/ | v1 steps (DEPRECATED) |
-| Pre-Analysis Node | scripts/langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan + RAG lookup before Step 0 |
+| Pre-Analysis Node | scripts/langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan before Step 0; template fast-path detection |
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
 | Call Graph Builder | scripts/langgraph_engine/call_graph_builder.py | AST-based FQN call stack (compat shim -> parsers/) |
 | Call Graph Analyzer | scripts/langgraph_engine/call_graph_analyzer.py | Pipeline impact analysis (Steps 2/10/11) |
@@ -223,7 +223,7 @@ and points to `mcp-{name}/server.py` in the local workspace.
 | 9 | anthropic-provider | [mcp-anthropic-provider](https://github.com/techdeveloper-org/mcp-anthropic-provider) | 4 | Direct Anthropic Claude API, cost estimation |
 | 10 | openai-provider | [mcp-openai-provider](https://github.com/techdeveloper-org/mcp-openai-provider) | 4 | Direct OpenAI GPT API, cost estimation |
 | 11 | token-optimizer | [mcp-token-optimizer](https://github.com/techdeveloper-org/mcp-token-optimizer) | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
-| 12 | pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 8 | Pre-tool validation (8 policy checks, skill hints) |
+| 12 | pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 13 | Pre-tool validation (8 policy checks, skill hints) |
 | 13 | post-tool-tracker | [mcp-post-tool-tracker](https://github.com/techdeveloper-org/mcp-post-tool-tracker) | 6 | Post-tool tracking (progress, commit readiness, stats) |
 | 14 | standards-loader | [mcp-standards-loader](https://github.com/techdeveloper-org/mcp-standards-loader) | 7 | Standards (project detect, framework detect, hot-reload) |
 | 15 | skill-manager | [mcp-skill-manager](https://github.com/techdeveloper-org/mcp-skill-manager) | 8 | Skill lifecycle (load, search, validate, rank, conflicts) |
@@ -243,21 +243,16 @@ and points to `mcp-{name}/server.py` in the local workspace.
 
 ### RAG Integration
 
-Every LangGraph node stores its decision in Vector DB (`node_decisions` collection).
-Before LLM calls, the pipeline checks RAG for similar past decisions.
-If confidence >= step-specific threshold, RAG result replaces LLM call (saving inference time).
+Session summaries and flow traces are stored in Qdrant Vector DB for cross-session learning.
+For eligible pipeline steps (Step 0, Step 8, Step 11, Step 13, Step 14), RAGLayer.lookup()
+checks for similar past decisions before LLM calls. On hit (confidence >= step threshold),
+the cached decision replaces the LLM call.
 
 Key module: `scripts/langgraph_engine/rag_integration.py`
 Collections: `node_decisions`, `sessions`, `flow_traces`, `tool_calls`
 Default threshold: 0.82 (step-specific: 0.75-0.90)
 
-**Orchestration-level RAG (v1.6.0 NEW):**
-`rag_lookup_orchestration()` / `rag_store_orchestration()` operate at the plan level
-(step="orchestration_plan", threshold=0.85). On hit, the full orchestration plan
-(agent roster, task type, complexity, skill selection) is reused from cache,
-bypassing Steps 0-4 entirely and saving ~5 LLM calls per session.
-
-**RAG Cross-Project Guard (v1.6.1 NEW):**
+**RAG Cross-Project Guard (v1.6.1):**
 Every payload stored in `node_decisions` includes a `codebase_hash` -- a 12-char SHA1
 fingerprint of the sorted list of top-level Python module file names.  During lookup,
 if the query hash differs from the stored hash, the similarity score is penalised x0.65,
@@ -287,7 +282,7 @@ Key module: `scripts/langgraph_engine/call_graph_analyzer.py`
 Data source: `scripts/langgraph_engine/call_graph_builder.py`
 State fields: `pre_analysis_result`, `step10_pre_change_graph`, `step11_impact_review`
 
-**Stale Graph Guard (v1.6.1 NEW):**
+**Stale Graph Guard (v1.6.1):**
 After Step 10 writes files, state flag `call_graph_stale = True` is set.
 `refresh_call_graph_if_stale(state, project_root)` (in `call_graph_analyzer.py`) checks
 this flag and silently rebuilds the graph when stale rather than returning a pre-implementation
@@ -452,7 +447,7 @@ See environment variables in `.env.example`:
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: v1.14.0 -- Step 0 redesign: replace 2-subprocess analysis chain with prompt-gen-expert (LLM Call 1, captured) + orchestrator-agent (LLM Call 2, stderr streamed live). Templates stored in level3_execution/templates/. New call_streaming_script() helper with inherited stderr for real-time terminal output.
+- **Task**: v1.15.0 -- Remove orchestration RAG, per-node RAG, and TOON compression from pipeline. Clean state definition, tests, policies, and docs.
 - **Skill**: python-core
 - **Agent**: python-backend-engineer
 - **Date**: 2026-04-04

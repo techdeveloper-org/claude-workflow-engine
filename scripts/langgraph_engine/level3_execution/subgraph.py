@@ -18,10 +18,17 @@ CHANGE LOG (v1.14.0):
   already produces a comprehensive plan.
   Active steps: Pre-0, 0.0, 0.1, 0, 8, 9, [10-14] = 8 active steps.
 
+CHANGE LOG (v1.15.0):
+  Removed per-node RAG cache from _run_step():
+    - _RAG_ELIGIBLE_STEPS constant removed
+    - RAG lookup block before LLM call removed
+    - RAG store block after node completion removed
+    - rag_lookup_before_llm / rag_store_after_node imports removed
+  LLM call path in all step nodes is unchanged.
+
 Remaining steps (0, 8-14) implemented with:
 - Proper logging via loguru
 - Time tracking
-- TOON object handling
 - Session management
 - LangGraph routing support
 - Global error handling with try/catch on every critical path
@@ -109,7 +116,6 @@ def _get_backup_manager():
 
 
 from ..flow_state import FlowState  # noqa: E402
-from ..rag_integration import rag_lookup_before_llm, rag_store_after_node  # noqa: E402
 from ..step_logger import write_level_log  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -178,14 +184,6 @@ def _write_step_log(
 
     except Exception:
         pass  # Logging failure is never fatal
-
-
-# ---------------------------------------------------------------------------
-# RAG-eligible steps: these make subprocess calls that can be short-circuited by RAG
-# ---------------------------------------------------------------------------
-# Steps 8-14 are unique per task; Step 10 is implementation
-# Steps 1-7 removed (v1.13-v1.14); Step 0 routes directly to Step 8
-_RAG_ELIGIBLE_STEPS = {0, 8}
 
 
 # ---------------------------------------------------------------------------
@@ -300,44 +298,6 @@ def _run_step(
         except Exception:
             pass  # Non-blocking
 
-    # --- RAG lookup before LLM call (fail-open) ---
-    if step_number in _RAG_ELIGIBLE_STEPS:
-        try:
-            user_msg = state.get("user_message", "") or ""
-            rag_query = f"{step_label} {user_msg[:200]}"
-            step_key = f"step{step_number}"
-            rag_result = rag_lookup_before_llm(step=step_key, query=rag_query, state=dict(state))
-            if rag_result and rag_result.get("rag_hit"):
-                duration = time.time() - step_start
-                cached_decision = rag_result.get("decision", {})
-                confidence = rag_result.get("confidence", 0.0)
-                print(
-                    f"[STEP {step_number:02d}] {step_label} - RAG HIT "
-                    f"(confidence={confidence:.2f}, {duration*1000:.0f}ms)",
-                    file=sys.stderr,
-                )
-                logger.info(f"[STEP {step_number:02d}] {step_label} - RAG HIT " f"(confidence={confidence:.2f})")
-                # Add RAG metadata to cached result
-                cached_decision[f"step{step_number}_rag_hit"] = True
-                cached_decision[f"step{step_number}_rag_confidence"] = confidence
-                cached_decision[f"step{step_number}_execution_time_ms"] = duration * 1000
-                # Write step log
-                _write_step_log(state, step_number, step_label, "RAG_HIT", duration, cached_decision)
-                # Record metric
-                if metrics:
-                    try:
-                        metrics.record_step(step=step_number, duration=duration, status="RAG_HIT")
-                    except Exception:
-                        pass
-                # Write telemetry entry (non-blocking)
-                _write_telemetry(state, step_number, step_label, "RAG_HIT", duration * 1000, cached_decision)
-                return cached_decision
-            else:
-                print(f"[STEP {step_number:02d}] {step_label} - RAG MISS", file=sys.stderr)
-        except Exception as rag_exc:
-            # Fail-open: RAG errors never block pipeline
-            logger.debug(f"[STEP {step_number:02d}] RAG lookup failed (non-fatal): {rag_exc}")
-
     # --- Failure Prevention KB check (informational, non-blocking) ---
     # Only for steps that run external commands/tools (Steps 0, 8, 9, 10)
     if step_number in {0, 8, 9, 10}:
@@ -439,13 +399,6 @@ def _run_step(
 
         # Write telemetry entry (non-blocking)
         _write_telemetry(state, step_number, step_label, "OK", duration * 1000, result)
-
-        # Store node decision in Vector DB for RAG (non-blocking)
-        try:
-            step_key = f"step{step_number}"
-            rag_store_after_node(step=step_key, decision=result or {}, state=dict(state))
-        except Exception:
-            pass  # RAG storage is never fatal
 
         # Save workflow memory for resume support (non-blocking)
         try:

@@ -3,6 +3,11 @@ Tests for RAG Integration Layer (rag_integration.py).
 
 Tests the RAGLayer class which provides vector DB based
 caching and recommendation for LangGraph pipeline nodes.
+
+CHANGE LOG (v1.15.0):
+  Removed TestRAGLookupInRunStep -- per-node RAG cache removed from _run_step.
+  Removed _RAG_ELIGIBLE_STEPS test -- constant no longer exists.
+  Updated test_thresholds_defined_for_llm_steps -- steps 1, 2, 5, 7 removed.
 """
 
 import json
@@ -246,39 +251,18 @@ class TestConvenienceFunctions:
         rag2 = get_rag_layer(session_id="s2")
         assert rag1 is not rag2  # Different session = new instance
 
-    @patch("langgraph_engine.rag_integration._get_vector_functions")
-    def test_rag_lookup_before_llm(self, mock_vf):
-        from langgraph_engine.rag_integration import rag_lookup_before_llm
-
-        mock_vf.return_value = {"available": False}
-        state = {"session_id": "s1", "project_root": "/tmp/test"}
-        result = rag_lookup_before_llm(step="step0", query="test", state=state)
-        assert result is None
-
-    @patch("langgraph_engine.rag_integration._get_vector_functions")
-    def test_rag_store_after_node(self, mock_vf):
-        from langgraph_engine.rag_integration import rag_store_after_node
-
-        mock_vf.return_value = {"available": False}
-        state = {"session_id": "s1", "project_root": "/tmp/test"}
-        result = rag_store_after_node(
-            step="step0",
-            decision={"task_type": "Bug Fix"},
-            state=state,
-        )
-        assert result is False
-
 
 class TestStepThresholds:
     """Test step-specific confidence thresholds."""
 
-    def test_thresholds_defined_for_llm_steps(self):
+    def test_thresholds_defined_for_active_steps(self):
         from langgraph_engine.rag_integration import STEP_THRESHOLDS
 
-        llm_steps = ["step0", "step1", "step2", "step5", "step7", "step8", "step11", "step13", "step14"]
-        for step in llm_steps:
-            assert step in STEP_THRESHOLDS, f"Missing threshold for {step}"
-            assert 0.5 <= STEP_THRESHOLDS[step] <= 1.0, f"Invalid threshold for {step}"
+        # Active steps that still have thresholds defined (steps 1,2,5,7 removed in v1.13-1.15)
+        active_steps = ["step0", "step8", "step11", "step13", "step14"]
+        for step in active_steps:
+            assert step in STEP_THRESHOLDS, "Missing threshold for {}".format(step)
+            assert 0.5 <= STEP_THRESHOLDS[step] <= 1.0, "Invalid threshold for {}".format(step)
 
     def test_step7_has_highest_threshold(self):
         from langgraph_engine.rag_integration import STEP_THRESHOLDS
@@ -319,67 +303,3 @@ class TestSkillSelectionRAGBoost:
         # Should get pattern boost for matching "python" and "flask"
         assert boost > 0
         assert boost <= 0.15
-
-
-class TestRAGLookupInRunStep:
-    """Test RAG lookup wiring in _run_step (level3_execution/subgraph.py)."""
-
-    def test_rag_eligible_steps_defined(self):
-        from langgraph_engine.level3_execution.subgraph import _RAG_ELIGIBLE_STEPS
-
-        # Steps 1,2,5,7 removed in v1.13-v1.14; only Step 0 and Step 8 remain eligible
-        assert _RAG_ELIGIBLE_STEPS == {0, 8}
-
-    @patch("langgraph_engine.level3_execution.subgraph.rag_lookup_before_llm")
-    def test_run_step_calls_rag_for_eligible_step(self, mock_rag_lookup):
-        from langgraph_engine.level3_execution.subgraph import _run_step
-
-        mock_rag_lookup.return_value = None  # RAG miss
-        dummy_fn = MagicMock(return_value={"step0_task_type": "Bug Fix"})
-        state = {"user_message": "fix auth bug", "session_id": "s1"}
-        _run_step(0, "Task Analysis", dummy_fn, state)
-        # RAG should have been called
-        mock_rag_lookup.assert_called_once()
-        # step_fn should still be called (RAG miss)
-        dummy_fn.assert_called_once()
-
-    @patch("langgraph_engine.level3_execution.subgraph.rag_lookup_before_llm")
-    def test_run_step_skips_rag_for_non_eligible_step(self, mock_rag_lookup):
-        from langgraph_engine.level3_execution.subgraph import _run_step
-
-        dummy_fn = MagicMock(return_value={"step3_tasks_validated": []})
-        state = {"user_message": "fix auth bug", "session_id": "s1"}
-        _run_step(3, "Task Breakdown", dummy_fn, state)
-        # RAG should NOT be called for step 3
-        mock_rag_lookup.assert_not_called()
-        dummy_fn.assert_called_once()
-
-    @patch("langgraph_engine.level3_execution.subgraph.rag_lookup_before_llm")
-    def test_run_step_returns_cached_on_rag_hit(self, mock_rag_lookup):
-        from langgraph_engine.level3_execution.subgraph import _run_step
-
-        mock_rag_lookup.return_value = {
-            "rag_hit": True,
-            "confidence": 0.92,
-            "decision": {"step0_task_type": "Bug Fix", "step0_complexity": 3},
-        }
-        dummy_fn = MagicMock(return_value={})
-        state = {"user_message": "fix auth bug", "session_id": "s1"}
-        result = _run_step(0, "Task Analysis", dummy_fn, state)
-        # step_fn should NOT be called (RAG hit)
-        dummy_fn.assert_not_called()
-        assert result["step0_task_type"] == "Bug Fix"
-        assert result["step0_rag_hit"] is True
-        assert result["step0_rag_confidence"] == 0.92
-
-    @patch("langgraph_engine.level3_execution.subgraph.rag_lookup_before_llm")
-    def test_run_step_continues_on_rag_error(self, mock_rag_lookup):
-        from langgraph_engine.level3_execution.subgraph import _run_step
-
-        mock_rag_lookup.side_effect = RuntimeError("Vector DB down")
-        dummy_fn = MagicMock(return_value={"step0_task_type": "Feature"})
-        state = {"user_message": "add feature", "session_id": "s1"}
-        result = _run_step(0, "Task Analysis", dummy_fn, state)
-        # Should fail-open: step_fn called despite RAG error
-        dummy_fn.assert_called_once()
-        assert result["step0_task_type"] == "Feature"
