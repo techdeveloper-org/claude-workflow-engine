@@ -7,9 +7,14 @@ Windows-safe: ASCII only.
 CHANGE LOG (v1.13.0):
   Removed Steps 1, 3, 4 node wrappers -- collapsed into Step 0 template call.
   Step 0 now injects combined_complexity_score (1-25 from Level 1) and
-  CallGraph analysis into the template context before the single LLM call.
+  CallGraph analysis into the template context before the subprocess calls.
   Step 0 output populates the fields that Steps 1,3,4,5,6,7 previously provided.
-  Step 2 (plan execution) is retained as-is.
+
+CHANGE LOG (v1.14.0):
+  Step 0 caller scripts now use claude CLI subprocess (not direct llm_call API).
+  Step 2 (plan execution) removed from pipeline -- orchestrator subprocess
+  already produces a comprehensive plan. step2_plan_execution_node kept as
+  deprecated no-op for backward compatibility with test imports.
 """
 import os
 from pathlib import Path
@@ -35,11 +40,11 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
 
     Phase 1: calls prompt-gen-expert-caller (fast, captured stdout) to build
     an orchestration prompt enriched with combined_complexity_score and
-    CallGraph risk data.
+    CallGraph risk data. Uses claude CLI subprocess internally.
 
     Phase 2: calls orchestrator-agent-caller (long-running, stderr streamed
     live) with the orchestration prompt written to a temp file so the user
-    sees real-time agent progress.
+    sees real-time agent progress. Uses claude CLI subprocess internally.
 
     Post-call: populates migration fields so Steps 8-14 receive correct data.
     """
@@ -78,7 +83,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
 
     user_message = state.get("user_message", "") or os.environ.get("CURRENT_USER_MESSAGE", "")
 
-    # --- PHASE 1: prompt-gen-expert-caller ---
+    # --- PHASE 1: prompt-gen-expert-caller (claude CLI subprocess) ---
     os.environ.setdefault("STEP0_PROMPT_GEN_TIMEOUT", "60")
     prompt_gen_args = [
         user_message,
@@ -113,7 +118,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     else:
         logger.info("[v2] Step 0 prompt-gen-expert: orchestration_prompt length=%d", len(orchestration_prompt))
 
-    # --- PHASE 2: orchestrator-agent-caller (streaming stderr) ---
+    # --- PHASE 2: orchestrator-agent-caller (claude CLI subprocess, streaming stderr) ---
     orch_result: Dict[str, Any] = {}
     try:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as _tf:
@@ -146,7 +151,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
             pass
 
     # --- Build result from orchestrator output + migration fields ---
-    result = _map_step0_v2_result_to_state(state, orchestration_prompt, orch_result)
+    result = _map_step0_result_to_state(state, orchestration_prompt, orch_result)
 
     # Store the injected context for observability
     result["step0_call_graph_risk_level"] = call_graph_risk_level
@@ -180,7 +185,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     return result
 
 
-def _map_step0_v2_result_to_state(
+def _map_step0_result_to_state(
     state: FlowState,
     orchestration_prompt: str,
     orch_result: Dict[str, Any],
@@ -210,8 +215,8 @@ def _map_step0_v2_result_to_state(
     result["step0_task_count"] = orch_result.get("task_count", 1)
     result["step0_error"] = orch_result.get("error") if not orch_result.get("success", True) else None
 
-    # From Step 1: plan_required decision
-    result.setdefault("step1_plan_required", orch_result.get("plan_required", False))
+    # From Step 1: plan_required decision (always False -- Step 2 removed in v1.14.0)
+    result.setdefault("step1_plan_required", False)
 
     # From Step 3: validated task list
     if isinstance(raw_tasks, dict):
@@ -258,120 +263,27 @@ def _map_step0_v2_result_to_state(
 
 
 def step2_plan_execution_node(state: FlowState) -> Dict[str, Any]:
-    """Step 2: Plan Execution (conditional on Step 1) with full error handling.
+    """Step 2: Plan Execution -- DEPRECATED (v1.14.0).
 
-    Retained: provides structural plan data consumed by Steps 10 and 11.
-    Injects CallGraph impact analysis before planning so the planner
-    considers ripple effects of proposed changes.
+    This node is no longer part of the active pipeline graph.
+    The orchestrator subprocess in Step 0 already produces a comprehensive plan,
+    making a separate plan execution step redundant.
+
+    Kept as a no-op stub for backward compatibility with test imports.
     """
-    # --- CallGraph Impact Analysis (pre-plan) ---
-    impact_data = {}
-    try:
-        from ..call_graph_analyzer import analyze_impact_before_change
-
-        project_root = state.get("project_root", ".")
-        target_files = state.get("step0_target_files", [])
-        task_desc = state.get("user_message", "")
-        impact_data = analyze_impact_before_change(project_root, target_files, task_desc)
-        if impact_data.get("call_graph_available"):
-            logger.info(
-                "[v2] Step 2 CallGraph impact: risk=%s, affected=%d methods",
-                impact_data.get("risk_level", "unknown"),
-                len(impact_data.get("affected_methods", [])),
-            )
-    except Exception as e:
-        logger.debug("[v2] Step 2 CallGraph analysis skipped: %s", e)
-
-    result = _run_step(
-        2,
-        "Plan Execution",
-        step2_plan_execution,
-        state,
-        fallback_result={
-            "step2_plan_execution": {"error": "Step 2 failed", "phases": []},
-            "step2_plan_status": "ERROR",
-            "step2_phases": 0,
-            "step2_total_estimated_steps": 0,
-        },
-    )
-
-    # Merge impact analysis into result
-    if impact_data.get("call_graph_available"):
-        result["step2_impact_analysis"] = impact_data
-        result["step2_graph_risk_level"] = impact_data.get("risk_level", "low")
-        result["step2_affected_methods"] = [m.get("fqn", "") for m in impact_data.get("affected_methods", [])]
-
-    # --- Plan Validation against CallGraph impact ---
-    plan = result.get("step2_plan_execution", {})
-    phases = plan.get("phases", [])
-
-    if phases:
-        try:
-            impact = result.get("step2_impact_analysis", {}) or state.get("step2_impact_analysis", {})
-            affected_methods = impact.get("affected_methods", [])
-            danger_zones = impact.get("danger_zones", [])
-
-            validation_issues = []
-
-            # Check 1: Do plan phases cover all affected files?
-            plan_files = set()
-            for phase in phases:
-                for task in phase.get("tasks", []):
-                    if isinstance(task, dict):
-                        plan_files.update(task.get("files", []))
-
-            affected_files = set()
-            for m in affected_methods:
-                fqn = m.get("fqn", "") if isinstance(m, dict) else str(m)
-                if "::" in fqn:
-                    affected_files.add(fqn.split("::")[0])
-
-            uncovered = affected_files - plan_files
-            if uncovered:
-                validation_issues.append(
-                    "Plan does not cover %d affected files: %s" % (len(uncovered), ", ".join(sorted(uncovered)[:5]))
-                )
-
-            # Check 2: Are danger zone methods addressed in the plan?
-            if danger_zones and not any("careful" in str(p).lower() or "test" in str(p).lower() for p in phases):
-                validation_issues.append(
-                    "%d danger zone methods found but plan has no testing/careful phase" % len(danger_zones)
-                )
-
-            result["step2_plan_validated"] = len(validation_issues) == 0
-            result["step2_plan_validation_issues"] = validation_issues
-
-            if validation_issues:
-                logger.info(
-                    "[v2] Step 2 plan validation: %d issues found: %s",
-                    len(validation_issues),
-                    "; ".join(validation_issues),
-                )
-            else:
-                logger.info("[v2] Step 2 plan validation: PASSED")
-
-        except Exception as e:
-            logger.debug("[v2] Step 2 plan validation skipped: %s", e)
-            result["step2_plan_validated"] = True  # Default to valid on error
-            result["step2_plan_validation_issues"] = []
-
-    # --- User Interaction: High-risk plan confirmation ---
-    try:
-        from ..user_interaction import generate_step2_questions
-
-        questions = generate_step2_questions({**state, **result})
-        if questions:
-            result["step2_pending_questions"] = questions
-    except Exception as e:
-        logger.debug("[v2] Step 2 user interaction skipped: %s", e)
-
-    return result
+    logger.warning("[v2] step2_plan_execution_node called but Step 2 is deprecated (v1.14.0)")
+    return {
+        "step2_plan_status": "DEPRECATED",
+        "step2_plan_execution": {"phases": [], "note": "Step 2 removed in v1.14.0"},
+        "step2_phases": 0,
+        "step2_total_estimated_steps": 0,
+    }
 
 
 # REMOVED: step1_plan_mode_decision_node -- collapsed into Step 0 template (v1.13.0)
 # REMOVED: step3_task_breakdown_node -- collapsed into Step 0 template (v1.13.0)
 # REMOVED: step4_toon_refinement_node -- collapsed into Step 0 template (v1.13.0)
+# REMOVED: step2_plan_execution_node active code -- deprecated in v1.14.0 (stub above)
 #
-# These functions are intentionally absent. Their FlowState outputs are now populated
-# by step0_task_analysis_node after the orchestration template LLM call.
-# See: impact_map.md Section 2 (FlowState Field Audit) and Section 3 (Step 0 Spec).
+# These functions are intentionally absent or stubbed. Their FlowState outputs are now
+# populated by step0_task_analysis_node after the orchestration subprocess calls.

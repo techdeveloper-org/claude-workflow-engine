@@ -219,7 +219,7 @@ Test files that may import removed step names:
 
 | Test File | Risk | Resolution |
 |-----------|------|------------|
-| `tests/test_level3_execution_v2.py` | May import step node names | Steps removed from `__init__.py` exports; tests must not import step1/3/4/5/6/7 node functions |
+| `tests/test_level3_execution.py` | May import step node names | Steps removed from `__init__.py` exports; tests must not import step1/3/4/5/6/7 node functions |
 | `tests/test_level3_robustness.py` | May reference routing functions | `route_to_plan_or_breakdown` and `route_after_step1_decision` are stubbed — imports still resolve |
 | `tests/test_level3_remaining_steps.py` | Tests Steps 8-14 — unaffected | No changes to Steps 8-14 |
 | `tests/test_level3_documentation_manager.py` | Tests Step 13 — unaffected | No changes to Step 13 |

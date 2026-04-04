@@ -145,7 +145,7 @@ On retry, Step 10 receives:
 
 ## Implementation Reference
 
-- **Node function:** `step10_implementation_note()` in `subgraphs/level3_execution_v2.py`
+- **Node function:** `step10_implementation_note()` in `level3_execution/subgraph.py`
 - **Core logic:** `step10_implementation_execution()` in `subgraphs/level3_execution.py`
 - **Hybrid inference:** `langgraph_engine/hybrid_inference.py`
 - **Retry loop:** Orchestrator conditional edge from Step 11 back to Step 10

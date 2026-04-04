@@ -89,7 +89,7 @@ The system aims to:
 
 **Priority:** Critical
 **Status:** Implemented
-**Key Module:** `subgraphs/level3_execution_v2.py`
+**Key Module:** `level3_execution/subgraph.py`
 
 ### FR-3: RAG Decision Caching
 

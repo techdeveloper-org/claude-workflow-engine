@@ -185,22 +185,22 @@ flowchart LR
     level3_execution --> persistence
     level3_execution --> skill_agent_loader
     level3_execution --> skill_selection_criteria
-    level3_execution_v2 --> backup_manager
-    level3_execution_v2 --> builders
-    level3_execution_v2 --> call_graph_analyzer
-    level3_execution_v2 --> checkpoint_manager
-    level3_execution_v2 --> deepseek_reasoning
-    level3_execution_v2 --> error_logger
-    level3_execution_v2 --> flow_state
-    level3_execution_v2 --> level3_execution
-    level3_execution_v2 --> metrics_collector
-    level3_execution_v2 --> ollama_service
-    level3_execution_v2 --> orchestrator
-    level3_execution_v2 --> persistence
-    level3_execution_v2 --> rag_integration
-    level3_execution_v2 --> recovery_handler
-    level3_execution_v2 --> step_logger
-    level3_execution_v2 --> timeout_wrapper
+    level3_execution --> backup_manager
+    level3_execution --> builders
+    level3_execution --> call_graph_analyzer
+    level3_execution --> checkpoint_manager
+    level3_execution --> deepseek_reasoning
+    level3_execution --> error_logger
+    level3_execution --> flow_state
+    level3_execution --> level3_execution
+    level3_execution --> metrics_collector
+    level3_execution --> ollama_service
+    level3_execution --> orchestrator
+    level3_execution --> persistence
+    level3_execution --> rag_integration
+    level3_execution --> recovery_handler
+    level3_execution --> step_logger
+    level3_execution --> timeout_wrapper
     level3_llm_retry --> builders
     level3_llm_retry --> deepseek_reasoning
     level3_remaining_steps --> cache_system
@@ -420,7 +420,7 @@ flowchart LR
     test_all_14_steps --> error_logger
     test_all_14_steps --> inference_router
     test_all_14_steps --> level3_execution
-    test_all_14_steps --> level3_execution_v2
+    test_all_14_steps --> level3_execution
     test_all_14_steps --> level3_remaining_steps
     test_all_14_steps --> level_minus1
     test_all_14_steps --> ollama_service
@@ -454,7 +454,7 @@ flowchart LR
     test_failure_scenarios --> hybrid_inference
     test_failure_scenarios --> inference_router
     test_failure_scenarios --> level3_execution
-    test_failure_scenarios --> level3_execution_v2
+    test_failure_scenarios --> level3_execution
     test_failure_scenarios --> level3_remaining_steps
     test_failure_scenarios --> level_minus1
     test_failure_scenarios --> ollama_service
@@ -509,9 +509,9 @@ flowchart LR
     test_level2_standards --> level2_standards
     test_level3_documentation_manager --> level3_documentation_manager
     test_level3_documentation_manager --> persistence
-    test_level3_execution_v2 --> error_messages
-    test_level3_execution_v2 --> level3_execution_v2
-    test_level3_execution_v2 --> persistence
+    test_level3_execution --> error_messages
+    test_level3_execution --> level3_execution
+    test_level3_execution --> persistence
     test_level3_remaining_steps --> level3_remaining_steps
     test_level3_robustness --> cache_system
     test_level3_robustness --> conflict_resolver
@@ -545,12 +545,12 @@ flowchart LR
     test_pre_tool_gate_mcp_server --> cache_system
     test_pre_tool_gate_mcp_server --> persistence
     test_pre_tool_gate_mcp_server --> pre_tool_gate_mcp_server
-    test_rag_integration --> level3_execution_v2
+    test_rag_integration --> level3_execution
     test_rag_integration --> rag_integration
     test_rag_integration --> skill_selection_criteria
     test_recovery_handler --> recovery_handler
     test_retry_history_tracking --> flow_state
-    test_retry_history_tracking --> level3_execution_v2
+    test_retry_history_tracking --> level3_execution
     test_root_scripts --> ide_paths
     test_root_scripts --> metrics-emitter
     test_root_scripts --> metrics_dashboard

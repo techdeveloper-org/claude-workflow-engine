@@ -23,7 +23,7 @@
 | ID | File | Lines | Why It Matters |
 |----|------|-------|----------------|
 | A1 | scripts/langgraph_engine/subgraphs/level3_execution.py | 2,608 | 15 monolithic step functions (step0-step14) + 2 routers + merge node |
-| A2 | scripts/langgraph_engine/subgraphs/level3_execution_v2.py | 2,261 | 323-line _run_step() + 16 thin wrappers + orchestration_pre_analysis_node + infra getters |
+| A2 | scripts/langgraph_engine/level3_execution/subgraph.py | 2,261 | 323-line _run_step() + 16 thin wrappers + orchestration_pre_analysis_node + infra getters |
 | A3 | scripts/pre-tool-enforcer.py | 2,059 | 13 policy-check functions + 4 loader functions + main() |
 | A4 | scripts/post-tool-tracker.py | 1,709 | 6 policy branches + progress tracking + github integration + main() |
 | A5 | scripts/github_issue_manager.py | 1,703 | GitHub CRUD + branch management + session integration + utility functions |
@@ -45,7 +45,7 @@
 ```
 Phase A (sequential - each item depends on prior for imports)
   A1 (level3_execution.py split) MUST complete before A2
-  A2 (level3_execution_v2.py refactor) MUST complete before QA-A gate
+  A2 (level3_execution/subgraph.py refactor) MUST complete before QA-A gate
   A3, A4, A5 can run in parallel after A1+A2 complete
 
 QA Gate A: pytest tests/ must pass before Phase B begins
@@ -175,12 +175,12 @@ from .level3_execution.routing import (  # noqa: F401
 **QA check for A1:** After A1, run:
 ```bash
 python -c "from scripts.langgraph_engine.subgraphs.level3_execution import step0_task_analysis, step14_final_summary_generation, route_after_step1_plan_decision"
-pytest tests/test_level3_execution_v2.py tests/test_level3_remaining_steps.py -x
+pytest tests/test_level3_execution.py tests/test_level3_remaining_steps.py -x
 ```
 
 ---
 
-### A2: level3_execution_v2.py -> core/infrastructure.py + StepNodeFactory
+### A2: level3_execution/subgraph.py -> core/infrastructure.py + StepNodeFactory
 
 **Current state:** 2,261 lines. Contains:
 - 4 lazy infrastructure getters (_get_checkpoint_manager, _get_metrics_collector, _get_error_logger, _get_backup_manager)
@@ -206,7 +206,7 @@ scripts/langgraph_engine/core/infrastructure.py    <- NEW FILE
   _infra_cache dict
   _pipeline_start_times dict
 
-scripts/langgraph_engine/subgraphs/level3_execution_v2.py  <- REDUCED (~300 lines)
+scripts/langgraph_engine/level3_execution/subgraph.py  <- REDUCED (~300 lines)
   All imports (kept)
   _write_step_log() (kept here - level3-specific)
   _RAG_ELIGIBLE_STEPS constant
@@ -249,7 +249,7 @@ from typing import Any, Dict
 ```
 No circular deps - infrastructure.py does NOT import FlowState.
 
-**level3_execution_v2.py shim after refactor:**
+**level3_execution/subgraph.py shim after refactor:**
 The file is reduced but remains at the same path. It now imports from core.infrastructure:
 ```python
 from ..core.infrastructure import _get_infra, _pipeline_start_times
@@ -257,8 +257,8 @@ from ..core.infrastructure import _get_infra, _pipeline_start_times
 
 **QA check for A2:**
 ```bash
-pytest tests/test_level3_execution_v2.py -x
-python -c "from scripts.langgraph_engine.subgraphs.level3_execution_v2 import orchestration_pre_analysis_node, build_level3_v2_subgraph"
+pytest tests/test_level3_execution.py -x
+python -c "from scripts.langgraph_engine.subgraphs.level3_execution import orchestration_pre_analysis_node, build_level3_v2_subgraph"
 ```
 
 ---
@@ -453,7 +453,7 @@ python -c "import sys; sys.path.insert(0,'scripts'); import github_issue_manager
 ```
 [ ] pytest tests/ -x  -> zero failures
 [ ] python -c "from scripts.langgraph_engine.subgraphs.level3_execution import step0_task_analysis"
-[ ] python -c "from scripts.langgraph_engine.subgraphs.level3_execution_v2 import orchestration_pre_analysis_node"
+[ ] python -c "from scripts.langgraph_engine.subgraphs.level3_execution import orchestration_pre_analysis_node"
 [ ] python -c "import sys; sys.path.insert(0,'scripts'); import pre_tool_enforcer; import post_tool_tracker_mod; import github_issue_manager"
 [ ] No new import-time side effects (check with CLAUDE_WORKFLOW_RUNNING=1)
 [ ] All shim files re-export every previously-exported symbol
@@ -733,7 +733,7 @@ scripts/policy_framework/
     - call_execution_script exported
     - 3 routing/merge functions exported
 
-[ ] scripts/langgraph_engine/subgraphs/level3_execution_v2.py
+[ ] scripts/langgraph_engine/level3_execution/subgraph.py
     - orchestration_pre_analysis_node exported
     - route_pre_analysis exported
     - build_level3_v2_subgraph exported
@@ -773,7 +773,7 @@ grep -rn "from .level1_sync import" scripts/langgraph_engine/subgraphs/
 ```
 
 **Key import locations to update:**
-- scripts/langgraph_engine/subgraphs/level3_execution_v2.py line 71-90: imports from .level3_execution -> update to from .level3_execution.steps import ...
+- scripts/langgraph_engine/level3_execution/subgraph.py line 71-90: imports from .level3_execution -> update to from .level3_execution.steps import ...
 - scripts/langgraph_engine/level3_steps8to12_jira.py (if imports from level3_execution)
 - scripts/langgraph_engine/orchestrator.py (imports subgraph builders)
 - tests/ files: do NOT change test imports - they test the public API which must still work via shims
@@ -818,7 +818,7 @@ grep -rn "from .level1_sync import" scripts/langgraph_engine/subgraphs/
 | Phase | Rollback Scope |
 |-------|----------------|
 | A1 fails | Delete subgraphs/level3_execution/ directory; restore level3_execution.py from git |
-| A2 fails | Delete core/infrastructure.py; restore level3_execution_v2.py from git |
+| A2 fails | Delete core/infrastructure.py; restore level3_execution/subgraph.py from git |
 | A3 fails | Delete pre_tool_enforcer/; restore pre-tool-enforcer.py from git |
 | A4 fails | Delete post_tool_tracker/; restore post-tool-tracker.py from git |
 | A5 fails | Delete github_operations/; restore github_issue_manager.py from git |
@@ -860,7 +860,7 @@ AGENT HANDOFF:
 ```
 Sequential block 1:
   [python-backend-engineer] A1: level3_execution.py split
-  [python-backend-engineer] A2: level3_execution_v2.py refactor
+  [python-backend-engineer] A2: level3_execution/subgraph.py refactor
   [qa-testing-agent] Verify A1+A2
 
 Parallel block 1 (after A1+A2 pass QA):
@@ -900,7 +900,7 @@ Sequential block 3 (after QA Gate B):
 | Phase | New Files Created | Original Files Shimmed | Net Change |
 |-------|-------------------|------------------------|------------|
 | A1 | 18 (16 steps + helpers.py + routing.py) + 1 __init__ + 1 steps/__init__ | 1 (level3_execution.py) | +20 |
-| A2 | 1 (core/infrastructure.py) | level3_execution_v2.py reduced | +1 |
+| A2 | 1 (core/infrastructure.py) | level3_execution/subgraph.py reduced | +1 |
 | A3 | ~16 (core + registry + loaders + 13 policies + __init__s) | 1 (pre-tool-enforcer.py) | +15 |
 | A4 | ~9 (core + progress + github + loaders + 5 policies + __init__s) | 1 (post-tool-tracker.py) | +8 |
 | A5 | 6 (client + session + issue_manager + branch + labels + __init__) | 1 (github_issue_manager.py) | +5 |

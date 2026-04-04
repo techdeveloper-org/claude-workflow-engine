@@ -3,26 +3,22 @@
 Level 3 - Orchestrator Agent Caller
 
 Reads a pre-built prompt from a temp file path (--orchestration-prompt-file),
-calls the LLM, streams stderr progress, and writes JSON to stdout.
+calls the claude CLI subprocess with stderr streamed live to the terminal,
+and writes JSON to stdout.
 
-Invoked by: call_execution_script("orchestrator-agent-caller", args)
+Invoked by: call_streaming_script("orchestrator-agent-caller", args)
 Output: JSON with keys: status, agent_output, llm_response, error (on failure)
 
 Environment:
-  STEP0_ORCHESTRATOR_TIMEOUT  max seconds to wait for LLM (default: 300)
+  STEP0_ORCHESTRATOR_TIMEOUT  max seconds to wait for claude CLI (default: 300)
 """
 
 import json
 import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
-
-# ---------------------------------------------------------------------------
-# Path bootstrap (shared llm_call module lives 4 dirs up)
-# ---------------------------------------------------------------------------
-_ENGINE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(_ENGINE_ROOT))
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -95,23 +91,74 @@ def _load_prompt(args):
     return None, "No --orchestration-prompt-file and no --task-description provided"
 
 
-def _call_llm(prompt):
-    """Call shared llm_call with quality model. Returns (response_text, error)."""
-    try:
-        from langgraph_engine.llm_call import llm_call
+def _call_claude_cli(prompt):
+    """Call claude CLI as subprocess with stderr inherited (live streaming).
 
-        response = llm_call(prompt, model="quality", temperature=0.2)
-        if response:
-            return response, None
-        return None, "llm_call returned empty response"
-    except ImportError as exc:
-        return None, "ImportError: " + str(exc)
+    Returns (response_text, error).
+    """
+    temp_file = None
+    try:
+        # Write prompt to temp file (avoids shell escaping issues)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".txt",
+            delete=False,
+            encoding="utf-8",
+        ) as tf:
+            tf.write(prompt)
+            temp_file = tf.name
+
+        cmd = [
+            "claude",
+            "--json",
+            "--no-stream",
+            "@" + temp_file,
+        ]
+
+        if DEBUG:
+            print("[orchestrator-agent-caller] Running: claude CLI", file=sys.stderr, flush=True)
+
+        # stderr=None inherits parent stderr -- user sees real-time progress
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=None,  # Inherit: live output visible in terminal
+            text=True,
+            timeout=_TIMEOUT,
+        )
+
+        if result.returncode != 0 and not result.stdout:
+            return None, "claude CLI non-zero exit (%d)" % result.returncode
+
+        # Parse JSON output from claude CLI
+        response_text = result.stdout or ""
+        try:
+            json_out = json.loads(response_text)
+            # claude --json returns {"type":"result","result":"..."}
+            if isinstance(json_out, dict) and "result" in json_out:
+                return json_out["result"], None
+            return response_text, None
+        except (json.JSONDecodeError, ValueError):
+            if response_text.strip():
+                return response_text.strip(), None
+            return None, "claude CLI returned empty response"
+
+    except subprocess.TimeoutExpired:
+        return None, "claude CLI timed out after %ds" % _TIMEOUT
+    except FileNotFoundError:
+        return None, "claude CLI binary not found in PATH"
     except Exception as exc:
-        return None, "LLM call failed: " + str(exc)
+        return None, "claude CLI call failed: " + str(exc)
+    finally:
+        if temp_file:
+            try:
+                Path(temp_file).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def _parse_agent_output(llm_response):
-    """Attempt to parse structured JSON from the LLM response."""
+    """Attempt to parse structured JSON from the response."""
     if not llm_response:
         return None
     try:
@@ -152,19 +199,19 @@ def main():
         preview = prompt[:200].replace("\n", " ")
         print("[orchestrator-agent-caller] Preview: " + preview, file=sys.stderr, flush=True)
 
-    # Call LLM
-    print("[orchestrator-agent-caller] Calling LLM (model=quality)", file=sys.stderr, flush=True)
+    # Call claude CLI subprocess (stderr streamed live to terminal)
+    print("[orchestrator-agent-caller] Calling claude CLI", file=sys.stderr, flush=True)
 
-    llm_response, err = _call_llm(prompt)
+    llm_response, err = _call_claude_cli(prompt)
 
     if err:
-        print("[orchestrator-agent-caller] LLM call failed: " + str(err), file=sys.stderr, flush=True)
+        print("[orchestrator-agent-caller] claude CLI failed: " + str(err), file=sys.stderr, flush=True)
         print(json.dumps({"status": "ERROR", "error": err}))
         return
 
     response_len = len(llm_response) if llm_response else 0
     print(
-        "[orchestrator-agent-caller] LLM responded (" + str(response_len) + " chars)",
+        "[orchestrator-agent-caller] claude CLI responded (" + str(response_len) + " chars)",
         file=sys.stderr,
         flush=True,
     )

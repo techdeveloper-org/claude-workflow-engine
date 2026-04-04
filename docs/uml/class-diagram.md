@@ -33,15 +33,15 @@ classDiagram
         +content
         +modified
         +__init__(script_path: str)
-        +read_script() 
-        +has_tracking_import() 
-        +integrate() 
+        +read_script()
+        +has_tracking_import()
+        +integrate()
         -_add_imports()
         -_add_setup()
         -_add_tracking_calls()
         -_add_tracking_template(lines: list, func_start_idx: int)
-        +write_script(backup: bool) 
-        +get_summary() 
+        +write_script(backup: bool)
+        +get_summary()
     }
     class SessionIDGenerator {
         +memory_path
@@ -49,17 +49,17 @@ classDiagram
         +sessions_log
         +current_session_file
         +__init__()
-        +generate_session_id(session_type: str) 
-        +create_session(session_type: str, description: str, metadata: dict) 
-        +get_current_session() 
-        +get_session_data(session_id: str) 
-        +add_work_item(session_id: str, work_type: str, description: str, metadata: dict) 
-        +complete_work_item(session_id: str, work_id: str, status: str) 
-        +end_session(session_id: str, status: str) 
-        +display_session_banner(session_id: str, session_data: dict) 
-        +list_recent_sessions(limit: int) 
-        +get_session_stats(session_id: str) 
-        -_log_session(session_id: str, event: str, details: str) 
+        +generate_session_id(session_type: str)
+        +create_session(session_type: str, description: str, metadata: dict)
+        +get_current_session()
+        +get_session_data(session_id: str)
+        +add_work_item(session_id: str, work_type: str, description: str, metadata: dict)
+        +complete_work_item(session_id: str, work_id: str, status: str)
+        +end_session(session_id: str, status: str)
+        +display_session_banner(session_id: str, session_data: dict)
+        +list_recent_sessions(limit: int)
+        +get_session_stats(session_id: str)
+        -_log_session(session_id: str, event: str, details: str)
     }
     class SessionIndex {
         +sessions_dir
@@ -771,7 +771,7 @@ classDiagram
         +test_nonexistent_file_raises_exception(tmp_path)
     }
     class TestNodeContextLoaderOptimizations {
-        -_make_state(project_root: str, session_path: str) 
+        -_make_state(project_root: str, session_path: str)
         +test_loads_normal_files_successfully(tmp_project)
         +test_returns_partial_context_when_one_file_missing(tmp_project)
         +test_returns_empty_context_when_no_files(tmp_project)
@@ -986,7 +986,7 @@ classDiagram
     }
     class TestReviewCriteria {
         +setUp()
-        -_write_file(name: str, content: str) 
+        -_write_file(name: str, content: str)
         +test_rule_count()
         +test_all_rules_have_required_keys()
         +test_bare_except_triggers_cq001()
@@ -2797,12 +2797,12 @@ classDiagram
         +get_setup_instructions()
     }
     class ImportManager {
-        +get_skill(skill_name: str) 
-        +get_agent(agent_name: str) 
-        +get_policy(policy_path: str) 
-        +get_local_module(module_path: str) 
-        +list_skills() 
-        +list_agents() 
+        +get_skill(skill_name: str)
+        +get_agent(agent_name: str)
+        +get_policy(policy_path: str)
+        +get_local_module(module_path: str)
+        +list_skills()
+        +list_agents()
     }
     class PathResolver {
         +project_root
@@ -2836,41 +2836,41 @@ classDiagram
         -_error
         -_init_lock
         +__init__()
-        +instance() 
-        +get() 
-        +get_or_raise() 
-        +available() 
-        +error() 
-        +reset() 
-        -_initialize() 
-        +health_check() 
-        -_health_check() 
-        +reset_all() 
+        +instance()
+        +get()
+        +get_or_raise()
+        +available()
+        +error()
+        +reset()
+        -_initialize()
+        +health_check()
+        -_health_check()
+        +reset_all()
     }
     class GitRepoClient {
         +_repo_path
-        +for_path(repo_path: str) 
-        -_initialize() 
-        -_health_check() 
+        +for_path(repo_path: str)
+        -_initialize()
+        -_health_check()
     }
     class GitHubApiClient {
-        -_initialize() 
-        -_resolve_token() 
+        -_initialize()
+        -_resolve_token()
         +get_repo(repo_path: str)
-        -_parse_remote(repo_path: str) 
+        -_parse_remote(repo_path: str)
     }
     class QdrantManager {
         +COLLECTIONS
-        -_get_db_path() 
-        -_initialize() 
-        -_health_check() 
+        -_get_db_path()
+        -_initialize()
+        -_health_check()
     }
     class EmbeddingManager {
         +MODEL_NAME
         +DIMENSION
-        -_initialize() 
-        +embed(text: str) 
-        -_health_check() 
+        -_initialize()
+        +embed(text: str)
+        -_health_check()
     }
     class AtomicJsonStore {
         +__slots__
@@ -2878,25 +2878,25 @@ classDiagram
         -_default_factory
         -_dir_created
         +__init__(path: Path, default_factory: Optional[Callable])
-        +path() 
-        +exists() 
-        +load(default: Optional[dict]) 
-        +save(data: dict, backup: bool) 
-        +modify(fn: Callable[Any], default: Optional[dict]) 
-        +delete() 
-        -_try_read(path: Path) 
+        +path()
+        +exists()
+        +load(default: Optional[dict])
+        +save(data: dict, backup: bool)
+        +modify(fn: Callable[Any], default: Optional[dict])
+        +delete()
+        -_try_read(path: Path)
     }
     class JsonlAppender {
         +__slots__
         -_path
         -_dir_created
         +__init__(path: Path)
-        +path() 
-        +exists() 
-        +append(entry: dict, auto_timestamp: bool) 
-        +read_all() 
-        +read_filtered(date: str) 
-        +count() 
+        +path()
+        +exists()
+        +append(entry: dict, auto_timestamp: bool)
+        +read_all()
+        +read_filtered(date: str)
+        +count()
     }
     class SessionIdResolver {
         +_instance
@@ -2907,27 +2907,27 @@ classDiagram
         -_initialized
         +__new__(config_dir: Optional[Path])
         +__init__(config_dir: Optional[Path])
-        +current_session_file() 
-        +progress_file() 
-        +get(force_refresh: bool) 
-        +invalidate() 
-        -_resolve() 
-        -_read_session_id(path: Path, key: str) 
-        +reset() 
+        +current_session_file()
+        +progress_file()
+        +get(force_refresh: bool)
+        +invalidate()
+        -_resolve()
+        -_read_session_id(path: Path, key: str)
+        +reset()
     }
     class MCPResponse {
         +__slots__
         +__init__(is_success: bool)
-        +ok() 
-        +fail() 
-        +message(msg: str) 
-        +error_detail(error_type: str, msg: str, suggestion: Optional[str]) 
-        +data(key: str, value: Any) 
-        +merge(mapping: dict) 
-        +timestamp() 
-        +build() 
-        +to_dict() 
-        +__repr__() 
+        +ok()
+        +fail()
+        +message(msg: str)
+        +error_detail(error_type: str, msg: str, suggestion: Optional[str])
+        +data(key: str, value: Any)
+        +merge(mapping: dict)
+        +timestamp()
+        +build()
+        +to_dict()
+        +__repr__()
     }
     class TestResult {
         +test_name: str
@@ -2946,16 +2946,16 @@ classDiagram
         +anthropic
         +client
         +__init__(api_key: Optional[str])
-        +take_screenshot(description: str) 
-        +click(x: int, y: int) 
-        +type_text(text: str) 
-        +press_key(key: str) 
-        +test_dashboard_login() 
-        +test_3level_flow_history() 
-        +test_sessions_page() 
-        +test_policies_page() 
-        +run_test_suite() 
-        -_generate_report() 
+        +take_screenshot(description: str)
+        +click(x: int, y: int)
+        +type_text(text: str)
+        +press_key(key: str)
+        +test_dashboard_login()
+        +test_3level_flow_history()
+        +test_sessions_page()
+        +test_policies_page()
+        +run_test_suite()
+        -_generate_report()
     }
     class DummyProjectSeeder {
         +memory_base
@@ -2963,22 +2963,22 @@ classDiagram
         +sessions_dir
         +sessions_created
         +__init__()
-        +generate_session_id() 
-        +create_flow_trace(session_id: str, task_type: str, model: str, agent: str) 
-        +create_session_summary(session_id: str, task_type: str, model: str, agent: str) 
-        +seed_dummy_sessions() 
-        +run() 
+        +generate_session_id()
+        +create_flow_trace(session_id: str, task_type: str, model: str, agent: str)
+        +create_session_summary(session_id: str, task_type: str, model: str, agent: str)
+        +seed_dummy_sessions()
+        +run()
     }
     class PreFlightChecker {
         +memory_base
         +logs_dir
         +__init__()
         +check(name: str, condition: bool, details: str)
-        +verify_policy_execution() 
-        +verify_output_files() 
-        +verify_dashboard() 
-        +verify_data_freshness() 
-        +run_all_checks() 
+        +verify_policy_execution()
+        +verify_output_files()
+        +verify_dashboard()
+        +verify_data_freshness()
+        +run_all_checks()
     }
     class BackupManager {
         +session_id
@@ -2987,53 +2987,53 @@ classDiagram
         +metadata_file
         +metadata
         +__init__(session_id: str, backup_base_dir: str)
-        +backup_file(file_path: str, step: str, description: str) 
-        +restore_file(file_path: str, step: str) 
-        +generate_diff(file_path: str, step: str, label: str) 
-        +validate_file_integrity(file_path: str, step: str) 
-        +compare_files(file_path: str, step: str) 
-        +get_backup_history(file_path: Optional[str]) 
-        -_load_metadata() 
-        -_save_metadata() 
+        +backup_file(file_path: str, step: str, description: str)
+        +restore_file(file_path: str, step: str)
+        +generate_diff(file_path: str, step: str, label: str)
+        +validate_file_integrity(file_path: str, step: str)
+        +compare_files(file_path: str, step: str)
+        +get_backup_history(file_path: Optional[str])
+        -_load_metadata()
+        -_save_metadata()
     }
     class CommitMessageBuilder {
         +ALLOWED_TYPES
-        +__init__() 
-        +type(commit_type: str) 
-        +scope(scope: str) 
-        +subject(subject: str) 
-        +body(body: str) 
-        +footer(footer: str) 
-        +build() 
+        +__init__()
+        +type(commit_type: str)
+        +scope(scope: str)
+        +subject(subject: str)
+        +body(body: str)
+        +footer(footer: str)
+        +build()
     }
     class PRBodyBuilder {
         +CHANGE_TYPES
-        +__init__() 
-        +resolves(issue_number: int) 
-        +changes_summary(summary: str) 
-        +change_type(label: str) 
-        +testing_notes(notes: str) 
-        +footer_note(note: str) 
-        +build() 
+        +__init__()
+        +resolves(issue_number: int)
+        +changes_summary(summary: str)
+        +change_type(label: str)
+        +testing_notes(notes: str)
+        +footer_note(note: str)
+        +build()
     }
     class IssueBodyBuilder {
-        +__init__() 
-        +description(description: str) 
-        +task_summary(summary: str) 
-        +implementation_plan(plan: str) 
-        +acceptance_criterion(criterion: str) 
-        +footer_note(note: str) 
-        +build() 
+        +__init__()
+        +description(description: str)
+        +task_summary(summary: str)
+        +implementation_plan(plan: str)
+        +acceptance_criterion(criterion: str)
+        +footer_note(note: str)
+        +build()
     }
     class _MemoryLayer {
         -_lock
         -_max_entries
         +__init__(max_entries: int)
-        +get(key: str) 
-        +set(key: str, value: Any, ttl_seconds: int) 
-        +invalidate(key: str) 
-        +clear() 
-        +stats() 
+        +get(key: str)
+        +set(key: str, value: Any, ttl_seconds: int)
+        +invalidate(key: str)
+        +clear()
+        +stats()
     }
     class CacheTier {
         +name
@@ -3045,28 +3045,28 @@ classDiagram
         -_sets
         -_lock
         +__init__(name: str, ttl_seconds: int, cache_base_dir: str)
-        +get(key: str) 
-        +set(key: str, value: Any) 
-        +invalidate(key: str) 
-        +clear_expired() 
-        +hit_rate() 
-        +stats() 
-        +make_llm_key(model: str, messages: list) 
-        +make_file_key(file_path: str) 
-        +make_skill_key(skill_name: str, skill_path: Optional[str]) 
-        -_disk_path(key: str) 
-        -_save_to_disk(key: str, value: Any) 
-        -_load_from_disk(key: str) 
-        -_delete_from_disk(key: str) 
+        +get(key: str)
+        +set(key: str, value: Any)
+        +invalidate(key: str)
+        +clear_expired()
+        +hit_rate()
+        +stats()
+        +make_llm_key(model: str, messages: list)
+        +make_file_key(file_path: str)
+        +make_skill_key(skill_name: str, skill_path: Optional[str])
+        -_disk_path(key: str)
+        -_save_to_disk(key: str, value: Any)
+        -_load_from_disk(key: str)
+        -_delete_from_disk(key: str)
     }
     class PipelineCache {
         +llm
         +file_analysis
         +skill_defs
         +__init__(cache_base_dir: str)
-        +all_stats() 
-        +clear_all_expired() 
-        +hit_rates() 
+        +all_stats()
+        +clear_all_expired()
+        +hit_rates()
     }
     class _CallGraphVisitor {
         +file_path
@@ -3119,69 +3119,69 @@ classDiagram
     class MemorySaver {
     }
     class CheckpointerManager {
-        +get_memory_checkpointer() 
+        +get_memory_checkpointer()
         +get_sqlite_checkpointer(db_path: Optional[Path])
         +get_default_checkpointer(use_sqlite: bool, db_path: Optional[Path])
-        +setup_checkpoint_db(db_path: Optional[Path]) 
-        +get_checkpoint_info(db_path: Optional[Path]) 
+        +setup_checkpoint_db(db_path: Optional[Path])
+        +get_checkpoint_info(db_path: Optional[Path])
     }
     class CheckpointManager {
         +CHECKPOINT_DIR_TEMPLATE
         +session_id
         +checkpoint_dir
         +__init__(session_id: str, base_dir: Optional[str])
-        -_make_checkpoint_id(step: int) 
-        -_atomic_write(path: Path, content: str) 
-        +save_checkpoint(step: int, state: Dict[str, Any], success_status: bool, error_message: Optional[str]) 
-        +load_checkpoint(step: int) 
-        +load_checkpoint_metadata(step: int) 
-        +load_checkpoint_by_id(checkpoint_id: str) 
-        +get_last_checkpoint() 
-        +get_last_successful_checkpoint() 
-        +list_checkpoints() 
-        +delete_checkpoint(step: int) 
-        +clear_all() 
+        -_make_checkpoint_id(step: int)
+        -_atomic_write(path: Path, content: str)
+        +save_checkpoint(step: int, state: Dict[str, Any], success_status: bool, error_message: Optional[str])
+        +load_checkpoint(step: int)
+        +load_checkpoint_metadata(step: int)
+        +load_checkpoint_by_id(checkpoint_id: str)
+        +get_last_checkpoint()
+        +get_last_successful_checkpoint()
+        +list_checkpoints()
+        +delete_checkpoint(step: int)
+        +clear_all()
     }
     class ConflictResolver {
         +session_dir
         +__init__(session_dir: str)
-        +resolve_skill_conflicts(selected_skills: List[Dict[str, Any]], task: Optional[Dict[str, Any]]) 
-        +resolve_standard_conflicts(active_standards: List[Dict[str, Any]]) 
-        +resolve_branch_conflict(desired_branch: str, repo_path: str, session_suffix: Optional[str]) 
-        +save_conflict_log(filename: Optional[str]) 
-        -_resolve_explicit_conflicts(skills: List[Dict[str, Any]]) 
-        -_resolve_pattern_conflicts(skills: List[Dict[str, Any]]) 
-        -_resolve_exclusive_flags(skills: List[Dict[str, Any]]) 
-        -_resolve_domain_priority(skills: List[Dict[str, Any]]) 
-        -_run_git(args: List[str], cwd: str) 
-        -_branch_exists_local(branch: str, repo_path: str) 
-        -_branch_exists_remote(branch: str, repo_path: str) 
-        -_has_uncommitted_changes(repo_path: str) 
-        -_skill_result(kept: List[Dict], removed: List[str], conflicts: int, details: Optional[List[Dict]]) 
+        +resolve_skill_conflicts(selected_skills: List[Dict[str, Any]], task: Optional[Dict[str, Any]])
+        +resolve_standard_conflicts(active_standards: List[Dict[str, Any]])
+        +resolve_branch_conflict(desired_branch: str, repo_path: str, session_suffix: Optional[str])
+        +save_conflict_log(filename: Optional[str])
+        -_resolve_explicit_conflicts(skills: List[Dict[str, Any]])
+        -_resolve_pattern_conflicts(skills: List[Dict[str, Any]])
+        -_resolve_exclusive_flags(skills: List[Dict[str, Any]])
+        -_resolve_domain_priority(skills: List[Dict[str, Any]])
+        -_run_git(args: List[str], cwd: str)
+        -_branch_exists_local(branch: str, repo_path: str)
+        -_branch_exists_remote(branch: str, repo_path: str)
+        -_has_uncommitted_changes(repo_path: str)
+        -_skill_result(kept: List[Dict], removed: List[str], conflicts: int, details: Optional[List[Dict]])
     }
     class CacheStats {
         -_lock
         +__init__()
-        +record_hit() 
-        +record_miss(reason: str) 
-        +record_save() 
-        +record_invalidation() 
-        +to_dict() 
-        +reset() 
-        +persist(stats_file: Path) 
+        +record_hit()
+        +record_miss(reason: str)
+        +record_save()
+        +record_invalidation()
+        +to_dict()
+        +reset()
+        +persist(stats_file: Path)
     }
     class ContextCache {
         +cache_dir
         -_stats_file
         +__init__(cache_base_dir: str)
-        +save_cache(project_path: str, context_data: dict) 
-        +load_cache(project_path: str) 
-        +invalidate(project_path: str) 
-        +cache_info(project_path: str) 
-        +get_session_stats() 
-        +reset_session_stats() 
-        -_cache_key(project_path: str) 
-        -_collect_file_signatures(project_path: str) 
+        +save_cache(project_path: str, context_data: dict)
+        +load_cache(project_path: str)
+        +invalidate(project_path: str)
+        +cache_info(project_path: str)
+        +get_session_stats()
+        +reset_session_stats()
+        -_cache_key(project_path: str)
+        -_collect_file_signatures(project_path: str)
     }
     class DecisionExplanation {
         +decision_type: str
@@ -3191,14 +3191,14 @@ classDiagram
         +alternatives_considered: List
         +confidence: int
         +extra: Dict
-        +summary() 
-        +to_dict() 
+        +summary()
+        +to_dict()
     }
     class DecisionExplainer {
-        +explain_plan_decision(plan_required: bool, task_complexity: int, task_count: int, files_affected: int) 
-        +explain_skill_selection(selected_skill: str, task_description: str, candidate_skills: Optional[List[str]], capability_scores: Optional[Dict[str, int]]) 
-        +explain_approach_decision(approach: str, task_description: str, framework: str, standards_applied: bool) 
-        +explain_from_state(state: Dict[str, Any]) 
+        +explain_plan_decision(plan_required: bool, task_complexity: int, task_count: int, files_affected: int)
+        +explain_skill_selection(selected_skill: str, task_description: str, candidate_skills: Optional[List[str]], capability_scores: Optional[Dict[str, int]])
+        +explain_approach_decision(approach: str, task_description: str, framework: str, standards_applied: bool)
+        +explain_from_state(state: Dict[str, Any])
     }
     class logger {
         +info(msg)
@@ -3211,21 +3211,21 @@ classDiagram
         +optional_mcps: List
         +reasoning: str
         +confidence: float
-        +to_dict() 
+        +to_dict()
     }
     class DeepSeekReasoning {
         +inference_router
         +ollama_service
         +claude_client
         +__init__()
-        -_init_services() 
-        +analyze_mcp_requirements(user_message: str, task_type: str, complexity: int, available_mcps: List[Dict[str, Any]]) 
-        -_build_mcp_reasoning_prompt(user_message: str, task_type: str, complexity: int, available_mcps: List[Dict]) 
-        -_call_deepseek_reasoning(prompt: str) 
-        -_call_router_reasoning(prompt: str) 
-        -_call_claude_reasoning(prompt: str) 
-        -_parse_mcp_reasoning(reasoning_text: str) 
-        +evaluate_skill_agent_fit(user_message: str, candidate_skills: List[str], candidate_agents: List[str]) 
+        -_init_services()
+        +analyze_mcp_requirements(user_message: str, task_type: str, complexity: int, available_mcps: List[Dict[str, Any]])
+        -_build_mcp_reasoning_prompt(user_message: str, task_type: str, complexity: int, available_mcps: List[Dict])
+        -_call_deepseek_reasoning(prompt: str)
+        -_call_router_reasoning(prompt: str)
+        -_call_claude_reasoning(prompt: str)
+        -_parse_mcp_reasoning(reasoning_text: str)
+        +evaluate_skill_agent_fit(user_message: str, candidate_skills: List[str], candidate_agents: List[str])
     }
     class ProjectContext {
         +name: str
@@ -3243,16 +3243,16 @@ classDiagram
         +root
         +logger
         +__init__(project_root: str)
-        +analyze() 
-        -_detect_languages() 
-        -_detect_frameworks() 
-        -_scan_structure() 
-        -_detect_tests() 
-        -_get_run_command(frameworks: List[str]) 
-        -_extract_dependencies() 
-        -_get_version() 
-        -_generate_description(name: str, frameworks: List[str]) 
-        -_identify_key_components(structure: Dict[str, str]) 
+        +analyze()
+        -_detect_languages()
+        -_detect_frameworks()
+        -_scan_structure()
+        -_detect_tests()
+        -_get_run_command(frameworks: List[str])
+        -_extract_dependencies()
+        -_get_version()
+        -_generate_description(name: str, frameworks: List[str])
+        -_identify_key_components(structure: Dict[str, str])
     }
     class DocumentationGenerator {
         +root
@@ -3260,17 +3260,17 @@ classDiagram
         +analyzer
         +logger
         +__init__(project_root: str, session_dir: str)
-        +update_all_documentation(files_modified: List[str]) 
+        +update_all_documentation(files_modified: List[str])
         +update_or_create_readme(file_path: Path, context: ProjectContext, files_modified: List[str])
         +update_or_create_claude_md(file_path: Path, context: ProjectContext, files_modified: List[str])
         +update_or_create_sra(file_path: Path, context: ProjectContext, files_modified: List[str])
         +update_or_create_changelog(file_path: Path, context: ProjectContext, files_modified: List[str])
         +update_or_create_version(file_path: Path, context: ProjectContext, files_modified: List[str])
-        -_format_list(items: List[str], max_items: int) 
-        -_format_components_table(components: List[Dict]) 
-        -_format_directory_tree(structure: Dict[str, str]) 
-        -_format_checklist(items: List[str], checked: bool) 
-        -_format_changes(files_modified: List[str], category: str) 
+        -_format_list(items: List[str], max_items: int)
+        -_format_components_table(components: List[Dict])
+        -_format_directory_tree(structure: Dict[str, str])
+        -_format_checklist(items: List[str], checked: bool)
+        -_format_changes(files_modified: List[str], category: str)
     }
     class ErrorLogger {
         +SEVERITY_DEBUG
@@ -3284,19 +3284,19 @@ classDiagram
         +decision_file
         +audit_file
         +__init__(session_id: str, log_base_dir: str)
-        +log_error(step: str, error_message: str, severity: str, error_type: Optional[str]) 
-        +log_decision(step: str, decision: str, reasoning: str, options: Optional[List[str]]) 
-        +log_validation_result(step: str, check_name: str, passed: bool, details: Optional[str]) 
-        +log_retry_attempt(step: str, attempt: int, max_attempts: int, status: str) 
-        +log_backup_restore(operation: str, file_path: str, success: bool, backup_path: Optional[str]) 
-        +get_error_summary() 
-        +get_decision_summary() 
-        +save_audit_trail() 
-        -_format_error_entry(entry: Dict) 
-        -_format_decision_entry(entry: Dict) 
-        -_format_validation_entry(entry: Dict) 
-        -_append_to_file(file_path: Path, content: str) 
-        -_print_error(entry: Dict) 
+        +log_error(step: str, error_message: str, severity: str, error_type: Optional[str])
+        +log_decision(step: str, decision: str, reasoning: str, options: Optional[List[str]])
+        +log_validation_result(step: str, check_name: str, passed: bool, details: Optional[str])
+        +log_retry_attempt(step: str, attempt: int, max_attempts: int, status: str)
+        +log_backup_restore(operation: str, file_path: str, success: bool, backup_path: Optional[str])
+        +get_error_summary()
+        +get_decision_summary()
+        +save_audit_trail()
+        -_format_error_entry(entry: Dict)
+        -_format_decision_entry(entry: Dict)
+        -_format_validation_entry(entry: Dict)
+        -_append_to_file(file_path: Path, content: str)
+        -_print_error(entry: Dict)
     }
     class FormattedError {
         +error_type: str
@@ -3307,8 +3307,8 @@ classDiagram
         +severity: str
         +is_recoverable: bool
         +context: Dict
-        +full_text() 
-        +to_dict() 
+        +full_text()
+        +to_dict()
     }
     class _ErrorCatalog {
         +__init__()
@@ -3317,13 +3317,13 @@ classDiagram
         -_register_all()
     }
     class ErrorMessages {
-        +format(error_type: str, detail: str, context: Optional[Dict[str, Any]], severity_override: Optional[str]) 
-        +format_from_exception(exc: Exception, step: Optional[int], session_id: str) 
-        +format_help(topic: str) 
+        +format(error_type: str, detail: str, context: Optional[Dict[str, Any]], severity_override: Optional[str])
+        +format_from_exception(exc: Exception, step: Optional[int], session_id: str)
+        +format_help(topic: str)
     }
     class WorkflowEngineError {
-        +__init__(message: str, step: Optional[Any], context: Optional[Dict[str, Any]]) 
-        +__repr__() 
+        +__init__(message: str, step: Optional[Any], context: Optional[Dict[str, Any]])
+        +__repr__()
     }
     class PolicyExecutionError {
     }
@@ -3336,8 +3336,8 @@ classDiagram
     class ConfigurationError {
     }
     class StepExecutionError {
-        +__init__(message: str, step_number: int, step: Optional[Any], context: Optional[Dict[str, Any]]) 
-        +__repr__() 
+        +__init__(message: str, step_number: int, step: Optional[Any], context: Optional[Dict[str, Any]])
+        +__repr__()
     }
     class FlowState {
         +session_id: Annotated
@@ -3364,22 +3364,22 @@ classDiagram
         +LEVEL_MINUS1_STATUS
     }
     class ToonObject {
-        +create(schema: str, essential_data: Dict, full_data: Dict, memory_key: str) 
-        +is_toon(obj: Any) 
-        +extract(toon_obj: Dict) 
-        +get_schema(toon_obj: Dict) 
-        +get_memory_reference(toon_obj: Dict) 
+        +create(schema: str, essential_data: Dict, full_data: Dict, memory_key: str)
+        +is_toon(obj: Any)
+        +extract(toon_obj: Dict)
+        +get_schema(toon_obj: Dict)
+        +get_memory_reference(toon_obj: Dict)
     }
     class WorkflowContextOptimizer {
         +TOKEN_RATIO
-        +estimate_tokens(text: str) 
-        +extract_essential_fields(data: Dict, essential_keys: List[str]) 
-        +compress_task_list(tasks: List[Dict]) 
-        +compress_context_status(context_data: Dict) 
-        +build_optimized_context(state: FlowState) 
-        -_find_current_level3_step(state: FlowState) 
-        +store_step_output(state: FlowState, step_name: str, output: Dict) 
-        +get_memory_item(state: FlowState, step_name: str) 
+        +estimate_tokens(text: str)
+        +extract_essential_fields(data: Dict, essential_keys: List[str])
+        +compress_task_list(tasks: List[Dict])
+        +compress_context_status(context_data: Dict)
+        +build_optimized_context(state: FlowState)
+        -_find_current_level3_step(state: FlowState)
+        +store_step_output(state: FlowState, step_name: str, output: Dict)
+        +get_memory_item(state: FlowState, step_name: str)
     }
     class IssueResult {
         +success: bool
@@ -3415,24 +3415,24 @@ classDiagram
         -_token
         -_router
         -_git
-        +__init__(repo_path: str, token: Optional[str], use_mcp: bool) 
-        +create_issue(title: str, body: str, labels: Optional[List[str]], assignee: Optional[str]) 
-        +close_issue(issue_number: int, comment: Optional[str]) 
-        +create_pr(title: str, body: str, head: str, base: str) 
-        +merge_pr(pr_number: int, commit_message: Optional[str], delete_branch: bool) 
-        +create_branch(name: str, from_branch: str) 
-        +push_branch(branch_name: str, force: bool) 
+        +__init__(repo_path: str, token: Optional[str], use_mcp: bool)
+        +create_issue(title: str, body: str, labels: Optional[List[str]], assignee: Optional[str])
+        +close_issue(issue_number: int, comment: Optional[str])
+        +create_pr(title: str, body: str, head: str, base: str)
+        +merge_pr(pr_number: int, commit_message: Optional[str], delete_branch: bool)
+        +create_branch(name: str, from_branch: str)
+        +push_branch(branch_name: str, force: bool)
     }
     class GitHubIntegration {
         +repo_path
         +__init__(token: Optional[str], repo_path: str)
-        -_get_repo_info() 
-        +create_issue(title: str, body: str, labels: Optional[List[str]], assignee: Optional[str]) 
-        +add_issue_comment(issue_number: int, comment: str) 
-        +close_issue(issue_number: int, closing_comment: Optional[str]) 
-        +create_pull_request(title: str, body: str, head_branch: str, base_branch: str) 
-        +merge_pull_request(pr_number: int, commit_message: Optional[str], delete_branch: bool) 
-        +add_pr_comment(pr_number: int, comment: str) 
+        -_get_repo_info()
+        +create_issue(title: str, body: str, labels: Optional[List[str]], assignee: Optional[str])
+        +add_issue_comment(issue_number: int, comment: str)
+        +close_issue(issue_number: int, closing_comment: Optional[str])
+        +create_pull_request(title: str, body: str, head_branch: str, base_branch: str)
+        +merge_pull_request(pr_number: int, commit_message: Optional[str], delete_branch: bool)
+        +add_pr_comment(pr_number: int, comment: str)
     }
     class GitHubMCP {
         +repo_path
@@ -3440,14 +3440,14 @@ classDiagram
         +github
         +repo
         +__init__(token: Optional[str], repo_path: str)
-        -_get_token_from_gh_cli() 
-        -_get_repo_info() 
-        +create_issue(title: str, body: str, labels: Optional[List[str]], assignee: Optional[str]) 
-        +add_issue_comment(issue_number: int, comment: str) 
-        +close_issue(issue_number: int, closing_comment: Optional[str]) 
-        +create_pull_request(title: str, body: str, head_branch: str, base_branch: str) 
-        +merge_pull_request(pr_number: int, commit_message: Optional[str], delete_branch: bool) 
-        +add_pr_comment(pr_number: int, comment: str) 
+        -_get_token_from_gh_cli()
+        -_get_repo_info()
+        +create_issue(title: str, body: str, labels: Optional[List[str]], assignee: Optional[str])
+        +add_issue_comment(issue_number: int, comment: str)
+        +close_issue(issue_number: int, closing_comment: Optional[str])
+        +create_pull_request(title: str, body: str, head_branch: str, base_branch: str)
+        +merge_pull_request(pr_number: int, commit_message: Optional[str], delete_branch: bool)
+        +add_pr_comment(pr_number: int, comment: str)
     }
     class GitHubOperationRouter {
         +use_mcp
@@ -3457,12 +3457,12 @@ classDiagram
         +mcp
         +gh_cli
         +__init__(use_mcp: bool, fallback_to_gh: bool, token: Optional[str], repo_path: str)
-        +create_issue(title: str, body: str, labels: Optional[List[str]], assignee: Optional[str]) 
-        +add_issue_comment(issue_number: int, comment: str) 
-        +close_issue(issue_number: int, closing_comment: Optional[str]) 
-        +create_pull_request(title: str, body: str, head_branch: str, base_branch: str) 
-        +merge_pull_request(pr_number: int, commit_message: Optional[str], delete_branch: bool) 
-        +add_pr_comment(pr_number: int, comment: str) 
+        +create_issue(title: str, body: str, labels: Optional[List[str]], assignee: Optional[str])
+        +add_issue_comment(issue_number: int, comment: str)
+        +close_issue(issue_number: int, closing_comment: Optional[str])
+        +create_pull_request(title: str, body: str, head_branch: str, base_branch: str)
+        +merge_pull_request(pr_number: int, commit_message: Optional[str], delete_branch: bool)
+        +add_pr_comment(pr_number: int, comment: str)
     }
     class GitOperations {
         +repo_path
@@ -3470,20 +3470,20 @@ classDiagram
         +origin_url
         +current_branch
         +__init__(repo_path: str)
-        -_is_git_available() 
-        -_is_git_repository() 
-        -_run_git(args: List[str], check: bool) 
-        -_get_origin_url() 
-        -_get_current_branch() 
-        -_ensure_git_repo() 
-        +create_branch(branch_name: str, from_branch: str) 
-        +post_merge_cleanup(merged_branch: str, main_branch: str) 
-        +switch_branch(branch_name: str) 
-        +list_branches() 
-        +stage_files(files: Optional[List[str]]) 
-        +commit(message: str, files: Optional[List[str]]) 
-        +push_to_remote(branch: Optional[str], force: bool) 
-        +get_status() 
+        -_is_git_available()
+        -_is_git_repository()
+        -_run_git(args: List[str], check: bool)
+        -_get_origin_url()
+        -_get_current_branch()
+        -_ensure_git_repo()
+        +create_branch(branch_name: str, from_branch: str)
+        +post_merge_cleanup(merged_branch: str, main_branch: str)
+        +switch_branch(branch_name: str)
+        +list_branches()
+        +stage_files(files: Optional[List[str]])
+        +commit(message: str, files: Optional[List[str]])
+        +push_to_remote(branch: Optional[str], force: bool)
+        +get_status()
     }
     class StepType {
         +CLASSIFICATION
@@ -3499,14 +3499,14 @@ classDiagram
         +ollama
         +stats
         +__init__()
-        +invoke(step: str, prompt: str, context: Optional[Dict[str, Any]], system_prompt: Optional[str]) 
-        -_invoke_classification(step: str, prompt: str, context: Optional[Dict[str, Any]], routing_info: Dict[str, Any]) 
-        -_invoke_lightweight_analysis(step: str, prompt: str, context: Optional[Dict[str, Any]], routing_info: Dict[str, Any]) 
-        -_invoke_deep_local(step: str, prompt: str, context: Optional[Dict[str, Any]], routing_info: Dict[str, Any]) 
-        -_invoke_complex_reasoning(step: str, prompt: str, context: Optional[Dict[str, Any]], routing_info: Dict[str, Any]) 
-        -_invoke_claude_cli(prompt: str, context: Optional[Dict[str, Any]], step: Optional[str], system_prompt: Optional[str]) 
-        -_invoke_claude(prompt: str, context: Optional[Dict[str, Any]], step: Optional[str], system_prompt: Optional[str]) 
-        +get_stats() 
+        +invoke(step: str, prompt: str, context: Optional[Dict[str, Any]], system_prompt: Optional[str])
+        -_invoke_classification(step: str, prompt: str, context: Optional[Dict[str, Any]], routing_info: Dict[str, Any])
+        -_invoke_lightweight_analysis(step: str, prompt: str, context: Optional[Dict[str, Any]], routing_info: Dict[str, Any])
+        -_invoke_deep_local(step: str, prompt: str, context: Optional[Dict[str, Any]], routing_info: Dict[str, Any])
+        -_invoke_complex_reasoning(step: str, prompt: str, context: Optional[Dict[str, Any]], routing_info: Dict[str, Any])
+        -_invoke_claude_cli(prompt: str, context: Optional[Dict[str, Any]], step: Optional[str], system_prompt: Optional[str])
+        -_invoke_claude(prompt: str, context: Optional[Dict[str, Any]], step: Optional[str], system_prompt: Optional[str])
+        +get_stats()
         +print_stats()
     }
     class InferenceConfig {
@@ -3521,9 +3521,9 @@ classDiagram
         +NPU_CLI_EXE
         +NPU_MODELS_PATH
         +get_gpu_startup_command()
-        +get_gpu_startup_instruction() 
-        +get_npu_startup_instruction() 
-        +validate_setup() 
+        +get_gpu_startup_instruction()
+        +get_npu_startup_instruction()
+        +validate_setup()
     }
     class InferenceRouter {
         +mode
@@ -3533,27 +3533,27 @@ classDiagram
         +npu
         +__init__(mode: str, ollama_endpoint: str, npu_path: str)
         -_init_services()
-        +choose_backend(task_type: str, complexity: int) 
-        +chat(messages: List[Dict[str, str]], task_type: str, complexity: int, model: str) 
-        -_fallback_to_gpu(messages: List[Dict[str, str]], model: str, temperature: float) 
-        -_fallback_to_npu(messages: List[Dict[str, str]], model: str, temperature: float) 
-        +step1_plan_mode_decision(toon: Dict[str, Any], user_requirement: str) 
-        +step5_skill_agent_selection(blueprint: Dict[str, Any], available_skills: List[str], available_agents: List[str]) 
+        +choose_backend(task_type: str, complexity: int)
+        +chat(messages: List[Dict[str, str]], task_type: str, complexity: int, model: str)
+        -_fallback_to_gpu(messages: List[Dict[str, str]], model: str, temperature: float)
+        -_fallback_to_npu(messages: List[Dict[str, str]], model: str, temperature: float)
+        +step1_plan_mode_decision(toon: Dict[str, Any], user_requirement: str)
+        +step5_skill_agent_selection(blueprint: Dict[str, Any], available_skills: List[str], available_agents: List[str])
     }
     class Level3DocumentationManager {
         +project_root
         +session_dir
         +__init__(project_root: str, session_dir: str)
-        +detect_project_docs() 
-        +summarize_existing_docs(context_data: Dict) 
-        +create_all_docs(state: Dict) 
-        +update_existing_docs(state: Dict) 
-        -_find_srs() 
+        +detect_project_docs()
+        +summarize_existing_docs(context_data: Dict)
+        +create_all_docs(state: Dict)
+        +update_existing_docs(state: Dict)
+        -_find_srs()
         -_update_claude_md(path: Path, session_id: str, task_type: str, complexity: int)
         -_update_changelog(path: Path, task_type: str, modified_files: List[str], date_str: str)
         -_update_srs(path: Path, state: Dict, date_str: str)
         -_update_readme(path: Path, state: Dict, date_str: str)
-        -_apply_doc_requirements(requirements: Dict, state: Dict) 
+        -_apply_doc_requirements(requirements: Dict, state: Dict)
     }
     class Level3RemainingSteps {
         +session_dir
@@ -3562,20 +3562,20 @@ classDiagram
         +ollama
         +token_budget
         +__init__(session_dir: str, token_budget: Optional[TokenBudget])
-        -_select_planning_model(toon: Dict[str, Any]) 
-        +step2_plan_execution(toon: Dict[str, Any], user_requirement: str, project_root: Optional[str]) 
-        -_extract_files(plan_text: str) 
-        -_extract_phases(plan_text: str) 
-        -_extract_risks(plan_text: str) 
-        -_tool_read(file_path: str, offset: int, limit: int) 
-        -_tool_grep(pattern: str, glob_pattern: str, head_limit: int) 
-        -_tool_search(query: str, max_results: int) 
-        -_explore_codebase(user_requirement: str, project_root: Optional[str]) 
-        -_analyze_directory_structure(root: str, max_depth: int) 
-        -_find_relevant_files(requirement: str, root: str) 
-        -_detect_project_patterns(root: str) 
-        -_find_key_files(root: str) 
-        -_extract_code_snippets(file_paths: List[str], max_files: int) 
+        -_select_planning_model(toon: Dict[str, Any])
+        +step2_plan_execution(toon: Dict[str, Any], user_requirement: str, project_root: Optional[str])
+        -_extract_files(plan_text: str)
+        -_extract_phases(plan_text: str)
+        -_extract_risks(plan_text: str)
+        -_tool_read(file_path: str, offset: int, limit: int)
+        -_tool_grep(pattern: str, glob_pattern: str, head_limit: int)
+        -_tool_search(query: str, max_results: int)
+        -_explore_codebase(user_requirement: str, project_root: Optional[str])
+        -_analyze_directory_structure(root: str, max_depth: int)
+        -_find_relevant_files(requirement: str, root: str)
+        -_detect_project_patterns(root: str)
+        -_find_key_files(root: str)
+        -_extract_code_snippets(file_paths: List[str], max_files: int)
     }
     class Level3Step1Planner {
         +session_dir
@@ -3583,9 +3583,9 @@ classDiagram
         +validator
         +token_budget
         +__init__(session_dir_path: str, token_budget: Optional[TokenBudget])
-        +execute(toon: Dict[str, Any], user_requirement: str, requirement_type: str) 
-        -_format_decision(plan_required: bool, risk_level: str, reasoning: str) 
-        +should_enter_plan_mode(step1_result: Dict[str, Any]) 
+        +execute(toon: Dict[str, Any], user_requirement: str, requirement_type: str)
+        -_format_decision(plan_required: bool, risk_level: str, reasoning: str)
+        +should_enter_plan_mode(step1_result: Dict[str, Any])
     }
     class Level3GitHubWorkflow {
         +session_dir
@@ -3594,25 +3594,25 @@ classDiagram
         +facade
         +ollama
         +__init__(session_dir: str, repo_path: str)
-        +step8_create_issue(title: str, description: str, task_summary: str, implementation_plan: str) 
-        -_determine_issue_label(description: str) 
-        -_classify_with_llm(description: str) 
-        -_classify_with_keywords(description: str) 
-        -_build_issue_body(description: str, task_summary: str, implementation_plan: str) 
-        +step9_create_branch(issue_number: int, label: str, session_dir: str) 
-        +step11_create_pull_request(issue_number: int, branch_name: str, changes_summary: str, auto_merge: bool) 
-        -_build_pr_body(issue_number: int, changes_summary: str) 
-        +step12_close_issue(issue_number: int, pr_number: int, files_modified: Optional[List[str]], approach_taken: str) 
-        -_build_closing_comment(pr_number: int, files_modified: Optional[List[str]], approach_taken: str, verification_steps: Optional[List[str]]) 
-        +execute_github_workflow(title: str, description: str, changes_summary: str, files_modified: Optional[List[str]]) 
-        -_run_code_review(pr_number: int, branch_name: str, selected_skills: List[str], selected_agents: List[str]) 
-        -_analyze_diff_for_issues(diff_text: str, diff_lines: List[str]) 
-        -_check_python_best_practices(diff_text: str) 
+        +step8_create_issue(title: str, description: str, task_summary: str, implementation_plan: str)
+        -_determine_issue_label(description: str)
+        -_classify_with_llm(description: str)
+        -_classify_with_keywords(description: str)
+        -_build_issue_body(description: str, task_summary: str, implementation_plan: str)
+        +step9_create_branch(issue_number: int, label: str, session_dir: str)
+        +step11_create_pull_request(issue_number: int, branch_name: str, changes_summary: str, auto_merge: bool)
+        -_build_pr_body(issue_number: int, changes_summary: str)
+        +step12_close_issue(issue_number: int, pr_number: int, files_modified: Optional[List[str]], approach_taken: str)
+        -_build_closing_comment(pr_number: int, files_modified: Optional[List[str]], approach_taken: str, verification_steps: Optional[List[str]])
+        +execute_github_workflow(title: str, description: str, changes_summary: str, files_modified: Optional[List[str]])
+        -_run_code_review(pr_number: int, branch_name: str, selected_skills: List[str], selected_agents: List[str])
+        -_analyze_diff_for_issues(diff_text: str, diff_lines: List[str])
+        -_check_python_best_practices(diff_text: str)
     }
     class LLMProvider {
-        +call(prompt: str, model: str, temperature: float, timeout: int) 
-        +is_available() 
-        +name() 
+        +call(prompt: str, model: str, temperature: float, timeout: int)
+        +is_available()
+        +name()
     }
     class OllamaProvider {
         -_endpoint
@@ -3620,9 +3620,9 @@ classDiagram
         -_model_deep
         -_available
         +__init__()
-        +name() 
-        +is_available() 
-        -_check_health() 
+        +name()
+        +is_available()
+        -_check_health()
         +call(prompt, model, temperature, timeout)
     }
     class ClaudeCLIProvider {
@@ -3630,8 +3630,8 @@ classDiagram
         -_claude_path
         -_available
         +__init__()
-        +name() 
-        +is_available() 
+        +name()
+        +is_available()
         +call(prompt, model, temperature, timeout)
     }
     class OpenAIProvider {
@@ -3642,8 +3642,8 @@ classDiagram
         -_model_deep
         -_available
         +__init__()
-        +name() 
-        +is_available() 
+        +name()
+        +is_available()
         +call(prompt, model, temperature, timeout)
     }
     class AnthropicProvider {
@@ -3655,8 +3655,8 @@ classDiagram
         -_model_deep
         -_available
         +__init__()
-        +name() 
-        +is_available() 
+        +name()
+        +is_available()
         +call(prompt, model, temperature, timeout)
     }
     class LoggingSetup {
@@ -3665,14 +3665,14 @@ classDiagram
         +__init__(session_dir: Path, console: Optional[Console])
         -_setup_loguru()
         -_setup_rich_logging()
-        +get_progress(total_tasks: int, description: str) 
+        +get_progress(total_tasks: int, description: str)
         +log_step_start(step_number: int, step_name: str, description: str)
         +log_step_complete(step_number: int, step_name: str, duration_ms: float)
         +log_step_error(step_number: int, step_name: str, error: str)
         +log_toon_saved(version: int, file_path: Path)
         +log_github_event(event_type: str, details: str)
         +log_tool_call(tool_name: str, args: dict, result: str)
-        +get_session_summary() 
+        +get_session_summary()
     }
     class ExecutionLogger {
         +setup
@@ -3680,7 +3680,7 @@ classDiagram
         +__init__(session_dir: Path)
         +log_execution_step(step_number: int, step_name: str, status: str, message: str)
         +save_execution_log(file_path: Optional[Path])
-        +get_execution_summary() 
+        +get_execution_summary()
     }
     class MCPPluginError {
     }
@@ -3689,49 +3689,49 @@ classDiagram
     class PluginImplementationError {
     }
     class MCPPluginInstance {
-        +get_capability_metadata() 
+        +get_capability_metadata()
     }
     class PluginManifest {
         +data
         +plugin_path
         +__init__(data: Dict[str, Any], plugin_path: Path)
-        -_validate() 
-        +name() 
-        +short_name() 
-        +version() 
-        +enabled() 
-        +description() 
-        +module() 
-        +class_name() 
-        +capabilities() 
-        +configuration() 
-        +to_dict() 
+        -_validate()
+        +name()
+        +short_name()
+        +version()
+        +enabled()
+        +description()
+        +module()
+        +class_name()
+        +capabilities()
+        +configuration()
+        +to_dict()
     }
     class MCPPluginLoader {
         -_logger
         +plugins_path
         +__init__(plugins_path: Optional[str])
         -_setup_logger()
-        +discover_plugins() 
-        +load_plugin(plugin_name: str) 
-        +get_available_mcps() 
-        +validate_plugin_manifest(manifest_path: Path) 
-        +reload_all_plugins() 
-        +route_to_mcp(mcp_name: str, operation: str) 
+        +discover_plugins()
+        +load_plugin(plugin_name: str)
+        +get_available_mcps()
+        +validate_plugin_manifest(manifest_path: Path)
+        +reload_all_plugins()
+        +route_to_mcp(mcp_name: str, operation: str)
     }
     class MetricsCollector {
         +session_id
         +metrics_file
         -_start_time
         +__init__(session_id: str, base_log_dir: str)
-        +record_step(step: int, duration: float, status: str, tokens: int) 
-        +record_files_modified(step: int, files: List[str], operation: str) 
-        +record_error(step: int, error_type: str, recovery: str, message: Optional[str]) 
+        +record_step(step: int, duration: float, status: str, tokens: int)
+        +record_files_modified(step: int, files: List[str], operation: str)
+        +record_error(step: int, error_type: str, recovery: str, message: Optional[str])
         +timed_step(step: int, tokens: int, model: Optional[str])
-        +summary() 
-        +print_summary() 
-        -_save() 
-        -_load() 
+        +summary()
+        +print_summary()
+        -_save()
+        -_load()
     }
     class MetricsDashboard {
         +benchmark_dir
@@ -3751,21 +3751,21 @@ classDiagram
         +quantization: Optional
         +description: str
         +recommended_for: List
-        +to_dict() 
+        +to_dict()
     }
     class ModelDiscovery {
         +models_path
         +__init__(models_path: Optional[str])
-        -_discover_npu_models() 
-        -_parse_npu_model_name(name: str) 
-        -_discover_openvino_models() 
-        -_parse_openvino_model_name(name: str) 
-        -_discover_gpu_models() 
-        +get_all_models() 
-        +get_models_by_platform(platform: Literal[npu, gpu, openvino]) 
-        +get_models_for_task(task: str) 
-        +find_best_model(task: str, platform: Optional[str]) 
-        +to_dict() 
+        -_discover_npu_models()
+        -_parse_npu_model_name(name: str)
+        -_discover_openvino_models()
+        -_parse_openvino_model_name(name: str)
+        -_discover_gpu_models()
+        +get_all_models()
+        +get_models_by_platform(platform: Literal[npu, gpu, openvino])
+        +get_models_for_task(task: str)
+        +find_best_model(task: str, platform: Optional[str])
+        +to_dict()
     }
     class NPUService {
         +npu_path
@@ -3776,13 +3776,13 @@ classDiagram
         +available_models
         +available_categories
         +__init__(npu_path: str)
-        -_check_available_models() 
-        -_categorize_models() 
-        +select_model(task_type: str, complexity: int) 
-        +chat(messages: List[Dict[str, str]], model: str, task_type: str, complexity: int) 
-        +step1_plan_mode_decision(toon: Dict[str, Any], user_requirement: str) 
-        +step3_task_breakdown(plan: str, complexity: int) 
-        +list_models() 
+        -_check_available_models()
+        -_categorize_models()
+        +select_model(task_type: str, complexity: int)
+        +chat(messages: List[Dict[str, str]], model: str, task_type: str, complexity: int)
+        +step1_plan_mode_decision(toon: Dict[str, Any], user_requirement: str)
+        +step3_task_breakdown(plan: str, complexity: int)
+        +list_models()
     }
     class OllamaService {
         +_MODEL_TEMPERATURES
@@ -3793,40 +3793,40 @@ classDiagram
         +models
         +__init__(endpoint: str)
         -_validate_ollama_server()
-        -_check_available_models() 
-        +chat(messages: List[Dict[str, str]], model: str, temperature: float, format: Optional[str]) 
+        -_check_available_models()
+        +chat(messages: List[Dict[str, str]], model: str, temperature: float, format: Optional[str])
         -_fallback_chain(messages, model_type, temperature)
         -_init_claude_fallback()
-        -_chat_claude(messages: List[Dict[str, str]], model_type: str, temperature: float) 
-        -_chat_claude_cli(messages: List[Dict[str, str]], model_type: str) 
-        +step1_plan_mode_decision(toon: Dict[str, Any], user_requirement: str) 
-        +step5_skill_agent_selection(blueprint: Dict[str, Any], available_skills: List[str], available_agents: List[str]) 
-        +step7_final_prompt_generation(toon_final: Dict[str, Any]) 
+        -_chat_claude(messages: List[Dict[str, str]], model_type: str, temperature: float)
+        -_chat_claude_cli(messages: List[Dict[str, str]], model_type: str)
+        +step1_plan_mode_decision(toon: Dict[str, Any], user_requirement: str)
+        +step5_skill_agent_selection(blueprint: Dict[str, Any], available_skills: List[str], available_agents: List[str])
+        +step7_final_prompt_generation(toon_final: Dict[str, Any])
     }
     class ParallelExplorer {
         +max_workers
         +__init__(max_workers: int)
-        +explore(tasks: List[Tuple[str, Callable, list, dict]], timeout_seconds: float) 
-        +parallel_file_scan(file_paths: List[str], scan_fn: Callable[str], max_workers: int, timeout_seconds: float) 
+        +explore(tasks: List[Tuple[str, Callable, list, dict]], timeout_seconds: float)
+        +parallel_file_scan(file_paths: List[str], scan_fn: Callable[str], max_workers: int, timeout_seconds: float)
     }
     class ParallelTaskExecutor {
         +max_workers
         +__init__(max_workers: int)
-        +execute_tasks(tasks: List[Dict[str, Any]], timeout_seconds: float) 
-        -_build_safe_batches(tasks: List[Dict[str, Any]]) 
+        +execute_tasks(tasks: List[Dict[str, Any]], timeout_seconds: float)
+        -_build_safe_batches(tasks: List[Dict[str, Any]])
     }
     class ConcurrentSkillDownloader {
         +MAX_WORKERS: int
         +max_workers
         +__init__(max_workers: int)
-        +load_skills(skill_specs: List[Dict[str, Any]], timeout_seconds: float) 
-        +load_agents(agent_specs: List[Dict[str, Any]], timeout_seconds: float) 
+        +load_skills(skill_specs: List[Dict[str, Any]], timeout_seconds: float)
+        +load_agents(agent_specs: List[Dict[str, Any]], timeout_seconds: float)
     }
     class _CacheEntry {
         +__slots__
         +value
-        +__init__(value: Any, ttl: float) 
-        +is_expired() 
+        +__init__(value: Any, ttl: float)
+        +is_expired()
     }
     class SkillInfo {
         +domain: str
@@ -3837,14 +3837,14 @@ classDiagram
     class SkillRegistry {
         +_registry: Dict
         +_lock: threading
-        +register(domain: str, name: str, metadata: Optional[Dict[str, Any]]) 
-        +register_defaults() 
-        +discover(pattern: str) 
-        +get(name: str) 
-        +all_domains_raw() 
-        +all_domains() 
-        +clear() 
-        +size() 
+        +register(domain: str, name: str, metadata: Optional[Dict[str, Any]])
+        +register_defaults()
+        +discover(pattern: str)
+        +get(name: str)
+        +all_domains_raw()
+        +all_domains()
+        +clear()
+        +size()
     }
     class PipelineBenchmark {
         +session_id
@@ -3868,20 +3868,20 @@ classDiagram
         +description
         +timeout_seconds
         +__init__(script_path: str, input_mapping: Optional[Dict[str, str]], output_mapping: Optional[Dict[str, str]], description: str)
-        -_resolve_script_path() 
-        -_build_command(state: FlowState) 
-        -_parse_output(output: str) 
-        -_map_output_to_state(script_output: Dict[str, Any]) 
-        +__call__(state: FlowState) 
-        +create_batch(adapters: list) 
+        -_resolve_script_path()
+        -_build_command(state: FlowState)
+        -_parse_output(output: str)
+        -_map_output_to_state(script_output: Dict[str, Any])
+        +__call__(state: FlowState)
+        +create_batch(adapters: list)
     }
     class StepRecord {
         +step_number
         +__init__(step_number: int)
-        +start(label: Optional[str]) 
-        +complete(status: str, duration_ms: Optional[float], detail: Optional[str]) 
-        +elapsed_ms() 
-        +format_duration() 
+        +start(label: Optional[str])
+        +complete(status: str, duration_ms: Optional[float], detail: Optional[str])
+        +elapsed_ms()
+        +format_duration()
     }
     class ProgressDisplay {
         +session_id
@@ -3891,17 +3891,17 @@ classDiagram
         +enable_refresh_thread
         -_lock
         +__init__(session_id: str, total_steps: int, refresh_interval: float, output_stream)
-        +start() 
-        +update_step(step: int, status: str, label: Optional[str], duration_ms: Optional[float]) 
-        +finish(final_status: str) 
-        +get_eta() 
-        +get_summary() 
-        -_compute_eta() 
-        -_build_progress_bar(width: int) 
-        -_format_step_line(record: StepRecord) 
-        -_render() 
-        -_build_display() 
-        -_refresh_loop() 
+        +start()
+        +update_step(step: int, status: str, label: Optional[str], duration_ms: Optional[float])
+        +finish(final_status: str)
+        +get_eta()
+        +get_summary()
+        -_compute_eta()
+        -_build_progress_bar(width: int)
+        -_format_step_line(record: StepRecord)
+        -_render()
+        -_build_display()
+        -_refresh_loop()
     }
     class RAGLayer {
         +session_id
@@ -3926,11 +3926,11 @@ classDiagram
         +error_logger
         -_start_time
         +__init__(session_id: str, step_executor: Optional[Callable], base_log_dir: str)
-        +install_signal_handlers() 
-        +register_cleanup(callback: Callable) 
-        +update_state(step: int, state: Dict[str, Any]) 
-        +save_step_checkpoint(step: int, state: Dict[str, Any], success_status: bool, error_message: Optional[str]) 
-        +resume_session(checkpoint_id: Optional[str]) 
+        +install_signal_handlers()
+        +register_cleanup(callback: Callable)
+        +update_state(step: int, state: Dict[str, Any])
+        +save_step_checkpoint(step: int, state: Dict[str, Any], success_status: bool, error_message: Optional[str])
+        +resume_session(checkpoint_id: Optional[str])
     }
     class CriteriaIssue {
         +domain: str
@@ -3948,42 +3948,42 @@ classDiagram
         +summary: str
         +domain_scores: Dict
         +timestamp: str
-        +to_dict() 
+        +to_dict()
     }
     class ReviewCriteria {
         +project_root
         +rules
         +__init__(project_root: Optional[str])
-        +evaluate(files_changed: List[str], pr_title: str, pr_body: str, diff_text: str) 
-        +get_checklist() 
-        -_evaluate_code_quality(files: List[str], diff_text: str) 
-        -_evaluate_test_coverage(files: List[str]) 
-        -_evaluate_documentation(files: List[str], pr_body: str) 
-        -_read_file(file_path: str) 
-        -_find_long_functions(content: str, max_lines: int) 
-        -_detect_hardcoded_secrets(content: str) 
-        -_compute_domain_scores(issues: List[CriteriaIssue], warnings: List[CriteriaIssue]) 
-        -_build_summary(passed: bool, issues: List[CriteriaIssue], warnings: List[CriteriaIssue], score: float) 
-        -_issue_to_dict(issue: CriteriaIssue) 
+        +evaluate(files_changed: List[str], pr_title: str, pr_body: str, diff_text: str)
+        +get_checklist()
+        -_evaluate_code_quality(files: List[str], diff_text: str)
+        -_evaluate_test_coverage(files: List[str])
+        -_evaluate_documentation(files: List[str], pr_body: str)
+        -_read_file(file_path: str)
+        -_find_long_functions(content: str, max_lines: int)
+        -_detect_hardcoded_secrets(content: str)
+        -_compute_domain_scores(issues: List[CriteriaIssue], warnings: List[CriteriaIssue])
+        -_build_summary(passed: bool, issues: List[CriteriaIssue], warnings: List[CriteriaIssue], score: float)
+        -_issue_to_dict(issue: CriteriaIssue)
     }
     class SessionManager {
         +session_id
         +session_dir
         +__init__(session_id: str)
-        +save_session_metadata(metadata: SessionMetadata) 
-        +save_toon_analysis(toon: ToonAnalysis) 
-        +save_execution_blueprint(blueprint: ExecutionBlueprint) 
-        +save_toon_with_skills(toon: ToonWithSkills) 
-        +save_prompt(prompt_text: str) 
-        +save_task_breakdown(tasks: Dict[str, Any]) 
-        +save_github_details(details: Dict[str, Any]) 
-        +save_execution_logs(logs: list) 
-        +load_latest_toon(version: int) 
-        +load_prompt() 
-        +load_task_breakdown() 
-        +load_github_details() 
-        +add_execution_log(log: ExecutionLog) 
-        +get_session_status() 
+        +save_session_metadata(metadata: SessionMetadata)
+        +save_toon_analysis(toon: ToonAnalysis)
+        +save_execution_blueprint(blueprint: ExecutionBlueprint)
+        +save_toon_with_skills(toon: ToonWithSkills)
+        +save_prompt(prompt_text: str)
+        +save_task_breakdown(tasks: Dict[str, Any])
+        +save_github_details(details: Dict[str, Any])
+        +save_execution_logs(logs: list)
+        +load_latest_toon(version: int)
+        +load_prompt()
+        +load_task_breakdown()
+        +load_github_details()
+        +add_execution_log(log: ExecutionLog)
+        +get_session_status()
     }
     class SkillAgentLoader {
         +home
@@ -3992,54 +3992,54 @@ classDiagram
         -_use_cache
         -_use_parallel
         +__init__(use_cache: bool, use_parallel: bool)
-        +load_skill(skill_name: str) 
-        +load_agent(agent_name: str) 
-        +list_all_skills() 
-        +parse_skill_metadata(content: str) 
-        +list_all_agents() 
-        +get_skill_names() 
-        +get_agent_names() 
+        +load_skill(skill_name: str)
+        +load_agent(agent_name: str)
+        +list_all_skills()
+        +parse_skill_metadata(content: str)
+        +list_all_agents()
+        +get_skill_names()
+        +get_agent_names()
     }
     class SkillManager {
         +skills_root
         +github_raw_base
         +__init__(skills_root: Optional[Path], github_raw_base: str)
-        +provision_skill(skill_name: str, version_req: str, force_download: bool) 
-        +provision_skills_batch(skill_names: List[str], version_requirements: Optional[Dict[str, str]], resolve_deps: bool) 
-        +validate_skill_set(skill_names: List[str]) 
-        +get_cache_stats() 
-        +clear_memory_cache() 
-        -_download_with_retry(skill_name: str) 
-        -_attempt_download(url: str) 
-        -_build_candidate_urls(skill_name: str) 
-        -_get_from_memory_cache(skill_name: str, field: Optional[str]) 
-        -_store_in_memory_cache(skill_name: str, content: str) 
-        -_load_from_disk(skill_name: str) 
-        -_save_to_disk(skill_name: str, content: str) 
-        -_count_disk_cache_entries() 
-        -_resolve_all_dependencies(skill_names: List[str]) 
+        +provision_skill(skill_name: str, version_req: str, force_download: bool)
+        +provision_skills_batch(skill_names: List[str], version_requirements: Optional[Dict[str, str]], resolve_deps: bool)
+        +validate_skill_set(skill_names: List[str])
+        +get_cache_stats()
+        +clear_memory_cache()
+        -_download_with_retry(skill_name: str)
+        -_attempt_download(url: str)
+        -_build_candidate_urls(skill_name: str)
+        -_get_from_memory_cache(skill_name: str, field: Optional[str])
+        -_store_in_memory_cache(skill_name: str, content: str)
+        -_load_from_disk(skill_name: str)
+        -_save_to_disk(skill_name: str, content: str)
+        -_count_disk_cache_entries()
+        -_resolve_all_dependencies(skill_names: List[str])
     }
     class StandardsSchema {
         +REQUIRED_FIELDS
         +FIELD_TYPES: Dict
-        +validate(standard_dict: Dict[str, Any]) 
+        +validate(standard_dict: Dict[str, Any])
     }
     class StepValidator {
-        +validate_step_1_input(state: Dict[str, Any]) 
-        +validate_step_1_output(decision: Dict[str, Any]) 
-        +validate_step_2_input(state: Dict[str, Any]) 
-        +validate_step_2_output(plan: Dict[str, Any]) 
-        +validate_step_3_input(state: Dict[str, Any]) 
-        +validate_step_3_output(tasks: Any) 
-        +validate_step_4_input(state: Dict[str, Any]) 
-        +validate_step_4_output(blueprint: Dict[str, Any]) 
-        +validate_step_5_input(state: Dict[str, Any]) 
-        +validate_step_5_output(selection: Dict[str, Any]) 
-        +validate_step_6_input(state: Dict[str, Any]) 
-        +validate_step_6_output(result: Dict[str, Any]) 
-        +validate_step_7_input(state: Dict[str, Any]) 
-        +validate_step_7_output(result: Dict[str, Any]) 
-        +validate_step_8_input(state: Dict[str, Any]) 
+        +validate_step_1_input(state: Dict[str, Any])
+        +validate_step_1_output(decision: Dict[str, Any])
+        +validate_step_2_input(state: Dict[str, Any])
+        +validate_step_2_output(plan: Dict[str, Any])
+        +validate_step_3_input(state: Dict[str, Any])
+        +validate_step_3_output(tasks: Any)
+        +validate_step_4_input(state: Dict[str, Any])
+        +validate_step_4_output(blueprint: Dict[str, Any])
+        +validate_step_5_input(state: Dict[str, Any])
+        +validate_step_5_output(selection: Dict[str, Any])
+        +validate_step_6_input(state: Dict[str, Any])
+        +validate_step_6_output(result: Dict[str, Any])
+        +validate_step_7_input(state: Dict[str, Any])
+        +validate_step_7_output(result: Dict[str, Any])
+        +validate_step_8_input(state: Dict[str, Any])
     }
     class _StepResult {
         +__init__()
@@ -4047,8 +4047,8 @@ classDiagram
     class StepTimeout {
         +timeout_seconds
         +__init__(timeout_seconds: int)
-        +run(fn: Callable, args: Tuple, kwargs: Optional[Dict[str, Any]], fallback: Optional[Dict[str, Any]]) 
-        -_build_error_result(step_label: str, reason: str, elapsed_ms: float, fallback: Optional[Dict[str, Any]]) 
+        +run(fn: Callable, args: Tuple, kwargs: Optional[Dict[str, Any]], fallback: Optional[Dict[str, Any]])
+        -_build_error_result(step_label: str, reason: str, elapsed_ms: float, fallback: Optional[Dict[str, Any]])
     }
     class BudgetExceededError {
         +step
@@ -4062,19 +4062,19 @@ classDiagram
         +_WARN_RATIO: float
         +total_budget
         +__init__(total_budget: Optional[int])
-        +get_spent() 
-        +get_remaining() 
-        +get_step_allocation(step: str) 
-        +get_step_usage(step: str) 
-        +can_proceed(step: str, estimated: int) 
-        +check_or_raise(step: str, estimated: int) 
-        +record_usage(step: str, tokens: int) 
-        +allocate(step_number: Any, tokens_used: int) 
-        +remaining() 
-        -_normalise_step(step: Any) 
-        +get_summary() 
-        +log_summary() 
-        +estimate_tokens(text: str) 
+        +get_spent()
+        +get_remaining()
+        +get_step_allocation(step: str)
+        +get_step_usage(step: str)
+        +can_proceed(step: str, estimated: int)
+        +check_or_raise(step: str, estimated: int)
+        +record_usage(step: str, tokens: int)
+        +allocate(step_number: Any, tokens_used: int)
+        +remaining()
+        -_normalise_step(step: Any)
+        +get_summary()
+        +log_summary()
+        +estimate_tokens(text: str)
     }
     class ContextData {
         +model_config
@@ -4178,20 +4178,20 @@ classDiagram
         -_error_formatter
         -_enable_progress_thread
         +__init__(session_id: str, total_steps: int, output_stream, enable_progress_thread: bool)
-        +start_pipeline(total_steps: Optional[int]) 
-        +finish_pipeline(final_status: str) 
-        +step_started(step: int, label: Optional[str]) 
-        +step_done(step: int, duration_ms: Optional[float], detail: Optional[str]) 
-        +step_skipped(step: int, reason: str) 
-        +step_failed(step: int, error: Optional[str], duration_ms: Optional[float]) 
-        +explain_decision(decision_type: str, state: Optional[Dict[str, Any]], explanation: Optional[DecisionExplanation]) 
-        +explain_plan_decision(plan_required: bool, task_complexity: int, task_count: int, files_affected: int) 
-        +explain_skill_selection(selected_skill: str, task_description: str, candidate_skills: Optional[List[str]], capability_scores: Optional[Dict[str, int]]) 
-        +explain_approach(approach: str, task_description: str, framework: str, standards_applied: bool) 
-        +show_error(error: Any, step: Optional[int], error_type: Optional[str]) 
-        +show_warning(message: str, step: Optional[int]) 
-        +show_info(message: str) 
-        +show_help(topic: str) 
+        +start_pipeline(total_steps: Optional[int])
+        +finish_pipeline(final_status: str)
+        +step_started(step: int, label: Optional[str])
+        +step_done(step: int, duration_ms: Optional[float], detail: Optional[str])
+        +step_skipped(step: int, reason: str)
+        +step_failed(step: int, error: Optional[str], duration_ms: Optional[float])
+        +explain_decision(decision_type: str, state: Optional[Dict[str, Any]], explanation: Optional[DecisionExplanation])
+        +explain_plan_decision(plan_required: bool, task_complexity: int, task_count: int, files_affected: int)
+        +explain_skill_selection(selected_skill: str, task_description: str, candidate_skills: Optional[List[str]], capability_scores: Optional[Dict[str, int]])
+        +explain_approach(approach: str, task_description: str, framework: str, standards_applied: bool)
+        +show_error(error: Any, step: Optional[int], error_type: Optional[str])
+        +show_warning(message: str, step: Optional[int])
+        +show_info(message: str)
+        +show_help(topic: str)
     }
     class UMLAstAnalyzer {
         +project_root
@@ -4236,15 +4236,15 @@ classDiagram
         +pre
         +pre_num
         +__init__(major: int, minor: int, patch: int, pre: str)
-        +parse(version_str: str) 
-        -_sort_key() 
-        +__lt__(other: Version) 
-        +__le__(other: Version) 
-        +__gt__(other: Version) 
-        +__ge__(other: Version) 
-        +__eq__(other: object) 
-        +__repr__() 
-        +is_compatible_release(other: Version) 
+        +parse(version_str: str)
+        -_sort_key()
+        +__lt__(other: Version)
+        +__le__(other: Version)
+        +__gt__(other: Version)
+        +__ge__(other: Version)
+        +__eq__(other: object)
+        +__repr__()
+        +is_compatible_release(other: Version)
     }
     class StandardsLoader {
         +policies_dir
@@ -4260,19 +4260,19 @@ classDiagram
         +project_root
         +tech_stack
         +session_id
-        +__init__(project_path: str, tech_stack: Optional[List[str]], session_id: str) 
-        +run() 
-        +save() 
-        +summary() 
+        +__init__(project_path: str, tech_stack: Optional[List[str]], session_id: str)
+        +run()
+        +save()
+        +summary()
     }
     class OllamaTaskAnalyzer {
         +endpoint
         +model
         +project_root
         +__init__()
-        +call_ollama(prompt: str) 
-        +detect_project_type() 
-        +analyze(task_description: str, context_data: dict) 
+        +call_ollama(prompt: str)
+        +detect_project_type()
+        +analyze(task_description: str, context_data: dict)
     }
     class TaskAutoAnalyzer {
         +memory_path
@@ -4292,12 +4292,12 @@ classDiagram
     class AutoPlanModeSuggester {
         +decision_log
         +__init__()
-        +should_use_plan_mode(complexity_analysis: Dict, structured_prompt: Dict) 
-        +calculate_risk_factors(structured_prompt: Dict, complexity: Dict) 
-        +adjust_complexity_with_risks(complexity: Dict, risks: Dict) 
-        +get_complexity_level(score: int) 
-        +make_decision(complexity: Dict) 
-        +format_suggestion(decision: Dict, complexity: Dict) 
+        +should_use_plan_mode(complexity_analysis: Dict, structured_prompt: Dict)
+        +calculate_risk_factors(structured_prompt: Dict, complexity: Dict)
+        +adjust_complexity_with_risks(complexity: Dict, risks: Dict)
+        +get_complexity_level(score: int)
+        +make_decision(complexity: Dict)
+        +format_suggestion(decision: Dict, complexity: Dict)
         +log_decision(decision: Dict, complexity: Dict)
     }
     class AutoSkillAgentSelector {
@@ -4305,12 +4305,12 @@ classDiagram
         +available_skills
         +available_agents
         +__init__()
-        +select(task_type: str, complexity: Dict, structured_prompt: Dict) 
-        +extract_technologies(prompt: Dict) 
-        +match_technologies(technologies: List[str], complexity: int) 
-        +match_task_type(task_type: str, complexity: int) 
-        +is_multi_service(prompt: Dict) 
-        +generate_execution_plan(selection: Dict) 
+        +select(task_type: str, complexity: Dict, structured_prompt: Dict)
+        +extract_technologies(prompt: Dict)
+        +match_technologies(technologies: List[str], complexity: int)
+        +match_task_type(task_type: str, complexity: int)
+        +is_multi_service(prompt: Dict)
+        +generate_execution_plan(selection: Dict)
     }
     LazyClient <|-- GitRepoClient
     LazyClient <|-- GitHubApiClient

@@ -1077,10 +1077,10 @@ sequenceDiagram
     participant TestCreateAllDocs
     participant TestUpdateExistingDocs
     participant TestGracefulFailure
-    participant test_level3_execution_v2
+    participant test_level3_execution
     participant _infra_cache_clear as _infra_cache.clear
     participant TestRunStep
-    participant level3_execution_v2
+    participant level3_execution
     participant mock_cp_save_checkpoint_assert_called as mock_cp.save_checkpoint.assert_called
     participant mock_metrics_record_step_assert_called as mock_metrics.record_step.assert_called
     participant TestLevel3InitNode

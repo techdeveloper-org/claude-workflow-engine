@@ -281,7 +281,7 @@ def route_to_closure_or_retry(state: FlowState) -> str:
 # ============================================================================
 
 
-def level3_v2_merge_node(state):
+def level3_merge_node(state):
     """Re-export merge node from routing module."""
     from ..routing import level3_merge_node
 

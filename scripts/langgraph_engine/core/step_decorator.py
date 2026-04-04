@@ -1,6 +1,6 @@
 """Step execution decorator and factory for Level 3 pipeline steps.
 
-Replaces the repetitive _run_step() wrapper pattern in level3_execution_v2.py
+Replaces the repetitive _run_step() wrapper pattern in level3_execution/subgraph.py
 where each step node is a thin wrapper around _run_step() with step-specific
 parameters.  Moving the wrapper logic here lets callers register new step nodes
 with a single function call instead of duplicating ~300 lines of
@@ -32,17 +32,17 @@ callers can construct a StepExecutionContext with mock objects and call its
 methods directly.
 """
 
+import functools
+import json
 import os
 import sys
-import json
 import time
-import functools
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Set
 
-from .logger_factory import get_logger
 from .infrastructure import get_infra
+from .logger_factory import get_logger
 
 logger = get_logger(__name__)
 
@@ -54,13 +54,14 @@ logger = get_logger(__name__)
 # by a cached vector-DB decision when confidence >= step threshold.
 _RAG_ELIGIBLE_STEPS: Set[int] = {0, 1, 2, 5, 7, 8}
 
-# Telemetry directory under the user home (mirrors level3_execution_v2.py).
+# Telemetry directory under the user home (mirrors level3_execution/subgraph.py).
 _TELEMETRY_DIR = Path.home() / ".claude" / "logs" / "telemetry"
 
 
 # ---------------------------------------------------------------------------
 # StepExecutionContext
 # ---------------------------------------------------------------------------
+
 
 class StepExecutionContext:
     """Per-step execution context encapsulating infrastructure and timing.
@@ -135,9 +136,8 @@ class StepExecutionContext:
         if self.step_number not in _RAG_ELIGIBLE_STEPS:
             return None
         try:
-            from ..rag_integration import (
-                rag_lookup_before_llm,
-            )
+            from ..rag_integration import rag_lookup_before_llm
+
             user_msg = self.state.get("user_message", "") or ""
             rag_query = "%s %s" % (self.step_label, user_msg[:200])
             step_key = "step%d" % self.step_number
@@ -154,7 +154,8 @@ class StepExecutionContext:
                 cached["step%d_rag_confidence" % self.step_number] = confidence
                 cached["step%d_execution_time_ms" % self.step_number] = duration_s * 1000
                 print(
-                    "[STEP %02d] %s - RAG HIT (confidence=%.2f, %.0fms)" % (
+                    "[STEP %02d] %s - RAG HIT (confidence=%.2f, %.0fms)"
+                    % (
                         self.step_number,
                         self.step_label,
                         confidence,
@@ -163,7 +164,8 @@ class StepExecutionContext:
                     file=sys.stderr,
                 )
                 logger.info(
-                    "[STEP %02d] %s - RAG HIT (confidence=%.2f)" % (
+                    "[STEP %02d] %s - RAG HIT (confidence=%.2f)"
+                    % (
                         self.step_number,
                         self.step_label,
                         confidence,
@@ -176,9 +178,7 @@ class StepExecutionContext:
                     file=sys.stderr,
                 )
         except Exception as exc:
-            logger.debug(
-                "[STEP %02d] RAG lookup failed (non-fatal): %s" % (self.step_number, exc)
-            )
+            logger.debug("[STEP %02d] RAG lookup failed (non-fatal): %s" % (self.step_number, exc))
         return None
 
     def store_rag_decision(self, result: Dict[str, Any]) -> None:
@@ -188,6 +188,7 @@ class StepExecutionContext:
         """
         try:
             from ..rag_integration import rag_store_after_node
+
             step_key = "step%d" % self.step_number
             rag_store_after_node(
                 step=step_key,
@@ -296,9 +297,7 @@ class StepExecutionContext:
                     severity="ERROR",
                     error_type=type(exc).__name__,
                     recovery_action=(
-                        "Returning fallback result"
-                        if fallback is not None
-                        else "Step returning empty result"
+                        "Returning fallback result" if fallback is not None else "Step returning empty result"
                     ),
                 )
             except Exception:
@@ -329,14 +328,8 @@ class StepExecutionContext:
                 "status": status,
                 "duration_ms": round(duration_ms, 1),
                 "timestamp": datetime.now().isoformat(),
-                "llm_called": bool(
-                    result.get("step%d_llm_invoked" % n, False)
-                    if result else False
-                ),
-                "modified_files_count": len(
-                    result.get("step%d_modified_files" % n, [])
-                    if result else []
-                ),
+                "llm_called": bool(result.get("step%d_llm_invoked" % n, False) if result else False),
+                "modified_files_count": len(result.get("step%d_modified_files" % n, []) if result else []),
             }
             _TELEMETRY_DIR.mkdir(parents=True, exist_ok=True)
             telemetry_file = _TELEMETRY_DIR / ("%s.jsonl" % session_id)
@@ -377,6 +370,7 @@ class StepExecutionContext:
 # ---------------------------------------------------------------------------
 # Internal execution helper
 # ---------------------------------------------------------------------------
+
 
 def _execute_step_with_infra(
     ctx: StepExecutionContext,
@@ -446,9 +440,7 @@ def _execute_step_with_infra(
             "[STEP %02d] %s - OK (%.0fms)" % (n, label, duration_s * 1000),
             file=sys.stderr,
         )
-        logger.info(
-            "[STEP %02d] %s - OK (%.0fms)" % (n, label, duration_s * 1000)
-        )
+        logger.info("[STEP %02d] %s - OK (%.0fms)" % (n, label, duration_s * 1000))
 
         # 4c. Write telemetry
         ctx.write_telemetry("OK", duration_s * 1000, result)
@@ -500,6 +492,7 @@ def _execute_step_with_infra(
 # ---------------------------------------------------------------------------
 # Public factory
 # ---------------------------------------------------------------------------
+
 
 def create_step_node(
     step_number: int,
@@ -556,6 +549,7 @@ def create_step_node(
         # Register with StateGraph
         graph.add_node("step3_task_breakdown", my_step_node)
     """
+
     @functools.wraps(step_fn)
     def _node(state: Dict[str, Any]) -> Dict[str, Any]:
         ctx = StepExecutionContext(

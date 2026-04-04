@@ -53,15 +53,12 @@ Covers every failure mode defined in the acceptance criteria:
 """
 
 import json
-import os
-import platform
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
-from typing import Dict, Any
-from unittest.mock import MagicMock, patch, PropertyMock, call
+from typing import Any, Dict
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -74,12 +71,14 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 # Shared state helpers (mirrored from test_all_14_steps.py, kept local)
 # ---------------------------------------------------------------------------
 
+
 def _base_state(
     session_id: str = "fail-test-session",
     user_message: str = "Fix a bug in routes",
     project_root: str = "/tmp/test-project",
 ) -> Dict[str, Any]:
     from datetime import datetime
+
     return {
         "session_id": session_id,
         "timestamp": datetime.now().isoformat(),
@@ -155,16 +154,19 @@ def _base_state(
 # TEST CLASS: call_execution_script Failure Modes
 # ===========================================================================
 
+
 class TestCallExecutionScriptFailures:
     """Verify call_execution_script handles every failure path correctly."""
 
     def test_returns_script_not_found_for_missing_script(self):
         from langgraph_engine.subgraphs.level3_execution import call_execution_script
+
         result = call_execution_script("__nonexistent_script_xyz__")
         assert result.get("status") == "SCRIPT_NOT_FOUND"
 
     def test_returns_timeout_on_subprocess_timeout(self):
         from langgraph_engine.subgraphs.level3_execution import call_execution_script
+
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=30)):
             with patch("pathlib.Path.exists", return_value=True):
                 result = call_execution_script("some-script")
@@ -172,6 +174,7 @@ class TestCallExecutionScriptFailures:
 
     def test_returns_error_on_generic_exception(self):
         from langgraph_engine.subgraphs.level3_execution import call_execution_script
+
         with patch("subprocess.run", side_effect=OSError("Permission denied")):
             with patch("pathlib.Path.exists", return_value=True):
                 result = call_execution_script("some-script")
@@ -181,6 +184,7 @@ class TestCallExecutionScriptFailures:
     def test_handles_non_json_stdout_gracefully(self):
         """Non-JSON stdout should be wrapped in a status=SUCCESS dict."""
         from langgraph_engine.subgraphs.level3_execution import call_execution_script
+
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "plain text output, not JSON"
@@ -193,6 +197,7 @@ class TestCallExecutionScriptFailures:
     def test_handles_empty_stdout(self):
         """Empty stdout with exit code 0 should be treated as success."""
         from langgraph_engine.subgraphs.level3_execution import call_execution_script
+
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = ""
@@ -205,6 +210,7 @@ class TestCallExecutionScriptFailures:
     def test_handles_non_zero_exit_code(self):
         """Non-zero exit code with no stdout should report FAILED."""
         from langgraph_engine.subgraphs.level3_execution import call_execution_script
+
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stdout = ""
@@ -219,14 +225,18 @@ class TestCallExecutionScriptFailures:
 # TEST CLASS: Network Failure - GitHub API
 # ===========================================================================
 
+
 class TestNetworkFailureGithub:
     """Test graceful handling when GitHub API is unreachable."""
 
     def test_step8_issue_creation_github_connection_error(self):
         from langgraph_engine.subgraphs.level3_execution import step8_github_issue_creation
+
         state = _base_state()
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "ERROR", "error": "connection refused"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"status": "ERROR", "error": "connection refused"},
+        ):
             result = step8_github_issue_creation(state)
         # Step must not raise; it should return error state
         assert isinstance(result, dict)
@@ -234,35 +244,46 @@ class TestNetworkFailureGithub:
 
     def test_step9_branch_creation_git_unavailable(self):
         from langgraph_engine.subgraphs.level3_execution import step9_branch_creation
+
         state = _base_state()
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "ERROR", "error": "git: command not found"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"status": "ERROR", "error": "git: command not found"},
+        ):
             result = step9_branch_creation(state)
         assert isinstance(result, dict)
         assert "step9_branch_name" in result or "step9_error" in result
 
     def test_step11_pr_creation_github_timeout(self):
         from langgraph_engine.subgraphs.level3_execution import step11_pull_request_review
+
         state = _base_state()
         state["step5_selected_skills"] = ["python"]
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "TIMEOUT"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script", return_value={"status": "TIMEOUT"}
+        ):
             result = step11_pull_request_review(state)
         assert isinstance(result, dict)
 
     def test_step12_issue_closure_github_rate_limited(self):
         from langgraph_engine.subgraphs.level3_execution import step12_issue_closure
+
         state = _base_state()
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "ERROR", "error": "rate limit exceeded (429)"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"status": "ERROR", "error": "rate limit exceeded (429)"},
+        ):
             result = step12_issue_closure(state)
         assert isinstance(result, dict)
 
     def test_github_api_401_unauthorized_handled(self):
         from langgraph_engine.subgraphs.level3_execution import step8_github_issue_creation
+
         state = _base_state()
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "ERROR", "error": "401 Unauthorized - bad credentials"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"status": "ERROR", "error": "401 Unauthorized - bad credentials"},
+        ):
             result = step8_github_issue_creation(state)
         assert isinstance(result, dict)
 
@@ -270,6 +291,7 @@ class TestNetworkFailureGithub:
 # ===========================================================================
 # TEST CLASS: LLM Failure - Ollama Unreachable
 # ===========================================================================
+
 
 class TestLLMFailureOllamaOffline:
     """Verify pipeline steps degrade gracefully when Ollama is offline."""
@@ -284,6 +306,7 @@ class TestLLMFailureOllamaOffline:
         """
         import requests
         from langgraph_engine.ollama_service import OllamaService
+
         with patch("requests.get", side_effect=requests.ConnectionError("Connection refused")):
             # Must NOT raise - graceful degradation is the expected behavior
             service = OllamaService()
@@ -293,9 +316,12 @@ class TestLLMFailureOllamaOffline:
     def test_step1_uses_fallback_when_ollama_unavailable(self):
         """Step 1 must not crash when Ollama script fails; default plan_required=False."""
         from langgraph_engine.subgraphs.level3_execution import step1_plan_mode_decision
+
         state = _base_state()
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "ERROR", "error": "Ollama connection refused"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"status": "ERROR", "error": "Ollama connection refused"},
+        ):
             result = step1_plan_mode_decision(state)
         # Must not raise and must have a boolean plan_required
         assert "step1_plan_required" in result
@@ -304,14 +330,16 @@ class TestLLMFailureOllamaOffline:
     def test_step5_uses_fallback_skills_when_llm_unavailable(self):
         """Step 5 must return some skill selection even when LLM is unavailable."""
         from langgraph_engine.subgraphs.level3_execution import step5_skill_agent_selection
+
         state = _base_state()
         mock_loader = MagicMock()
         mock_loader.list_all_skills.return_value = {"python": "content"}
         mock_loader.list_all_agents.return_value = {}
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "ERROR", "error": "LLM unavailable"}):
-            with patch("langgraph_engine.skill_agent_loader.get_skill_agent_loader",
-                       return_value=mock_loader):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"status": "ERROR", "error": "LLM unavailable"},
+        ):
+            with patch("langgraph_engine.skill_agent_loader.get_skill_agent_loader", return_value=mock_loader):
                 result = step5_skill_agent_selection(state)
         assert isinstance(result, dict)
         # Step 5 uses step5_skill (singular) as the output key
@@ -328,13 +356,13 @@ class TestLLMFailureOllamaOffline:
           - success dict: {"done": True, "message": {...}, "model": "claude-cli"}
         The key requirement is that the call does NOT raise an exception.
         """
-        import requests
         from langgraph_engine.ollama_service import OllamaService
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"models": []}
         with patch("requests.get", return_value=mock_response):
-            with patch("requests.post") as mock_post:
+            with patch("requests.post"):
                 service = OllamaService()
                 # Model not in available_models (empty list); fallback chain runs
                 result = service.chat([{"role": "user", "content": "test"}], model="fast_classification")
@@ -344,8 +372,8 @@ class TestLLMFailureOllamaOffline:
 
     def test_ollama_chat_handles_http_500(self):
         """Ollama returning 500 should produce error dict, not exception."""
-        import requests
         from langgraph_engine.ollama_service import OllamaService
+
         # Setup: server responds to /api/tags (init) then 500 for chat
         tags_response = MagicMock()
         tags_response.status_code = 200
@@ -366,15 +394,19 @@ class TestLLMFailureOllamaOffline:
 # TEST CLASS: LLM Failure - Malformed Response
 # ===========================================================================
 
+
 class TestLLMMalformedResponse:
     """Verify steps handle LLM returning unexpected / malformed data."""
 
     def test_step1_handles_null_plan_required_field(self):
         """If script returns null for plan_required, step should coerce to bool."""
         from langgraph_engine.subgraphs.level3_execution import step1_plan_mode_decision
+
         state = _base_state()
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"plan_required": None, "reasoning": ""}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"plan_required": None, "reasoning": ""},
+        ):
             result = step1_plan_mode_decision(state)
         assert "step1_plan_required" in result
         # None should be treated as falsy default
@@ -383,6 +415,7 @@ class TestLLMMalformedResponse:
     def test_step5_handles_non_list_selected_skills(self):
         """If selected_skills is a string, step should handle without crashing."""
         from langgraph_engine.subgraphs.level3_execution import step5_skill_agent_selection
+
         state = _base_state()
         mock_loader = MagicMock()
         mock_loader.list_all_skills.return_value = {"python": "content"}
@@ -391,16 +424,18 @@ class TestLLMMalformedResponse:
         # selected_agents must be [] (not None) because production code at
         # line 831 iterates over it directly: `for ag in selected_agents:`.
         # Passing None causes TypeError: 'NoneType' is not iterable.
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"selected_skills": "python", "selected_agents": []}):
-            with patch("langgraph_engine.skill_agent_loader.get_skill_agent_loader",
-                       return_value=mock_loader):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"selected_skills": "python", "selected_agents": []},
+        ):
+            with patch("langgraph_engine.skill_agent_loader.get_skill_agent_loader", return_value=mock_loader):
                 result = step5_skill_agent_selection(state)
         assert isinstance(result, dict)
 
     def test_step3_handles_none_tasks_from_state(self):
         """Step 3 must not crash if step0_tasks is None."""
         from langgraph_engine.subgraphs.level3_execution import step3_task_breakdown_validation
+
         state = _base_state()
         state["step0_tasks"] = None
         result = step3_task_breakdown_validation(state)
@@ -409,6 +444,7 @@ class TestLLMMalformedResponse:
     def test_step4_handles_corrupted_toon(self):
         """Step 4 must not crash if level1_context_toon contains non-dict value."""
         from langgraph_engine.subgraphs.level3_execution import step4_toon_refinement
+
         state = _base_state()
         state["level1_context_toon"] = "corrupted_string_not_dict"
         # This might cause an AttributeError - the step should catch it
@@ -420,16 +456,19 @@ class TestLLMMalformedResponse:
 # TEST CLASS: Timeout Handling
 # ===========================================================================
 
+
 class TestTimeoutHandling:
     """Verify all timeout paths return fallback results without propagating exceptions."""
 
     def test_script_timeout_on_step7_prompt_generation(self):
         from langgraph_engine.subgraphs.level3_execution import step7_final_prompt_generation
+
         state = _base_state()
         state["step6_final_skills"] = ["python"]
         state["step6_final_agents"] = []
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "TIMEOUT"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script", return_value={"status": "TIMEOUT"}
+        ):
             result = step7_final_prompt_generation(state)
         assert isinstance(result, dict)
         # Should have some status field
@@ -437,7 +476,8 @@ class TestTimeoutHandling:
 
     def test_v2_step_wrapper_catches_timeout_exception(self):
         """_run_step should return fallback if step_fn raises TimeoutError."""
-        from langgraph_engine.subgraphs.level3_execution_v2 import _run_step
+        from langgraph_engine.level3_execution.subgraph import _run_step
+
         state = _base_state()
 
         def timeout_step(s):
@@ -477,6 +517,7 @@ class TestTimeoutHandling:
     def test_script_timeout_does_not_propagate_as_exception(self):
         """Calling a script that times out should return {status: TIMEOUT}, never raise."""
         from langgraph_engine.subgraphs.level3_execution import call_execution_script
+
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd=["python", "test.py"], timeout=30)):
             with patch("pathlib.Path.exists", return_value=True):
                 result = call_execution_script("any-script")
@@ -485,9 +526,11 @@ class TestTimeoutHandling:
 
     def test_step0_timeout_falls_back_to_defaults(self):
         from langgraph_engine.subgraphs.level3_execution import step0_task_analysis
+
         state = _base_state()
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"status": "TIMEOUT"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script", return_value={"status": "TIMEOUT"}
+        ):
             result = step0_task_analysis(state)
         assert "step0_task_type" in result
         assert "step0_complexity" in result
@@ -497,11 +540,13 @@ class TestTimeoutHandling:
 # TEST CLASS: File System Errors
 # ===========================================================================
 
+
 class TestFileSystemErrors:
     """Verify handling of permission denied, disk full, missing directories."""
 
     def test_checkpoint_write_permission_denied_degrades_gracefully(self):
         from langgraph_engine.checkpoint_manager import CheckpointManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = CheckpointManager.__new__(CheckpointManager)
             cp.session_id = "perm-test-001"
@@ -520,6 +565,7 @@ class TestFileSystemErrors:
     def test_error_logger_handles_unwritable_log_dir(self):
         """ErrorLogger._append_to_file has internal try/except for IO failures."""
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = ErrorLogger(session_id="perm-log-001", log_base_dir=tmpdir)
             # The _append_to_file method itself catches IOError internally.
@@ -533,6 +579,7 @@ class TestFileSystemErrors:
     def test_node_encoding_validation_missing_project_root(self):
         """Encoding check with non-existent project_root should not crash."""
         from langgraph_engine.subgraphs.level_minus1 import node_encoding_validation
+
         state = _base_state()
         state["project_root"] = "/absolutely/nonexistent/path/xyz123"
         result = node_encoding_validation(state)
@@ -542,11 +589,14 @@ class TestFileSystemErrors:
     def test_step7_prompt_file_write_failure(self):
         """Step 7 prompt file write failing should result in error status, not exception."""
         from langgraph_engine.subgraphs.level3_execution import step7_final_prompt_generation
+
         state = _base_state()
         state["step6_final_skills"] = ["python"]
         state["step6_final_agents"] = []
-        with patch("langgraph_engine.subgraphs.level3_execution.call_execution_script",
-                   return_value={"prompt": "Test prompt", "status": "OK"}):
+        with patch(
+            "langgraph_engine.subgraphs.level3_execution.call_execution_script",
+            return_value={"prompt": "Test prompt", "status": "OK"},
+        ):
             with patch("builtins.open", side_effect=IOError("Disk full")):
                 # Step should handle the IOError from its own file write attempts
                 try:
@@ -568,11 +618,13 @@ class TestFileSystemErrors:
         This test documents the EXISTING behavior - callers must handle it.
         """
         from langgraph_engine.checkpoint_manager import CheckpointManager
+
         with patch("pathlib.Path.mkdir", side_effect=OSError("Permission denied")):
             with pytest.raises(OSError, match="Permission denied"):
                 CheckpointManager(session_id="dir-fail-001", base_dir="/tmp/test-checkpoints")
         # Verify the v2 lazy-loader handles this gracefully
-        from langgraph_engine.subgraphs.level3_execution_v2 import _get_checkpoint_manager
+        from langgraph_engine.level3_execution.subgraph import _get_checkpoint_manager
+
         with patch("pathlib.Path.mkdir", side_effect=OSError("Permission denied")):
             result = _get_checkpoint_manager("dir-fail-session")
         assert result is None  # Gracefully returns None, not raises
@@ -582,12 +634,14 @@ class TestFileSystemErrors:
 # TEST CLASS: Level -1 Retry Loop Under Failures
 # ===========================================================================
 
+
 class TestLevelMinus1RetryLoop:
     """Validate the 3-attempt retry loop in Level -1 enforcement."""
 
     def test_max_3_retries_respected_in_routing(self):
         """Route function must not send to fix after 3 retries even if still FAILED."""
         from langgraph_engine.orchestrator import route_after_level_minus1_user_choice
+
         state = _base_state()
         state["level_minus1_user_choice"] = "auto-fix"
         state["level_minus1_retry_count"] = 3
@@ -597,6 +651,7 @@ class TestLevelMinus1RetryLoop:
 
     def test_retry_at_count_0_goes_to_fix(self):
         from langgraph_engine.orchestrator import route_after_level_minus1_user_choice
+
         state = _base_state()
         state["level_minus1_user_choice"] = "auto-fix"
         state["level_minus1_retry_count"] = 0
@@ -604,6 +659,7 @@ class TestLevelMinus1RetryLoop:
 
     def test_retry_at_count_2_goes_to_fix(self):
         from langgraph_engine.orchestrator import route_after_level_minus1_user_choice
+
         state = _base_state()
         state["level_minus1_user_choice"] = "auto-fix"
         state["level_minus1_retry_count"] = 2
@@ -612,6 +668,7 @@ class TestLevelMinus1RetryLoop:
     def test_encoding_failure_node_records_error(self):
         """Encoding validation node should populate encoding_check_error on failure."""
         from langgraph_engine.subgraphs.level_minus1 import node_encoding_validation
+
         state = _base_state()
         # Create a temp file with non-ASCII content
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -626,6 +683,7 @@ class TestLevelMinus1RetryLoop:
     def test_unicode_fix_node_records_check_true_on_non_windows(self):
         """Unicode node passes trivially on non-Windows."""
         from langgraph_engine.subgraphs.level_minus1 import node_unicode_fix
+
         state = _base_state()
         with patch("sys.platform", "linux"):
             result = node_unicode_fix(state)
@@ -634,6 +692,7 @@ class TestLevelMinus1RetryLoop:
     def test_ask_level_minus1_node_defaults_to_autofix(self):
         """ask_level_minus1_fix should default user_choice to auto-fix."""
         from langgraph_engine.orchestrator import ask_level_minus1_fix
+
         state = _base_state()
         state["unicode_check"] = False
         state["encoding_check"] = False
@@ -647,12 +706,14 @@ class TestLevelMinus1RetryLoop:
 # TEST CLASS: Step 11 PR Review Retry Under Failures
 # ===========================================================================
 
+
 class TestStep11ReviewRetryLoop:
     """Verify step 11 retry logic is robust against repeated failures."""
 
     def test_step11_review_failure_increments_retry(self):
         """After a failed review, retry_count must increase."""
         from langgraph_engine.orchestrator import route_after_step11_review
+
         state = _base_state()
         state["step11_review_passed"] = False
         state["step11_retry_count"] = 1
@@ -662,6 +723,7 @@ class TestStep11ReviewRetryLoop:
 
     def test_step11_max_retries_forced_to_step12(self):
         from langgraph_engine.orchestrator import route_after_step11_review
+
         state = _base_state()
         state["step11_review_passed"] = False
         state["step11_retry_count"] = 3
@@ -669,6 +731,7 @@ class TestStep11ReviewRetryLoop:
 
     def test_step11_review_passed_goes_to_step12(self):
         from langgraph_engine.orchestrator import route_after_step11_review
+
         state = _base_state()
         state["step11_review_passed"] = True
         state["step11_retry_count"] = 0
@@ -677,6 +740,7 @@ class TestStep11ReviewRetryLoop:
     def test_step11_review_passed_at_retry_2_still_goes_to_step12(self):
         """Even at retry_count=2, if review passes, go to step 12 immediately."""
         from langgraph_engine.orchestrator import route_after_step11_review
+
         state = _base_state()
         state["step11_review_passed"] = True
         state["step11_retry_count"] = 2
@@ -685,6 +749,7 @@ class TestStep11ReviewRetryLoop:
     def test_step11_missing_review_passed_defaults_to_false(self):
         """If step11_review_passed is absent, conservative default is failure."""
         from langgraph_engine.orchestrator import route_after_step11_review
+
         state = _base_state()
         # No step11_review_passed key set
         state["step11_retry_count"] = 0
@@ -697,11 +762,13 @@ class TestStep11ReviewRetryLoop:
 # TEST CLASS: Recovery from Checkpoint
 # ===========================================================================
 
+
 class TestCheckpointRecovery:
     """Verify pipeline can recover from a saved checkpoint."""
 
     def test_get_last_checkpoint_returns_most_recent_step(self):
         from langgraph_engine.checkpoint_manager import CheckpointManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = CheckpointManager.__new__(CheckpointManager)
             cp.session_id = "recovery-001"
@@ -717,6 +784,7 @@ class TestCheckpointRecovery:
 
     def test_get_last_checkpoint_returns_none_when_no_checkpoints(self):
         from langgraph_engine.checkpoint_manager import CheckpointManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = CheckpointManager.__new__(CheckpointManager)
             cp.session_id = "empty-session"
@@ -729,20 +797,19 @@ class TestCheckpointRecovery:
 
     def test_pipeline_resumes_from_step5_checkpoint(self):
         """Simulate resuming a session where Steps 0-5 already completed."""
-        from langgraph_engine.subgraphs.level3_execution import (
-            step6_skill_validation_download,
-            step7_final_prompt_generation,
-        )
         from langgraph_engine.checkpoint_manager import CheckpointManager
+        from langgraph_engine.subgraphs.level3_execution import step6_skill_validation_download
 
         # Simulate a checkpoint saved after step 5
         saved_state = _base_state()
-        saved_state.update({
-            "step5_selected_skills": ["python", "flask"],
-            "step5_selected_agents": ["backend-agent"],
-            "step5_skill_count": 2,
-            "step5_skill_mapping": {},
-        })
+        saved_state.update(
+            {
+                "step5_selected_skills": ["python", "flask"],
+                "step5_selected_agents": ["backend-agent"],
+                "step5_skill_count": 2,
+                "step5_skill_mapping": {},
+            }
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = CheckpointManager.__new__(CheckpointManager)
@@ -766,28 +833,33 @@ class TestCheckpointRecovery:
 
     def test_checkpoint_metadata_includes_success_status(self):
         from langgraph_engine.checkpoint_manager import CheckpointManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = CheckpointManager.__new__(CheckpointManager)
             cp.session_id = "meta-test-001"
             cp.checkpoint_dir = Path(tmpdir) / "checkpoints"
             cp.checkpoint_dir.mkdir(parents=True)
 
-            cp.save_checkpoint(step=3, state={"session_id": "meta-test-001"},
-                               success_status=True, error_message=None)
+            cp.save_checkpoint(step=3, state={"session_id": "meta-test-001"}, success_status=True, error_message=None)
             metadata = cp.load_checkpoint_metadata(step=3)
             assert metadata is not None
             assert metadata.get("success_status") is True
 
     def test_checkpoint_metadata_records_failure(self):
         from langgraph_engine.checkpoint_manager import CheckpointManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = CheckpointManager.__new__(CheckpointManager)
             cp.session_id = "fail-meta-001"
             cp.checkpoint_dir = Path(tmpdir) / "checkpoints"
             cp.checkpoint_dir.mkdir(parents=True)
 
-            cp.save_checkpoint(step=7, state={"session_id": "fail-meta-001"},
-                               success_status=False, error_message="LLM timeout at step 7")
+            cp.save_checkpoint(
+                step=7,
+                state={"session_id": "fail-meta-001"},
+                success_status=False,
+                error_message="LLM timeout at step 7",
+            )
             metadata = cp.load_checkpoint_metadata(step=7)
             assert metadata is not None
             assert metadata.get("success_status") is False
@@ -795,6 +867,7 @@ class TestCheckpointRecovery:
 
     def test_corrupted_checkpoint_file_handled_gracefully(self):
         from langgraph_engine.checkpoint_manager import CheckpointManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             cp = CheckpointManager.__new__(CheckpointManager)
             cp.session_id = "corrupt-001"
@@ -807,7 +880,7 @@ class TestCheckpointRecovery:
 
             # Loading should not raise - should return None or default
             try:
-                metadata = cp.load_checkpoint_metadata(step=3)
+                cp.load_checkpoint_metadata(step=3)
             except json.JSONDecodeError:
                 pytest.fail("load_checkpoint_metadata raised JSONDecodeError on corrupted file")
 
@@ -815,6 +888,7 @@ class TestCheckpointRecovery:
 # ===========================================================================
 # TEST CLASS: Recovery Handler - SIGINT / Emergency Checkpoint
 # ===========================================================================
+
 
 class TestRecoveryHandlerSigint:
     """Verify RecoveryHandler correctly registers state and handles SIGINT."""
@@ -840,6 +914,7 @@ class TestRecoveryHandlerSigint:
 
     def test_is_transient_error_identifies_network_errors(self):
         from langgraph_engine.recovery_handler import _is_transient_error
+
         assert _is_transient_error(Exception("connection refused"))
         assert _is_transient_error(Exception("timeout waiting for response"))
         assert _is_transient_error(Exception("rate limit exceeded"))
@@ -847,12 +922,14 @@ class TestRecoveryHandlerSigint:
 
     def test_is_transient_error_rejects_non_transient_errors(self):
         from langgraph_engine.recovery_handler import _is_transient_error
+
         assert not _is_transient_error(Exception("AttributeError: NoneType"))
         assert not _is_transient_error(Exception("SyntaxError in script"))
         assert not _is_transient_error(Exception("ValueError: invalid literal"))
 
     def test_cleanup_callbacks_run_on_interrupt(self):
         from langgraph_engine import recovery_handler
+
         cleanup_called = []
         recovery_handler._cleanup_callbacks = [lambda: cleanup_called.append(True)]
         recovery_handler._run_cleanup_callbacks()
@@ -861,11 +938,15 @@ class TestRecoveryHandlerSigint:
 
     def test_cleanup_callbacks_swallow_individual_failures(self):
         from langgraph_engine import recovery_handler
+
         results = []
+
         def bad_callback():
             raise RuntimeError("Cleanup failed")
+
         def good_callback():
             results.append("ok")
+
         recovery_handler._cleanup_callbacks = [bad_callback, good_callback]
         # Should NOT propagate the RuntimeError from bad_callback
         recovery_handler._run_cleanup_callbacks()
@@ -878,7 +959,8 @@ class TestRecoveryHandlerSigint:
 # ===========================================================================
 
 try:
-    from langgraph_engine.hybrid_inference import HybridInferenceManager, StepType
+    from langgraph_engine.hybrid_inference import HybridInferenceManager  # noqa: F401
+
     _HYBRID_INFERENCE_AVAILABLE = True
 except (ImportError, SyntaxError):
     _HYBRID_INFERENCE_AVAILABLE = False
@@ -886,7 +968,7 @@ except (ImportError, SyntaxError):
 
 _skip_if_no_hybrid = pytest.mark.skipif(
     not _HYBRID_INFERENCE_AVAILABLE,
-    reason="hybrid_inference unavailable due to npu_service.py SyntaxError (pre-existing bug)"
+    reason="hybrid_inference unavailable due to npu_service.py SyntaxError (pre-existing bug)",
 )
 
 
@@ -897,8 +979,10 @@ class TestHybridInferenceFailures:
     def test_init_without_inference_router_module(self):
         """If InferenceRouter import fails, manager should still initialize."""
         from langgraph_engine.hybrid_inference import HybridInferenceManager
-        with patch("langgraph_engine.hybrid_inference.InferenceRouter",
-                   side_effect=ImportError("No module named npu_sdk")):
+
+        with patch(
+            "langgraph_engine.hybrid_inference.InferenceRouter", side_effect=ImportError("No module named npu_sdk")
+        ):
             manager = HybridInferenceManager()
         assert manager.router is None
 
@@ -906,6 +990,7 @@ class TestHybridInferenceFailures:
     def test_step_routing_map_covers_all_15_steps(self):
         """All 15 steps (Step 0-14) must appear in STEP_ROUTING map."""
         from langgraph_engine.hybrid_inference import HybridInferenceManager
+
         routing = HybridInferenceManager.STEP_ROUTING
         expected_steps = {
             "step1_plan_mode_decision",
@@ -931,21 +1016,19 @@ class TestHybridInferenceFailures:
     def test_no_llm_steps_not_routed_to_ollama(self):
         """Steps classified as NO_LLM must not have Ollama model assigned."""
         from langgraph_engine.hybrid_inference import HybridInferenceManager, StepType
+
         for step_name, config in HybridInferenceManager.STEP_ROUTING.items():
             if config.get("type") == StepType.NO_LLM:
-                assert config.get("npu_model") is None, (
-                    f"NO_LLM step '{step_name}' has unexpected npu_model"
-                )
+                assert config.get("npu_model") is None, f"NO_LLM step '{step_name}' has unexpected npu_model"
 
     @_skip_if_no_hybrid
     def test_complex_reasoning_steps_have_claude_fallback(self):
         """Steps requiring complex reasoning must have a Claude fallback model."""
         from langgraph_engine.hybrid_inference import HybridInferenceManager, StepType
+
         for step_name, config in HybridInferenceManager.STEP_ROUTING.items():
             if config.get("type") == StepType.COMPLEX_REASONING:
-                assert "fallback_model" in config, (
-                    f"COMPLEX_REASONING step '{step_name}' has no fallback_model"
-                )
+                assert "fallback_model" in config, f"COMPLEX_REASONING step '{step_name}' has no fallback_model"
                 assert config["fallback_model"] is not None
 
 
@@ -953,11 +1036,13 @@ class TestHybridInferenceFailures:
 # TEST CLASS: Error Logger Edge Cases
 # ===========================================================================
 
+
 class TestErrorLoggerEdgeCases:
     """Edge cases for ErrorLogger that should not cause unexpected failures."""
 
     def test_log_error_with_empty_message(self):
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = ErrorLogger(session_id="edge-001", log_base_dir=tmpdir)
             # Empty message should not raise
@@ -966,6 +1051,7 @@ class TestErrorLoggerEdgeCases:
 
     def test_log_error_with_none_context(self):
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = ErrorLogger(session_id="edge-002", log_base_dir=tmpdir)
             logger.log_error("Step 2", "None context test", context=None)
@@ -973,6 +1059,7 @@ class TestErrorLoggerEdgeCases:
 
     def test_multiple_errors_counted_correctly(self):
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = ErrorLogger(session_id="edge-003", log_base_dir=tmpdir)
             for i in range(10):
@@ -982,16 +1069,19 @@ class TestErrorLoggerEdgeCases:
 
     def test_retry_logging_records_attempt(self):
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = ErrorLogger(session_id="retry-log-001", log_base_dir=tmpdir)
-            logger.log_retry_attempt("Level -1", attempt=2, max_attempts=3,
-                                     status="FAILED", reason="Encoding still broken")
+            logger.log_retry_attempt(
+                "Level -1", attempt=2, max_attempts=3, status="FAILED", reason="Encoding still broken"
+            )
             summary = logger.get_error_summary()
             assert summary["total_errors"] >= 0  # Logger recorded without raising
             assert logger.session_id == "retry-log-001"
 
     def test_backup_restore_logging(self):
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = ErrorLogger(session_id="backup-log-001", log_base_dir=tmpdir)
             logger.log_backup_restore("backup", "/tmp/file.py", success=True, backup_path="/tmp/file.py.bak")
@@ -1001,6 +1091,7 @@ class TestErrorLoggerEdgeCases:
 
     def test_save_audit_trail_is_valid_json(self):
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = ErrorLogger(session_id="audit-001", log_base_dir=tmpdir)
             logger.log_error("Step 1", "Test", severity="CRITICAL")
@@ -1013,6 +1104,7 @@ class TestErrorLoggerEdgeCases:
 
     def test_validation_result_logging_pass_and_fail(self):
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = ErrorLogger(session_id="val-001", log_base_dir=tmpdir)
             logger.log_validation_result("Level -1", "Unicode fix", passed=True)
@@ -1026,11 +1118,13 @@ class TestErrorLoggerEdgeCases:
 # TEST CLASS: V2 Infrastructure - MetricsCollector Degraded Mode
 # ===========================================================================
 
+
 class TestMetricsCollectorDegradedMode:
     """If MetricsCollector is unavailable, _run_step should continue without it."""
 
     def test_run_step_works_without_metrics_collector(self):
-        from langgraph_engine.subgraphs.level3_execution_v2 import _run_step, _infra_cache
+        from langgraph_engine.level3_execution.subgraph import _infra_cache, _run_step
+
         state = _base_state()
         session_id = state.get("session_id", "unknown")
 
@@ -1049,7 +1143,8 @@ class TestMetricsCollectorDegradedMode:
         del _infra_cache[session_id]
 
     def test_run_step_works_without_checkpoint_manager(self):
-        from langgraph_engine.subgraphs.level3_execution_v2 import _run_step, _infra_cache
+        from langgraph_engine.level3_execution.subgraph import _infra_cache, _run_step
+
         state = _base_state()
         session_id = state.get("session_id", "unknown")
 
@@ -1068,7 +1163,8 @@ class TestMetricsCollectorDegradedMode:
 
     def test_metrics_record_failure_does_not_abort_step(self):
         """If metrics.record_step raises, _run_step should complete the step anyway."""
-        from langgraph_engine.subgraphs.level3_execution_v2 import _run_step, _infra_cache
+        from langgraph_engine.level3_execution.subgraph import _infra_cache, _run_step
+
         state = _base_state()
         session_id = state.get("session_id", "unknown")
 
@@ -1092,12 +1188,14 @@ class TestMetricsCollectorDegradedMode:
 # TEST CLASS: Windows-Specific Path Handling
 # ===========================================================================
 
+
 class TestWindowsPathHandling:
     """Verify Windows path normalization in Level -1 checks."""
 
     def test_windows_path_check_rejects_backslashes(self):
         """Path containing backslashes should fail the windows_path_check."""
         from langgraph_engine.subgraphs.level_minus1 import node_windows_path_check
+
         state = _base_state()
         state["project_root"] = "C:\\Users\\test\\project"  # Windows-style path
         result = node_windows_path_check(state)
@@ -1108,6 +1206,7 @@ class TestWindowsPathHandling:
     def test_windows_path_check_with_unc_path(self):
         """UNC paths should be handled without exception."""
         from langgraph_engine.subgraphs.level_minus1 import node_windows_path_check
+
         state = _base_state()
         state["project_root"] = "//server/share/project"
         result = node_windows_path_check(state)
@@ -1116,6 +1215,7 @@ class TestWindowsPathHandling:
     def test_unicode_fix_node_on_windows_platform(self):
         """Unicode fix node runs encoding reconfiguration on win32."""
         from langgraph_engine.subgraphs.level_minus1 import node_unicode_fix
+
         state = _base_state()
         with patch("sys.platform", "win32"):
             with patch("sys.stdout") as mock_stdout:
@@ -1130,23 +1230,21 @@ class TestWindowsPathHandling:
 # TEST CLASS: State Isolation Between Sessions
 # ===========================================================================
 
+
 class TestStatIsolation:
     """Verify that two concurrent sessions do not share state."""
 
     def test_infra_cache_keyed_by_session_id(self):
         """Two different sessions must have independent infra caches."""
-        from langgraph_engine.subgraphs.level3_execution_v2 import _get_infra
+        from langgraph_engine.level3_execution.subgraph import _get_infra
+
         state1 = _base_state(session_id="session-A")
         state2 = _base_state(session_id="session-B")
 
-        with patch("langgraph_engine.subgraphs.level3_execution_v2._get_checkpoint_manager",
-                   return_value=None):
-            with patch("langgraph_engine.subgraphs.level3_execution_v2._get_metrics_collector",
-                       return_value=None):
-                with patch("langgraph_engine.subgraphs.level3_execution_v2._get_error_logger",
-                           return_value=None):
-                    with patch("langgraph_engine.subgraphs.level3_execution_v2._get_backup_manager",
-                               return_value=None):
+        with patch("langgraph_engine.level3_execution.subgraph._get_checkpoint_manager", return_value=None):
+            with patch("langgraph_engine.level3_execution.subgraph._get_metrics_collector", return_value=None):
+                with patch("langgraph_engine.level3_execution.subgraph._get_error_logger", return_value=None):
+                    with patch("langgraph_engine.level3_execution.subgraph._get_backup_manager", return_value=None):
                         infra1 = _get_infra(state1)
                         infra2 = _get_infra(state2)
 
@@ -1156,6 +1254,7 @@ class TestStatIsolation:
     def test_error_logger_per_session_isolation(self):
         """Errors logged in session A must not appear in session B's logger."""
         from langgraph_engine.error_logger import ErrorLogger
+
         with tempfile.TemporaryDirectory() as tmpdir:
             logger_a = ErrorLogger(session_id="session-A", log_base_dir=tmpdir)
             logger_b = ErrorLogger(session_id="session-B", log_base_dir=tmpdir)

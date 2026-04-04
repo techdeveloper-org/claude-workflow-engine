@@ -440,9 +440,9 @@ Hit rate printed at pipeline end: `[RAG] Stats: N stored, N hits, N misses, X% h
 
 ### Implementation Architecture
 
-- **Active:** `subgraphs/level3_execution_v2.py` (1001 lines) - wrapper/bridge module
+- **Active:** `level3_execution/subgraph.py` (1001 lines) - wrapper/bridge module
 - **Deprecated:** `subgraphs/level3_execution.py` (2488 lines) - original, used as backend by v2
-- **Orchestrator imports from v2:** `from .subgraphs.level3_execution_v2 import ...`
+- **Orchestrator imports from v2:** `from .subgraphs.level3_execution import ...`
 
 v2 wraps v1 functions with infrastructure: loguru logging, time tracking, session management, LangGraph routing, error handling, checkpointing (SQLite), and metrics collection. Lazy-loaded per session: CheckpointManager, MetricsCollector, ErrorLogger, BackupManager.
 
@@ -450,7 +450,7 @@ v2 wraps v1 functions with infrastructure: loguru logging, time tracking, sessio
 
 | Module | Steps | Purpose |
 |--------|-------|---------|
-| level3_execution_v2.py | All (0-14) | Active wrapper with infrastructure |
+| level3_execution/subgraph.py | All (0-14) | Active wrapper with infrastructure |
 | level3_remaining_steps.py | 2-7, 13-14 | Plan, breakdown, TOON, skills, docs, summary |
 | level3_steps8to12_github.py | 8-12 | GitHub workflow (issue, branch, PR, closure) |
 | level3_code_explorer.py | (utility) | Tool-optimized file read/grep/search |

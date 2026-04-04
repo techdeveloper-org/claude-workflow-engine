@@ -9,7 +9,7 @@
 
 ## Project Overview
 
-Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 15-step task execution (Step 0-14) with GitHub integration, RAG-powered decision caching, and hybrid LLM inference across 4 providers.
+Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 8-step active execution (Pre-0, Step 0, Steps 8-14) with GitHub integration, RAG-powered decision caching, and hybrid LLM inference across 4 providers.
 
 ### Quick Info
 
@@ -39,7 +39,7 @@ Level 1: Sync (session + parallel [complexity, context] + TOON compress)
     |
 Level 2: Standards (common + conditional Java + tool opt + MCP discovery)
     |
-Level 3: Execution (9 active steps: Pre-0, Step 0, Steps 8-14)
+Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
     |
     |-- Pre-0: Orchestration Pre-Analysis (unchanged)
     |           CallGraph scan -> hot_nodes, danger_zones, complexity_boost -> state
@@ -59,7 +59,7 @@ Level 3: Execution (9 active steps: Pre-0, Step 0, Steps 8-14)
     |   |         Step 6: skill validation          [REMOVED in v1.13]
     |   |         Step 7: final prompt generation   [REMOVED in v1.13]
     |   |  v1.13: Step 0 = 2 subprocess calls (~30s planning)
-    |   |  v1.14: Step 0 = 2 LLM chain calls (~15s planning)  <-- CURRENT
+    |   |  v1.14: Step 0 = 2 subprocess calls (claude CLI, ~15s planning)  <-- CURRENT
     |   |
     |   |-- Call 1: prompt-gen-expert-caller  (~10s, stdout captured)
     |   |     Reads: level3_execution/templates/orchestration_system_prompt.txt
@@ -71,7 +71,7 @@ Level 3: Execution (9 active steps: Pre-0, Step 0, Steps 8-14)
     |   |       {codebase_danger_zones}      <- call_graph_metrics["danger_zones"][:3]
     |   |       {codebase_affected_methods}  <- call_graph_metrics["affected_methods"]
     |   |       {codebase_hot_nodes}         <- call_graph_metrics["hot_nodes"][:5]
-    |   |     LLM generates: complete orchestration prompt (agents, phases, contracts)
+    |   |     claude CLI generates: complete orchestration prompt (agents, phases, contracts)
     |   |     Stores: state["orchestration_prompt"]
     |   |
     |   |-- Call 2: orchestrator-agent-caller  (~30-90s, stderr streamed live)
@@ -85,7 +85,6 @@ Level 3: Execution (9 active steps: Pre-0, Step 0, Steps 8-14)
     |         Env vars: STEP0_PROMPT_GEN_TIMEOUT (default 60s)
     |                   STEP0_ORCHESTRATOR_TIMEOUT (default 300s)
     |
-    |-- Step 2:  Plan Execution (optional, if step1_plan_required=True -- rare)
     |-- Step 8:  GitHub Issue + Jira Issue creation (ENABLE_JIRA, dual-linked)
     |-- Step 9:  Branch Creation (Jira key: feature/PROJ-123)
     |-- Step 10: Implementation + Jira "In Progress" + Figma "started" comment
@@ -101,7 +100,7 @@ Level 3: Execution (9 active steps: Pre-0, Step 0, Steps 8-14)
 |---------|-------------|-------------------|---------------|------------|
 | v1.12.0 | 15 | ~6 | ~75s | Original — Steps 0-7 each called LLM separately |
 | v1.13.0 | 9 | ~2 (subprocess) | ~30s | Removed Steps 1,3,4,5,6,7 |
-| **v1.14.0** | **9** | **2 (LLM chain)** | **~15s** | Step 0 = template fill + orchestrator with live stderr |
+| **v1.14.0** | **8** | **2 (subprocess)** | **~15s** | Step 0 = template fill + orchestrator (claude CLI subprocess) |
 
 ### Directory Layout
 
@@ -167,7 +166,7 @@ Level 3: Execution (9 active steps: Pre-0, Step 0, Steps 8-14)
 | Level -1 | scripts/langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical) |
 | Level 1 | scripts/langgraph_engine/level1_sync/ | Session/context sync + TOON (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
 | Level 2 | scripts/langgraph_engine/level2_standards/ | Standards loading (canonical) |
-| Level 3 | scripts/langgraph_engine/level3_execution/subgraph.py | 15-step execution with RAG - ACTIVE (nodes in level3_execution/nodes/) |
+| Level 3 | scripts/langgraph_engine/level3_execution/subgraph.py | 8-step active execution (Pre-0, Step 0, Steps 8-14) with RAG - ACTIVE (nodes in level3_execution/nodes/) |
 | Level 3 v1 steps | scripts/langgraph_engine/level3_execution/steps/ | v1 steps (DEPRECATED) |
 | Pre-Analysis Node | scripts/langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan + RAG lookup before Step 0 |
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
@@ -272,8 +271,8 @@ informed decisions at critical steps instead of blind code generation.
 CallGraph now supports 4 languages: Python (full AST), Java, TypeScript, Kotlin (regex-based).
 
 ```
-Step 2 (Plan):   analyze_impact_before_change() -> risk_level, danger_zones, affected_methods
-                 Planner knows what could break BEFORE suggesting changes
+Pre-0 (Pre-Analysis): analyze_impact_before_change() -> risk_level, danger_zones, affected_methods
+                          Planner knows what could break BEFORE suggesting changes
 
 Step 10 (Impl):  snapshot_call_graph() + get_implementation_context()
                  Captures pre-change state + injects caller/callee awareness
@@ -284,7 +283,7 @@ Step 11 (Review): review_change_impact() -> compare before/after graphs
 
 Key module: `scripts/langgraph_engine/call_graph_analyzer.py`
 Data source: `scripts/langgraph_engine/call_graph_builder.py`
-State fields: `step2_impact_analysis`, `step10_pre_change_graph`, `step11_impact_review`
+State fields: `pre_analysis_result`, `step10_pre_change_graph`, `step11_impact_review`
 
 **Stale Graph Guard (v1.6.1 NEW):**
 After Step 10 writes files, state flag `call_graph_stale = True` is set.
@@ -302,11 +301,11 @@ in `uml_generators.py`, replacing duplicate AST analysis.
 
 ```
 Hook Mode (default, CLAUDE_HOOK_MODE=1):
-  Steps 0-9   -> Pipeline (analysis + prompt + GitHub issue + branch)
-  Steps 10-14 -> Skipped (user implements, then runs Full Mode for PR/closure)
+  Pre-0, Step 0, Steps 8-9 -> Pipeline (analysis + prompt + GitHub issue + branch)
+  Steps 10-14              -> Skipped (user implements, then runs Full Mode for PR/closure)
 
 Full Mode (CLAUDE_HOOK_MODE=0):
-  Steps 0-14  -> All steps execute sequentially
+  Pre-0, Step 0, Steps 8-14 -> All active steps execute sequentially
 ```
 
 ### Integration Flags
@@ -318,7 +317,7 @@ All integrations are configurable via environment variables (default: disabled):
 | `ENABLE_JIRA` | `0` | Dual GitHub+Jira issue tracking (Steps 8,9,11,12) |
 | `ENABLE_JENKINS` | `0` | Jenkins build validation (Step 11) |
 | `ENABLE_SONARQUBE` | `0` | SonarQube scan after implementation (Step 10) |
-| `ENABLE_FIGMA` | `0` | Figma design-to-code extraction (Steps 3,7,11) |
+| `ENABLE_FIGMA` | `0` | Figma design-to-code pipeline (Steps 10,11,12 -- extraction/injection now inside Step 0 template) |
 | `ENABLE_CI` | `false` | GitHub Actions CI pipeline |
 | `ENABLE_HEALTH_SERVER` | `0` | Start HTTP /health + /readiness on HEALTH_PORT (8080) |
 | `ENABLE_METRICS` | `0` | Start Prometheus /metrics server on METRICS_PORT (9090) |
@@ -342,8 +341,7 @@ Jira Lifecycle (ENABLE_JIRA=1):
   Step 12: CLOSE    -> Transition to "Done", add implementation summary
 
 Figma Lifecycle (ENABLE_FIGMA=1):
-  Step 3:  EXTRACT  -> Components extracted for UI task breakdown
-  Step 7:  INJECT   -> Design tokens (colors, typography, spacing) into prompt
+  Step 0:  EXTRACT+INJECT -> Components + design tokens extracted inside orchestration template
   Step 10: COMMENT  -> "Implementation started" with component list
   Step 11: REVIEW   -> Design fidelity checklist in code review
   Step 12: COMMENT  -> "Implementation complete" with PR link

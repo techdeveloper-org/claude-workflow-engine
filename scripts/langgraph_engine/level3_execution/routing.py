@@ -9,17 +9,10 @@ from ..flow_state import FlowState
 # ============================================================================
 
 
-def route_after_step1_plan_decision(state: FlowState) -> str:
-    """Route after Step 1: Plan Mode Decision.
-
-    - If plan_required=true: Go to step2_plan_execution
-    - If plan_required=false: Skip to step3_task_breakdown
-    """
-    plan_required = state.get("step1_plan_required", False)
-    if plan_required:
-        return "step2_execution"
-    else:
-        return "step3_breakdown"
+# REMOVED (v1.14.0): route_after_step1_plan_decision -- Step 1 removed in v1.13.0
+# REMOVED (v1.14.0): route_after_step0_to_step2 -- Step 2 removed from pipeline.
+#   Step 0 now always routes directly to Step 8. The orchestrator subprocess
+#   produces a comprehensive plan, making Step 2 plan execution redundant.
 
 
 def route_after_step11_review(state: FlowState) -> str:
@@ -43,7 +36,7 @@ def route_after_step11_review(state: FlowState) -> str:
 
 
 def level3_merge_node(state: FlowState) -> dict:
-    """Determine final status based on all 15 steps (Step 0-14)."""
+    """Determine final status based on all steps (Step 0, Steps 8-14)."""
     error_steps = [k for k in state if k.endswith("_error") and state.get(k)]
 
     updates = {}

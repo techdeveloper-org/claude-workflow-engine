@@ -60,7 +60,7 @@ flowchart TB
         level3_code_explorer[level3_code_explorer]
         level3_documentation_manager[level3_documentation_manager]
         level3_execution[level3_execution]
-        level3_execution_v2[level3_execution_v2]
+        level3_execution[level3_execution]
         level3_llm_retry[level3_llm_retry]
         level3_remaining_steps[level3_remaining_steps]
         level3_step1_planner[level3_step1_planner]
@@ -187,7 +187,7 @@ flowchart TB
         test_level1_sync[test_level1_sync]
         test_level2_standards[test_level2_standards]
         test_level3_documentation_manager[test_level3_documentation_manager]
-        test_level3_execution_v2[test_level3_execution_v2]
+        test_level3_execution[test_level3_execution]
         test_level3_remaining_steps[test_level3_remaining_steps]
         test_level3_robustness[test_level3_robustness]
         test_level_minus1[test_level_minus1]
@@ -374,9 +374,9 @@ flowchart TB
     test_level2_standards --> auto_build_validator
     test_level3_documentation_manager --> persistence
     test_level3_documentation_manager --> level3_documentation_manager
-    test_level3_execution_v2 --> level3_execution_v2
-    test_level3_execution_v2 --> persistence
-    test_level3_execution_v2 --> error_messages
+    test_level3_execution --> level3_execution
+    test_level3_execution --> persistence
+    test_level3_execution --> error_messages
     test_level3_remaining_steps --> level3_remaining_steps
     test_level3_robustness --> cache_system
     test_level3_robustness --> conflict_resolver
@@ -410,11 +410,11 @@ flowchart TB
     test_pre_tool_gate_mcp_server --> cache_system
     test_pre_tool_gate_mcp_server --> pre_tool_gate_mcp_server
     test_pre_tool_gate_mcp_server --> persistence
-    test_rag_integration --> level3_execution_v2
+    test_rag_integration --> level3_execution
     test_rag_integration --> rag_integration
     test_rag_integration --> skill_selection_criteria
     test_recovery_handler --> recovery_handler
-    test_retry_history_tracking --> level3_execution_v2
+    test_retry_history_tracking --> level3_execution
     test_retry_history_tracking --> flow_state
     test_root_scripts --> project_session
     test_root_scripts --> policy_tracking_helper
@@ -458,7 +458,7 @@ flowchart TB
     test_all_14_steps --> error_logger
     test_all_14_steps --> level3_execution
     test_all_14_steps --> inference_router
-    test_all_14_steps --> level3_execution_v2
+    test_all_14_steps --> level3_execution
     test_all_14_steps --> persistence
     test_failure_scenarios --> level_minus1
     test_failure_scenarios --> ollama_service
@@ -469,7 +469,7 @@ flowchart TB
     test_failure_scenarios --> error_logger
     test_failure_scenarios --> level3_execution
     test_failure_scenarios --> inference_router
-    test_failure_scenarios --> level3_execution_v2
+    test_failure_scenarios --> level3_execution
     test_failure_scenarios --> response
     test_failure_scenarios --> hybrid_inference
     test_failure_scenarios --> persistence
@@ -784,22 +784,22 @@ flowchart TB
     level3_execution --> flow_state
     level3_execution --> hybrid_inference
     level3_execution --> persistence
-    level3_execution_v2 --> ollama_service
-    level3_execution_v2 --> step_logger
-    level3_execution_v2 --> timeout_wrapper
-    level3_execution_v2 --> checkpoint_manager
-    level3_execution_v2 --> recovery_handler
-    level3_execution_v2 --> metrics_collector
-    level3_execution_v2 --> orchestrator
-    level3_execution_v2 --> error_logger
-    level3_execution_v2 --> rag_integration
-    level3_execution_v2 --> level3_execution
-    level3_execution_v2 --> backup_manager
-    level3_execution_v2 --> deepseek_reasoning
-    level3_execution_v2 --> call_graph_analyzer
-    level3_execution_v2 --> flow_state
-    level3_execution_v2 --> persistence
-    level3_execution_v2 --> builders
+    level3_execution --> ollama_service
+    level3_execution --> step_logger
+    level3_execution --> timeout_wrapper
+    level3_execution --> checkpoint_manager
+    level3_execution --> recovery_handler
+    level3_execution --> metrics_collector
+    level3_execution --> orchestrator
+    level3_execution --> error_logger
+    level3_execution --> rag_integration
+    level3_execution --> level3_execution
+    level3_execution --> backup_manager
+    level3_execution --> deepseek_reasoning
+    level3_execution --> call_graph_analyzer
+    level3_execution --> flow_state
+    level3_execution --> persistence
+    level3_execution --> builders
     level_minus1 --> error_logger
     level_minus1 --> backup_manager
     level_minus1 --> flow_state

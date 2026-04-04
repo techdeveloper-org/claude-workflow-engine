@@ -67,9 +67,9 @@ from .level2_standards import (
 )
 
 # Level 3 nodes (v2 active)
-from .level3_execution.subgraph import level3_init_node
-from .level3_execution.subgraph import level3_merge_node as level3_v2_merge_node
 from .level3_execution.subgraph import (
+    level3_init_node,
+    level3_merge_node,
     orchestration_pre_analysis_node,
     route_pre_analysis,
     step0_0_project_context_node,
@@ -397,7 +397,7 @@ class PipelineBuilder:
         if hook_mode:
             # HOOK MODE: After Steps 8-9, skip to output
             # Claude Code itself is Step 10 (LLM reading the prompt and working)
-            g.add_node("level3_merge", level3_v2_merge_node)
+            g.add_node("level3_merge", level3_merge_node)
             g.add_edge("level3_step9", "level3_merge")
 
             g.add_node("level3_output", output_node)
@@ -448,7 +448,7 @@ class PipelineBuilder:
             g.add_edge("level3_standards_hook_step13", "level3_step14")
 
             # Merge -> output -> END
-            g.add_node("level3_merge", level3_v2_merge_node)
+            g.add_node("level3_merge", level3_merge_node)
             g.add_edge("level3_step14", "level3_merge")
 
             g.add_node("level3_output", output_node)

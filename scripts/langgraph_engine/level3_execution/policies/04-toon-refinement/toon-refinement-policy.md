@@ -107,7 +107,7 @@ When skipped, the pipeline continues with the unrefined Level 1 TOON.
 
 ## Implementation Reference
 
-- **Node function:** `step4_toon_refinement_node()` in `subgraphs/level3_execution_v2.py`
+- **Node function:** `step4_toon_refinement_node()` in `level3_execution/subgraph.py`
 - **Core logic:** `step4_toon_refinement()` in `subgraphs/level3_execution.py`
 - **TOON schema:** `langgraph_engine/toon_schema.py`
 - **TOON models:** `langgraph_engine/toon_models.py`

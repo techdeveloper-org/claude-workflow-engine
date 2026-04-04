@@ -132,7 +132,7 @@ After Step 14, the pipeline flows to `output_node` which:
 
 ## Implementation Reference
 
-- **Node function:** `step14_final_summary_node()` in `subgraphs/level3_execution_v2.py`
+- **Node function:** `step14_final_summary_node()` in `level3_execution/subgraph.py`
 - **Core logic:** `step14_final_summary_generation()` in `subgraphs/level3_execution.py`
 - **Summary text builder:** `_build_summary_text()` in `subgraphs/level3_execution.py`
 - **Metrics display:** `langgraph_engine/metrics_collector.py`

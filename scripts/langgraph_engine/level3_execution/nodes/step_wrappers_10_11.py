@@ -1,5 +1,5 @@
 # ruff: noqa: F821
-"""Level 3 v2 step node wrapper.
+"""Level 3 step node wrappers for Steps 10-11.
 
 Extracted from level3_execution/subgraph.py for modularity.
 Windows-safe: ASCII only.
@@ -18,6 +18,13 @@ try:
     from ...flow_state import FlowState
 except ImportError:
     FlowState = dict  # type: ignore[misc,assignment]
+
+try:
+    from .step_wrappers_5to9 import _build_retry_history_context
+except ImportError:
+
+    def _build_retry_history_context(state) -> str:  # type: ignore[misc]
+        return ""
 
 
 def step10_implementation_note(state: FlowState) -> Dict[str, Any]:

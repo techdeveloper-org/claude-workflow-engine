@@ -1,18 +1,24 @@
 """
-Level 3 SubGraph v2 - Integrated Execution Pipeline (Steps 0, 2, 8-14)
+Level 3 SubGraph v2 - Integrated Execution Pipeline (Steps 0, 8-14)
 
 Bridge module that wraps the WORKFLOW.md-compliant level3_execution.py functions
 with proper orchestrator integration and logging.
 
 CHANGE LOG (v1.13.0):
   Removed Steps 1, 3, 4, 5, 6, 7 from the pipeline. These were collapsed into
-  Step 0's orchestration template LLM call. The new pipeline is:
+  Step 0's orchestration template call. The new pipeline is:
     Pre-0 -> Step 0 -> Step 8 -> Step 9 -> Steps 10-14
 
   Step count: 15 steps -> 9 meaningful steps (Pre-0, Step 0, Steps 8-14)
-  LLM calls during planning: ~6 -> ~1 (~70% reduction in planning phase cost)
+  Planning calls: ~6 -> ~2 (~70% reduction in planning phase cost)
 
-Remaining steps (0, 2, 8-14) implemented with:
+CHANGE LOG (v1.14.0):
+  Step 0 caller scripts now use claude CLI subprocess (not direct llm_call API).
+  Step 2 (plan execution) removed from pipeline -- orchestrator subprocess
+  already produces a comprehensive plan.
+  Active steps: Pre-0, 0.0, 0.1, 0, 8, 9, [10-14] = 8 active steps.
+
+Remaining steps (0, 8-14) implemented with:
 - Proper logging via loguru
 - Time tracking
 - TOON object handling
@@ -37,11 +43,11 @@ try:
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
     from utils.path_resolver import get_session_logs_dir, get_telemetry_dir
 
-    _LEVEL3V2_TELEMETRY_DIR = get_telemetry_dir()
-    _LEVEL3V2_SESSION_LOGS_DIR = get_session_logs_dir()
+    _LEVEL3_TELEMETRY_DIR = get_telemetry_dir()
+    _LEVEL3_SESSION_LOGS_DIR = get_session_logs_dir()
 except ImportError:
-    _LEVEL3V2_TELEMETRY_DIR = Path.home() / ".claude" / "logs" / "telemetry"
-    _LEVEL3V2_SESSION_LOGS_DIR = Path.home() / ".claude" / "logs" / "sessions"
+    _LEVEL3_TELEMETRY_DIR = Path.home() / ".claude" / "logs" / "telemetry"
+    _LEVEL3_SESSION_LOGS_DIR = Path.home() / ".claude" / "logs" / "sessions"
 
 
 # Lazy import: avoid import-time side effects from timeout_wrapper
@@ -105,7 +111,6 @@ def _get_backup_manager():
 from ..flow_state import FlowState  # noqa: E402
 from ..rag_integration import rag_lookup_before_llm, rag_store_after_node  # noqa: E402
 from ..step_logger import write_level_log  # noqa: E402
-from .routing import level3_merge_node  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Per-step session logging
@@ -176,11 +181,11 @@ def _write_step_log(
 
 
 # ---------------------------------------------------------------------------
-# RAG-eligible steps: these make LLM calls that can be short-circuited by RAG
+# RAG-eligible steps: these make subprocess calls that can be short-circuited by RAG
 # ---------------------------------------------------------------------------
 # Steps 8-14 are unique per task; Step 10 is implementation
-# Steps 3,4,6 (removed) had no LLM; Steps 1,5,7 (removed) collapsed into Step 0
-_RAG_ELIGIBLE_STEPS = {0, 2, 8}
+# Steps 1-7 removed (v1.13-v1.14); Step 0 routes directly to Step 8
+_RAG_ELIGIBLE_STEPS = {0, 8}
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +219,7 @@ def _write_telemetry(
             "llm_called": bool(result.get("step%d_llm_invoked" % step_number, False) if result else False),
             "modified_files_count": len(result.get("step%d_modified_files" % step_number, []) if result else []),
         }
-        telemetry_dir = _LEVEL3V2_TELEMETRY_DIR
+        telemetry_dir = _LEVEL3_TELEMETRY_DIR
         telemetry_dir.mkdir(parents=True, exist_ok=True)
         telemetry_file = telemetry_dir / ("%s.jsonl" % session_id)
         with open(telemetry_file, "a", encoding="utf-8") as f:
@@ -573,5 +578,4 @@ from .nodes import (  # noqa: F401,E402
 # MERGE NODE - Final status determination
 # ============================================================================
 
-# Just re-export the merge node from core
-level3_v2_merge_node = level3_merge_node
+# level3_merge_node is the canonical name (v1.14: removed level3_v2_merge_node alias)

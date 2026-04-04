@@ -538,7 +538,7 @@ tests/
 scripts/langgraph_engine/state/state_definition.py     ← Add step1b_* fields
 scripts/langgraph_engine/state/step_keys.py            ← Add STEP1B_* constants
 scripts/langgraph_engine/subgraphs/level3_execution.py ← Add step1b core function
-scripts/langgraph_engine/subgraphs/level3_execution_v2.py ← Add node wrapper
+scripts/langgraph_engine/level3_execution/subgraph.py ← Add node wrapper
 scripts/langgraph_engine/orchestrator.py               ← Register node + edges
 .env.example                                            ← Add ENABLE_DEP_RESEARCH
 docs/WORKFLOW.md                                        ← Update pipeline docs
@@ -547,7 +547,7 @@ docs/WORKFLOW.md                                        ← Update pipeline docs
 ### 9.3 Node Pattern (Following Existing Convention)
 
 ```python
-# In level3_execution_v2.py
+# In level3_execution/subgraph.py
 def step1b_dependency_research_node(state: FlowState) -> Dict[str, Any]:
     """Step 1b: Dependency Research — only runs if ENABLE_DEP_RESEARCH=1."""
     if os.environ.get("ENABLE_DEP_RESEARCH", "0") != "1":

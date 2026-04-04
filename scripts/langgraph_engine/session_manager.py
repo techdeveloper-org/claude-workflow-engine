@@ -6,23 +6,23 @@ Session structure: ~/.claude/logs/sessions/{session_id}/
 """
 
 import json
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional
+
 from loguru import logger
 
 try:
     import sys as _sys
+
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
     from utils.path_resolver import get_session_logs_dir
+
     _SESSION_LOGS_DIR = get_session_logs_dir()
 except ImportError:
     _SESSION_LOGS_DIR = Path.home() / ".claude" / "logs" / "sessions"
 
-from .toon_models import (
-    ToonAnalysis, ExecutionBlueprint, ToonWithSkills,
-    SessionMetadata, ExecutionLog, serialize_toon
-)
+from .toon_models import ExecutionBlueprint, ExecutionLog, SessionMetadata, ToonAnalysis, ToonWithSkills, serialize_toon
 
 
 class SessionManager:
@@ -39,7 +39,7 @@ class SessionManager:
             str(log_file),
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}",
             rotation="100 MB",
-            retention="7 days"
+            retention="7 days",
         )
 
         logger.info(f"Session {session_id} initialized at {self.session_dir}")
@@ -54,7 +54,7 @@ class SessionManager:
 
     def save_toon_analysis(self, toon: ToonAnalysis) -> Path:
         """Save Level 1 analysis TOON."""
-        timestamp = datetime.now().isoformat().replace(':', '-')
+        timestamp = datetime.now().isoformat().replace(":", "-")
         file_path = self.session_dir / f"toon_v1_analysis_{timestamp}.json"
         content = json.dumps(json.loads(serialize_toon(toon)), indent=2)
         file_path.write_text(content)
@@ -63,16 +63,16 @@ class SessionManager:
 
     def save_execution_blueprint(self, blueprint: ExecutionBlueprint) -> Path:
         """Save Level 3 execution blueprint (after planning)."""
-        timestamp = datetime.now().isoformat().replace(':', '-')
-        file_path = self.session_dir / f"toon_v2_blueprint_{timestamp}.json"
+        timestamp = datetime.now().isoformat().replace(":", "-")
+        file_path = self.session_dir / f"toon_blueprint_{timestamp}.json"
         content = json.dumps(json.loads(serialize_toon(blueprint)), indent=2)
         file_path.write_text(content)
-        logger.info(f"TOON v2 (blueprint) saved: {file_path}")
+        logger.info(f"TOON blueprint saved: {file_path}")
         return file_path
 
     def save_toon_with_skills(self, toon: ToonWithSkills) -> Path:
         """Save TOON with skill mappings (after Step 5)."""
-        timestamp = datetime.now().isoformat().replace(':', '-')
+        timestamp = datetime.now().isoformat().replace(":", "-")
         file_path = self.session_dir / f"toon_v3_skills_{timestamp}.json"
         content = json.dumps(json.loads(serialize_toon(toon)), indent=2)
         file_path.write_text(content)
@@ -115,7 +115,7 @@ class SessionManager:
         if version == 1:
             pattern = "toon_v1_analysis_*.json"
         elif version == 2:
-            pattern = "toon_v2_blueprint_*.json"
+            pattern = "toon_blueprint_*.json"
         elif version == 3:
             pattern = "toon_v3_skills_*.json"
         else:
@@ -175,7 +175,7 @@ class SessionManager:
             "files": [f.name for f in self.session_dir.glob("*")],
             "has_prompt": (self.session_dir / "prompt.txt").exists(),
             "has_tasks": (self.session_dir / "tasks.json").exists(),
-            "has_github": (self.session_dir / "github.json").exists()
+            "has_github": (self.session_dir / "github.json").exists(),
         }
 
     def cleanup_old_toots(self, keep_latest: int = 2) -> None:
@@ -184,7 +184,7 @@ class SessionManager:
             if version == 1:
                 pattern = "toon_v1_analysis_*.json"
             elif version == 2:
-                pattern = "toon_v2_blueprint_*.json"
+                pattern = "toon_blueprint_*.json"
             else:
                 pattern = "toon_v3_skills_*.json"
 

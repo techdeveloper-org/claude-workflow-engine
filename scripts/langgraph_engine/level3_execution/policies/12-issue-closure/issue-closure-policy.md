@@ -111,7 +111,7 @@ If `Level3GitHubWorkflow` is unavailable (import error, API failure):
 
 ## Implementation Reference
 
-- **Node function:** `step12_issue_closure_node()` in `subgraphs/level3_execution_v2.py`
+- **Node function:** `step12_issue_closure_node()` in `level3_execution/subgraph.py`
 - **Core logic:** `step12_issue_closure()` in `subgraphs/level3_execution.py`
 - **GitHub workflow:** `langgraph_engine/level3_steps8to12_github.py`
 - **Related policy:** `github-issues-integration-policy.md` (Step 8 issue creation)

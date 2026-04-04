@@ -7,18 +7,16 @@ Verifies that Claude gets complete feedback history showing:
 - Remaining retry attempts
 """
 
-import pytest
+import sys
 import tempfile
 from pathlib import Path
-import sys
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from langgraph_engine.subgraphs.level3_execution_v2 import (
-    step10_implementation_note,
-    _build_retry_history_context
-)
 from langgraph_engine.flow_state import FlowState
+from langgraph_engine.level3_execution.subgraph import _build_retry_history_context, step10_implementation_note
 
 
 class TestRetryHistoryTracking:
@@ -35,7 +33,7 @@ class TestRetryHistoryTracking:
             step11_retry_messages=[],
             step11_review_issues=[],
             step7_execution_prompt="Initial prompt",
-            session_dir=str(getattr(self, '_tmp', Path(tempfile.mkdtemp())))
+            session_dir=str(getattr(self, "_tmp", Path(tempfile.mkdtemp()))),
         )
 
         history = _build_retry_history_context(state)
@@ -54,7 +52,7 @@ class TestRetryHistoryTracking:
             step11_retry_messages=["Fixed print() statement in main function"],
             step11_review_issues=["Missing logger import"],
             step7_execution_prompt="Original prompt",
-            session_dir=str(getattr(self, '_tmp', Path(tempfile.mkdtemp())))
+            session_dir=str(getattr(self, "_tmp", Path(tempfile.mkdtemp()))),
         )
 
         history = _build_retry_history_context(state)
@@ -79,15 +77,15 @@ class TestRetryHistoryTracking:
             step11_retry_count=2,
             step11_retry_messages=[
                 "Attempt 1: Fixed print() → added logging",
-                "Attempt 2: Added logger import → fixed import error"
+                "Attempt 2: Added logger import → fixed import error",
             ],
             step11_review_issues=[
                 "Missing @Autowired annotation",
                 "No error handling in try/catch",
-                "Unused variable 'result'"
+                "Unused variable 'result'",
             ],
             step7_execution_prompt="Original prompt",
-            session_dir=str(getattr(self, '_tmp', Path(tempfile.mkdtemp())))
+            session_dir=str(getattr(self, "_tmp", Path(tempfile.mkdtemp()))),
         )
 
         history = _build_retry_history_context(state)
@@ -117,7 +115,7 @@ class TestRetryHistoryTracking:
             ],
             step11_review_issues=["Issue C"],
             step7_execution_prompt="Original prompt",
-            session_dir=str(getattr(self, '_tmp', Path(tempfile.mkdtemp())))
+            session_dir=str(getattr(self, "_tmp", Path(tempfile.mkdtemp()))),
         )
 
         history = _build_retry_history_context(state)
@@ -139,12 +137,9 @@ class TestRetryHistoryTracking:
         state = FlowState(
             step11_retry_count=1,
             step11_retry_messages=["Removed print() statements"],
-            step11_review_issues=[
-                "Missing imports at top",
-                "No docstring in main function"
-            ],
+            step11_review_issues=["Missing imports at top", "No docstring in main function"],
             step7_execution_prompt="Implement the feature...",
-            session_dir=str(getattr(self, '_tmp', Path(tempfile.mkdtemp())))
+            session_dir=str(getattr(self, "_tmp", Path(tempfile.mkdtemp()))),
         )
 
         result = step10_implementation_note(state)
@@ -178,7 +173,7 @@ class TestRetryHistoryTracking:
             step11_retry_messages=["Fixed previous issue"],
             step11_review_issues=issues,
             step7_execution_prompt="Prompt",
-            session_dir=str(getattr(self, '_tmp', Path(tempfile.mkdtemp())))
+            session_dir=str(getattr(self, "_tmp", Path(tempfile.mkdtemp()))),
         )
 
         history = _build_retry_history_context(state)
@@ -199,7 +194,8 @@ class TestRetryHistorySummary:
         print("\n" + "=" * 70)
         print("COMPLETE RETRY HISTORY TRACKING - TEST SUMMARY")
         print("=" * 70)
-        print("""
+        print(
+            """
 ✅ FEATURES IMPLEMENTED:
 
 1. Build Retry History Context
@@ -283,7 +279,8 @@ BENEFITS:
 ✅ Better retry success rate
 
 Status: PRODUCTION READY ✅
-        """)
+        """
+        )
 
 
 if __name__ == "__main__":

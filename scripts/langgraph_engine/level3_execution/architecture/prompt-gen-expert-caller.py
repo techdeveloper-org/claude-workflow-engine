@@ -3,23 +3,22 @@
 Level 3 - Prompt Generation Expert Caller
 
 Reads CLI args, loads the orchestration system prompt template,
-fills the 7 placeholders, calls the LLM, and writes JSON to stdout.
+fills the 7 placeholders, calls the claude CLI subprocess, and writes
+JSON to stdout.
 
 Invoked by: call_execution_script("prompt-gen-expert-caller", args)
 Output: JSON with keys: status, prompt, llm_response, error (on failure)
+
+Environment:
+  STEP0_PROMPT_GEN_TIMEOUT  max seconds for claude CLI (default: 60)
 """
 
 import json
 import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
-
-# ---------------------------------------------------------------------------
-# Path bootstrap (shared llm_call module lives 4 dirs up)
-# ---------------------------------------------------------------------------
-_ENGINE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(_ENGINE_ROOT))
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -28,6 +27,7 @@ _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 _TEMPLATE_FILE = _TEMPLATES_DIR / "orchestration_system_prompt.txt"
 
 DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
+_TIMEOUT = int(os.getenv("STEP0_PROMPT_GEN_TIMEOUT", "60"))
 
 
 # ---------------------------------------------------------------------------
@@ -132,19 +132,68 @@ def _build_filled_prompt(template, args):
     return filled
 
 
-def _call_llm(prompt):
-    """Call shared llm_call. Returns (response_text, error)."""
+def _call_claude_cli(prompt):
+    """Call claude CLI as subprocess. Returns (response_text, error)."""
+    temp_file = None
     try:
-        from langgraph_engine.llm_call import llm_call
+        # Write prompt to temp file (avoids shell escaping issues)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".txt",
+            delete=False,
+            encoding="utf-8",
+        ) as tf:
+            tf.write(prompt)
+            temp_file = tf.name
 
-        response = llm_call(prompt, model="balanced", temperature=0.2)
-        if response:
-            return response, None
-        return None, "llm_call returned empty response"
-    except ImportError as exc:
-        return None, "ImportError: " + str(exc)
+        cmd = [
+            "claude",
+            "--json",
+            "--no-stream",
+            "@" + temp_file,
+        ]
+
+        if DEBUG:
+            print("[prompt-gen-expert-caller] Running: claude CLI", file=sys.stderr, flush=True)
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=_TIMEOUT,
+        )
+
+        if result.returncode != 0 and not result.stdout:
+            stderr_preview = (result.stderr or "")[:300]
+            return None, "claude CLI non-zero exit (%d): %s" % (result.returncode, stderr_preview)
+
+        # Parse JSON output from claude CLI
+        response_text = result.stdout or ""
+        try:
+            json_out = json.loads(response_text)
+            # claude --json returns {"type":"result","result":"..."}
+            if isinstance(json_out, dict) and "result" in json_out:
+                return json_out["result"], None
+            # Fallback: return raw text content
+            return response_text, None
+        except (json.JSONDecodeError, ValueError):
+            # Non-JSON output; return as-is
+            if response_text.strip():
+                return response_text.strip(), None
+            return None, "claude CLI returned empty response"
+
+    except subprocess.TimeoutExpired:
+        return None, "claude CLI timed out after %ds" % _TIMEOUT
+    except FileNotFoundError:
+        return None, "claude CLI binary not found in PATH"
     except Exception as exc:
-        return None, "LLM call failed: " + str(exc)
+        return None, "claude CLI call failed: " + str(exc)
+    finally:
+        if temp_file:
+            try:
+                Path(temp_file).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -175,21 +224,21 @@ def main():
     filled_prompt = _build_filled_prompt(template, args)
 
     if DEBUG:
-        print("[prompt-gen-expert-caller] Calling LLM", file=sys.stderr, flush=True)
+        print("[prompt-gen-expert-caller] Calling claude CLI", file=sys.stderr, flush=True)
 
-    # Call LLM
-    llm_response, err = _call_llm(filled_prompt)
+    # Call claude CLI subprocess
+    llm_response, err = _call_claude_cli(filled_prompt)
     if err:
         print(json.dumps({"status": "ERROR", "error": err, "prompt": filled_prompt[:500]}))
         return
 
     if DEBUG:
-        print("[prompt-gen-expert-caller] LLM responded", file=sys.stderr, flush=True)
+        print("[prompt-gen-expert-caller] claude CLI responded", file=sys.stderr, flush=True)
 
-    # Try to parse LLM response as JSON (it should be per template instructions)
+    # Try to parse response as JSON (it should be per template instructions)
     parsed_plan = None
     try:
-        if "{" in llm_response:
+        if llm_response and "{" in llm_response:
             json_start = llm_response.index("{")
             json_end = llm_response.rindex("}") + 1
             parsed_plan = json.loads(llm_response[json_start:json_end])

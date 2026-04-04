@@ -38,21 +38,21 @@ Engine does:
            -> RAG hit (>=0.85)? Skip Step 0 entirely, jump to Step 8
            -> Miss? Continue to Step 0 with fresh call graph data
 
-  Step 0:  Task Analysis v2 -- PromptGen + Orchestrator (2 LLM calls, ~15s total)
+  Step 0:  Task Analysis v2 -- PromptGen + Orchestrator (2 subprocess calls, ~15s total)
   |
-  |  [What was before v1.13.0 -- 6 separate LLM calls:]
+  |  [What was before v1.13.0 -- 6 separate subprocess calls:]
   |    Step 0: task analysis, Step 1: plan mode decision,
   |    Step 3: phase breakdown, Step 4: TOON refinement,
   |    Step 5: skill/agent selection, Step 6: validation,
   |    Step 7: final prompt generation
   |
-  |  [What happens now -- 2 calls:]
+  |  [What happens now -- 2 subprocess calls (claude CLI):]
   |
   |  Call 1 -- prompt-gen-expert-caller (~10s, captured):
   |    Reads orchestration_system_prompt.txt template
   |    Injects: user requirements + combined_complexity_score (from Level 1)
   |             + call graph data (risk_level, danger_zones, hot_nodes from Pre-0)
-  |    LLM fills: complete orchestration prompt with agents, phases, contracts
+  |    claude CLI fills: complete orchestration prompt with agents, phases, contracts
   |    Output: fully structured plan stored in state["orchestration_prompt"]
   |
   |  Call 2 -- orchestrator-agent-caller (~30-90s, stderr streamed live):
@@ -82,7 +82,7 @@ Engine does:
 |---------|-------|----------------------|-----------------|--------------|
 | v1.12.0 | 15 | ~6 | ~75s | Original: Steps 0-7 each made separate LLM calls |
 | v1.13.0 | 9 | ~2 (subprocess) | ~30s | Removed Steps 1,3,4,5,6,7. Step 0 used 2 subprocess calls |
-| **v1.14.0** | **9** | **2 (LLM chain)** | **~15s** | Step 0 redesigned: template fill -> orchestrator chain with live stderr output |
+| **v1.14.0** | **8** | **2 (subprocess)** | **~15s** | Step 0 redesigned: template fill + orchestrator (claude CLI subprocess with live stderr) |
 
 > **Template Fast-Path (unchanged from v1.8.0):** Pre-built orchestration prompt skips Step 0 entirely, jumps to Step 8. Drops planning time to ~0s.
 
@@ -327,7 +327,7 @@ LLM Calls Saved:   8 calls (67% reduction)
   ├─ Per-node RAG caching:     ~2 calls (per-step checks)
   └─ Call graph determinism:   ~1 call (no re-analysis)
 
-Execution Time:    ~45 seconds (Hook Mode Steps 0-9)
+Execution Time:    ~45 seconds (Hook Mode: Pre-0, Step 0, Steps 8-9)
   ├─ Pre-0:  1.2s (call graph scan)
   ├─ Steps 5-9: 43.8s (skill download + GitHub + branch)
   └─ No Step 0-4 overhead (skipped via RAG hit)
@@ -354,16 +354,15 @@ Level 1:  CONTEXT SYNC     Session + parallel [complexity, context] + TOON compr
     |
 Level 2:  STANDARDS         Common + conditional Java + tool optimization + MCP discovery
     |
-Level 3:  EXECUTION         15 steps (Step 0-14): Full SDLC automation
+Level 3:  EXECUTION         8 active steps (Pre-0, Step 0, Steps 8-14): Full SDLC automation
 ```
 
-### 15-Step SDLC Pipeline (Level 3)
+### 8-Step Active SDLC Pipeline (Level 3)
 
 | Phase | Steps | What Happens |
 |-------|-------|-------------|
-| **Pre-Analysis Gate** | Pre-0 | Call graph scan + orchestration-level RAG lookup (threshold 0.85); on cache hit, skips Steps 0-4 entirely |
-| **Analysis & Planning** | 0-2 | Task analysis + call graph complexity boost, plan mode decision; CallGraph impact analysis + plan validation |
-| **Preparation** | 3-7 | Task Breakdown + **Figma component extraction**; TOON Refinement; skill/agent selection; Final Prompt + **Figma design tokens injection** |
+| **Pre-Analysis Gate** | Pre-0 | Call graph scan + orchestration-level RAG lookup (threshold 0.85); on cache hit, skips Step 0 and jumps to Step 8 |
+| **Analysis & Planning** | 0 | Task analysis v2: prompt-gen-expert (template fill) + orchestrator-agent (full plan) -- 2 claude CLI subprocess calls. Figma extraction/injection included in template when ENABLE_FIGMA=1 |
 | **Issue & Branch** | 8-9 | GitHub Issue + **Jira Issue** (dual, cross-linked); Branch from **Jira key** (`feature/PROJ-123`) |
 | **Implementation** | 10 | Implementation + CallGraph snapshot; **Jira -> "In Progress"**; **Figma "started" comment** |
 | **Review & Closure** | 11-12 | PR + Code Review + **Jira PR link + "In Review"** + **Figma design fidelity check**; Issue closure (**Jira -> "Done"** + **Figma "complete" comment**) |
@@ -373,11 +372,11 @@ Level 3:  EXECUTION         15 steps (Step 0-14): Full SDLC automation
 
 ```
 Hook Mode (default, CLAUDE_HOOK_MODE=1):
-  Steps 0-9   -> Pipeline (analysis + prompt + GitHub issue + branch)
-  Steps 10-14 -> Skipped (user implements, then runs Full Mode for PR/closure)
+  Pre-0, Step 0, Steps 8-9 -> Pipeline (analysis + prompt + GitHub issue + branch)
+  Steps 10-14              -> Skipped (user implements, then runs Full Mode for PR/closure)
 
 Full Mode (CLAUDE_HOOK_MODE=0):
-  Steps 0-14  -> All steps execute sequentially
+  Pre-0, Step 0, Steps 8-14 -> All active steps execute sequentially
 ```
 
 ### Integration Lifecycle
@@ -399,8 +398,7 @@ All integrations follow a complete **Create -> Update -> Close** lifecycle acros
 
 | Step | Action | What Happens |
 |------|--------|-------------|
-| Step 3 | **EXTRACT** | Figma components extracted -> UI-specific subtasks created |
-| Step 7 | **INJECT** | Design tokens (colors, typography, spacing, shadows, radii) injected into prompt |
+| Step 0 | **EXTRACT+INJECT** | Figma components + design tokens (colors, typography, spacing) extracted and injected inside orchestration template |
 | Step 10 | **COMMENT** | "Implementation started" comment added to Figma file with component list |
 | Step 11 | **REVIEW** | Design fidelity checklist generated (colors match? spacing correct? shadows applied?) |
 | Step 12 | **COMMENT** | "Implementation complete" comment added with PR link |
@@ -490,15 +488,15 @@ This reduces LLM calls per task by up to 5 inference steps on repeat workflows.
 
 Every LLM call has latency and cost. The engine uses five distinct mechanisms to avoid unnecessary inference:
 
-| Mechanism | Where | LLM Calls Saved | How |
-|-----------|-------|----------------|-----|
-| **Template Fast-Path** | Pre-Step 0 | ~6 calls | Pre-filled orchestration template skips Steps 0-5 entirely, jumps to Step 6 |
-| **Orchestration RAG Hit** | Pre-Step 0 | ~5 calls | If task was orchestrated before (score ≥ 0.85), skip Steps 0-4 and reuse cached plan |
-| **Per-Node RAG Cache** | Steps 0-14 | 1 call per step | Each step checks RAG before calling LLM; on hit, returns cached decision directly |
-| **Call Graph Complexity Boost** | Step 0 | ~1 call | Complexity score computed without LLM using hot-node count; eliminates a dedicated analysis call |
-| **TOON Compression** | Level 1 | 1-2 calls | Context compressed before Step 0; LLM sees less tokens → faster, cheaper inference |
+| Mechanism | Where | Calls Saved | How |
+|-----------|-------|------------|-----|
+| **Template Fast-Path** | Pre-Step 0 | 2 subprocess calls | Pre-filled orchestration template skips Step 0 entirely, jumps to Step 8 |
+| **Orchestration RAG Hit** | Pre-Step 0 | 2 subprocess calls | If task was orchestrated before (score >= 0.85), skip Step 0 and jump to Step 8 |
+| **Per-Node RAG Cache** | Steps 8-14 | 1 call per step | Each step checks RAG before calling LLM; on hit, returns cached decision directly |
+| **Call Graph Complexity Boost** | Pre-0 | deterministic | Complexity score computed without LLM using hot-node count; no extra call needed |
+| **TOON Compression** | Level 1 | 1-2 calls | Context compressed before Step 0; LLM sees less tokens in downstream steps |
 
-**Total savings on a Template Fast-Path session: up to 6 LLM calls avoided out of ~7 typical → effectively 1 LLM call (Step 10 implementation only).**
+**Total savings on a Template Fast-Path session: Step 0 bypassed (2 subprocess calls avoided), execution starts directly at Step 8.**
 
 #### Pre-Analysis Decision Tree (Priority Order)
 
@@ -670,7 +668,7 @@ This simple architectural choice (NodeVisitor vs walk) is what makes the entire 
 
 | Function | Used By | What It Does |
 |----------|---------|-------------|
-| `analyze_impact_before_change(method_fqn)` | Step 2 | Pre-plan risk assessment - returns all callers, call depth, and blast radius before any code change |
+| `analyze_impact_before_change(method_fqn)` | Pre-0 | Pre-plan risk assessment - returns all callers, call depth, and blast radius before any code change |
 | `get_implementation_context(method_fqn)` | Step 10 | Caller/callee awareness during implementation - gives full context of what calls the target and what it calls |
 | `review_change_impact(before_snapshot, after_snapshot)` | Step 11 | Before/after graph comparison for code review - detects new call edges, removed edges, and breaking changes |
 | `snapshot_call_graph()` | Step 10 | Captures serializable call graph state for diff comparison in Step 11 |
@@ -678,7 +676,7 @@ This simple architectural choice (NodeVisitor vs walk) is what makes the entire 
 
 The data flow across steps:
 ```
-Step 2:  analyze_impact_before_change() -> risk score -> informs plan complexity
+Pre-0:   analyze_impact_before_change() -> risk score -> informs plan complexity
 Step 10: snapshot_call_graph() -> saved as pre_change_snapshot
          get_implementation_context() -> injected into implementation prompt
 Step 11: review_change_impact(pre_change_snapshot, new_snapshot) -> PR review findings
@@ -823,7 +821,7 @@ policies/
 +-- 00-auto-fix-system/    Level -1: Unicode, encoding, paths, recovery
 +-- 01-sync-system/        Level 1: Session, context, preferences, patterns
 +-- 02-standards-system/   Level 2: Common + conditional standards
-+-- 03-execution-system/   Level 3: All 15 steps + failure prevention
++-- 03-execution-system/   Level 3: 8 active steps (Pre-0, Step 0, Steps 8-14) + failure prevention
 ```
 
 ---
@@ -836,7 +834,7 @@ policies/
 
 | Component | Details |
 |-----------|---------|
-| **15-Step Pipeline** | All steps produce real output (not stubs). Steps 0–14 fully wired. |
+| **8-Step Active Pipeline** | All active steps produce real output (Pre-0, Step 0, Steps 8-14). Steps 1-7 consolidated into Step 0 (v1.13-v1.14). |
 | **4-Level Architecture** | Level -1 → Level 1 → Level 2 → Level 3, fully operational |
 | **20 MCP Servers** | 328 tools — all 20 in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories); 2 also keep in-engine copies in `src/mcp/` |
 | **LLM Provider Routing** | Official Anthropic SDK (auto-retry, typed errors). 4 providers: Ollama · Anthropic · Claude CLI · OpenAI. Specific provider → Ollama fallback by default. |
@@ -1063,8 +1061,8 @@ Step 10: Implementation                (1 LLM call — the only one)
 
 | Mode | When | Steps Skipped | LLM Calls | Hook Time |
 |------|------|--------------|-----------|-----------|
-| **Template Fast-Path** | `--orchestration-template` provided | Steps 0-5 (6 calls) | **1** | ~15s |
-| **RAG Hit** | Similar task run before (≥0.85 match) | Steps 0-4 (5 calls) | **2** | ~25s |
+| **Template Fast-Path** | `--orchestration-template` provided | Step 0 (2 subprocess calls) | **0** | ~2s |
+| **RAG Hit** | Similar task run before (>=0.85 match) | Step 0 (2 subprocess calls) | **0** | ~3s |
 | **Full Pipeline** | New task, no template | None | **7-8** | ~60s |
 
 ### Template Fields Reference
@@ -1142,16 +1140,16 @@ cp .env.example .env
 ### Running the Pipeline
 
 ```bash
-# Full 15-step pipeline
+# Full pipeline (all active steps)
 python scripts/3-level-flow.py --message "your task description"
 
-# Hook mode (Steps 0-9 only, default)
+# Hook mode (Pre-0, Step 0, Steps 8-9 only, default)
 CLAUDE_HOOK_MODE=1 python scripts/3-level-flow.py --message "fix login bug"
 
-# Full mode (all 15 steps)
+# Full mode (Pre-0, Step 0, Steps 8-14)
 CLAUDE_HOOK_MODE=0 python scripts/3-level-flow.py --message "add user profile feature"
 
-# Template fast-path (skips Steps 0-5, ~1 LLM call, ~15s hook time)
+# Template fast-path (skips Step 0, jumps to Step 8, ~2s hook time)
 python scripts/3-level-flow.py \
   --message "add document Q&A feature" \
   --orchestration-template=my_template.json
@@ -1646,7 +1644,7 @@ All external integrations are **disabled by default**. Enable only what you need
 | Flag | Default | Steps Affected | What It Does |
 |------|---------|---------------|-------------|
 | `ENABLE_JIRA` | `0` | 8, 9, 11, 12 | **Dual GitHub + Jira issue tracking.** When enabled, every GitHub Issue gets a matching Jira issue — linked, synced, and closed together. Branch names use the Jira key (`feature/PROJ-123`). Requires `JIRA_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY`. |
-| `ENABLE_FIGMA` | `0` | 3, 7, 10, 11, 12 | **Design-to-code pipeline.** Extracts components (Step 3), injects design tokens into prompts (Step 7), posts progress comments on Figma frames (Steps 10/12), and adds design fidelity checklist to code review (Step 11). Requires `FIGMA_ACCESS_TOKEN` and `FIGMA_FILE_KEY`. |
+| `ENABLE_FIGMA` | `0` | 0, 10, 11, 12 | **Design-to-code pipeline.** Extracts components and injects design tokens inside Step 0 orchestration template, posts progress comments on Figma frames (Steps 10/12), and adds design fidelity checklist to code review (Step 11). Requires `FIGMA_ACCESS_TOKEN` and `FIGMA_FILE_KEY`. |
 | `ENABLE_JENKINS` | `0` | 11 | **Jenkins CI/CD build validation.** Triggers a Jenkins build on PR creation (Step 11) and waits for the result before merging. Requires `JENKINS_URL`, `JENKINS_USER`, `JENKINS_TOKEN`, `JENKINS_JOB_NAME`. |
 | `ENABLE_SONARQUBE` | `0` | 10 | **Static analysis + auto-fix loop.** Runs a SonarQube scan after implementation (Step 10). If issues are found, the pipeline attempts auto-fixes and re-scans before continuing. Requires `SONARQUBE_URL`, `SONARQUBE_TOKEN`, `SONARQUBE_PROJECT_KEY`. |
 | `ENABLE_CI` | `false` | 11 | **GitHub Actions CI pipeline.** Enables the `.github/workflows/` CI pipeline on PRs. Set to `true` to enable CI checks on every PR. |
@@ -1670,7 +1668,7 @@ ENABLE_CI=false
 
 | Variable | Default | What It Does |
 |----------|---------|-------------|
-| `CLAUDE_HOOK_MODE` | `1` | **Controls how many steps run.** `1` = Hook Mode (Steps 0-9 only, generates prompt + creates issue/branch, you implement). `0` = Full Mode (all 15 steps including implementation, PR, and issue closure). Use `1` for daily work, `0` for full automation. |
+| `CLAUDE_HOOK_MODE` | `1` | **Controls how many steps run.** `1` = Hook Mode (Pre-0, Step 0, Steps 8-9 -- generates prompt + creates issue/branch, you implement). `0` = Full Mode (all 8 active steps including implementation, PR, and issue closure). Use `1` for daily work, `0` for full automation. |
 | `CLAUDE_DEBUG` | `0` | **Enables verbose logging.** `1` = prints every LLM call, every state transition, every decision. Useful when a step fails and you need to see exactly what happened. |
 | `INFERENCE_MODE` | `auto` | **Which hardware to use for AI inference.** `auto` = smart routing (simple tasks to NPU, complex to GPU). `gpu_only` = only use Ollama GPU. `npu_only` = only use Intel NPU. Most users should leave this as `auto`. |
 
@@ -1744,7 +1742,7 @@ These are where the pipeline writes telemetry, sessions, cache, and quality data
 |----------|---------|----------|--------------|
 | `CLAUDE_LOGS_DIR` | `~/.claude/logs/` | `get_logs_dir()` | **Root for ALL log data.** Set this ONE variable and all sub-paths below change automatically. Monitoring repo uses this to find data. |
 | _(auto)_ | `{LOGS}/sessions/` | `get_session_logs_dir()` | Per-session folders with session.json, flow-trace.json, prompts. **409+ sessions** stored here. |
-| _(auto)_ | `{LOGS}/telemetry/` | `get_telemetry_dir()` | Per-step JSONL files with timing, status, LLM calls. Written by Level 1 (5 nodes) + Level 3 (15 steps). |
+| _(auto)_ | `{LOGS}/telemetry/` | `get_telemetry_dir()` | Per-step JSONL files with timing, status, LLM calls. Written by Level 1 (5 nodes) + Level 3 (8 active steps). |
 | _(auto)_ | `{LOGS}/level/` | `get_level_logs_dir()` | Per-level execution logs (Level -1, 1, 2, 3 status). |
 | _(auto)_ | `{LOGS}/cache/` | `get_cache_logs_dir()` | Context cache data (SHA-256 keyed, 24h TTL). **576+ items.** |
 | _(auto)_ | `{LOGS}/errors/` | `get_error_logs_dir()` | Error logs with stack traces, severity, recovery actions. |
@@ -1784,7 +1782,7 @@ These are where the pipeline writes telemetry, sessions, cache, and quality data
 ├── policies/                           # CLAUDE_POLICIES_DIR
 │   ├── 01-sync-system/                 #   Level 1 policies
 │   ├── 02-standards-system/            #   Level 2 policies
-│   └── 03-execution-system/            #   Level 3 policies (15 steps)
+│   └── 03-execution-system/            #   Level 3 policies (8 active steps)
 ├── skills/                             # CLAUDE_SKILLS_DIR (16 skills)
 ├── agents/                             # CLAUDE_AGENTS_DIR (13 agents)
 ├── memory/                             # CLAUDE_INSIGHT_DATA_DIR
@@ -1867,7 +1865,7 @@ export CLAUDE_HOME=/path/to/your/.claude
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **v1.14.0** | 2026-04-04 | Step 0 redesign: 2-call LLM chain (prompt-gen-expert + orchestrator-agent). Template stored in `level3_execution/templates/`. `call_streaming_script()` helper with inherited stderr for real-time terminal output. Planning time: ~75s -> ~15s. Planning LLM calls: ~6 -> 2. |
+| **v1.14.0** | 2026-04-04 | Step 0 redesign: 2 claude CLI subprocess calls (prompt-gen-expert + orchestrator-agent). Template stored in `level3_execution/templates/`. `call_streaming_script()` helper with inherited stderr for real-time terminal output. Step 2 (Plan Mode) removed. Planning time: ~75s -> ~15s. |
 | **v1.13.0** | 2026-04-03 | Level 3 simplification: removed Steps 1,3,4,5,6,7. Pipeline 15 steps -> 9 steps. Step 0 collapsed all planning into 1 template call. `docs/impact_map.md` architecture blueprint created. |
 | **v1.12.0** | 2026-04-03 | scripts/ root cleanup: organized 31 files into setup/ (9), bin/ (5), tools/ (17). Path references updated across cli.py, step14, shell scripts. |
 | **v1.2.0 - v1.2.1** | 2026-03-18 | CallGraph-driven pipeline intelligence (Steps 2/3/4/10/11), phase-scoped context, 15 MCP servers (split LLM into Ollama + Anthropic + OpenAI + Router), Quality Intelligence Layer (SonarQube API-first, auto-fix, test gen, coverage, quality gates), 5 new language standards (TypeScript, Go, Rust, Swift, Kotlin), user interaction system, dependency resolver, metrics aggregator, dry-run mode, telemetry, plan validation, Level 2 enforcement |

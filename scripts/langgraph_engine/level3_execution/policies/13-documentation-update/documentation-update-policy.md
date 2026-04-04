@@ -115,7 +115,7 @@ Step 13 has special file-operation error handling (wrapped in `_with_file_error_
 
 ## Implementation Reference
 
-- **Node function:** `step13_docs_update_node()` in `subgraphs/level3_execution_v2.py`
+- **Node function:** `step13_docs_update_node()` in `level3_execution/subgraph.py`
 - **Core logic:** `step13_project_documentation_update()` in `subgraphs/level3_execution.py`
 - **Documentation generator:** `langgraph_engine/documentation_generator.py`
 - **Standards hook:** `apply_integration_step13` in `orchestrator.py`

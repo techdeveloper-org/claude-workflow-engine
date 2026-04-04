@@ -1,5 +1,5 @@
 """
-Tests for Level 3 SubGraph v2 - Execution Pipeline Wrapper
+Tests for Level 3 Execution Pipeline (level3_execution/subgraph.py)
 
 Tests _run_step wrapper, level3_init_node, individual step nodes,
 retry logic for step 8, and _build_retry_history_context.
@@ -9,11 +9,6 @@ MetricsCollector, ErrorLogger, level3_execution step functions,
 loguru, subprocess) are mocked before import.
 
 ASCII-safe, UTF-8 encoded - Windows cp1252 compatible.
-
-CHANGE LOG (v1.13.0):
-  Updated paths: v2_nodes/ -> nodes/, execution_v2.py -> subgraph.py.
-  These were renamed in v1.11 refactoring; test now references correct paths.
-  _run_step is in subgraph.py; _infra_cache is in core/infrastructure.py.
 """
 
 import sys
@@ -180,7 +175,7 @@ _pre_spec.loader.exec_module(_pre_mod)
 _l3_nodes.level3_init_node = _pre_mod.level3_init_node
 _l3_nodes.step0_0_project_context_node = _pre_mod.step0_0_project_context_node
 _l3_nodes.step0_1_initial_callgraph_node = _pre_mod.step0_1_initial_callgraph_node
-for _v2_fn in [
+for _fn in [
     "_build_retry_history_context",
     "orchestration_pre_analysis_node",
     "route_pre_analysis",
@@ -196,12 +191,9 @@ for _v2_fn in [
     "step13_docs_update_node",
     "step14_final_summary_node",
 ]:
-    setattr(_l3_nodes, _v2_fn, MagicMock(return_value={}))
+    setattr(_l3_nodes, _fn, MagicMock(return_value={}))
 
-# Also keep legacy v2_nodes alias for any imports that still use old path
-_l3_v2_nodes_alias = _stub("langgraph_engine.level3_execution.v2_nodes")
-_l3_v2_nodes_alias.__path__ = _l3_nodes.__path__
-_l3_v2_nodes_alias.__package__ = "langgraph_engine.level3_execution.nodes"
+# v2_nodes alias removed (v1.14.0) -- all imports now use canonical nodes/ path
 
 # ---------------------------------------------------------------------------
 # Load subgraph module (where _run_step lives) via importlib
@@ -252,9 +244,7 @@ _v2_mod.__package__ = "langgraph_engine.level3_execution"
 sys.modules["langgraph_engine.level3_execution.subgraph"] = _v2_mod
 _spec.loader.exec_module(_v2_mod)
 
-# Also register backward-compat shim paths for old test references
-sys.modules["langgraph_engine.subgraphs.level3_execution_v2"] = _v2_mod
-sys.modules["langgraph_engine.level3_execution.execution_v2"] = _v2_mod
+# Legacy shim paths removed (v1.14.0) -- v2 naming no longer exists
 
 _run_step = _v2_mod._run_step
 # _infra_cache lives in core/infrastructure.py; subgraph.py re-exports it

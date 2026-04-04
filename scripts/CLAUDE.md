@@ -1,9 +1,9 @@
 # Claude Workflow Engine - Scripts Directory Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.12.0
+**Version:** 1.14.0
 **Type:** LangGraph Orchestration Pipeline with RAG
-**Last Updated:** 2026-04-03
+**Last Updated:** 2026-04-04
 
 > For full project context, architecture, and development guidelines see the root `CLAUDE.md`.
 
@@ -30,7 +30,7 @@ This directory contains the pipeline entry point, hook scripts, and the core `la
 | `/CHANGELOG.md` | Full project changelog (root) |
 | `/SRS.md` | System Requirements Specification (root) |
 
-### langgraph_engine/ Package Structure (v1.12.0)
+### langgraph_engine/ Package Structure (v1.14.0)
 
 ```
 langgraph_engine/
@@ -61,10 +61,10 @@ langgraph_engine/
 # From project root:
 python scripts/3-level-flow.py --task "your task description"
 
-# Hook mode (Steps 0-9 only):
+# Hook mode (Pre-0, Step 0, Steps 8-9 only):
 CLAUDE_HOOK_MODE=1 python scripts/3-level-flow.py --task "fix login bug"
 
-# Full mode (all 15 steps):
+# Full mode (Pre-0, Step 0, Steps 8-14):
 CLAUDE_HOOK_MODE=0 python scripts/3-level-flow.py --task "add user profile feature"
 ```
 
@@ -98,4 +98,4 @@ PipelineBuilder().add_level_minus1().add_level1().add_my_level().build()
 
 ---
 
-**Last Updated:** 2026-04-03
+**Last Updated:** 2026-04-04

@@ -22,10 +22,14 @@ CHANGE LOG (v1.13.0):
   apply_integration_step1/2/3/4/5/6/7 removed (hooks only needed for live steps).
   route_pre_analysis conditional edges updated: both fast-path and RAG-hit now
   route to "level3_step8" (was "level3_step6" and "level3_step5" respectively).
-  Step 2 (plan execution) retained as optional branch post-step0.
-  Direct edge: level3_step0 -> level3_step2 -> level3_step8 (plan mode)
-             OR level3_step0 -> level3_step8 (no-plan mode, new default).
-  New step count: Pre-0, 0.0, 0.1, 0, [2], 8, 9, [10-14] = 9 active steps.
+
+CHANGE LOG (v1.14.0):
+  Step 0 caller scripts use claude CLI subprocess (not direct LLM API calls).
+  Step 2 (plan execution) removed from pipeline -- orchestrator subprocess
+  already produces a comprehensive plan. route_after_step0_to_step2_or_step8
+  removed; Step 0 now routes directly to Step 8.
+  Direct edge: level3_step0 -> level3_step8.
+  Active step count: Pre-0, 0.0, 0.1, 0, 8, 9, [10-14] = 8 active steps.
 """
 
 import sys
@@ -68,15 +72,14 @@ from .level2_standards import (
     node_mcp_plugin_discovery,
     node_tool_optimization_standards,
 )
-from .level3_execution.subgraph import level3_init_node
-from .level3_execution.subgraph import level3_merge_node as level3_v2_merge_node
 from .level3_execution.subgraph import (
+    level3_init_node,
+    level3_merge_node,
     orchestration_pre_analysis_node,
     route_pre_analysis,
     step0_0_project_context_node,
     step0_1_initial_callgraph_node,
     step0_task_analysis_node,
-    step2_plan_execution_node,
     step8_github_issue_node,
     step9_branch_creation_node,
     step10_implementation_note,
@@ -115,11 +118,8 @@ def route_standards_loading(state: FlowState) -> Literal["level2_java_standards"
     return "level2_merge"
 
 
-def route_after_step0_to_step2_or_step8(state: FlowState) -> Literal["level3_step2", "level3_step8"]:
-    """Conditional routing after Step 0: if plan required, execute Step 2; else skip to Step 8."""
-    if state.get(StepKeys.PLAN_REQUIRED, False):
-        return "level3_step2"
-    return "level3_step8"
+# REMOVED (v1.14.0): route_after_step0_to_step2_or_step8 -- Step 2 removed from pipeline.
+#   Step 0 now routes directly to Step 8.
 
 
 def route_after_step11_review(state: FlowState) -> Literal["level3_step12", "level3_step11_retry"]:
@@ -365,7 +365,7 @@ def level2_select_standards_node(state: FlowState) -> dict:
 
 
 # REMOVED (v1.13.0): apply_integration_step1 -- Step 1 no longer in graph
-# REMOVED (v1.13.0): apply_integration_step2 -- Step 2 standards hook removed (step2 is now optional, no hook)
+# REMOVED (v1.14.0): apply_integration_step2 -- Step 2 removed from pipeline
 # REMOVED (v1.13.0): apply_integration_step3 -- Step 3 no longer in graph
 # REMOVED (v1.13.0): apply_integration_step4 -- Step 4 no longer in graph
 # REMOVED (v1.13.0): apply_integration_step5 -- Step 5 no longer in graph
@@ -699,7 +699,7 @@ def _save_pipeline_execution_log(state: FlowState, final_status: str) -> None:
         log_lines.append(f"- Status: {state.get(StepKeys.LEVEL2_STATUS, 'unknown')}")
         log_lines.append("")
 
-        # Level 3 Steps (v1.13.0: Steps 1,3,4,5,6,7 removed; Step 2 is optional)
+        # Level 3 Steps (v1.14.0: Steps 1-7 removed; Step 0 routes directly to Step 8)
         log_lines.append("## Level 3: Execution Steps")
         log_lines.append("")
         log_lines.append("| Step | Name | Status | Duration | Details |")
@@ -707,7 +707,6 @@ def _save_pipeline_execution_log(state: FlowState, final_status: str) -> None:
 
         step_info = [
             (0, "Task Analysis + Template", "step0_task_type", "step0_complexity"),
-            (2, "Plan Execution (optional)", "step2_plan_status", "step2_phases"),
             (8, "GitHub Issue Creation", "step8_status", "step8_issue_url"),
             (9, "Branch Creation", "step9_status", "step9_branch_name"),
             (10, "Implementation", "step10_implementation_status", "step10_llm_invoked"),
@@ -788,7 +787,7 @@ def create_flow_graph(hook_mode: bool = False):
     Args:
         hook_mode: If True, skip Steps 10-14 (GitHub workflow) for fast
                    UserPromptSubmit hook execution. Only runs Levels -1/1/2
-                   and Steps 0/2/8/9 (analysis + prompt generation + issue + branch).
+                   and Steps 0/8/9 (analysis + prompt generation + issue + branch).
                    Steps 10-14 can be triggered separately after Claude has context.
 
     Returns:
@@ -801,7 +800,7 @@ def create_flow_graph(hook_mode: bool = False):
         Steps 1, 3, 4, 5, 6, 7 removed from graph.
         Step 0 now does consolidated LLM call (orchestration template) and
         populates all migration fields previously written by steps 1-7.
-        Step 2 (plan execution) retained as optional conditional branch.
+        Step 2 (plan execution) removed from pipeline (v1.14.0).
         route_pre_analysis targets updated to "level3_step8" for both fast paths.
         Standards hooks for removed steps are no longer registered.
     """
@@ -935,7 +934,7 @@ def create_flow_graph(hook_mode: bool = False):
     # ========================================================================
     # LEVEL 3: EXECUTION SYSTEM - 9-STEP PIPELINE (v1.13.0 CONSOLIDATED)
     #
-    # Active steps: Pre-0, 0.0, 0.1, 0, [2 optional], 8, 9, [10-14 full mode]
+    # Active steps: Pre-0, 0.0, 0.1, 0, 8, 9, [10-14 full mode]
     # Steps 1, 3, 4, 5, 6, 7 removed -- outputs merged into Step 0 template call.
     # ========================================================================
 
@@ -965,24 +964,13 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_node("level3_step0_1", step0_1_initial_callgraph_node)
     graph.add_edge("level3_step0_0", "level3_step0_1")
 
-    # Step 0: Task Analysis + Orchestration Template (consolidated LLM call).
+    # Step 0: Task Analysis + Orchestration (2 claude CLI subprocess calls).
     # Populates all migration fields for steps 8-14 (previously written by 1/3/4/5/6/7).
     graph.add_node("level3_step0", step0_task_analysis_node)
     graph.add_edge("level3_step0_1", "level3_step0")
 
-    # CONDITIONAL: plan_required -> step2 (plan execution) | step8 (direct to GitHub issue)
-    graph.add_conditional_edges(
-        "level3_step0",
-        route_after_step0_to_step2_or_step8,
-        {
-            "level3_step2": "level3_step2",
-            "level3_step8": "level3_step8",
-        },
-    )
-
-    # Step 2: Plan Execution (optional - only when step0 sets plan_required=True)
-    graph.add_node("level3_step2", step2_plan_execution_node)
-    graph.add_edge("level3_step2", "level3_step8")
+    # Direct edge: Step 0 -> Step 8 (Step 2 removed in v1.14.0)
+    graph.add_edge("level3_step0", "level3_step8")
 
     # ========================================================================
     # STEPS 8-9: Issue + Branch Creation (runs in BOTH hook and full mode)
@@ -1002,7 +990,7 @@ def create_flow_graph(hook_mode: bool = False):
     # Steps 11-14 = run in Stop hook after Claude finishes working
     # ========================================================================
     if hook_mode:
-        graph.add_node("level3_merge", level3_v2_merge_node)
+        graph.add_node("level3_merge", level3_merge_node)
         graph.add_edge("level3_step9", "level3_merge")
 
         graph.add_node("level3_output", output_node)
@@ -1064,7 +1052,7 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_edge("level3_standards_hook_step13", "level3_step14")
 
     # Merge node
-    graph.add_node("level3_merge", level3_v2_merge_node)
+    graph.add_node("level3_merge", level3_merge_node)
     graph.add_edge("level3_step14", "level3_merge")
 
     # ========================================================================

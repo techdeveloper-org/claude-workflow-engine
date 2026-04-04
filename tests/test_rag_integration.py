@@ -7,11 +7,8 @@ caching and recommendation for LangGraph pipeline nodes.
 
 import json
 import sys
-import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 # Add scripts to path for imports
 _SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
@@ -24,17 +21,20 @@ class TestRAGLayerInit:
 
     def test_rag_layer_creation(self):
         from langgraph_engine.rag_integration import RAGLayer
+
         rag = RAGLayer(session_id="test-session", project="test-project")
         assert rag.session_id == "test-session"
         assert rag.project == "test-project"
 
     def test_rag_layer_from_project_root(self):
         from langgraph_engine.rag_integration import RAGLayer
+
         rag = RAGLayer(project_root="/home/user/projects/my-app")
         assert rag.project == "my-app"
 
     def test_rag_stats_initial(self):
         from langgraph_engine.rag_integration import RAGLayer
+
         rag = RAGLayer()
         stats = rag.get_stats()
         assert stats["lookups"] == 0
@@ -44,6 +44,7 @@ class TestRAGLayerInit:
 
     def test_hit_rate_zero_lookups(self):
         from langgraph_engine.rag_integration import RAGLayer
+
         rag = RAGLayer()
         assert rag.get_hit_rate() == 0.0
 
@@ -54,6 +55,7 @@ class TestRAGLookup:
     @patch("langgraph_engine.rag_integration._get_vector_functions")
     def test_lookup_returns_none_when_unavailable(self, mock_vf):
         from langgraph_engine.rag_integration import RAGLayer
+
         mock_vf.return_value = {"available": False}
         rag = RAGLayer(session_id="s1")
         rag._available = False
@@ -63,11 +65,16 @@ class TestRAGLookup:
     @patch("langgraph_engine.rag_integration._get_vector_functions")
     def test_lookup_returns_none_on_no_matches(self, mock_vf):
         from langgraph_engine.rag_integration import RAGLayer
-        mock_search = MagicMock(return_value=json.dumps({
-            "success": True,
-            "matches": [],
-            "total_matches": 0,
-        }))
+
+        mock_search = MagicMock(
+            return_value=json.dumps(
+                {
+                    "success": True,
+                    "matches": [],
+                    "total_matches": 0,
+                }
+            )
+        )
         mock_vf.return_value = {
             "available": True,
             "search": mock_search,
@@ -86,22 +93,29 @@ class TestRAGLookup:
     @patch("langgraph_engine.rag_integration._get_vector_functions")
     def test_lookup_returns_hit_on_high_confidence(self, mock_vf):
         from langgraph_engine.rag_integration import RAGLayer
-        mock_search = MagicMock(return_value=json.dumps({
-            "success": True,
-            "matches": [{
-                "id": 123,
-                "score": 0.92,
-                "payload": {
-                    "step": "step0",
-                    "decision": '{"task_type": "Bug Fix", "complexity": 3}',
-                    "session_id": "old-session",
-                    "project": "test",
-                    "task_type": "Bug Fix",
-                    "indexed_at": "2026-03-16T10:00:00",
-                },
-            }],
-            "total_matches": 1,
-        }))
+
+        mock_search = MagicMock(
+            return_value=json.dumps(
+                {
+                    "success": True,
+                    "matches": [
+                        {
+                            "id": 123,
+                            "score": 0.92,
+                            "payload": {
+                                "step": "step0",
+                                "decision": '{"task_type": "Bug Fix", "complexity": 3}',
+                                "session_id": "old-session",
+                                "project": "test",
+                                "task_type": "Bug Fix",
+                                "indexed_at": "2026-03-16T10:00:00",
+                            },
+                        }
+                    ],
+                    "total_matches": 1,
+                }
+            )
+        )
         mock_vf.return_value = {
             "available": True,
             "search": mock_search,
@@ -124,20 +138,27 @@ class TestRAGLookup:
     @patch("langgraph_engine.rag_integration._get_vector_functions")
     def test_lookup_rejects_different_task_type(self, mock_vf):
         from langgraph_engine.rag_integration import RAGLayer
-        mock_search = MagicMock(return_value=json.dumps({
-            "success": True,
-            "matches": [{
-                "id": 123,
-                "score": 0.86,
-                "payload": {
-                    "step": "step0",
-                    "decision": '{"task_type": "Feature"}',
-                    "session_id": "old-session",
-                    "project": "test",
-                    "task_type": "Feature",
-                },
-            }],
-        }))
+
+        mock_search = MagicMock(
+            return_value=json.dumps(
+                {
+                    "success": True,
+                    "matches": [
+                        {
+                            "id": 123,
+                            "score": 0.86,
+                            "payload": {
+                                "step": "step0",
+                                "decision": '{"task_type": "Feature"}',
+                                "session_id": "old-session",
+                                "project": "test",
+                                "task_type": "Feature",
+                            },
+                        }
+                    ],
+                }
+            )
+        )
         mock_vf.return_value = {
             "available": True,
             "search": mock_search,
@@ -165,6 +186,7 @@ class TestRAGStore:
     @patch("langgraph_engine.rag_integration._get_vector_functions")
     def test_store_returns_false_when_unavailable(self, mock_vf):
         from langgraph_engine.rag_integration import RAGLayer
+
         mock_vf.return_value = {"available": False}
         rag = RAGLayer()
         rag._available = False
@@ -174,6 +196,7 @@ class TestRAGStore:
     @patch("langgraph_engine.rag_integration._get_vector_functions")
     def test_store_success(self, mock_vf):
         from langgraph_engine.rag_integration import RAGLayer
+
         mock_client = MagicMock()
         mock_vf.return_value = {
             "available": True,
@@ -188,10 +211,13 @@ class TestRAGStore:
         rag._available = True
 
         # Mock qdrant_client.models for PointStruct import inside store()
-        with patch.dict("sys.modules", {
-            "qdrant_client": MagicMock(),
-            "qdrant_client.models": MagicMock(),
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "qdrant_client": MagicMock(),
+                "qdrant_client.models": MagicMock(),
+            },
+        ):
             result = rag.store(
                 step="step0",
                 decision={"task_type": "Bug Fix", "complexity": 3},
@@ -208,12 +234,14 @@ class TestConvenienceFunctions:
 
     def test_get_rag_layer_singleton(self):
         from langgraph_engine.rag_integration import get_rag_layer
+
         rag1 = get_rag_layer(session_id="s1", project="p1")
         rag2 = get_rag_layer(session_id="s1", project="p1")
         assert rag1 is rag2  # Same session = same instance
 
     def test_get_rag_layer_new_session(self):
         from langgraph_engine.rag_integration import get_rag_layer
+
         rag1 = get_rag_layer(session_id="s1")
         rag2 = get_rag_layer(session_id="s2")
         assert rag1 is not rag2  # Different session = new instance
@@ -221,6 +249,7 @@ class TestConvenienceFunctions:
     @patch("langgraph_engine.rag_integration._get_vector_functions")
     def test_rag_lookup_before_llm(self, mock_vf):
         from langgraph_engine.rag_integration import rag_lookup_before_llm
+
         mock_vf.return_value = {"available": False}
         state = {"session_id": "s1", "project_root": "/tmp/test"}
         result = rag_lookup_before_llm(step="step0", query="test", state=state)
@@ -229,6 +258,7 @@ class TestConvenienceFunctions:
     @patch("langgraph_engine.rag_integration._get_vector_functions")
     def test_rag_store_after_node(self, mock_vf):
         from langgraph_engine.rag_integration import rag_store_after_node
+
         mock_vf.return_value = {"available": False}
         state = {"session_id": "s1", "project_root": "/tmp/test"}
         result = rag_store_after_node(
@@ -244,6 +274,7 @@ class TestStepThresholds:
 
     def test_thresholds_defined_for_llm_steps(self):
         from langgraph_engine.rag_integration import STEP_THRESHOLDS
+
         llm_steps = ["step0", "step1", "step2", "step5", "step7", "step8", "step11", "step13", "step14"]
         for step in llm_steps:
             assert step in STEP_THRESHOLDS, f"Missing threshold for {step}"
@@ -251,11 +282,13 @@ class TestStepThresholds:
 
     def test_step7_has_highest_threshold(self):
         from langgraph_engine.rag_integration import STEP_THRESHOLDS
+
         # Step 7 (final prompt) should have the highest threshold
         assert STEP_THRESHOLDS["step7"] >= 0.90
 
     def test_step14_has_lowest_threshold(self):
         from langgraph_engine.rag_integration import STEP_THRESHOLDS
+
         # Step 14 (summary) has lowest stakes
         assert STEP_THRESHOLDS["step14"] <= 0.80
 
@@ -265,6 +298,7 @@ class TestSkillSelectionRAGBoost:
 
     def test_rag_boost_returns_zero_no_skill_name(self):
         from langgraph_engine.skill_selection_criteria import _get_rag_skill_boost
+
         task = {"task_type": "Bug Fix"}
         skill = {"name": ""}
         assert _get_rag_skill_boost(task, skill) == 0.0
@@ -272,6 +306,7 @@ class TestSkillSelectionRAGBoost:
     @patch("langgraph_engine.skill_selection_criteria._load_cross_project_patterns")
     def test_pattern_boost_with_matching_patterns(self, mock_patterns):
         from langgraph_engine.skill_selection_criteria import _get_rag_skill_boost
+
         mock_patterns.return_value = {
             "patterns": [
                 {"name": "python", "confidence": 0.8, "projects": ["p1", "p2"]},
@@ -287,37 +322,42 @@ class TestSkillSelectionRAGBoost:
 
 
 class TestRAGLookupInRunStep:
-    """Test RAG lookup wiring in _run_step (level3_execution_v2.py)."""
+    """Test RAG lookup wiring in _run_step (level3_execution/subgraph.py)."""
 
     def test_rag_eligible_steps_defined(self):
-        from langgraph_engine.subgraphs.level3_execution_v2 import _RAG_ELIGIBLE_STEPS
-        assert _RAG_ELIGIBLE_STEPS == {0, 1, 2, 5, 7, 8}
+        from langgraph_engine.level3_execution.subgraph import _RAG_ELIGIBLE_STEPS
 
-    @patch("langgraph_engine.subgraphs.level3_execution_v2.rag_lookup_before_llm")
+        # Steps 1,2,5,7 removed in v1.13-v1.14; only Step 0 and Step 8 remain eligible
+        assert _RAG_ELIGIBLE_STEPS == {0, 8}
+
+    @patch("langgraph_engine.level3_execution.subgraph.rag_lookup_before_llm")
     def test_run_step_calls_rag_for_eligible_step(self, mock_rag_lookup):
-        from langgraph_engine.subgraphs.level3_execution_v2 import _run_step
+        from langgraph_engine.level3_execution.subgraph import _run_step
+
         mock_rag_lookup.return_value = None  # RAG miss
         dummy_fn = MagicMock(return_value={"step0_task_type": "Bug Fix"})
         state = {"user_message": "fix auth bug", "session_id": "s1"}
-        result = _run_step(0, "Task Analysis", dummy_fn, state)
+        _run_step(0, "Task Analysis", dummy_fn, state)
         # RAG should have been called
         mock_rag_lookup.assert_called_once()
         # step_fn should still be called (RAG miss)
         dummy_fn.assert_called_once()
 
-    @patch("langgraph_engine.subgraphs.level3_execution_v2.rag_lookup_before_llm")
+    @patch("langgraph_engine.level3_execution.subgraph.rag_lookup_before_llm")
     def test_run_step_skips_rag_for_non_eligible_step(self, mock_rag_lookup):
-        from langgraph_engine.subgraphs.level3_execution_v2 import _run_step
+        from langgraph_engine.level3_execution.subgraph import _run_step
+
         dummy_fn = MagicMock(return_value={"step3_tasks_validated": []})
         state = {"user_message": "fix auth bug", "session_id": "s1"}
-        result = _run_step(3, "Task Breakdown", dummy_fn, state)
+        _run_step(3, "Task Breakdown", dummy_fn, state)
         # RAG should NOT be called for step 3
         mock_rag_lookup.assert_not_called()
         dummy_fn.assert_called_once()
 
-    @patch("langgraph_engine.subgraphs.level3_execution_v2.rag_lookup_before_llm")
+    @patch("langgraph_engine.level3_execution.subgraph.rag_lookup_before_llm")
     def test_run_step_returns_cached_on_rag_hit(self, mock_rag_lookup):
-        from langgraph_engine.subgraphs.level3_execution_v2 import _run_step
+        from langgraph_engine.level3_execution.subgraph import _run_step
+
         mock_rag_lookup.return_value = {
             "rag_hit": True,
             "confidence": 0.92,
@@ -332,9 +372,10 @@ class TestRAGLookupInRunStep:
         assert result["step0_rag_hit"] is True
         assert result["step0_rag_confidence"] == 0.92
 
-    @patch("langgraph_engine.subgraphs.level3_execution_v2.rag_lookup_before_llm")
+    @patch("langgraph_engine.level3_execution.subgraph.rag_lookup_before_llm")
     def test_run_step_continues_on_rag_error(self, mock_rag_lookup):
-        from langgraph_engine.subgraphs.level3_execution_v2 import _run_step
+        from langgraph_engine.level3_execution.subgraph import _run_step
+
         mock_rag_lookup.side_effect = RuntimeError("Vector DB down")
         dummy_fn = MagicMock(return_value={"step0_task_type": "Feature"})
         state = {"user_message": "add feature", "session_id": "s1"}

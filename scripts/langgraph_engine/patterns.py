@@ -35,11 +35,11 @@ ASCII-only source - cp1252 safe (Windows).
 from __future__ import annotations
 
 import fnmatch
-import time
-import threading
 import functools
 import hashlib
 import json
+import threading
+import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, TypeVar
@@ -52,8 +52,8 @@ F = TypeVar("F", bound=Callable[..., Any])
 # ---------------------------------------------------------------------------
 # Cache constants
 # ---------------------------------------------------------------------------
-_DEFAULT_TTL_SECONDS = 300      # 5 minutes
-_DEFAULT_MAX_SIZE = 100         # Max entries before LRU eviction
+_DEFAULT_TTL_SECONDS = 300  # 5 minutes
+_DEFAULT_MAX_SIZE = 100  # Max entries before LRU eviction
 
 
 # ---------------------------------------------------------------------------
@@ -187,9 +187,9 @@ def memoize(
 
         # Attach helpers directly to the decorated function
         wrapper.cache_clear = cache_clear  # type: ignore[attr-defined]
-        wrapper.cache_info = cache_info    # type: ignore[attr-defined]
-        wrapper._cache = cache             # type: ignore[attr-defined]
-        wrapper._lock = lock               # type: ignore[attr-defined]
+        wrapper.cache_info = cache_info  # type: ignore[attr-defined]
+        wrapper._cache = cache  # type: ignore[attr-defined]
+        wrapper._lock = lock  # type: ignore[attr-defined]
 
         return wrapper  # type: ignore[return-value]
 
@@ -208,12 +208,14 @@ try:
     from loguru import logger as _logger
 except ImportError:
     import logging as _logging
+
     _logger = _logging.getLogger(__name__)  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------
 # @with_timeout(seconds)
 # ---------------------------------------------------------------------------
+
 
 def with_timeout(seconds: int) -> Callable[[F], F]:
     """Wrap a LangGraph node function with a per-invocation timeout.
@@ -238,6 +240,7 @@ def with_timeout(seconds: int) -> Callable[[F], F]:
         def step5_skill_selection(state: dict) -> dict:
             ...
     """
+
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
@@ -284,6 +287,7 @@ def with_timeout(seconds: int) -> Callable[[F], F]:
 # @with_metrics(step_name)
 # ---------------------------------------------------------------------------
 
+
 def with_metrics(step_name: str) -> Callable[[F], F]:
     """Record execution time and pass/fail status for a LangGraph node.
 
@@ -303,6 +307,7 @@ def with_metrics(step_name: str) -> Callable[[F], F]:
         def step5_skill_selection(state: dict) -> dict:
             ...
     """
+
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
@@ -336,9 +341,7 @@ def with_metrics(step_name: str) -> Callable[[F], F]:
                     metrics_list.append(entry)
                     result["_metrics"] = metrics_list
 
-                _logger.debug(
-                    "[with_metrics] %s => %s (%sms)", step_name, status, elapsed_ms
-                )
+                _logger.debug("[with_metrics] %s => %s (%sms)", step_name, status, elapsed_ms)
 
         return wrapper  # type: ignore[return-value]
 
@@ -348,6 +351,7 @@ def with_metrics(step_name: str) -> Callable[[F], F]:
 # ---------------------------------------------------------------------------
 # @with_retry(max_attempts, backoff)
 # ---------------------------------------------------------------------------
+
 
 def with_retry(
     max_attempts: int = 3,
@@ -387,8 +391,7 @@ def with_retry(
                     last_exc = exc
                     if attempt < max_attempts:
                         _logger.warning(
-                            "[with_retry] '%s' attempt %d/%d failed (%s). "
-                            "Retrying in %.1fs...",
+                            "[with_retry] '%s' attempt %d/%d failed (%s). " "Retrying in %.1fs...",
                             fn.__name__,
                             attempt,
                             max_attempts,
@@ -419,6 +422,7 @@ def with_retry(
 # @with_logging(step_name)
 # ---------------------------------------------------------------------------
 
+
 def with_logging(step_name: str) -> Callable[[F], F]:
     """Log start, end, and any error for a LangGraph node.
 
@@ -437,6 +441,7 @@ def with_logging(step_name: str) -> Callable[[F], F]:
         def step5_skill_selection(state: dict) -> dict:
             ...
     """
+
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
@@ -450,9 +455,7 @@ def with_logging(step_name: str) -> Callable[[F], F]:
                 return result
             except Exception as exc:  # noqa: BLE001
                 elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
-                _logger.error(
-                    "[%s] END ERROR (%sms): %s", step_name, elapsed_ms, exc
-                )
+                _logger.error("[%s] END ERROR (%sms): %s", step_name, elapsed_ms, exc)
                 raise
 
         return wrapper  # type: ignore[return-value]
@@ -587,9 +590,7 @@ class SkillRegistry:
                 f"_domain_{domain}",
                 {"type": "domain_placeholder"},
             )
-        _logger.debug(
-            "[SkillRegistry] Registered %d default domains", len(defaults)
-        )
+        _logger.debug("[SkillRegistry] Registered %d default domains", len(defaults))
 
     # ---------------------------------------------------------------------------
     # Read operations
