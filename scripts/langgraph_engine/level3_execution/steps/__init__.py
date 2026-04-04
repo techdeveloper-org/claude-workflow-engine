@@ -1,16 +1,17 @@
 """
 Level 3 Execution - Steps sub-package.
-Re-exports all 15 step functions plus the subgraph factory.
+
+CHANGE LOG (v1.15.0):
+  Removed step1, step3, step4, step5, step6, step7 exports -- these were
+  collapsed into Step 0 template call in v1.13.0 and are no longer called
+  by any active pipeline node. The step files themselves are removed as dead
+  code. Active steps exported here: step0, step8-step14.
+
+  step2_plan_execution kept as a deprecated no-op stub (backward-compat).
 """
 
 from .step0_task_analysis import step0_task_analysis  # noqa: F401
-from .step1_plan_mode_decision import step1_plan_mode_decision  # noqa: F401
 from .step2_plan_execution import step2_plan_execution  # noqa: F401
-from .step3_task_breakdown_validation import step3_task_breakdown_validation  # noqa: F401
-from .step4_toon_refinement import step4_toon_refinement  # noqa: F401
-from .step5_skill_agent_selection import step5_skill_agent_selection  # noqa: F401
-from .step6_skill_validation_download import step6_skill_validation_download  # noqa: F401
-from .step7_final_prompt_generation import step7_final_prompt_generation  # noqa: F401
 from .step8_github_issue_creation import step8_github_issue_creation  # noqa: F401
 from .step9_branch_creation import step9_branch_creation  # noqa: F401
 from .step10_implementation_execution import step10_implementation_execution  # noqa: F401

@@ -35,17 +35,7 @@ from .helper_nodes import (
 )
 
 # Standards integration hook functions
-from .helper_nodes.standards_helpers import (
-    apply_integration_step1,
-    apply_integration_step2,
-    apply_integration_step3,
-    apply_integration_step4,
-    apply_integration_step5,
-    apply_integration_step6,
-    apply_integration_step7,
-    apply_integration_step10,
-    apply_integration_step13,
-)
+from .helper_nodes.standards_helpers import apply_integration_step10, apply_integration_step13
 
 # Level 1 nodes
 from .level1_sync import (
@@ -75,13 +65,6 @@ from .level3_execution.subgraph import (
     step0_0_project_context_node,
     step0_1_initial_callgraph_node,
     step0_task_analysis_node,
-    step1_plan_mode_decision_node,
-    step2_plan_execution_node,
-    step3_task_breakdown_node,
-    step4_toon_refinement_node,
-    step5_skill_selection_node,
-    step6_skill_validation_node,
-    step7_final_prompt_node,
     step8_github_issue_node,
     step9_branch_creation_node,
     step10_implementation_note,
@@ -105,7 +88,6 @@ from .level_minus1 import (
 from .routing import (
     route_after_level_minus1,
     route_after_level_minus1_user_choice,
-    route_after_step1_decision,
     route_after_step11_review,
     route_standards_loading,
 )
@@ -274,11 +256,16 @@ class PipelineBuilder:
         return self
 
     # =========================================================================
-    # LEVEL 3: EXECUTION PIPELINE (15-step: Step 0-14)
+    # LEVEL 3: EXECUTION PIPELINE (v1.14.0: Pre-0, Step 0, Steps 8-14)
     # =========================================================================
 
     def add_level3(self, hook_mode: bool = False) -> "PipelineBuilder":
         """Wire Level 3 execution pipeline nodes and edges.
+
+        v1.14.0 active steps:
+            Pre-0 -> Step 0.0 -> Step 0.1 -> Step 0 -> Step 8 -> Step 9 -> [Steps 10-14]
+
+        Steps 1-7 were removed in v1.13.0 (collapsed into Step 0 orchestration template).
 
         Hook mode (hook_mode=True):
             Steps 0-9 execute: analysis + prompt + GitHub issue + branch
@@ -287,7 +274,7 @@ class PipelineBuilder:
         Full mode (hook_mode=False):
             Steps 0-14 execute sequentially with retry loop at Step 11.
 
-        Standards hooks run between each step to inject compliance context.
+        Standards hooks run at Steps 10 and 13 for compliance context injection.
         """
         self._hook_mode = hook_mode
         g = self._graph
@@ -297,7 +284,7 @@ class PipelineBuilder:
         g.add_edge("level2_optimize_context", "level3_init")
 
         # Pre-analysis gate: call graph scan + RAG orchestration lookup
-        # On RAG hit (confidence >= 0.85): jumps to level3_step5, skipping steps 0-4
+        # On RAG hit (confidence >= 0.85): jumps to level3_step8, skipping steps 0-4
         # On miss: falls through to level3_step0_0 (normal pre-flight flow)
         g.add_node("level3_pre_analysis", orchestration_pre_analysis_node)
         g.add_edge("level3_init", "level3_pre_analysis")
@@ -306,7 +293,7 @@ class PipelineBuilder:
             route_pre_analysis,
             {
                 "level3_step0_0": "level3_step0_0",
-                "level3_step5": "level3_step5",
+                "level3_step8": "level3_step8",
             },
         )
 
@@ -317,78 +304,14 @@ class PipelineBuilder:
         g.add_node("level3_step0_1", step0_1_initial_callgraph_node)
         g.add_edge("level3_step0_0", "level3_step0_1")
 
-        # Step 0: Task Analysis (provides task_type, complexity, tasks for Step 1)
+        # Step 0: Task Analysis (prompt_gen_expert + orchestrator_agent chain)
+        # Produces all step5/6/7 migration fields so Steps 8-14 work correctly.
         g.add_node("level3_step0", step0_task_analysis_node)
         g.add_edge("level3_step0_1", "level3_step0")
 
-        # Standards hook: Step 1 (before plan mode decision)
-        g.add_node("level3_standards_hook_step1", apply_integration_step1)
-        g.add_edge("level3_step0", "level3_standards_hook_step1")
-
-        # Step 1: Plan Mode Decision
-        g.add_node("level3_step1", step1_plan_mode_decision_node)
-        g.add_edge("level3_standards_hook_step1", "level3_step1")
-
-        # Conditional: plan_required -> step2 | step3
-        g.add_conditional_edges(
-            "level3_step1",
-            route_after_step1_decision,
-            {
-                "level3_step2": "level3_step2",
-                "level3_step3": "level3_step3",
-            },
-        )
-
-        # Standards hook: Step 2 (during plan execution)
-        g.add_node("level3_standards_hook_step2", apply_integration_step2)
-
-        # Step 2: Plan Execution (only when plan_required=True)
-        g.add_node("level3_step2", step2_plan_execution_node)
-        g.add_edge("level3_step2", "level3_standards_hook_step2")
-        g.add_edge("level3_standards_hook_step2", "level3_step3")
-
-        # Step 3: Task Breakdown
-        g.add_node("level3_step3", step3_task_breakdown_node)
-
-        # Standards hook: Step 3
-        g.add_node("level3_standards_hook_step3", apply_integration_step3)
-        g.add_edge("level3_step3", "level3_standards_hook_step3")
-
-        # Step 4: TOON Refinement
-        g.add_node("level3_step4", step4_toon_refinement_node)
-        g.add_edge("level3_standards_hook_step3", "level3_step4")
-
-        # Standards hook: Step 4
-        g.add_node("level3_standards_hook_step4", apply_integration_step4)
-        g.add_edge("level3_step4", "level3_standards_hook_step4")
-
-        # Step 5: Skill & Agent Selection
-        g.add_node("level3_step5", step5_skill_selection_node)
-        g.add_edge("level3_standards_hook_step4", "level3_step5")
-
-        # Standards hook: Step 5
-        g.add_node("level3_standards_hook_step5", apply_integration_step5)
-        g.add_edge("level3_step5", "level3_standards_hook_step5")
-
-        # Step 6: Skill Validation & Download
-        g.add_node("level3_step6", step6_skill_validation_node)
-        g.add_edge("level3_standards_hook_step5", "level3_step6")
-
-        # Standards hook: Step 6
-        g.add_node("level3_standards_hook_step6", apply_integration_step6)
-        g.add_edge("level3_step6", "level3_standards_hook_step6")
-
-        # Step 7: Final Prompt Generation
-        g.add_node("level3_step7", step7_final_prompt_node)
-        g.add_edge("level3_standards_hook_step6", "level3_step7")
-
-        # Standards hook: Step 7
-        g.add_node("level3_standards_hook_step7", apply_integration_step7)
-        g.add_edge("level3_step7", "level3_standards_hook_step7")
-
         # Step 8: GitHub Issue Creation (runs in both modes)
         g.add_node("level3_step8", step8_github_issue_node)
-        g.add_edge("level3_standards_hook_step7", "level3_step8")
+        g.add_edge("level3_step0", "level3_step8")
 
         # Step 9: Branch Creation (runs in both modes)
         g.add_node("level3_step9", step9_branch_creation_node)
