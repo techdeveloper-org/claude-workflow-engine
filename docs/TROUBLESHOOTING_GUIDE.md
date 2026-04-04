@@ -89,45 +89,7 @@ github.GithubException.GithubException: 401 {"message": "Bad credentials"}
 
 ---
 
-### 5. Anthropic API: 529 Overloaded
-
-**Symptom:**
-```
-anthropic.APIStatusError: 529 {"type":"error","error":{"type":"overloaded_error"}}
-```
-
-**Cause:** Anthropic API capacity limits during peak hours.
-
-**Fix:**
-- The pipeline automatically falls back to OpenAI then Ollama.
-- If all remote providers fail, ensure Ollama is running:
-  ```bash
-  ollama serve
-  ollama pull qwen2.5:7b
-  ```
-- See `docs/runbooks/RUNBOOK_LLM_PROVIDER_FAILURE.md` for full diagnosis.
-
----
-
-### 6. Ollama: Model Not Found
-
-**Symptom:**
-```
-[llm_provider] Ollama error: model 'qwen2.5:7b' not found
-```
-
-**Cause:** The model has not been pulled to the local Ollama registry.
-
-**Fix:**
-```bash
-ollama pull qwen2.5:7b
-# Verify
-ollama list
-```
-
----
-
-### 7. LangGraph StateGraph: Missing Key in State
+### 5. LangGraph StateGraph: Missing Key in State
 
 **Symptom:**
 ```

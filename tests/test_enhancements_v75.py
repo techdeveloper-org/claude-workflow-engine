@@ -1,13 +1,12 @@
 """Tests for v7.5.0 enhancements: checkpointer, system health, LLM health, standards reload."""
 
-import json
-import os
-import sys
-import pytest
-import tempfile
 import importlib.util
+import json
+import sys
+import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+
+import pytest
 
 # Add paths
 _PROJECT_ROOT = Path(__file__).parent.parent
@@ -41,12 +40,14 @@ class TestCheckpointerManager:
     def test_import_checkpointer(self):
         """Test checkpointer module imports correctly."""
         from langgraph_engine.checkpointer import CheckpointerManager
+
         assert CheckpointerManager is not None
 
     def test_get_memory_checkpointer(self):
         """Test MemorySaver creation."""
         try:
             from langgraph_engine.checkpointer import CheckpointerManager
+
             cp = CheckpointerManager.get_memory_checkpointer()
             assert cp is not None
         except RuntimeError:
@@ -56,6 +57,7 @@ class TestCheckpointerManager:
         """Test default checkpointer in memory mode."""
         try:
             from langgraph_engine.checkpointer import CheckpointerManager
+
             cp = CheckpointerManager.get_default_checkpointer(use_sqlite=False)
             assert cp is not None
         except RuntimeError:
@@ -65,6 +67,7 @@ class TestCheckpointerManager:
         """Test SQLite checkpointer creation with temp path."""
         try:
             from langgraph_engine.checkpointer import CheckpointerManager
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 db_path = Path(tmpdir) / "test-checkpoints.db"
                 cp = CheckpointerManager.get_sqlite_checkpointer(db_path)
@@ -75,6 +78,7 @@ class TestCheckpointerManager:
     def test_setup_checkpoint_db(self):
         """Test checkpoint DB setup and verification."""
         from langgraph_engine.checkpointer import CheckpointerManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
             result = CheckpointerManager.setup_checkpoint_db(db_path)
@@ -84,6 +88,7 @@ class TestCheckpointerManager:
     def test_get_checkpoint_info_no_db(self):
         """Test checkpoint info when no DB exists."""
         from langgraph_engine.checkpointer import CheckpointerManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "nonexistent.db"
             info = CheckpointerManager.get_checkpoint_info(db_path)
@@ -92,6 +97,7 @@ class TestCheckpointerManager:
     def test_get_checkpoint_info_with_db(self):
         """Test checkpoint info with existing DB."""
         from langgraph_engine.checkpointer import CheckpointerManager
+
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
             # Create the DB
@@ -103,6 +109,7 @@ class TestCheckpointerManager:
     def test_get_invoke_config(self):
         """Test invoke config generation."""
         from langgraph_engine.checkpointer import get_invoke_config
+
         config = get_invoke_config("SESSION-test-123")
         assert config["configurable"]["thread_id"] == "SESSION-test-123"
         assert config["recursion_limit"] == 1000
@@ -111,6 +118,7 @@ class TestCheckpointerManager:
         """Test checkpointer config dict."""
         try:
             from langgraph_engine.checkpointer import get_checkpointer_config
+
             config = get_checkpointer_config()
             assert "checkpointer" in config
             assert config["checkpointer"] is not None
@@ -128,9 +136,7 @@ class TestSystemHealthCheck:
 
     @pytest.fixture(autouse=True)
     def load_module(self):
-        self.mod = _load_mcp_module(
-            "enforcement_mcp_test", "enforcement_mcp_server.py"
-        )
+        self.mod = _load_mcp_module("enforcement_mcp_test", "enforcement_mcp_server.py")
 
     def test_health_check_returns_json(self):
         """Test system health check returns valid JSON."""
@@ -167,60 +173,6 @@ class TestSystemHealthCheck:
 
 
 # ============================================================================
-# ASYNC LLM HEALTH CHECK TESTS
-# ============================================================================
-
-
-class TestLLMHealthCheck:
-    """Tests for enhanced llm_health_check with concurrent probing."""
-
-    @pytest.fixture(autouse=True)
-    def load_module(self):
-        self.mod = _load_mcp_module(
-            "llm_mcp_test", "llm_mcp_server.py"
-        )
-
-    def test_health_check_returns_json(self):
-        """Test LLM health check returns valid JSON."""
-        result = _parse(self.mod.llm_health_check())
-        assert "success" in result
-        assert "providers" in result
-
-    def test_health_check_has_providers(self):
-        """Test health check probes all 4 providers."""
-        result = _parse(self.mod.llm_health_check(force_refresh=True))
-        providers = result.get("providers", {})
-        # Should attempt all 4 providers
-        expected = {"ollama", "claude_cli", "anthropic", "openai"}
-        assert expected.issubset(set(providers.keys()))
-
-    def test_health_check_caching(self):
-        """Test health check caches results."""
-        # First call
-        result1 = _parse(self.mod.llm_health_check(force_refresh=True))
-        assert result1.get("from_cache") is False
-
-        # Second call should be cached
-        result2 = _parse(self.mod.llm_health_check())
-        assert result2.get("from_cache") is True
-
-    def test_health_check_force_refresh(self):
-        """Test force_refresh bypasses cache."""
-        # Prime cache
-        self.mod.llm_health_check()
-        # Force refresh
-        result = _parse(self.mod.llm_health_check(force_refresh=True))
-        assert result.get("from_cache") is False
-
-    def test_health_check_provider_status_fields(self):
-        """Test each provider has required status fields."""
-        result = _parse(self.mod.llm_health_check(force_refresh=True))
-        for name, info in result.get("providers", {}).items():
-            assert "available" in info or "status" in info, \
-                f"Provider {name} missing status fields"
-
-
-# ============================================================================
 # DYNAMIC STANDARDS RELOAD TESTS
 # ============================================================================
 
@@ -230,34 +182,38 @@ class TestDynamicStandardsReload:
 
     @pytest.fixture(autouse=True)
     def load_module(self):
-        self.mod = _load_mcp_module(
-            "standards_loader_test", "standards_loader_mcp_server.py"
-        )
+        self.mod = _load_mcp_module("standards_loader_test", "standards_loader_mcp_server.py")
 
     def test_reload_returns_json(self):
         """Test reload_standards returns valid JSON."""
-        result = _parse(self.mod.reload_standards(
-            project_path=str(_PROJECT_ROOT),
-            start_watcher=False,
-        ))
+        result = _parse(
+            self.mod.reload_standards(
+                project_path=str(_PROJECT_ROOT),
+                start_watcher=False,
+            )
+        )
         assert result["success"] is True
         assert result["reloaded"] is True
 
     def test_reload_returns_standards_count(self):
         """Test reload returns standards count."""
-        result = _parse(self.mod.reload_standards(
-            project_path=str(_PROJECT_ROOT),
-            start_watcher=False,
-        ))
+        result = _parse(
+            self.mod.reload_standards(
+                project_path=str(_PROJECT_ROOT),
+                start_watcher=False,
+            )
+        )
         assert "standards_loaded" in result
         assert isinstance(result["standards_loaded"], int)
 
     def test_reload_detects_project_type(self):
         """Test reload detects project type."""
-        result = _parse(self.mod.reload_standards(
-            project_path=str(_PROJECT_ROOT),
-            start_watcher=False,
-        ))
+        result = _parse(
+            self.mod.reload_standards(
+                project_path=str(_PROJECT_ROOT),
+                start_watcher=False,
+            )
+        )
         assert result["project_type"] == "python"
 
     def test_cache_invalidation(self):
@@ -285,10 +241,12 @@ class TestDynamicStandardsReload:
     def test_reload_with_watcher(self):
         """Test reload with watcher enabled."""
         self.mod._file_watcher_active = False
-        result = _parse(self.mod.reload_standards(
-            project_path=str(_PROJECT_ROOT),
-            start_watcher=True,
-        ))
+        result = _parse(
+            self.mod.reload_standards(
+                project_path=str(_PROJECT_ROOT),
+                start_watcher=True,
+            )
+        )
         assert result["success"] is True
         assert "watcher" in result
         assert "watched_dirs" in result
@@ -305,12 +263,14 @@ class TestOrchestratorCheckpointer:
     def test_orchestrator_imports_checkpointer(self):
         """Test orchestrator imports CheckpointerManager."""
         from langgraph_engine.orchestrator import CheckpointerManager
+
         assert CheckpointerManager is not None
 
     def test_create_flow_graph_compiles(self):
         """Test create_flow_graph compiles successfully."""
         try:
             from langgraph_engine.orchestrator import create_flow_graph
+
             graph = create_flow_graph()
             assert graph is not None
         except Exception:
@@ -319,6 +279,7 @@ class TestOrchestratorCheckpointer:
     def test_create_initial_state(self):
         """Test create_initial_state builds valid state."""
         from langgraph_engine.orchestrator import create_initial_state
+
         state = create_initial_state(
             session_id="test-session",
             project_root="/tmp/test",

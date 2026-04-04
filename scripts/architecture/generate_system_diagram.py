@@ -222,7 +222,7 @@ def build():
     llm_id = rsys(450, "LLM Providers (4)\nOllama / Anthropic / OpenAI / Groq", "#E1D5E7", "#9673A6")
     rag_id = rsys(505, "Qdrant Vector DB\n4 Collections (RAG Cache)", "#E1D5E7", "#9673A6")
     cg_id = rsys(555, "CallGraph Engine\nPython/Java/TS/Kotlin (578 cls)", "#E1D5E7", "#9673A6")
-    mcp_id = rsys(615, "20 MCP Servers  (328 tools)\nAll registered in settings.json", "#F0F0F0", "#666666")
+    rsys(615, "14 MCP Servers  (295 tools)\nAll registered in settings.json", "#F0F0F0", "#666666")
 
     # Separator label
     C.append(section_label(RX, 668, R_W, 18, "\u2015\u2015  Hook Layer  \u2015\u2015"))
@@ -504,9 +504,8 @@ def build():
     cur_y += s_gap
 
     # Step 6
-    s6_id = step(MX + 10, cur_y, 230, 42, "Step 6  Skill Validation\n[MCP skill-manager]  download if missing")
+    s6_id = step(MX + 10, cur_y, 230, 42, "Step 6  Skill Validation")
     C.append(arrow(s5_id, s6_id, "", FLOW_ARROW))
-    extern_link(s6_id, mcp_id, "skill-manager")
     cur_y += s_gap
 
     # Step 7

@@ -329,11 +329,6 @@
           <mxGeometry x="2250" y="580" width="180" height="120" as="geometry" />
         </mxCell>
 
-        <!-- Skill Manager -->
-        <mxCell id="86" value="&lt;b&gt;skill_manager_mcp&lt;/b&gt; (8 tools)&lt;br&gt;load · search · validate&lt;br&gt;rank · conflicts&lt;br&gt;&lt;font color='#666'&gt;Steps: 5, 6&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5D8DC;strokeColor=#2C3E50;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="2250" y="710" width="180" height="75" as="geometry" />
-        </mxCell>
-
         <!-- Standards Loader -->
         <mxCell id="87" value="&lt;b&gt;standards_loader_mcp&lt;/b&gt; (7 tools)&lt;br&gt;detect · framework · hot-reload&lt;br&gt;&lt;font color='#666'&gt;Level 2&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5D8DC;strokeColor=#2C3E50;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="2250" y="795" width="180" height="65" as="geometry" />
@@ -649,10 +644,6 @@
         </mxCell>
         <!-- Step 13 → UML -->
         <mxCell id="ex6" value="generate 13 UML types" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#2C3E50;fontSize=9;" edge="1" source="60" target="89" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <!-- Step 5 → Skill Manager -->
-        <mxCell id="ex7" value="skill lookup" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#2C3E50;fontSize=9;" edge="1" source="49" target="86" parent="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <!-- Step 8 → Jira (optional) -->

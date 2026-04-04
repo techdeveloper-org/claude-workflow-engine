@@ -6,14 +6,13 @@ Does NOT require running MCP servers - imports functions directly.
 Windows-safe: ASCII only (cp1252 compatible).
 """
 
+import importlib.util
 import json
 import os
-import sys
 import tempfile
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-import importlib.util
+
+import pytest
 
 _MCP_DIR = Path(__file__).parent.parent / "src" / "mcp"
 
@@ -34,6 +33,7 @@ def _parse(result):
 # =============================================================================
 # IMPORT HEALTH: All 10 servers must import without errors
 # =============================================================================
+
 
 class TestImportHealth:
     """Verify all MCP server modules import cleanly."""
@@ -69,15 +69,6 @@ class TestImportHealth:
         assert hasattr(mod, "get_flow_trace_summary")
         assert hasattr(mod, "check_module_health")
 
-    def test_llm_provider_imports(self):
-        mod = _load_module("llm_mcp", _MCP_DIR / "llm_mcp_server.py")
-        assert hasattr(mod, "llm_generate")
-        assert hasattr(mod, "llm_git_commit_title")
-        assert hasattr(mod, "llm_classify_step")
-        assert hasattr(mod, "llm_select_model")
-        assert hasattr(mod, "llm_discover_models")
-        assert hasattr(mod, "llm_hybrid_generate")
-
     def test_token_optimizer_imports(self):
         mod = _load_module("token_opt_mcp", _MCP_DIR / "token_optimization_mcp_server.py")
         assert hasattr(mod, "optimize_tool_call")
@@ -108,19 +99,11 @@ class TestImportHealth:
         assert hasattr(mod, "load_standards")
         assert hasattr(mod, "list_available_standards")
 
-    def test_skill_manager_imports(self):
-        mod = _load_module("skill_mcp", _MCP_DIR / "skill_manager_mcp_server.py")
-        assert hasattr(mod, "skill_load_all")
-        assert hasattr(mod, "skill_search")
-        assert hasattr(mod, "skill_validate")
-        assert hasattr(mod, "skill_rank")
-        assert hasattr(mod, "skill_detect_conflicts")
-        assert hasattr(mod, "agent_load_all")
-
 
 # =============================================================================
 # TOOL COUNT VERIFICATION: Each server has expected number of tools
 # =============================================================================
+
 
 class TestToolCounts:
     """Verify each server exposes the expected number of tools."""
@@ -138,44 +121,27 @@ class TestToolCounts:
     def test_enforcement_tool_count(self):
         mod = _load_module("enforcement_mcp", _MCP_DIR / "enforcement_mcp_server.py")
         public_tools = [
-            "check_enforcement_status", "enforce_policy_step", "log_tool_usage",
-            "verify_compliance", "list_policies", "record_policy_execution",
-            "get_session_id", "get_flow_trace_summary", "check_module_health"
+            "check_enforcement_status",
+            "enforce_policy_step",
+            "log_tool_usage",
+            "verify_compliance",
+            "list_policies",
+            "record_policy_execution",
+            "get_session_id",
+            "get_flow_trace_summary",
+            "check_module_health",
         ]
         for tool in public_tools:
             assert hasattr(mod, tool), f"Missing tool: {tool}"
-
-    def test_llm_provider_tool_count(self):
-        mod = _load_module("llm_mcp", _MCP_DIR / "llm_mcp_server.py")
-        tools = [attr for attr in dir(mod) if attr.startswith("llm_")]
-        assert len(tools) >= 7, f"Expected 7+ llm tools, got {len(tools)}: {tools}"
 
 
 # =============================================================================
 # CROSS-SERVER INTEGRATION: Scenarios that span multiple servers
 # =============================================================================
 
+
 class TestCrossServerIntegration:
     """Test scenarios that require multiple MCP servers working together."""
-
-    def test_llm_step_classification_covers_all_steps(self):
-        """LLM classify_step should handle all 14 pipeline steps."""
-        mod = _load_module("llm_mcp", _MCP_DIR / "llm_mcp_server.py")
-        steps = [f"step{i}" for i in range(14)]
-        step_names = [
-            "step0_prompt_generation", "step1_plan_mode_decision",
-            "step2_plan_execution", "step3_task_analysis",
-            "step4_model_selection", "step5_skill_selection",
-            "step6_tool_optimization", "step7_context_reading",
-            "step8_progress_tracking", "step9_git_commit",
-            "step10_github_pr", "step11_github_issues",
-            "step12_parallel_execution", "step13_failure_prevention",
-        ]
-        for step in step_names:
-            result = _parse(mod.llm_classify_step(step))
-            assert result["success"] is True
-            assert "step_type" in result
-            assert result["needs_llm"] is not None
 
     def test_token_optimizer_read_optimization(self):
         """Token optimizer should add offset/limit for large files."""
@@ -186,9 +152,7 @@ class TestCrossServerIntegration:
             tmp_path = f.name
 
         try:
-            result = _parse(mod.optimize_tool_call(
-                "Read", json.dumps({"file_path": tmp_path})
-            ))
+            result = _parse(mod.optimize_tool_call("Read", json.dumps({"file_path": tmp_path})))
             assert result["success"] is True
             assert result["was_optimized"] is True
             assert result["optimized_params"].get("limit") is not None
@@ -199,9 +163,7 @@ class TestCrossServerIntegration:
     def test_token_optimizer_grep_head_limit(self):
         """Token optimizer should enforce head_limit on Grep."""
         mod = _load_module("token_opt", _MCP_DIR / "token_optimization_mcp_server.py")
-        result = _parse(mod.optimize_tool_call(
-            "Grep", json.dumps({"pattern": "class.*Service"})
-        ))
+        result = _parse(mod.optimize_tool_call("Grep", json.dumps({"pattern": "class.*Service"})))
         assert result["success"] is True
         assert result["optimized_params"]["head_limit"] == 100
         assert result["optimized_params"]["output_mode"] == "files_with_matches"
@@ -242,8 +204,9 @@ class TestCrossServerIntegration:
         for filename, expected_skill in test_cases:
             result = _parse(mod.get_dynamic_skill_hint(filename))
             assert result["success"] is True
-            assert result["suggested_skill"] == expected_skill, \
-                f"Expected {expected_skill} for {filename}, got {result['suggested_skill']}"
+            assert (
+                result["suggested_skill"] == expected_skill
+            ), f"Expected {expected_skill} for {filename}, got {result['suggested_skill']}"
 
     def test_enforcement_verify_compliance_structure(self):
         """Enforcement compliance check should return proper structure."""
@@ -267,6 +230,7 @@ class TestCrossServerIntegration:
 # =============================================================================
 # AST CODE NAVIGATION: Token optimizer's unique feature
 # =============================================================================
+
 
 class TestASTNavigation:
     """Test AST code navigation across languages."""
@@ -378,6 +342,7 @@ class TestASTNavigation:
 # DEDUPLICATION TESTS
 # =============================================================================
 
+
 class TestContextDeduplication:
     """Test context deduplication logic."""
 
@@ -426,6 +391,7 @@ class TestContextDeduplication:
 # SMART READ STRATEGY TESTS
 # =============================================================================
 
+
 class TestSmartRead:
     """Test smart file reading strategy recommendations."""
 
@@ -459,51 +425,6 @@ class TestSmartRead:
             assert "offset" in result["strategy"].get("params", {})
         finally:
             os.unlink(tmp_path)
-
-
-# =============================================================================
-# SKILL MANAGER FUNCTIONAL TESTS
-# =============================================================================
-
-class TestSkillManagerFunctional:
-    """Test skill manager with mock filesystem."""
-
-    def test_skill_search_empty(self):
-        """Search with nonexistent dir should return empty results."""
-        mod = _load_module("skill_mcp", _MCP_DIR / "skill_manager_mcp_server.py")
-        with patch.object(mod, "SKILLS_DIR", Path("/nonexistent/skills")):
-            result = _parse(mod.skill_search(query="python"))
-            assert result["success"] is True
-            assert result["count"] == 0
-
-    def test_skill_validate_no_requirements(self):
-        """Validate with no requirements should always pass."""
-        mod = _load_module("skill_mcp", _MCP_DIR / "skill_manager_mcp_server.py")
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            skill_dir = Path(tmpdir) / "test-skill"
-            skill_dir.mkdir()
-            (skill_dir / "SKILL.md").write_text("# Test Skill\n- **Capabilities**: orm, jwt\n")
-
-            with patch.object(mod, "SKILLS_DIR", Path(tmpdir)):
-                result = _parse(mod.skill_validate("test-skill", ""))
-                assert result["success"] is True
-                assert result["valid"] is True
-
-    def test_skill_detect_no_conflicts(self):
-        """Non-conflicting skills should report compatible."""
-        mod = _load_module("skill_mcp", _MCP_DIR / "skill_manager_mcp_server.py")
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            for name in ["skill-a", "skill-b"]:
-                d = Path(tmpdir) / name
-                d.mkdir()
-                (d / "SKILL.md").write_text(f"# {name}\n")
-
-            with patch.object(mod, "SKILLS_DIR", Path(tmpdir)):
-                result = _parse(mod.skill_detect_conflicts("skill-a,skill-b"))
-                assert result["success"] is True
-                assert result["compatible"] is True
 
 
 if __name__ == "__main__":

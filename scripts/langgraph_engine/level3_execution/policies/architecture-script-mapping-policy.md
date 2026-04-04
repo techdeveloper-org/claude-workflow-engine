@@ -77,7 +77,7 @@ All scripts that existed in the original v1.0.0 policy (65 total) but are no lon
 | Git commit (auto-commit-enforcer, auto-commit-detector, auto-commit) | `git_operations.py`, `github_facade.py` |
 | GitHub integration (github-issue, pr-workflow) | `github_integration.py`, `subgraphs/level3_steps8to12_github.py` |
 | Progress tracking (check-incomplete-work) | `progress_display.py`, `step_logger.py` |
-| Skill management (skill-detector, skill-manager, core-skills-enforcer) | `skill_manager.py`, `skill_agent_loader.py` |
+| Skill management (skill-detector, core-skills-enforcer) | `skill_manager.py`, `skill_agent_loader.py` |
 
 ---
 

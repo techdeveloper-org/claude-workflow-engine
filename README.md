@@ -661,9 +661,9 @@ The single data source for all 13 UML diagram types is also the call graph - `um
 - Checkpoint recovery (resume from any step after crash)
 - Signal handling (Ctrl+C graceful recovery)
 
-### 20 MCP Servers (328 tools) — All in Separate Repos
+### 14 MCP Servers (295 tools) — All in Separate Repos
 
-All 20 MCP servers use FastMCP protocol (stdio JSON-RPC) and have been extracted to individual
+All 14 MCP servers use FastMCP protocol (stdio JSON-RPC) and have been extracted to individual
 private repos under [`techdeveloper-org`](https://github.com/orgs/techdeveloper-org/repositories)
 for independent versioning, testing, and reuse. Each is registered in `~/.claude/settings.json`
 and points to `mcp-{name}/server.py` in the local workspace.
@@ -679,25 +679,19 @@ and points to `mcp-{name}/server.py` in the local workspace.
 | 3 | git-ops | [mcp-git-ops](https://github.com/techdeveloper-org/mcp-git-ops) | 14 | Git (branch, commit, push, pull, stash, diff, fetch, cleanup) |
 | 4 | github-api | [mcp-github-api](https://github.com/techdeveloper-org/mcp-github-api) | 12 | GitHub (issue, PR, merge, label, build validate, full merge cycle) |
 | 5 | policy-enforcement | [mcp-policy-enforcement](https://github.com/techdeveloper-org/mcp-policy-enforcement) | 11 | Policy compliance, flow-trace, module health, system health |
-| 6 | llm-provider | [mcp-llm-provider](https://github.com/techdeveloper-org/mcp-llm-provider) | 8 | LLM access (4 providers, hybrid GPU-first, model selection) |
-| 7 | llm-router | [mcp-llm-router](https://github.com/techdeveloper-org/mcp-llm-router) | 4 | Intelligent LLM routing, step classification, model selection |
-| 8 | ollama-provider | [mcp-ollama-provider](https://github.com/techdeveloper-org/mcp-ollama-provider) | 5 | Local Ollama GPU inference, model discovery, pull |
-| 9 | anthropic-provider | [mcp-anthropic-provider](https://github.com/techdeveloper-org/mcp-anthropic-provider) | 4 | Direct Anthropic Claude API, cost estimation |
-| 10 | openai-provider | [mcp-openai-provider](https://github.com/techdeveloper-org/mcp-openai-provider) | 4 | Direct OpenAI GPT API, cost estimation |
-| 11 | token-optimizer | [mcp-token-optimizer](https://github.com/techdeveloper-org/mcp-token-optimizer) | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
-| 12 | pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 8 | Pre-tool validation (8 policy checks, skill hints) |
-| 13 | post-tool-tracker | [mcp-post-tool-tracker](https://github.com/techdeveloper-org/mcp-post-tool-tracker) | 6 | Post-tool tracking (progress, commit readiness, stats) |
-| 14 | standards-loader | [mcp-standards-loader](https://github.com/techdeveloper-org/mcp-standards-loader) | 7 | Standards (project detect, framework detect, hot-reload) |
-| 15 | skill-manager | [mcp-skill-manager](https://github.com/techdeveloper-org/mcp-skill-manager) | 8 | Skill lifecycle (load, search, validate, rank, conflicts) |
-| 16 | uml-diagram | [mcp-uml-diagram](https://github.com/techdeveloper-org/mcp-uml-diagram) | 15 | UML generation (13 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io) |
-| 17 | drawio-diagram | [mcp-drawio-diagram](https://github.com/techdeveloper-org/mcp-drawio-diagram) | 5 | Draw.io editable diagrams (12 types, .drawio files, shareable URLs) |
-| 18 | jira-api | [mcp-jira-api](https://github.com/techdeveloper-org/mcp-jira-api) | 10 | Jira (create/search/transition issues, link PRs, Cloud + Server) |
-| 19 | jenkins-ci | [mcp-jenkins-ci](https://github.com/techdeveloper-org/mcp-jenkins-ci) | 10 | Jenkins CI/CD (trigger/abort builds, console output, queue, polling) |
-| 20 | figma-api | [mcp-figma](https://github.com/techdeveloper-org/mcp-figma) | 10 | Figma (file info, components, design tokens, styles, design review) |
+| 6 | token-optimizer | [mcp-token-optimizer](https://github.com/techdeveloper-org/mcp-token-optimizer) | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
+| 7 | pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 8 | Pre-tool validation (8 policy checks, skill hints) |
+| 8 | post-tool-tracker | [mcp-post-tool-tracker](https://github.com/techdeveloper-org/mcp-post-tool-tracker) | 6 | Post-tool tracking (progress, commit readiness, stats) |
+| 9 | standards-loader | [mcp-standards-loader](https://github.com/techdeveloper-org/mcp-standards-loader) | 7 | Standards (project detect, framework detect, hot-reload) |
+| 10 | uml-diagram | [mcp-uml-diagram](https://github.com/techdeveloper-org/mcp-uml-diagram) | 15 | UML generation (13 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io) |
+| 11 | drawio-diagram | [mcp-drawio-diagram](https://github.com/techdeveloper-org/mcp-drawio-diagram) | 5 | Draw.io editable diagrams (12 types, .drawio files, shareable URLs) |
+| 12 | jira-api | [mcp-jira-api](https://github.com/techdeveloper-org/mcp-jira-api) | 10 | Jira (create/search/transition issues, link PRs, Cloud + Server) |
+| 13 | jenkins-ci | [mcp-jenkins-ci](https://github.com/techdeveloper-org/mcp-jenkins-ci) | 10 | Jenkins CI/CD (trigger/abort builds, console output, queue, polling) |
+| 14 | figma-api | [mcp-figma](https://github.com/techdeveloper-org/mcp-figma) | 10 | Figma (file info, components, design tokens, styles, design review) |
 
 > **Shared base:** [mcp-base](https://github.com/techdeveloper-org/mcp-base) — MCPResponse builder, @mcp_tool_handler, AtomicJsonStore, LazyClient. Each server includes a `base/` copy.
 >
-> **Total:** 20 server repos + 1 shared base = [21 repos](https://github.com/orgs/techdeveloper-org/repositories) under `techdeveloper-org`
+> **Total:** 14 server repos + 1 shared base = [15 repos](https://github.com/orgs/techdeveloper-org/repositories) under `techdeveloper-org`
 
 ### RAG Integration (Vector DB Decision Caching)
 

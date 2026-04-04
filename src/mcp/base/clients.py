@@ -11,7 +11,6 @@ Replaces duplicated lazy-init patterns across 5+ MCP servers:
   - PyGithub client: ``github_mcp_server``
   - Qdrant client: ``vector_db_mcp_server``
   - Embedding model: ``vector_db_mcp_server``
-  - LLM module: ``llm_mcp_server``
 
 Windows-Safe: ASCII only (cp1252 compatible)
 """
@@ -115,10 +114,7 @@ class LazyClient(ABC):
         """
         client = self.get()
         if client is None:
-            raise RuntimeError(
-                f"{self.__class__.__name__} not available: "
-                f"{self._error or 'initialization failed'}"
-            )
+            raise RuntimeError(f"{self.__class__.__name__} not available: " f"{self._error or 'initialization failed'}")
         return client
 
     @property
@@ -221,6 +217,7 @@ class LazyClient(ABC):
 # Concrete Client Implementations
 # ---------------------------------------------------------------------------
 
+
 class GitRepoClient(LazyClient):
     """Lazy GitPython ``Repo`` client for git operations.
 
@@ -261,11 +258,10 @@ class GitRepoClient(LazyClient):
         """
         try:
             from git import Repo
+
             return Repo(repo_path)
         except ImportError:
-            raise RuntimeError(
-                "GitPython not installed. Install with: pip install GitPython"
-            )
+            raise RuntimeError("GitPython not installed. Install with: pip install GitPython")
 
     def _initialize(self) -> Any:
         """Initialize the default git repo at ``_repo_path``.
@@ -278,11 +274,10 @@ class GitRepoClient(LazyClient):
         """
         try:
             from git import Repo
+
             return Repo(self._repo_path)
         except ImportError:
-            raise RuntimeError(
-                "GitPython not installed. Install with: pip install GitPython"
-            )
+            raise RuntimeError("GitPython not installed. Install with: pip install GitPython")
 
     def _health_check(self) -> Optional[dict]:
         """Check git repo health (branch name and dirty state).
@@ -324,16 +319,11 @@ class GitHubApiClient(LazyClient):
         try:
             from github import Github
         except ImportError:
-            raise RuntimeError(
-                "PyGithub not installed. Install with: pip install PyGithub"
-            )
+            raise RuntimeError("PyGithub not installed. Install with: pip install PyGithub")
 
         token = self._resolve_token()
         if not token:
-            raise RuntimeError(
-                "No GitHub token. Set GITHUB_TOKEN env var or "
-                "login with: gh auth login"
-            )
+            raise RuntimeError("No GitHub token. Set GITHUB_TOKEN env var or " "login with: gh auth login")
 
         return Github(token)
 
@@ -353,9 +343,12 @@ class GitHubApiClient(LazyClient):
 
         try:
             import subprocess
+
             result = subprocess.run(
                 ["gh", "auth", "token"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
@@ -383,9 +376,7 @@ class GitHubApiClient(LazyClient):
         client = self.get_or_raise()
         owner, name = self._parse_remote(repo_path)
         if not owner or not name:
-            raise RuntimeError(
-                f"Cannot detect GitHub repo from: {repo_path}"
-            )
+            raise RuntimeError(f"Cannot detect GitHub repo from: {repo_path}")
         return client.get_repo(f"{owner}/{name}")
 
     @staticmethod
@@ -403,6 +394,7 @@ class GitHubApiClient(LazyClient):
         """
         try:
             from git import Repo
+
             repo = Repo(repo_path)
             url = repo.remotes.origin.url
             if "github.com" not in url:
@@ -462,7 +454,7 @@ class QdrantManager(LazyClient):
             ImportError: If ``qdrant_client`` is not installed.
         """
         from qdrant_client import QdrantClient
-        from qdrant_client.models import VectorParams, Distance
+        from qdrant_client.models import Distance, VectorParams
 
         db_path = self._get_db_path()
         db_path.mkdir(parents=True, exist_ok=True)
@@ -472,14 +464,10 @@ class QdrantManager(LazyClient):
         existing = {c.name for c in client.get_collections().collections}
         for name, config in self.COLLECTIONS.items():
             if name not in existing:
-                dist = getattr(
-                    Distance, config["distance"].upper(), Distance.COSINE
-                )
+                dist = getattr(Distance, config["distance"].upper(), Distance.COSINE)
                 client.create_collection(
                     collection_name=name,
-                    vectors_config=VectorParams(
-                        size=config["size"], distance=dist
-                    ),
+                    vectors_config=VectorParams(size=config["size"], distance=dist),
                 )
 
         return client
@@ -530,6 +518,7 @@ class EmbeddingManager(LazyClient):
             ImportError: If ``sentence_transformers`` is not installed.
         """
         from sentence_transformers import SentenceTransformer
+
         return SentenceTransformer(self.MODEL_NAME)
 
     def embed(self, text: str) -> List[float]:

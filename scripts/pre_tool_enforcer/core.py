@@ -537,37 +537,6 @@ def main():
     if not isinstance(tool_input, dict):
         tool_input = {}
 
-    # Verify skill/agent exists before invocation (Step 3.5)
-    if tool_name in ("Skill", "Agent"):
-        try:
-            skill_or_agent_name = tool_input.get("skill", tool_input.get("agent", ""))
-            if skill_or_agent_name:
-                try:
-                    _src_mcp_dir2 = _scripts_dir.parent / "src" / "mcp"
-                    if str(_src_mcp_dir2) not in sys.path:
-                        sys.path.insert(0, str(_src_mcp_dir2))
-                    from skill_manager_mcp_server import agent_load, skill_load
-
-                    load_result = json.loads(skill_load(skill_or_agent_name))
-                    if not load_result.get("success"):
-                        load_result = json.loads(agent_load(skill_or_agent_name))
-                    if load_result.get("success"):
-                        sys.stdout.write("[VERIFY] " + skill_or_agent_name + ": Available and ready (MCP)\n")
-                    else:
-                        available = load_result.get("available", [])
-                        if available:
-                            sys.stdout.write(
-                                "[HINT] "
-                                + skill_or_agent_name
-                                + " not found. Available: "
-                                + ", ".join(available[:5])
-                                + "\n"
-                            )
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
     all_hints = []
     all_blocks = []
 

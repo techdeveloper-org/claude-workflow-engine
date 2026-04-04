@@ -58,21 +58,6 @@ Auto-generated from `src/mcp/*_mcp_server.py` via `scripts/generate-mcp-docs.py`
 | `github_label_issue` | Add labels to an issue or PR. | number, labels, repo_path |
 | `github_full_merge_cycle` | Full merge cycle: validate build -> merge PR -> cleanup branch. | number, method, validate_build, repo_path |
 
-## llm-provider (8 tools)
-
-**File:** `llm_mcp_server.py`
-
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `llm_generate` | Generate text using configured LLM providers. | prompt, model, provider, temperature, json_mode, timeout |
-| `llm_list_models` | List all configured LLM providers and their available models. | - |
-| `llm_health_check` | Check health and availability of all configured LLM providers. | - |
-| `llm_git_commit_title` | Generate a meaningful git commit title using LLM from staged diff. | commit_type, cwd |
-| `llm_classify_step` | Classify a pipeline step for optimal model routing. | step_name |
-| `llm_select_model` | Intelligently select the best model for a task. | task_type, complexity, step_name |
-| `llm_discover_models` | Discover all available local models (Ollama + local files). | - |
-| `llm_hybrid_generate` | Generate text using hybrid GPU-first routing with Claude fallback. | prompt, step_name, complexity, temperature |
-
 ## post_tool_tracker (6 tools)
 
 **File:** `post_tool_tracker_mcp_server.py`
@@ -121,21 +106,6 @@ Auto-generated from `src/mcp/*_mcp_server.py` via `scripts/generate-mcp-docs.py`
 | `session_finalize` | Generate comprehensive session summary on session close. | session_id |
 | `session_add_work_item` | Add a work item to a session for tracking tasks within sessions. | session_id, description, work_type, metadata |
 | `session_complete_work_item` | Mark a work item as completed. | session_id, work_id, status |
-
-## skill_manager (8 tools)
-
-**File:** `skill_manager_mcp_server.py`
-
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `skill_load_all` | Load all available skills from ~/.claude/skills/ with metadata. | - |
-| `skill_load` | Load full SKILL.md content for a specific skill. | skill_name |
-| `skill_search` | Search skills by keyword, tags, or project type. | query, tags, project_type |
-| `skill_validate` | Validate whether a skill satisfies required capabilities. | skill_name, required_capabilities |
-| `skill_rank` | Rank available skills by relevance to task requirements. | task_type, project_type, complexity, required_capabilities |
-| `skill_detect_conflicts` | Detect conflicts between selected skills. | skill_names |
-| `agent_load_all` | Load all available agents from ~/.claude/agents/ with metadata. | - |
-| `agent_load` | Load full agent.md content for a specific agent. | agent_name |
 
 ## standards_loader (6 tools)
 

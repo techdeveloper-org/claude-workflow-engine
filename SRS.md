@@ -155,7 +155,7 @@ PipelineBuilder().add_level_minus1().add_level1().add_level3().build()
 **Description:** LLM calls must follow fallback chain: Ollama (local GPU) → Claude CLI → Anthropic API → OpenAI API. Model selection must be complexity-based.
 **Priority:** High
 **Status:** Implemented
-**Key Module:** `src/mcp/llm_mcp_server.py`
+**Key Module:** `scripts/langgraph_engine/llm_call.py`
 
 ### FR-10: Hook System
 

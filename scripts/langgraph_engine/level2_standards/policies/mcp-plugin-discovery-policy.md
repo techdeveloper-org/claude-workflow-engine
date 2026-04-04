@@ -54,12 +54,10 @@ When the `filesystem` MCP is available:
 | github-api | 12 | YES |
 | session-mgr | 14 | YES |
 | policy-enforcement | 11 | YES |
-| llm-provider | 8 | YES |
 | token-optimizer | 10 | NO |
 | pre-tool-gate | 8 | NO |
 | post-tool-tracker | 6 | NO |
 | standards-loader | 7 | NO |
-| skill-manager | 8 | NO |
 | vector-db | 11 | NO |
 | uml-diagram | 15 | NO |
 
