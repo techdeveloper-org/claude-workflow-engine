@@ -115,7 +115,7 @@ def cmd_health(args):
     """Check all dependencies and services.
 
     Verifies: Python version, required packages, Ollama, GitHub CLI,
-    Qdrant, and required environment variables.
+    and required environment variables.
     """
     print("Claude Workflow Engine - Health Check")
     print("=" * 50)
@@ -128,7 +128,7 @@ def cmd_health(args):
     checks.append(("Python >= 3.8", py_ver, ok))
 
     # Required packages
-    for pkg in ["langgraph", "langchain_core", "mcp", "qdrant_client"]:
+    for pkg in ["langgraph", "langchain_core", "mcp"]:
         try:
             __import__(pkg)
             checks.append((f"Package: {pkg}", "installed", True))

@@ -6,8 +6,6 @@ Covers:
 - GitRepoClient.for_path factory behavior (mocked GitPython)
 - GitHubApiClient token resolution (env var vs gh CLI subprocess)
 - GitHubApiClient._parse_remote SSH and HTTPS URL formats
-- QdrantManager.COLLECTIONS registry (4 collections, 384-dim)
-- EmbeddingManager.DIMENSION constant
 
 ASCII-only: cp1252 safe for Windows.
 """
@@ -18,13 +16,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "mcp"))
 
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_concrete_client(initialize_return=object()):
     """Return a minimal concrete LazyClient subclass for isolated testing."""
@@ -47,15 +46,16 @@ def _make_concrete_client(initialize_return=object()):
 # LazyClient - Singleton
 # ---------------------------------------------------------------------------
 
+
 class TestLazyClientSingleton:
 
     def setup_method(self):
         from base.clients import LazyClient
+
         LazyClient.reset_all()
 
     def test_singleton_instance_reuse(self):
         """Same concrete subclass returns the same instance each time."""
-        from base.clients import LazyClient
 
         Cls = _make_concrete_client(initialize_return="ok")
         a = Cls.instance()
@@ -74,7 +74,6 @@ class TestLazyClientSingleton:
 
     def test_different_subclasses_have_separate_instances(self):
         """Two distinct subclasses each maintain their own singleton."""
-        from base.clients import LazyClient
 
         ClsA = _make_concrete_client(initialize_return="a")
         ClsB = _make_concrete_client(initialize_return="b")
@@ -85,10 +84,12 @@ class TestLazyClientSingleton:
 # LazyClient - Lazy Initialization
 # ---------------------------------------------------------------------------
 
+
 class TestLazyClientInit:
 
     def setup_method(self):
         from base.clients import LazyClient
+
         LazyClient.reset_all()
 
     def test_lazy_init_on_first_get(self):
@@ -169,10 +170,12 @@ class TestLazyClientInit:
 # LazyClient - Health Check
 # ---------------------------------------------------------------------------
 
+
 class TestLazyClientHealthCheck:
 
     def setup_method(self):
         from base.clients import LazyClient
+
         LazyClient.reset_all()
 
     def test_health_check_structure_on_success(self):
@@ -210,10 +213,12 @@ class TestLazyClientHealthCheck:
 # GitRepoClient
 # ---------------------------------------------------------------------------
 
+
 class TestGitRepoClient:
 
     def setup_method(self):
         from base.clients import LazyClient
+
         LazyClient.reset_all()
 
     def test_git_repo_client_for_path_creates_repo(self):
@@ -242,9 +247,10 @@ class TestGitRepoClient:
 
     def test_git_repo_client_for_path_raises_without_gitpython(self):
         """for_path() raises RuntimeError when GitPython is not installed."""
+        import builtins
+
         from base.clients import GitRepoClient
 
-        import builtins
         original_import = builtins.__import__
 
         def _blocked_import(name, *args, **kwargs):
@@ -261,10 +267,12 @@ class TestGitRepoClient:
 # GitHubApiClient - Token Resolution
 # ---------------------------------------------------------------------------
 
+
 class TestGitHubApiClientTokenResolution:
 
     def setup_method(self):
         from base.clients import LazyClient
+
         LazyClient.reset_all()
 
     def test_github_api_client_uses_env_token(self):
@@ -285,10 +293,7 @@ class TestGitHubApiClientTokenResolution:
         mock_result.stdout = "cli-token-456\n"
 
         with patch.dict("os.environ", {}, clear=True):
-            env_without_gh = {
-                k: v for k, v in __import__("os").environ.items()
-                if k != "GITHUB_TOKEN"
-            }
+            env_without_gh = {k: v for k, v in __import__("os").environ.items() if k != "GITHUB_TOKEN"}
             with patch.dict("os.environ", env_without_gh, clear=True):
                 with patch("subprocess.run", return_value=mock_result) as mock_run:
                     token = GitHubApiClient._resolve_token()
@@ -306,9 +311,9 @@ class TestGitHubApiClientTokenResolution:
 
         with patch.dict("os.environ", {}, clear=True):
             with patch("subprocess.run", return_value=mock_result):
-                with patch.dict("os.environ", {k: v for k, v in
-                                __import__("os").environ.items()
-                                if k != "GITHUB_TOKEN"}, clear=True):
+                with patch.dict(
+                    "os.environ", {k: v for k, v in __import__("os").environ.items() if k != "GITHUB_TOKEN"}, clear=True
+                ):
                     token = GitHubApiClient._resolve_token()
 
         # token is None or empty string when no source provides one
@@ -318,6 +323,7 @@ class TestGitHubApiClientTokenResolution:
 # ---------------------------------------------------------------------------
 # GitHubApiClient - Remote URL Parsing
 # ---------------------------------------------------------------------------
+
 
 class TestGitHubApiClientParseRemote:
 
@@ -357,52 +363,3 @@ class TestGitHubApiClientParseRemote:
         owner, name = self._parse("https://gitlab.com/owner/repo.git")
         assert owner is None
         assert name is None
-
-
-# ---------------------------------------------------------------------------
-# QdrantManager - Collections registry
-# ---------------------------------------------------------------------------
-
-class TestQdrantManagerCollections:
-
-    def test_qdrant_manager_collections_count(self):
-        """QdrantManager defines exactly 4 collections."""
-        from base.clients import QdrantManager
-        assert len(QdrantManager.COLLECTIONS) == 4
-
-    def test_qdrant_manager_collections_names(self):
-        """All 4 expected collection names are registered."""
-        from base.clients import QdrantManager
-        expected = {"tool_calls", "sessions", "flow_traces", "node_decisions"}
-        assert set(QdrantManager.COLLECTIONS.keys()) == expected
-
-    def test_qdrant_manager_collections_vector_size(self):
-        """All collections use 384-dimensional vectors."""
-        from base.clients import QdrantManager
-        for name, config in QdrantManager.COLLECTIONS.items():
-            assert config["size"] == 384, f"{name} should have size 384"
-
-    def test_qdrant_manager_collections_distance_metric(self):
-        """All collections use Cosine distance."""
-        from base.clients import QdrantManager
-        for name, config in QdrantManager.COLLECTIONS.items():
-            assert config["distance"] == "Cosine", (
-                f"{name} should use Cosine distance"
-            )
-
-
-# ---------------------------------------------------------------------------
-# EmbeddingManager - Dimension constant
-# ---------------------------------------------------------------------------
-
-class TestEmbeddingManagerDimension:
-
-    def test_embedding_manager_dimension(self):
-        """EmbeddingManager.DIMENSION is 384 (all-MiniLM-L6-v2 output size)."""
-        from base.clients import EmbeddingManager
-        assert EmbeddingManager.DIMENSION == 384
-
-    def test_embedding_manager_model_name(self):
-        """EmbeddingManager.MODEL_NAME is the expected sentence-transformers model."""
-        from base.clients import EmbeddingManager
-        assert EmbeddingManager.MODEL_NAME == "all-MiniLM-L6-v2"

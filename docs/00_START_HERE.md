@@ -1,6 +1,6 @@
 # Getting Started with Claude Workflow Engine
 
-**Version:** 1.15.0 | **Status:** Active
+**Version:** 1.15.1 | **Status:** Active
 
 ---
 
@@ -13,14 +13,14 @@ documentation, and issue closure.
 
 ---
 
-## Current Pipeline (v1.14.0+)
+## Current Pipeline (v1.15.1)
 
 ```
 Level -1: Auto-Fix (Unicode, encoding, paths)
-Level 1:  Context Sync (complexity, session, TOON)
+Level 1:  Context Sync (complexity, session)
 Level 2:  Standards Loading (common, Java, tool-opt, MCP discovery)
 Level 3:  Execution
-  Pre-0:  Call graph scan + RAG orchestration lookup
+  Pre-0:  Call graph scan + template fast-path detection
   Step 0: Task Analysis (prompt-gen-expert + orchestrator-agent chain)
   Step 8: GitHub Issue Creation
   Step 9: Branch Creation

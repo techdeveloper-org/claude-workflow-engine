@@ -13,7 +13,7 @@ This policy required using `AskUserQuestion` for medium-complexity (4-6) decisio
 ### What Replaced It
 
 - **Complexity-based routing** in `inference_router.py` handles model selection automatically
-- **RAG-powered decisions** in `rag_integration.py` use past decisions instead of asking users
+- **Call graph and pattern data** inform decisions instead of asking users
 - **Standards integration hooks** at Steps 1, 2, 5, 10, 13 enforce constraints without user input
 
 ### Original Policy Scope

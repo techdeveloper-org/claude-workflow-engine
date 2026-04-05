@@ -1,75 +1,14 @@
 # Troubleshooting Guide
 
 **Project:** Claude Workflow Engine
-**Version:** 1.6.1
-**Last Updated:** 2026-03-27
+**Version:** 1.15.1
+**Last Updated:** 2026-04-04
 
 ---
 
 ## Failure Modes
 
-### 1. Qdrant: Connection Refused
-
-**Symptom:**
-```
-qdrant_client.http.exceptions.UnexpectedResponse: Unexpected Response: 0
-ConnectionRefusedError: [Errno 111] Connection refused
-```
-
-**Cause:** Pipeline is configured for server mode but no Qdrant server is running,
-or the `.qdrant_data` path is wrong.
-
-**Fix:**
-- Verify you are using local (embedded) mode, not server mode:
-  ```python
-  # Correct — embedded mode, no server needed
-  client = QdrantClient(path=".qdrant_data")
-  ```
-- If server mode is intentional, start Qdrant:
-  ```bash
-  docker run -p 6333:6333 qdrant/qdrant
-  ```
-
----
-
-### 2. Qdrant: StorageError / PermissionError on .qdrant_data
-
-**Symptom:**
-```
-StorageError: Could not open storage: Permission denied
-```
-
-**Cause:** Another process (previous pipeline run) holds a lock on `.qdrant_data`.
-
-**Fix:**
-- Kill any lingering pipeline processes: `pkill -f 3-level-flow.py`
-- On Windows: close any Explorer windows browsing `.qdrant_data`
-- If the directory is corrupted: `rm -rf .qdrant_data && mkdir .qdrant_data`
-
----
-
-### 3. Embedding Model Download Fails at First Run
-
-**Symptom:**
-```
-OSError: [Errno 28] No space left on device
-requests.exceptions.ConnectionError: HTTPSConnectionPool ... Failed to establish a new connection
-```
-
-**Cause:** Insufficient disk space or no internet access during first-run model download.
-
-**Fix:**
-- Check disk space: `df -h ~/.cache`
-- Pre-download the model on a machine with internet access:
-  ```bash
-  python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-  ```
-- Copy `~/.cache/huggingface/` to the target machine.
-- Set `TRANSFORMERS_OFFLINE=1` after copying to prevent future network calls.
-
----
-
-### 4. GitHub Token: 401 Unauthorized
+### 1. GitHub Token: 401 Unauthorized
 
 **Symptom:**
 ```
@@ -89,7 +28,7 @@ github.GithubException.GithubException: 401 {"message": "Bad credentials"}
 
 ---
 
-### 5. LangGraph StateGraph: Missing Key in State
+### 2. LangGraph StateGraph: Missing Key in State
 
 **Symptom:**
 ```
@@ -97,7 +36,7 @@ KeyError: 'step2_impact_analysis'
 ```
 
 **Cause:** A pipeline node reads a key that was not populated by a previous node
-(often because a step was skipped by the RAG cache hit path or hook mode).
+(often because a step was skipped due to hook mode).
 
 **Fix:**
 - All state reads should use `.get()` with a fallback:
@@ -109,11 +48,11 @@ KeyError: 'step2_impact_analysis'
 
 ---
 
-### 8. LangGraph State: Reducer Conflict
+### 3. LangGraph State: Reducer Conflict
 
 **Symptom:**
 ```
-InvalidUpdateError: Cannot apply update — reducer for key 'messages' expected list, got str
+InvalidUpdateError: Cannot apply update -- reducer for key 'messages' expected list, got str
 ```
 
 **Cause:** A node returns a state key with a type that conflicts with its registered
@@ -132,7 +71,7 @@ reducer (e.g., returning a string for a key whose reducer expects `list + list`)
 
 ---
 
-### 9. Call Graph Builder: AST Parse Error
+### 4. Call Graph Builder: AST Parse Error
 
 **Symptom:**
 ```
@@ -144,7 +83,7 @@ syntax (match/case) that the AST parser does not handle.
 
 **Fix:**
 - Fix the syntax error in the flagged file.
-- The call graph builder skips unparseable files and continues — the graph will
+- The call graph builder skips unparseable files and continues -- the graph will
   be incomplete but not broken.
 - Check which files were skipped:
   ```bash
@@ -153,7 +92,7 @@ syntax (match/case) that the AST parser does not handle.
 
 ---
 
-### 10. Stale Call Graph After Multi-Phase Implementation
+### 5. Stale Call Graph After Multi-Phase Implementation
 
 **Symptom:** Step 11 code review reports no changes despite Step 10 writing files.
 
@@ -168,47 +107,7 @@ python scripts/3-level-flow.py --task "your task" --start-step 11
 
 ---
 
-### 11. RAG Cross-Project False Positive
-
-**Symptom:** The pipeline reuses an orchestration plan from a different project,
-leading to wrong agent selection or incorrect step breakdown.
-
-**Cause:** Two projects have identically-worded tasks. Before v1.6.1 the RAG score
-was 0.95+ for both, causing cross-project plan reuse.
-
-**Fix:** The v1.6.1 `codebase_hash` penalty (×0.65) should prevent this. If it
-still occurs, confirm the penalty is applied:
-```bash
-grep "codebase_hash_penalty" logs/pipeline_*.log
-```
-If not present, ensure `rag_integration.py` is version 1.6.1+. As a workaround,
-clear the foreign project's entries from `node_decisions` (see
-`docs/runbooks/RUNBOOK_RAG_MISS_RATE.md` Step 3).
-
----
-
-### 12. MCP Server: Tool Not Found
-
-**Symptom:**
-```
-ToolNotFoundError: Tool 'vector_search_similar' not registered
-```
-
-**Cause:** The MCP server is not running, or it crashed during startup.
-
-**Fix:**
-```bash
-# Check which MCP servers are registered
-cat ~/.claude/settings.json | python -c "import sys,json; d=json.load(sys.stdin); [print(s['name']) for s in d.get('mcpServers', {}).values()]"
-
-# Restart MCP servers (they are started by Claude Code automatically)
-# If running standalone, restart the affected server:
-python src/mcp/vector_db_mcp_server.py
-```
-
----
-
-### 13. Jira Integration: ADF Formatting Error
+### 6. Jira Integration: ADF Formatting Error
 
 **Symptom:**
 ```
@@ -227,7 +126,7 @@ ADF (Atlassian Document Format) payload is malformed.
 
 ---
 
-### 14. Windows Encoding Error: UnicodeEncodeError cp1252
+### 7. Windows Encoding Error: UnicodeEncodeError cp1252
 
 **Symptom:**
 ```
@@ -247,7 +146,7 @@ Windows `cp1252` cannot encode them when writing to files without explicit encod
 
 ---
 
-### 15. Pipeline Step Timeout: LangGraph Watchdog
+### 8. Pipeline Step Timeout: LangGraph Watchdog
 
 **Symptom:**
 ```
@@ -261,7 +160,7 @@ usually due to a slow provider or a very large context window.
 - Check which provider is active: `grep "active_provider" logs/pipeline_*.log`
 - If Ollama is the active provider, the model may be running on CPU instead of GPU:
   ```bash
-  nvidia-smi  # Check GPU utilization — should be ~100% during inference
+  nvidia-smi  # Check GPU utilization -- should be ~100% during inference
   ```
 - Reduce context size by trimming the task description or disabling Figma token
   injection for this run: `ENABLE_FIGMA=0`

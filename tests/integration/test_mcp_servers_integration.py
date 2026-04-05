@@ -107,66 +107,7 @@ class TestGitMcpServerToolSchema:
 
 
 # ---------------------------------------------------------------------------
-# Test 2: vector_db codebase_hash penalty (integration marker - needs Qdrant)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.integration
-class TestVectorDbMcpStoreAndRetrieve:
-    """Verify codebase_hash cross-project penalty is applied during lookup.
-
-    The penalty factor is 0.65. A score of 0.95 from a different project
-    must be penalised to 0.95 * 0.65 = 0.6175, which falls below the
-    default 0.85 threshold and should cause lookup() to return None.
-    """
-
-    def test_cross_project_hash_penalty_blocks_false_positive(self):
-        """A 0.95 match from a different codebase must not exceed 0.85 threshold."""
-        CROSS_PROJECT_PENALTY = 0.65
-        THRESHOLD = 0.85
-        raw_score = 0.95
-
-        penalised = raw_score * CROSS_PROJECT_PENALTY
-        assert penalised < THRESHOLD, "Penalised score {:.4f} should be below threshold {}".format(penalised, THRESHOLD)
-
-    def test_same_project_hash_no_penalty(self):
-        """When codebase hashes match, no penalty is applied."""
-        raw_score = 0.95
-        effective_score = raw_score  # no penalty
-        THRESHOLD = 0.85
-        assert effective_score >= THRESHOLD
-
-    def test_rag_layer_lookup_returns_none_on_cross_project(self, tmp_path):
-        """RAGLayer.lookup returns None when stored decision is from a different project."""
-        _SCRIPTS_DIR_STR = str(_SCRIPTS_DIR)
-        if _SCRIPTS_DIR_STR not in sys.path:
-            sys.path.insert(0, _SCRIPTS_DIR_STR)
-
-        try:
-            from langgraph_engine.rag_integration import RAGLayer  # noqa: F401
-            from langgraph_engine.rag_integration import _compute_codebase_hash
-        except ImportError:
-            pytest.skip("langgraph_engine.rag_integration not importable")
-
-        # Create two temp directories representing two different projects
-        project_a = tmp_path / "project_a"
-        project_a.mkdir()
-        (project_a / "module_a.py").write_text("# project a", encoding="utf-8")
-
-        project_b = tmp_path / "project_b"
-        project_b.mkdir()
-        (project_b / "module_b.py").write_text("# project b", encoding="utf-8")
-
-        hash_a = _compute_codebase_hash(str(project_a))
-        hash_b = _compute_codebase_hash(str(project_b))
-
-        # Hashes must differ between distinct projects
-        if hash_a and hash_b:
-            assert hash_a != hash_b, "Expected distinct codebase hashes for different projects"
-
-
-# ---------------------------------------------------------------------------
-# Test 3: LLM MCP server provider fallback (integration marker)
+# Test 2: LLM MCP server provider fallback (integration marker)
 # ---------------------------------------------------------------------------
 
 
@@ -220,7 +161,7 @@ class TestLlmMcpServerProviderFallback:
 
 
 # ---------------------------------------------------------------------------
-# Test 4: enforcement_mcp_server policy check (integration marker)
+# Test 3: enforcement_mcp_server policy check (integration marker)
 # ---------------------------------------------------------------------------
 
 
@@ -251,7 +192,7 @@ class TestEnforcementMcpServerPolicyCheck:
 
 
 # ---------------------------------------------------------------------------
-# Test 5: TokenBucket - unit test (no marker - no external services needed)
+# Test 4: TokenBucket - unit test (no marker - no external services needed)
 # ---------------------------------------------------------------------------
 
 
@@ -311,7 +252,7 @@ class TestRateLimiterBasic:
 
 
 # ---------------------------------------------------------------------------
-# Test 6: input_validator - unit tests (no marker)
+# Test 5: input_validator - unit tests (no marker)
 # ---------------------------------------------------------------------------
 
 

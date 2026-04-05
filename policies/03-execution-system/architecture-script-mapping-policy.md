@@ -49,7 +49,7 @@ This document maps all scripts that physically exist in `scripts/architecture/` 
 
 | Script | Path | Pipeline Step | Purpose |
 |--------|------|--------------|---------|
-| `auto-skill-agent-selector.py` | `scripts/architecture/03-execution-system/05-skill-agent-selection/` | Step 5 - Skill and agent selection | Selects appropriate skills and agents for the task; enhanced with RAG cross-session boost in Level 3 v2 |
+| `auto-skill-agent-selector.py` | `scripts/architecture/03-execution-system/05-skill-agent-selection/` | Step 5 - Skill and agent selection | Selects appropriate skills and agents for the task |
 
 ---
 
@@ -57,7 +57,7 @@ This document maps all scripts that physically exist in `scripts/architecture/` 
 
 | File | Path | Purpose |
 |------|------|---------|
-| `failure-kb.json` | `scripts/architecture/03-execution-system/failure-prevention/` | Knowledge base of known failure patterns and solutions; read by `rag_integration.py` and failure prevention nodes |
+| `failure-kb.json` | `scripts/architecture/03-execution-system/failure-prevention/` | Knowledge base of known failure patterns and solutions; read by failure prevention nodes |
 
 ---
 
@@ -70,10 +70,10 @@ All scripts that existed in the original v1.0.0 policy (65 total) but are no lon
 | Session management (session-loader, session-state, auto-save, archive) | `session_manager.py`, `checkpoint_manager.py`, `backup_manager.py` |
 | Context management (context-monitor, context-pruner) | `context_cache.py`, `context_deduplicator.py`, `token_manager.py` |
 | User preferences (load-preferences, preference-detector) | `skill_selection_criteria.py`, `patterns.py` |
-| Pattern detection (detect-patterns, apply-patterns) | `rag_integration.py` (RAG-based pattern matching) |
+| Pattern detection (detect-patterns, apply-patterns) | `patterns.py`, `skill_selection_criteria.py` |
 | Model selection (model-auto-selector, intelligent-model-selector) | `version_selector.py`, `inference_router.py`, `hybrid_inference.py` |
 | Tool optimization (tool-usage-optimizer, smart-read, ast-navigator) | `subgraphs/level2_standards.py` tool optimization section |
-| Failure prevention (pre-execution-checker, failure-detector, failure-learner) | `recovery_handler.py`, `error_logger.py`, `rag_integration.py` |
+| Failure prevention (pre-execution-checker, failure-detector, failure-learner) | `recovery_handler.py`, `error_logger.py` |
 | Git commit (auto-commit-enforcer, auto-commit-detector, auto-commit) | `git_operations.py`, `github_facade.py` |
 | GitHub integration (github-issue, pr-workflow) | `github_integration.py`, `subgraphs/level3_steps8to12_github.py` |
 | Progress tracking (check-incomplete-work) | `progress_display.py`, `step_logger.py` |

@@ -85,10 +85,6 @@ _step_logger = _stub("langgraph_engine.step_logger")
 _step_logger.write_level_log = MagicMock()
 _step_logger._summarize_result = MagicMock(return_value={})
 
-# rag_integration stub (get_rag_layer only -- lookup/store functions removed in v1.15.0)
-_rag = _stub("langgraph_engine.rag_integration")
-_rag.get_rag_layer = MagicMock(return_value=None)
-
 # Infrastructure module stubs
 _cp_mod = _stub("langgraph_engine.checkpoint_manager")
 _cp_mod.CheckpointManager = MagicMock()

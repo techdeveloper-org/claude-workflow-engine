@@ -11,20 +11,16 @@ Public API::
 
     from base import MCPResponse, mcp_tool_handler, AtomicJsonStore, LazyClient
     from base.response import to_json, success, error
-    from base.clients import GitRepoClient, GitHubApiClient, QdrantManager, EmbeddingManager
+    from base.clients import GitRepoClient, GitHubApiClient
 
 Version: 1.1.0
 Windows-Safe: ASCII only (cp1252 compatible)
 """
 
-from .response import MCPResponse, success, error, to_json
-from .decorators import mcp_tool_handler
-from .persistence import (
-    AtomicJsonStore,
-    JsonlAppender,
-    SessionIdResolver,
-)
 from .clients import LazyClient
+from .decorators import mcp_tool_handler
+from .persistence import AtomicJsonStore, JsonlAppender, SessionIdResolver
+from .response import MCPResponse, error, success, to_json
 
 __all__ = [
     "MCPResponse",

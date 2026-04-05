@@ -1,8 +1,8 @@
 # Claude Workflow Engine - Scripts Directory Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.15.0
-**Type:** LangGraph Orchestration Pipeline with RAG
+**Version:** 1.15.1
+**Type:** LangGraph Orchestration Pipeline
 **Last Updated:** 2026-04-04
 
 > For full project context, architecture, and development guidelines see the root `CLAUDE.md`.
@@ -56,22 +56,19 @@ langgraph_engine/
 +-- [60+ shared modules] # Cross-level utilities (LLM, caching, metrics, git, etc.)
 ```
 
-### v1.15.0 Changes
+### v1.15.0 / v1.15.1 Changes
 
-Three features removed:
+**v1.15.0** — Three features removed:
+- **Orchestration RAG Hit (Pre-Step 0)** — RAG-based plan lookup before Step 0 removed.
+- **Per-Node RAG Cache (Steps 8-14)** — Per-step RAG short-circuit removed from `_run_step`.
+- **TOON Compression (Level 1)** — `node_toon_compression` removed from graph. `level1_complexity` and `level1_context` now feed directly into `level1_merge`.
 
-1. **Orchestration RAG Hit (Pre-Step 0)** -- `rag_lookup_orchestration()` / `rag_store_orchestration()` removed from
-   `rag_integration.py`. `RAG_ORCHESTRATION_THRESHOLD` removed. `route_pre_analysis()` no longer has a RAG-hit
-   branch. State fields `rag_orchestration_hit/confidence/cached_plan` removed from FlowState.
-
-2. **Per-Node RAG Cache (Steps 8-14)** -- `_RAG_ELIGIBLE_STEPS` removed from `subgraph.py` and `step_decorator.py`.
-   `rag_lookup_before_llm()` / `rag_store_after_node()` removed from `rag_integration.py`. LLM calls now always
-   execute without RAG short-circuit. `RAGLayer.lookup()` / `.store()` remain available for explicit use.
-
-3. **TOON Compression (Level 1)** -- `node_toon_compression` removed from graph in `orchestrator.py` and
-   `pipeline_builder.py`. `level1_complexity` and `level1_context` now feed directly into `level1_merge`.
-   `toon_compression.py` stays on disk (deprecated). `ToonObject` class and `WorkflowContextOptimizer` kept
-   (used for step-to-step workflow memory, not Level 1 compression).
+**v1.15.1** — Complete RAG/Qdrant purge:
+- All RAG source files deleted (`rag_integration.py`, `vector_db_mcp_server.py`, `db_migrate.py`, `cache_invalidation.py`)
+- All RAG test files deleted (`test_rag_integration.py`, `test_vector_db_mcp_server.py`)
+- All RAG policy docs deleted (`rag-integration-policy.md`, `ADR-001-rag-caching.md`, `RUNBOOK_RAG_MISS_RATE.md`)
+- `qdrant-client` and `sentence-transformers` removed from `requirements.txt`
+- `QdrantManager` and `EmbeddingManager` removed from `src/mcp/base/clients.py`
 
 ### Running the Pipeline
 
@@ -98,8 +95,6 @@ pytest tests/test_call_graph_builder.py tests/test_call_graph_analyzer.py tests/
 # MCP server tests:
 pytest tests/test_*mcp*.py
 
-# RAG tests (v1.15.0 -- TestRAGLookupInRunStep removed):
-pytest tests/test_rag_integration.py -v
 ```
 
 ### Adding a New Pipeline Level

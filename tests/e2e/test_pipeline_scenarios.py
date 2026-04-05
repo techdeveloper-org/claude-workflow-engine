@@ -29,88 +29,7 @@ pytestmark = pytest.mark.e2e
 
 
 # ---------------------------------------------------------------------------
-# Scenario 1: RAG hit path
-# ---------------------------------------------------------------------------
-
-
-class TestRagHitPath:
-    """Scenario: first pipeline call is a cache miss, second is a cache hit.
-
-    Tests that:
-    - lookup() returns None on the first call (cache miss)
-    - After store(), lookup() returns the cached value (cache hit)
-    """
-
-    def test_first_lookup_is_cache_miss(self):
-        """RAGLayer.lookup must return None when nothing has been stored yet."""
-        if str(_SCRIPTS_DIR) not in sys.path:
-            sys.path.insert(0, str(_SCRIPTS_DIR))
-
-        try:
-            from langgraph_engine.rag_integration import RAGLayer
-        except ImportError:
-            pytest.skip("langgraph_engine.rag_integration not importable")
-
-        rag = RAGLayer(session_id="e2e-session-001", project="test-project")
-        rag._available = False  # disable real Qdrant
-
-        result = rag.lookup(step="step0", query="add authentication to the Flask app")
-        assert result is None, "First lookup must be a cache miss (None)"
-
-    def test_rag_store_increments_store_counter(self):
-        """After storing a decision, the stores counter must increase by 1."""
-        if str(_SCRIPTS_DIR) not in sys.path:
-            sys.path.insert(0, str(_SCRIPTS_DIR))
-
-        try:
-            from langgraph_engine.rag_integration import RAGLayer
-        except ImportError:
-            pytest.skip("langgraph_engine.rag_integration not importable")
-
-        rag = RAGLayer(session_id="e2e-session-002", project="test-project")
-        rag._available = False
-
-        before = rag.get_stats()["stores"]
-
-        # store should not raise even when unavailable
-        try:
-            rag.store(
-                step="step0",
-                decision={"agent": "python-backend-engineer", "complexity": 6},
-                user_prompt="add auth to Flask",
-                context={"project": "test-project"},
-            )
-        except Exception:
-            pass  # store may silently skip when unavailable
-
-        after = rag.get_stats()["stores"]
-        # Either incremented (normal path) or stayed same (unavailable/skipped)
-        assert after >= before
-
-    def test_lookup_miss_increments_miss_counter(self):
-        """A lookup that returns None must increment the misses counter."""
-        if str(_SCRIPTS_DIR) not in sys.path:
-            sys.path.insert(0, str(_SCRIPTS_DIR))
-
-        try:
-            from langgraph_engine.rag_integration import RAGLayer
-        except ImportError:
-            pytest.skip("langgraph_engine.rag_integration not importable")
-
-        rag = RAGLayer(session_id="e2e-session-003", project="test-project")
-        rag._available = False
-
-        before = rag.get_stats()["misses"]
-        rag.lookup(step="step5", query="select best skill for Python task")
-        after = rag.get_stats()["misses"]
-
-        # With _available=False lookup returns None and must count as a miss
-        # or simply not error; either way misses should not decrease
-        assert after >= before
-
-
-# ---------------------------------------------------------------------------
-# Scenario 2: Stale call graph guard
+# Scenario 1: Stale call graph guard
 # ---------------------------------------------------------------------------
 
 
@@ -195,7 +114,7 @@ class TestStaleCallGraphGuard:
 
 
 # ---------------------------------------------------------------------------
-# Scenario 3: Hook mode vs Full mode
+# Scenario 2: Hook mode vs Full mode
 # ---------------------------------------------------------------------------
 
 
@@ -254,7 +173,7 @@ class TestHookModeVsFullMode:
 
 
 # ---------------------------------------------------------------------------
-# Scenario 4: Secrets validation blocks missing key
+# Scenario 3: Secrets validation blocks missing key
 # ---------------------------------------------------------------------------
 
 

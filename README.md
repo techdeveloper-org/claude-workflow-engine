@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** - from task analysis to merged PR, automatically.
 
-**Version:** 1.15.0 | **Status:** Alpha | **Last Updated:** 2026-04-04
+**Version:** 1.15.1 | **Status:** Alpha | **Last Updated:** 2026-04-04
 
 ---
 
@@ -81,6 +81,8 @@ Engine does:
 | v1.12.0 | 15 | ~6 | ~75s | Original: Steps 0-7 each made separate LLM calls |
 | v1.13.0 | 9 | ~2 (subprocess) | ~30s | Removed Steps 1,3,4,5,6,7. Step 0 used 2 subprocess calls |
 | **v1.14.0** | **8** | **2 (subprocess)** | **~15s** | Step 0 redesigned: template fill + orchestrator (claude CLI subprocess with live stderr) |
+| **v1.15.0** | **8** | **2 (subprocess)** | **~15s** | TOON compression + orchestration RAG + per-node RAG removed |
+| **v1.15.1** | **8** | **2 (subprocess)** | **~15s** | Complete RAG/Qdrant purge -- all dead code, tests, docs, configs removed |
 
 > **Template Fast-Path (unchanged from v1.8.0):** Pre-built orchestration prompt skips Step 0 entirely, jumps to Step 8. Drops planning time to ~0s.
 
@@ -90,7 +92,7 @@ Engine does:
 
 ### Scenario: User types "Fix the login timeout bug"
 
-Let's trace the complete execution with real data (call graph + RAG + LLM decisions):
+Let's trace the complete execution with real data (call graph + LLM decisions):
 
 #### Phase 1: Pre-Analysis Gate (No LLM yet)
 
@@ -147,106 +149,7 @@ Step 0: Task Analysis v2 -- 2 subprocess calls (claude CLI)
     OUTPUT: full implementation plan stored in state["orchestrator_result"]
 ```
 
-#### Phase 3: Skill Selection (Step 5) — With RAG Boost
-
-```
-INSTEAD OF GUESSING from task text:
-  Step 5 LLM receives:
-  ├─ Task: "Fix login timeout bug"
-  ├─ Complexity: 7 (from call graph, not guessed)
-  ├─ Hot nodes in scope: SessionManager.validate, AuthService.check_expiry
-  ├─ RAG boost: Similar task selected ["python-core", "testing-core"] before
-  │           → Add +0.10 bonus to these skills
-  ├─ Framework detected: FastAPI (from imports)
-  │           → Bonus skills: ["fastapi-core"]
-  └─ Agent recommendation from RAG: "python-backend-engineer"
-
-Step 5 LLM OUTPUT:
-  ├─ Selected skills: ["python-core", "testing-core", "fastapi-core"]
-  ├─ Selected agent: "python-backend-engineer"
-  ├─ Reasoning: "Hot-node method in session management + FastAPI backend → backend engineer + core Python skills"
-  └─ Confidence: 0.94
-```
-
-#### Phase 4: Prompt Generation (Step 7) — With Call Graph Context Pre-Injected
-
-```
-BEFORE (v1.5.0) - Pure LLM, no structure:
-  Step 7 LLM: "Generate implementation prompt for: Fix login timeout bug"
-  → LLM guesses everything, high hallucination
-
-AFTER (v1.6.1) - Call graph data + prompt engineering:
-  Step 7 LLM receives:
-  ├─ Task: "Fix login timeout bug"
-  ├─ Pre-computed call graph data:
-  │  ├─ Target method: SessionManager.validate()
-  │  ├─ Callers (12 methods that depend on this):
-  │  │  ├─ AuthService.check_expiry() @ line 45
-  │  │  ├─ TokenCache.refresh() @ line 78
-  │  │  ├─ MiddlewareAuth.process() @ line 120
-  │  │  └─ ... 9 more
-  │  ├─ Callees (what this method calls):
-  │  │  ├─ TimeUtils.current_timestamp()
-  │  │  ├─ SessionStore.get()
-  │  │  └─ LogUtils.log_timeout()
-  │  ├─ Risk level: "RISKY" (12 callers = high impact zone)
-  │  └─ Cyclomatic complexity: 8 (moderately complex)
-  │
-  ├─ Pre-computed phase breakdown:
-  │  ├─ Phase A: Fix SessionManager.validate() timeout logic
-  │  ├─ Phase B: Update dependent callers (SafeUpdateMiddleware, etc.)
-  │  └─ Phase C: Add tests for timeout scenarios
-  │
-  └─ Prompt template (from cached plan):
-     """
-     TASK: Fix login timeout bug in SessionManager.validate()
-
-     RISK ANALYSIS:
-     - Method has 12 callers (high impact - risky change)
-     - Current complexity: 8 (moderately complex)
-     - Affected files: auth.py, session.py, cache.py
-
-     IMPLEMENTATION APPROACH:
-     Phase A: Timeout logic fix
-       - Method: SessionManager.validate() @ auth.py:45
-       - Current logic: checks expiry with hardcoded 30s timeout
-       - Issue: Doesn't account for clock skew or refresh race conditions
-       - Fix: Implement sliding window timeout + grace period
-
-     Phase B: Dependent method review
-       - AuthService.check_expiry() must handle new return value
-       - TokenCache.refresh() may need retry logic
-
-     Phase C: Testing
-       - Add tests for timeout edge cases
-       - Verify all 12 callers still work
-
-     GENERATED PROMPTS:
-     """
-
-  Step 7 LLM OUTPUT (minimal hallucination):
-    ├─ system_prompt.txt:
-    │  "You are a Python backend engineer. Fix the timeout bug in
-    │   SessionManager.validate() which is called by 12 methods.
-    │   Handle clock skew and race conditions. All callers must
-    │   remain compatible. Return refactored method + updated callers."
-    │
-    ├─ user_message.txt:
-    │  "Fix login timeout bug:
-    │   1. SessionManager.validate() uses hardcoded 30s timeout
-    │   2. Affected callers: AuthService.check_expiry, TokenCache.refresh, ...
-    │   3. Root cause: No clock skew handling
-    │   4. Solution: Sliding window + grace period
-    │   5. Files to modify: auth.py, session.py, cache.py
-    │   6. Tests needed: Timeout edge cases + 12-caller compatibility"
-    │
-    └─ context.txt:
-       "Call graph shows SessionManager.validate() has 12 callers.
-        Current complexity: 8/10. This is a risky change.
-        All callers must be reviewed for compatibility."
-```
-
-#### Phase 5: Implementation & Review (Steps 8-12)
+#### Phase 3: Implementation & Review (Steps 8-12)
 
 ```
 Step 8: Create GitHub Issue
@@ -287,14 +190,13 @@ LLM Calls Used:    4 (out of 12 typical)
   ├─ Step 10:    1 (implementation, structured context)
   └─ Step 11:    1 (review, pre-change snapshot available)
 
-LLM Calls Saved:   8 calls via call graph determinism
+LLM Calls Saved:   via call graph determinism + template fast-path
   ├─ Template Fast-Path:       2 subprocess calls (Step 0 bypassed)
   └─ Call graph complexity:    deterministic (no extra LLM call needed)
 
 Execution Time:    ~45 seconds (Hook Mode: Pre-0, Step 0, Steps 8-9)
   ├─ Pre-0:  1.2s (call graph scan)
-  ├─ Steps 5-9: 43.8s (skill download + GitHub + branch)
-  └─ No Step 0-4 overhead (skipped via RAG hit)
+  └─ Steps 8-9: 43.8s (GitHub issue + branch creation)
 
 Cost Savings:
   ├─ LLM inference: 67% reduction (4 calls vs 12)
@@ -449,7 +351,7 @@ This data is injected into the Step 0 orchestration template so the LLM gets cal
 
 ### How the Engine Reduces LLM Calls
 
-Every LLM call has latency and cost. The engine uses five distinct mechanisms to avoid unnecessary inference:
+Every LLM call has latency and cost. The engine uses two mechanisms to avoid unnecessary inference:
 
 | Mechanism | Where | Calls Saved | How |
 |-----------|-------|------------|-----|
@@ -512,16 +414,7 @@ Without fix:  Step 11 would use Step-0's graph (pre-implementation state)
               review_change_impact() would see no changes → miss breaking changes → wrong PR review
 ```
 
-**5. Better Skill Selection (Step 5)**
-
-The call graph reveals the **actual architecture** - not what the README says, but what the code actually does:
-- Heavy use of async/await? Select `asyncio` patterns
-- Deep inheritance trees? Needs OOP expertise
-- Method complexity > 20? Needs refactoring skill
-- Cross-class coupling > 10? Needs architectural skill
-- Hot nodes matching skill domain → up to +0.10 call graph bonus in scoring
-
-**5. Precise Code Review (Step 11)**
+**4. Precise Code Review (Step 11)**
 
 The PR review loop uses the call graph to check:
 - Did the change touch a bottleneck method? Flag for extra review
@@ -529,7 +422,7 @@ The PR review loop uses the call graph to check:
 - Is the method complexity within acceptable bounds?
 - Are all affected callers still compatible with the change?
 
-**6. Complete UML Diagrams (Step 13)**
+**5. Complete UML Diagrams (Step 13)**
 
 Sequence diagrams now show **actual** call flows with class context:
 ```
@@ -638,8 +531,7 @@ The single data source for all 13 UML diagram types is also the call graph - `um
 |--------|------|---------|
 | Orchestrator | orchestrator.py | Main StateGraph pipeline (59K) |
 | Flow State | flow_state.py | TypedDict state definition (200+ fields) |
-| RAG Integration | rag_integration.py | Vector DB decision caching, cross-session learning |
-| Call Graph Analyzer | call_graph_analyzer.py | Pipeline impact analysis (6 functions for Steps 2/3/4/10/11) |
+| Call Graph Analyzer | call_graph_analyzer.py | Pipeline impact analysis (6 functions for Steps 2/10/11) |
 | Phase-Scoped Context | call_graph_analyzer.py | extract_phase_subgraph + get_phase_scoped_context |
 | Dependency Resolver | build_dependency_resolver.py | 5-language build file parsing (Python/Java/Node/Go/Rust) |
 | User Interaction | user_interaction.py | InteractionManager + 6 step-specific question generators |
@@ -661,51 +553,35 @@ The single data source for all 13 UML diagram types is also the call graph - `um
 - Checkpoint recovery (resume from any step after crash)
 - Signal handling (Ctrl+C graceful recovery)
 
-### 14 MCP Servers (295 tools) — All in Separate Repos
+### 13 MCP Servers — All in Separate Repos
 
-All 14 MCP servers use FastMCP protocol (stdio JSON-RPC) and have been extracted to individual
+All 13 MCP servers use FastMCP protocol (stdio JSON-RPC) and have been extracted to individual
 private repos under [`techdeveloper-org`](https://github.com/orgs/techdeveloper-org/repositories)
 for independent versioning, testing, and reuse. Each is registered in `~/.claude/settings.json`
 and points to `mcp-{name}/server.py` in the local workspace.
 
-> **Note:** `session-mgr` and `vector-db` also keep in-engine copies in `src/mcp/` because
-> they are imported in-process by `session_hooks.py` and `rag_integration.py` respectively.
-> The separate repos are the source of truth.
+> **Note:** `session-mgr` also keeps an in-engine copy in `src/mcp/` because
+> it is imported in-process by `session_hooks.py`. The separate repo is the source of truth.
 
 | # | Server | Repo | Tools | Purpose |
 |---|--------|------|-------|---------|
 | 1 | session-mgr | [mcp-session-mgr](https://github.com/techdeveloper-org/mcp-session-mgr) | 14 | Session lifecycle (also in-engine: `src/mcp/session_mcp_server.py`) |
-| 2 | vector-db | [mcp-vector-db](https://github.com/techdeveloper-org/mcp-vector-db) | 11 | Qdrant RAG (also in-engine: `src/mcp/vector_db_mcp_server.py`) |
-| 3 | git-ops | [mcp-git-ops](https://github.com/techdeveloper-org/mcp-git-ops) | 14 | Git (branch, commit, push, pull, stash, diff, fetch, cleanup) |
-| 4 | github-api | [mcp-github-api](https://github.com/techdeveloper-org/mcp-github-api) | 12 | GitHub (issue, PR, merge, label, build validate, full merge cycle) |
-| 5 | policy-enforcement | [mcp-policy-enforcement](https://github.com/techdeveloper-org/mcp-policy-enforcement) | 11 | Policy compliance, flow-trace, module health, system health |
-| 6 | token-optimizer | [mcp-token-optimizer](https://github.com/techdeveloper-org/mcp-token-optimizer) | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
-| 7 | pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 8 | Pre-tool validation (8 policy checks, skill hints) |
-| 8 | post-tool-tracker | [mcp-post-tool-tracker](https://github.com/techdeveloper-org/mcp-post-tool-tracker) | 6 | Post-tool tracking (progress, commit readiness, stats) |
-| 9 | standards-loader | [mcp-standards-loader](https://github.com/techdeveloper-org/mcp-standards-loader) | 7 | Standards (project detect, framework detect, hot-reload) |
-| 10 | uml-diagram | [mcp-uml-diagram](https://github.com/techdeveloper-org/mcp-uml-diagram) | 15 | UML generation (13 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io) |
-| 11 | drawio-diagram | [mcp-drawio-diagram](https://github.com/techdeveloper-org/mcp-drawio-diagram) | 5 | Draw.io editable diagrams (12 types, .drawio files, shareable URLs) |
-| 12 | jira-api | [mcp-jira-api](https://github.com/techdeveloper-org/mcp-jira-api) | 10 | Jira (create/search/transition issues, link PRs, Cloud + Server) |
-| 13 | jenkins-ci | [mcp-jenkins-ci](https://github.com/techdeveloper-org/mcp-jenkins-ci) | 10 | Jenkins CI/CD (trigger/abort builds, console output, queue, polling) |
-| 14 | figma-api | [mcp-figma](https://github.com/techdeveloper-org/mcp-figma) | 10 | Figma (file info, components, design tokens, styles, design review) |
+| 2 | git-ops | [mcp-git-ops](https://github.com/techdeveloper-org/mcp-git-ops) | 14 | Git (branch, commit, push, pull, stash, diff, fetch, cleanup) |
+| 3 | github-api | [mcp-github-api](https://github.com/techdeveloper-org/mcp-github-api) | 12 | GitHub (issue, PR, merge, label, build validate, full merge cycle) |
+| 4 | policy-enforcement | [mcp-policy-enforcement](https://github.com/techdeveloper-org/mcp-policy-enforcement) | 11 | Policy compliance, flow-trace, module health, system health |
+| 5 | token-optimizer | [mcp-token-optimizer](https://github.com/techdeveloper-org/mcp-token-optimizer) | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
+| 6 | pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 13 | Pre-tool validation (8 policy checks, skill hints) |
+| 7 | post-tool-tracker | [mcp-post-tool-tracker](https://github.com/techdeveloper-org/mcp-post-tool-tracker) | 6 | Post-tool tracking (progress, commit readiness, stats) |
+| 8 | standards-loader | [mcp-standards-loader](https://github.com/techdeveloper-org/mcp-standards-loader) | 7 | Standards (project detect, framework detect, hot-reload) |
+| 9 | uml-diagram | [mcp-uml-diagram](https://github.com/techdeveloper-org/mcp-uml-diagram) | 15 | UML generation (13 diagram types, AST + LLM, Mermaid/PlantUML, Kroki.io) |
+| 10 | drawio-diagram | [mcp-drawio-diagram](https://github.com/techdeveloper-org/mcp-drawio-diagram) | 5 | Draw.io editable diagrams (12 types, .drawio files, shareable URLs) |
+| 11 | jira-api | [mcp-jira-api](https://github.com/techdeveloper-org/mcp-jira-api) | 10 | Jira (create/search/transition issues, link PRs, Cloud + Server) |
+| 12 | jenkins-ci | [mcp-jenkins-ci](https://github.com/techdeveloper-org/mcp-jenkins-ci) | 10 | Jenkins CI/CD (trigger/abort builds, console output, queue, polling) |
+| 13 | figma-api | [mcp-figma](https://github.com/techdeveloper-org/mcp-figma) | 10 | Figma (file info, components, design tokens, styles, design review) |
 
 > **Shared base:** [mcp-base](https://github.com/techdeveloper-org/mcp-base) — MCPResponse builder, @mcp_tool_handler, AtomicJsonStore, LazyClient. Each server includes a `base/` copy.
 >
-> **Total:** 14 server repos + 1 shared base = [15 repos](https://github.com/orgs/techdeveloper-org/repositories) under `techdeveloper-org`
-
-### RAG Integration (Vector DB Decision Caching)
-
-Every pipeline node stores its decision in Vector DB. Before LLM calls, the pipeline checks RAG for similar past decisions. If confidence >= step-specific threshold, RAG result replaces LLM call (saving inference time and cost).
-
-| Step | Threshold | Rationale |
-|------|-----------|-----------|
-| Step 0 (Task Analysis) | 0.85 | Needs high match for accurate classification |
-| Step 1 (Plan Decision) | 0.80 | Binary decision, easier to cache |
-| Step 5 (Skill Selection) | 0.82 | Moderate - needs context match |
-| Step 7 (Final Prompt) | 0.90 | Near-exact match needed |
-| Step 14 (Summary) | 0.75 | Low stakes, summary is flexible |
-
-**Collections:** `node_decisions`, `sessions`, `flow_traces`, `tool_calls`
+> **Total:** 13 server repos + 1 shared base = [14 repos](https://github.com/orgs/techdeveloper-org/repositories) under `techdeveloper-org`
 
 ### Hybrid LLM Inference (4 providers)
 

@@ -3,8 +3,8 @@ health_server.py - Lightweight HTTP health and readiness server.
 
 Provides two endpoints used by Docker HEALTHCHECK and Kubernetes probes:
   GET /health    - Liveness check. Returns 200 with version and timestamp.
-  GET /readiness - Readiness check. Verifies Qdrant reachability and that
-                   ANTHROPIC_API_KEY is set. Returns 200 only when ready.
+  GET /readiness - Readiness check. Verifies that ANTHROPIC_API_KEY is set.
+                   Returns 200 only when ready.
 
 The server runs in a daemon thread so it does not block the main pipeline.
 It is activated only when the environment variable ENABLE_HEALTH_SERVER=1.
@@ -24,37 +24,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # ---------------------------------------------------------------------------
 # Module-level constants
 # ---------------------------------------------------------------------------
-_VERSION = "1.6.1"
+_VERSION = "1.15.1"
 _SERVICE_NAME = "workflow-engine"
 
 
 # ---------------------------------------------------------------------------
 # Health check helpers
 # ---------------------------------------------------------------------------
-
-
-def _check_qdrant():
-    # type: () -> bool
-    """Return True when the Qdrant healthz endpoint responds with HTTP 200."""
-    host = os.environ.get("QDRANT_HOST", "localhost")
-    port_str = os.environ.get("QDRANT_PORT", "6333")
-    try:
-        port = int(port_str)
-    except ValueError:
-        return False
-
-    try:
-        # Use a raw socket connect first to avoid importing requests/urllib3.
-        # If the port is open we perform a minimal HTTP GET via http.client.
-        import http.client
-
-        conn = http.client.HTTPConnection(host, port, timeout=3)
-        conn.request("GET", "/healthz")
-        resp = conn.getresponse()
-        conn.close()
-        return resp.status == 200
-    except Exception:
-        return False
 
 
 def _check_anthropic_key():
@@ -104,13 +80,11 @@ class _HealthHandler(BaseHTTPRequestHandler):
         self._send_json(200, payload)
 
     def _handle_readiness(self):
-        qdrant_ok = _check_qdrant()
         anthropic_key_ok = _check_anthropic_key()
-        ready = qdrant_ok and anthropic_key_ok
+        ready = anthropic_key_ok
         payload = {
             "ready": ready,
             "checks": {
-                "qdrant": qdrant_ok,
                 "anthropic_key": anthropic_key_ok,
             },
         }

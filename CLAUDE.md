@@ -2,24 +2,24 @@
 
 **Project:** Claude Workflow Engine
 **Version:** 1.15.1
-**Type:** LangGraph Orchestration Pipeline with RAG + Call Graph Intelligence + Template Fast-Path
+**Type:** LangGraph Orchestration Pipeline with Call Graph Intelligence + Template Fast-Path
 **Last Updated:** 2026-04-04
 
 ---
 
 ## Project Overview
 
-Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 8-step active execution (Pre-0, Step 0, Steps 8-14) with GitHub integration, RAG-powered decision caching, and hybrid LLM inference across 4 providers.
+Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 8-step active execution (Pre-0, Step 0, Steps 8-14) with GitHub integration and hybrid LLM inference across 4 providers.
 
 ### Quick Info
 
 | Property | Value |
 |----------|-------|
 | **Languages** | Python |
-| **Frameworks** | LangGraph 0.2.0+, LangChain, FastMCP (mcp package), Qdrant |
+| **Frameworks** | LangGraph 0.2.0+, LangChain, FastMCP (mcp package) |
 | **Status** | Active Development |
 | **Primary Location** | scripts/langgraph_engine/ |
-| **MCP Servers** | 14 servers (295 tools) -- all in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories); 2 also keep in-engine copies in `src/mcp/` |
+| **MCP Servers** | 13 servers -- all in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories); 1 also keeps an in-engine copy in `src/mcp/` |
 | **Total Python Files** | 310+ |
 | **Test Files** | 75 |
 | **Call Graph** | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
@@ -101,6 +101,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | v1.13.0 | 9 | ~2 (subprocess) | ~30s | Removed Steps 1,3,4,5,6,7 |
 | **v1.14.0** | **8** | **2 (subprocess)** | **~15s** | Step 0 = template fill + orchestrator (claude CLI subprocess) |
 | **v1.15.0** | **8** | **2 (subprocess)** | **~15s** | TOON compression removed from Level 1; orchestration RAG and per-node RAG removed |
+| **v1.15.1** | **8** | **2 (subprocess)** | **~15s** | Complete RAG/Qdrant purge -- all dead code, tests, docs, configs removed |
 
 ### Directory Layout
 
@@ -140,7 +141,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 |   +-- policy_tracking_helper.py     # Policy tracking (imported by hook packages)
 +-- policies/                         # README pointing to level packages (policies moved into level_*/policies/)
 |   +-- testing/                      # Testing policies (unchanged)
-+-- src/mcp/                          # In-engine copies of session-mgr + vector-db (repos are source of truth) + bridge (session_hooks, base/)
++-- src/mcp/                          # In-engine copy of session-mgr (repo is source of truth) + bridge (session_hooks, base/)
 +-- tests/                            # 75 test files
 +-- docs/                             # 71 documentation files
 +-- docs/uml/                         # Auto-generated UML diagrams (13 types)
@@ -162,7 +163,6 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | Parsers Package | scripts/langgraph_engine/parsers/ | Abstract Factory: ParserRegistry + 4 language parsers |
 | SonarQube Package | scripts/langgraph_engine/level3_execution/sonarqube/ | Facade: api_client, lightweight, aggregator, auto_fixer |
 | Integrations Package | scripts/langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
-| RAG Integration | scripts/langgraph_engine/rag_integration.py | Vector DB session/flow trace storage; node-level lookup/store for eligible steps |
 | Level -1 | scripts/langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical) |
 | Level 1 | scripts/langgraph_engine/level1_sync/ | Session/context sync (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
 | Level 2 | scripts/langgraph_engine/level2_standards/ | Standards loading (canonical) |
@@ -182,14 +182,12 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | Jira Workflow | scripts/langgraph_engine/level3_execution/steps8to12_jira.py | Dual GitHub+Jira integration (Steps 8/9/11/12) |
 | Figma Workflow | scripts/langgraph_engine/level3_execution/figma_workflow.py | Design-to-code (components, tokens, review) |
 | Health Server | scripts/health_server.py | Stdlib HTTP: GET /health + GET /readiness (daemon thread) |
-| DB Migrate | scripts/db_migrate.py | Idempotent Qdrant collection bootstrap + index creation |
 | Secrets Manager | scripts/langgraph_engine/secrets_manager.py | Startup secrets validation + AWS SM integration + rotation hints |
 | Audit Logger | scripts/langgraph_engine/audit_logger.py | Append-only JSON audit log, daily rotation, credential redaction |
 | Metrics Exporter | scripts/langgraph_engine/metrics_exporter.py | Prometheus: 9 metrics, start_metrics_server(port) |
 | Structured Logger | scripts/langgraph_engine/core/structured_logger.py | JSON log sink (LOG_FORMAT=json), ContextVar session/step injection |
 | Tracing | scripts/langgraph_engine/tracing.py | OpenTelemetry OTLP/console, create_span() context manager |
 | Error Tracking | scripts/langgraph_engine/error_tracking.py | Sentry capture_exception(), no-op without SENTRY_DSN |
-| Cache Invalidation | scripts/langgraph_engine/cache_invalidation.py | Qdrant cache purge by session/project/step/age; CLI |
 | Rate Limiter | src/mcp/rate_limiter.py | TokenBucket per client, 100/min tools, 10/min LLM |
 | Input Validator | src/mcp/input_validator.py | Null-byte strip, length limit, prompt injection detection |
 | Secrets Scanner | scripts/secrets_check.py | CI gate: 6 regex patterns, exit 1 on finding |
@@ -197,35 +195,34 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | PromptGen Caller | scripts/langgraph_engine/level3_execution/architecture/prompt_gen_expert_caller.py | Step 0 Call 1: fills orchestration template via claude CLI |
 | Orchestrator Caller | scripts/langgraph_engine/level3_execution/architecture/orchestrator_agent_caller.py | Step 0 Call 2: executes orchestration plan, streams live to terminal |
 
-### MCP Servers (20 servers, 328 tools) -- All Extracted to Separate Repos
+### MCP Servers (14 servers, 295 tools) -- All Extracted to Separate Repos
 
-All 20 MCP servers have been extracted to individual private repos under
+All 13 MCP servers have been extracted to individual private repos under
 [`techdeveloper-org`](https://github.com/orgs/techdeveloper-org/repositories)
 for independent versioning, testing, and reuse. Each is registered in `~/.claude/settings.json`
 and points to `mcp-{name}/server.py` in the local workspace.
 
-> **Note:** `session-mgr` and `vector-db` also keep in-engine copies in `src/mcp/` because
-> they are imported in-process by `session_hooks.py` and `rag_integration.py` respectively.
-> The separate repos are the source of truth; in-engine copies are kept for tight coupling needs.
+> **Note:** `session-mgr` also keeps an in-engine copy in `src/mcp/` because
+> it is imported in-process by `session_hooks.py`.
+> The separate repo is the source of truth; the in-engine copy is kept for tight coupling needs.
 
-#### All 20 MCP Server Repos
+#### All 13 MCP Server Repos
 
 | # | Server | Repo | Tools | Purpose |
 |---|--------|------|-------|---------|
 | 1 | session-mgr | [mcp-session-mgr](https://github.com/techdeveloper-org/mcp-session-mgr) | 14 | Session lifecycle (also in-engine: `src/mcp/session_mcp_server.py`) |
-| 2 | vector-db | [mcp-vector-db](https://github.com/techdeveloper-org/mcp-vector-db) | 11 | Qdrant RAG (also in-engine: `src/mcp/vector_db_mcp_server.py`) |
-| 3 | git-ops | [mcp-git-ops](https://github.com/techdeveloper-org/mcp-git-ops) | 14 | Git (branch, commit, push, pull, stash, diff, fetch, post-merge cleanup) |
-| 4 | github-api | [mcp-github-api](https://github.com/techdeveloper-org/mcp-github-api) | 12 | GitHub (PR, issue, merge, label, build validate, full merge cycle) |
-| 5 | policy-enforcement | [mcp-policy-enforcement](https://github.com/techdeveloper-org/mcp-policy-enforcement) | 11 | Policy compliance, flow-trace, module health, system health |
-| 6 | token-optimizer | [mcp-token-optimizer](https://github.com/techdeveloper-org/mcp-token-optimizer) | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
-| 7 | pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 13 | Pre-tool validation (8 policy checks, skill hints) |
-| 8 | post-tool-tracker | [mcp-post-tool-tracker](https://github.com/techdeveloper-org/mcp-post-tool-tracker) | 6 | Post-tool tracking (progress, commit readiness, stats) |
-| 9 | standards-loader | [mcp-standards-loader](https://github.com/techdeveloper-org/mcp-standards-loader) | 7 | Standards (project detect, framework detect, hot-reload) |
-| 10 | uml-diagram | [mcp-uml-diagram](https://github.com/techdeveloper-org/mcp-uml-diagram) | 15 | UML generation (13 diagram types, CallGraph + AST + LLM, Mermaid/PlantUML, Kroki.io) |
-| 11 | drawio-diagram | [mcp-drawio-diagram](https://github.com/techdeveloper-org/mcp-drawio-diagram) | 5 | Draw.io editable diagrams (12 types, .drawio files, shareable URLs, no API needed) |
-| 12 | jira-api | [mcp-jira-api](https://github.com/techdeveloper-org/mcp-jira-api) | 10 | Jira (create/search/transition issues, link PRs, Cloud+Server, ADF+plain text) |
-| 13 | jenkins-ci | [mcp-jenkins-ci](https://github.com/techdeveloper-org/mcp-jenkins-ci) | 10 | Jenkins CI/CD (trigger/abort builds, console output, queue, build polling) |
-| 14 | figma-api | [mcp-figma](https://github.com/techdeveloper-org/mcp-figma) | 10 | Figma (file info, components, design tokens, styles, design review) |
+| 2 | git-ops | [mcp-git-ops](https://github.com/techdeveloper-org/mcp-git-ops) | 14 | Git (branch, commit, push, pull, stash, diff, fetch, post-merge cleanup) |
+| 3 | github-api | [mcp-github-api](https://github.com/techdeveloper-org/mcp-github-api) | 12 | GitHub (PR, issue, merge, label, build validate, full merge cycle) |
+| 4 | policy-enforcement | [mcp-policy-enforcement](https://github.com/techdeveloper-org/mcp-policy-enforcement) | 11 | Policy compliance, flow-trace, module health, system health |
+| 5 | token-optimizer | [mcp-token-optimizer](https://github.com/techdeveloper-org/mcp-token-optimizer) | 10 | Token reduction (AST navigation, smart read, dedup, 60-85% savings) |
+| 6 | pre-tool-gate | [mcp-pre-tool-gate](https://github.com/techdeveloper-org/mcp-pre-tool-gate) | 13 | Pre-tool validation (8 policy checks, skill hints) |
+| 7 | post-tool-tracker | [mcp-post-tool-tracker](https://github.com/techdeveloper-org/mcp-post-tool-tracker) | 6 | Post-tool tracking (progress, commit readiness, stats) |
+| 8 | standards-loader | [mcp-standards-loader](https://github.com/techdeveloper-org/mcp-standards-loader) | 7 | Standards (project detect, framework detect, hot-reload) |
+| 9 | uml-diagram | [mcp-uml-diagram](https://github.com/techdeveloper-org/mcp-uml-diagram) | 15 | UML generation (13 diagram types, CallGraph + AST + LLM, Mermaid/PlantUML, Kroki.io) |
+| 10 | drawio-diagram | [mcp-drawio-diagram](https://github.com/techdeveloper-org/mcp-drawio-diagram) | 5 | Draw.io editable diagrams (12 types, .drawio files, shareable URLs, no API needed) |
+| 11 | jira-api | [mcp-jira-api](https://github.com/techdeveloper-org/mcp-jira-api) | 10 | Jira (create/search/transition issues, link PRs, Cloud+Server, ADF+plain text) |
+| 12 | jenkins-ci | [mcp-jenkins-ci](https://github.com/techdeveloper-org/mcp-jenkins-ci) | 10 | Jenkins CI/CD (trigger/abort builds, console output, queue, build polling) |
+| 13 | figma-api | [mcp-figma](https://github.com/techdeveloper-org/mcp-figma) | 10 | Figma (file info, components, design tokens, styles, design review) |
 
 #### Shared Base Package
 
@@ -233,27 +230,7 @@ and points to `mcp-{name}/server.py` in the local workspace.
 |------|---------|
 | [mcp-base](https://github.com/techdeveloper-org/mcp-base) | Shared base package: MCPResponse builder, @mcp_tool_handler decorator, AtomicJsonStore, LazyClient. Each server repo includes a copy as `base/`. |
 
-> **Total:** 14 server repos + 1 shared base = [15 repos](https://github.com/orgs/techdeveloper-org/repositories) under `techdeveloper-org`
-
-### RAG Integration
-
-Session summaries and flow traces are stored in Qdrant Vector DB for cross-session learning.
-For eligible pipeline steps (Step 0, Step 8, Step 11, Step 13, Step 14), RAGLayer.lookup()
-checks for similar past decisions before LLM calls. On hit (confidence >= step threshold),
-the cached decision replaces the LLM call.
-
-Key module: `scripts/langgraph_engine/rag_integration.py`
-Collections: `node_decisions`, `sessions`, `flow_traces`, `tool_calls`
-Default threshold: 0.82 (step-specific: 0.75-0.90)
-
-**RAG Cross-Project Guard (v1.6.1):**
-Every payload stored in `node_decisions` includes a `codebase_hash` -- a 12-char SHA1
-fingerprint of the sorted list of top-level Python module file names.  During lookup,
-if the query hash differs from the stored hash, the similarity score is penalised x0.65,
-effectively blocking false positives where two identically-worded tasks from different
-projects (e.g. "Add login to dashboard" in Project A vs Project B) would otherwise match
-at 0.95+ and inject the wrong blueprint.  Empty hashes (unavailable codebase) are treated
-as unknown and incur no penalty.
+> **Total:** 13 server repos + 1 shared base = [14 repos](https://github.com/orgs/techdeveloper-org/repositories) under `techdeveloper-org`
 
 ### CallGraph-Driven Pipeline Intelligence
 
@@ -315,7 +292,6 @@ All integrations are configurable via environment variables (default: disabled):
 | `ENABLE_TRACING` | `0` | Enable OpenTelemetry tracing (OTLP to OTEL_EXPORTER_OTLP_ENDPOINT) |
 | `ENABLE_RATE_LIMITING` | `0` | Token bucket rate limiting on MCP tool endpoints |
 | `LOG_FORMAT` | `""` | Set to `json` for structured JSON logging (container log aggregation) |
-| `AUTO_CACHE_CLEANUP` | `0` | Auto-invalidate RAG entries older than 30 days at startup |
 | `FORCE_GRAPH_REBUILD` | `0` | Force call graph rebuild even if stale flag is False |
 
 ### Integration Lifecycle (Create -> Update -> Close)
@@ -366,7 +342,7 @@ pytest tests/
 # MCP server tests
 pytest tests/test_*mcp*.py
 
-# Integration tests (require live Qdrant + providers)
+# Integration tests (require live providers)
 pytest tests/integration/ -m integration
 
 # E2E scenario tests
@@ -381,9 +357,6 @@ pytest tests/test_secrets_manager.py tests/test_audit_logger.py
 # CallGraph tests
 pytest tests/test_call_graph_builder.py tests/test_call_graph_analyzer.py
 
-# RAG tests
-pytest tests/test_rag_integration.py
-
 # With coverage report
 pytest tests/ --cov=scripts/langgraph_engine --cov-report=html:docs/coverage
 ```
@@ -391,9 +364,6 @@ pytest tests/ --cov=scripts/langgraph_engine --cov-report=html:docs/coverage
 ### First-Time Setup
 
 ```bash
-# Bootstrap Qdrant collections (idempotent)
-python scripts/db_migrate.py
-
 # Scan for hardcoded secrets (CI gate)
 python scripts/secrets_check.py
 
@@ -441,7 +411,7 @@ See environment variables in `.env.example`:
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: v1.15.0 -- Remove orchestration RAG, per-node RAG, and TOON compression from pipeline. Clean state definition, tests, policies, and docs.
+- **Task**: v1.15.1 -- RAG/Qdrant purge: remove all dead code from rag_integration.py, vector_db_mcp_server.py, base/clients.py, skill_selection_criteria.py, orchestrator.py, output_helpers.py, tests, docs, policies, requirements.txt, .env.example
 - **Skill**: python-core
 - **Agent**: python-backend-engineer
 - **Date**: 2026-04-04

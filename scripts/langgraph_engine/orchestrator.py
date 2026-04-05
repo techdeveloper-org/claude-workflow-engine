@@ -34,7 +34,10 @@ CHANGE LOG (v1.15.0):
   TOON compression node removed from Level 1 graph.
   level1_complexity and level1_context now feed level1_merge directly (parallel).
   node_toon_compression import removed.
-  Pre-analysis comment updated: RAG orchestration lookup removed.
+
+CHANGE LOG (v1.15.1):
+  RAG/Qdrant purge: removed VECTOR DB RAG session storage block from output_node.
+  rag_integration import removed.
 """
 
 import sys
@@ -575,46 +578,6 @@ def output_node(state: FlowState) -> dict:
                 summary_file.write_text(quick_summary, encoding="utf-8")
             except Exception:
                 pass
-
-    # VECTOR DB RAG - Store session summary for cross-session learning
-    try:
-        from .rag_integration import get_rag_layer
-
-        rag = get_rag_layer(
-            session_id=state.get(StepKeys.SESSION_ID, ""),
-            project_root=state.get(StepKeys.PROJECT_ROOT, ""),
-        )
-        rag.store_session_summary(
-            summary=state.get(StepKeys.USER_MESSAGE, "")[:500],
-            task_type=state.get(StepKeys.TASK_TYPE, ""),
-            skill=state.get(StepKeys.SKILL, ""),
-            agent=state.get(StepKeys.AGENT, ""),
-            final_status=final_status,
-            steps_completed=14 if state.get("step14_status") else 9,
-        )
-        # Store flow traces for each level
-        for level_name, level_status_key in [
-            ("level_minus1", StepKeys.LEVEL_MINUS1_STATUS),
-            ("level1", "level1_status"),
-            ("level2", "level2_status"),
-        ]:
-            rag.store_flow_trace(
-                level=level_name,
-                step="merge",
-                status=state.get(level_status_key, "OK"),
-                description=f"{level_name} completed for {state.get(StepKeys.TASK_TYPE, 'task')}",
-            )
-        # Log RAG stats
-        stats = rag.get_stats()
-        if stats.get("stores", 0) > 0 or stats.get("hits", 0) > 0:
-            print(
-                f"[RAG] Stats: {stats.get('stores', 0)} stored, "
-                f"{stats.get('hits', 0)} hits, {stats.get('misses', 0)} misses, "
-                f"{rag.get_hit_rate()}% hit rate",
-                file=sys.stderr,
-            )
-    except Exception:
-        pass  # RAG storage is non-blocking
 
     # SESSION ACCUMULATE - Record this request's data via MCP session tools
     try:

@@ -99,74 +99,7 @@ class TestConcurrentSessionIdUniqueness:
 
 
 # ---------------------------------------------------------------------------
-# Test 2: RAG codebase hash cross-project penalty math
-# ---------------------------------------------------------------------------
-
-
-class TestRagCodebaseHashCrossProjectPenalty:
-    """Verify the 0.65 penalty keeps cross-project matches below the 0.85 threshold."""
-
-    def test_penalty_brings_095_below_threshold(self):
-        """0.95 raw score * 0.65 penalty = 0.6175 which is below 0.85 threshold."""
-        CROSS_PROJECT_PENALTY = 0.65
-        RAG_THRESHOLD = 0.85
-        raw_score = 0.95
-
-        effective = raw_score * CROSS_PROJECT_PENALTY
-        assert abs(effective - 0.6175) < 1e-9, "Expected 0.6175, got {:.6f}".format(effective)
-        assert effective < RAG_THRESHOLD, "Penalised score {:.4f} must be below threshold {}".format(
-            effective, RAG_THRESHOLD
-        )
-
-    def test_penalty_keeps_098_below_threshold(self):
-        """0.98 * 0.65 = 0.637 which is still below 0.85."""
-        effective = 0.98 * 0.65
-        assert effective < 0.85
-
-    def test_no_penalty_for_matching_hash(self):
-        """Same codebase hash: raw 0.95 score is above threshold without penalty."""
-        raw_score = 0.95
-        # Same hash - no penalty applied
-        effective = raw_score
-        assert effective >= 0.85
-
-    def test_codebase_hash_compute_returns_string(self, tmp_path):
-        """_compute_codebase_hash must return a non-empty string for a dir with .py files."""
-        if str(_SCRIPTS_DIR) not in sys.path:
-            sys.path.insert(0, str(_SCRIPTS_DIR))
-
-        try:
-            from langgraph_engine.rag_integration import _compute_codebase_hash
-        except ImportError:
-            pytest.skip("langgraph_engine.rag_integration not importable")
-
-        project_dir = tmp_path / "my_project"
-        project_dir.mkdir()
-        (project_dir / "main.py").write_text("# entry", encoding="utf-8")
-        (project_dir / "utils.py").write_text("# utils", encoding="utf-8")
-
-        result = _compute_codebase_hash(str(project_dir))
-        assert isinstance(result, str)
-        assert len(result) > 0
-
-    def test_codebase_hash_empty_dir_returns_empty_string(self, tmp_path):
-        """_compute_codebase_hash must return '' for a directory with no .py files."""
-        if str(_SCRIPTS_DIR) not in sys.path:
-            sys.path.insert(0, str(_SCRIPTS_DIR))
-
-        try:
-            from langgraph_engine.rag_integration import _compute_codebase_hash
-        except ImportError:
-            pytest.skip("langgraph_engine.rag_integration not importable")
-
-        empty_dir = tmp_path / "empty"
-        empty_dir.mkdir()
-        result = _compute_codebase_hash(str(empty_dir))
-        assert result == ""
-
-
-# ---------------------------------------------------------------------------
-# Test 3: TokenBucket thread safety
+# Test 2: TokenBucket thread safety
 # ---------------------------------------------------------------------------
 
 
