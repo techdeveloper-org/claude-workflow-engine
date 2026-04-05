@@ -19,6 +19,12 @@ CHANGE LOG (v1.15.0):
   add_level1() TOON node + edges replaced with direct parallel merge:
     level1_complexity -> level1_merge
     level1_context -> level1_merge
+
+CHANGE LOG (v1.15.2):
+  level3_merge_node removed from import and add_level3().
+  level3_merge was a comment stub in subgraph.py, never implemented.
+  Hook mode: level3_step9 -> level3_output (direct edge).
+  Full mode: level3_step14 -> level3_output (direct edge).
 """
 
 try:
@@ -64,7 +70,6 @@ from .level2_standards import (
 # Level 3 nodes (v2 active)
 from .level3_execution.subgraph import (
     level3_init_node,
-    level3_merge_node,
     orchestration_pre_analysis_node,
     route_pre_analysis,
     step0_0_project_context_node,
@@ -279,6 +284,10 @@ class PipelineBuilder:
             Steps 0-14 execute sequentially with retry loop at Step 11.
 
         Standards hooks run at Steps 10 and 13 for compliance context injection.
+
+        v1.15.2: level3_merge node removed (was a comment stub, never implemented).
+          Hook mode: level3_step9 -> level3_output (direct edge).
+          Full mode: level3_step14 -> level3_output (direct edge).
         """
         self._hook_mode = hook_mode
         g = self._graph
@@ -324,11 +333,9 @@ class PipelineBuilder:
         if hook_mode:
             # HOOK MODE: After Steps 8-9, skip to output
             # Claude Code itself is Step 10 (LLM reading the prompt and working)
-            g.add_node("level3_merge", level3_merge_node)
-            g.add_edge("level3_step9", "level3_merge")
-
+            # v1.15.2: direct edge to output (no merge node)
             g.add_node("level3_output", output_node)
-            g.add_edge("level3_merge", "level3_output")
+            g.add_edge("level3_step9", "level3_output")
             g.add_edge("level3_output", END)
         else:
             # FULL MODE: Steps 10-14 (implementation + PR + merge + close)
@@ -374,12 +381,9 @@ class PipelineBuilder:
             g.add_node("level3_step14", step14_final_summary_node)
             g.add_edge("level3_standards_hook_step13", "level3_step14")
 
-            # Merge -> output -> END
-            g.add_node("level3_merge", level3_merge_node)
-            g.add_edge("level3_step14", "level3_merge")
-
+            # v1.15.2: direct edge to output (no merge node)
             g.add_node("level3_output", output_node)
-            g.add_edge("level3_merge", "level3_output")
+            g.add_edge("level3_step14", "level3_output")
             g.add_edge("level3_output", END)
 
         self._levels_added.append("level3")

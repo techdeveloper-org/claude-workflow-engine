@@ -34,6 +34,12 @@ CHANGE LOG (v1.15.0):
   TOON compression node removed from Level 1 graph.
   level1_complexity and level1_context now feed level1_merge directly (parallel).
   node_toon_compression import removed.
+
+CHANGE LOG (v1.15.2):
+  level3_merge_node removed from import and graph.
+  The function body was never implemented in subgraph.py (comment stub only).
+  Hook mode: level3_step9 -> level3_output (direct edge, no merge node).
+  Full mode: level3_step14 -> level3_output (direct edge, no merge node).
 """
 
 import sys
@@ -77,7 +83,6 @@ from .level2_standards import (
 )
 from .level3_execution.subgraph import (
     level3_init_node,
-    level3_merge_node,
     orchestration_pre_analysis_node,
     route_pre_analysis,
     step0_0_project_context_node,
@@ -769,6 +774,11 @@ def create_flow_graph(hook_mode: bool = False):
     CHANGE LOG (v1.15.0):
         TOON compression node removed from Level 1 graph.
         level1_complexity and level1_context now feed level1_merge directly.
+
+    CHANGE LOG (v1.15.2):
+        level3_merge node removed (level3_merge_node was a comment stub, never
+        implemented). Hook mode: level3_step9 -> level3_output directly.
+        Full mode: level3_step14 -> level3_output directly.
     """
     if not _LANGGRAPH_AVAILABLE:
         raise RuntimeError(
@@ -949,13 +959,11 @@ def create_flow_graph(hook_mode: bool = False):
     # HOOK MODE: After Steps 8-9, go to output
     # Step 10 = Claude Code itself (the LLM reading this prompt and working)
     # Steps 11-14 = run in Stop hook after Claude finishes working
+    # v1.15.2: level3_merge removed (was never implemented); direct edge used.
     # ========================================================================
     if hook_mode:
-        graph.add_node("level3_merge", level3_merge_node)
-        graph.add_edge("level3_step9", "level3_merge")
-
         graph.add_node("level3_output", output_node)
-        graph.add_edge("level3_merge", "level3_output")
+        graph.add_edge("level3_step9", "level3_output")
         graph.add_edge("level3_output", END)
 
         try:
@@ -1012,15 +1020,12 @@ def create_flow_graph(hook_mode: bool = False):
     graph.add_node("level3_step14", step14_final_summary_node)
     graph.add_edge("level3_standards_hook_step13", "level3_step14")
 
-    # Merge node
-    graph.add_node("level3_merge", level3_merge_node)
-    graph.add_edge("level3_step14", "level3_merge")
-
     # ========================================================================
     # OUTPUT
+    # v1.15.2: level3_merge removed (was never implemented); direct edge used.
     # ========================================================================
     graph.add_node("level3_output", output_node)
-    graph.add_edge("level3_merge", "level3_output")
+    graph.add_edge("level3_step14", "level3_output")
     graph.add_edge("level3_output", END)
 
     # Compile graph with SqliteSaver checkpointer for state persistence
