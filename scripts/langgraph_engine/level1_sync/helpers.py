@@ -4,6 +4,11 @@ Canonical location for Level 1 shared constants, imports, and helper
 functions used by all Level 1 node modules.
 
 Windows-safe: ASCII only, no Unicode characters.
+
+# v1.15.2: removed `import toons` try/except block (_TOONS_AVAILABLE) and
+#           `from .toon_schema import validate_toon` try/except block
+#           (_TOON_SCHEMA_AVAILABLE).  Both modules were deleted in v1.15.2 and
+#           neither flag was read by any live caller.
 """
 
 # ruff: noqa: F401
@@ -33,13 +38,6 @@ except ImportError:
     _LANGGRAPH_AVAILABLE = False
 
 
-try:
-    import toons  # noqa: F401
-
-    _TOONS_AVAILABLE = True
-except ImportError:
-    _TOONS_AVAILABLE = False
-
 # Level 1 new modules (graceful import fallback)
 try:
     from ..complexity_calculator import calculate_complexity, calculate_graph_complexity, should_plan  # noqa: F401
@@ -65,13 +63,6 @@ try:
     _DEDUPLICATOR_AVAILABLE = True
 except ImportError:
     _DEDUPLICATOR_AVAILABLE = False
-
-try:
-    from .toon_schema import validate_toon  # noqa: F401
-
-    _TOON_SCHEMA_AVAILABLE = True
-except ImportError:
-    _TOON_SCHEMA_AVAILABLE = False
 
 # Shared utility: step logger
 try:

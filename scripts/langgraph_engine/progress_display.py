@@ -1,5 +1,5 @@
 """
-Progress Display - Real-time step progress visualization for the 15-step pipeline (Step 0-14).
+Progress Display - Real-time step progress visualization for the pipeline (Step 0-14).
 
 Provides:
 - ASCII progress bars with completion percentage
@@ -14,42 +14,44 @@ Usage:
     display = ProgressDisplay(session_id="abc-123", total_steps=14)
     display.start()
 
-    display.update_step(step=1, status="RUNNING", label="Plan Mode Decision")
+    display.update_step(step=8, status="RUNNING", label="GitHub Issue Creation")
     time.sleep(2)
-    display.update_step(step=1, status="DONE", duration_ms=1850)
+    display.update_step(step=8, status="DONE", duration_ms=1850)
 
-    display.update_step(step=2, status="SKIPPED", label="Plan Execution")
-    display.update_step(step=3, status="RUNNING", label="Task Breakdown")
+    display.update_step(step=9, status="RUNNING", label="Branch Creation")
 
     display.finish(final_status="SUCCESS")
+
+# v1.15.2: removed STEP_LABELS and HISTORICAL_STEP_DURATIONS_MS entries for
+#           steps 4-7 (TOON Refinement, Skill & Agent Selection, Skill Validation,
+#           Final Prompt Generation -- removed from pipeline in v1.13.0).
 """
 
 import sys
-import time
 import threading
-from typing import Dict, List, Optional, Any
+import time
+from typing import Any, Dict, List, Optional
 
 try:
     from loguru import logger
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Step metadata - human-readable labels for all 14 pipeline steps
+# Step metadata - human-readable labels for active pipeline steps
+# Active steps: Pre-0, Step 0, Steps 8-14
+# v1.15.2: removed dead entries for steps 4-7
 # ---------------------------------------------------------------------------
 
 STEP_LABELS: Dict[int, str] = {
-    1:  "Plan Mode Decision",
-    2:  "Plan Execution",
-    3:  "Task Breakdown",
-    4:  "TOON Refinement",
-    5:  "Skill & Agent Selection",
-    6:  "Skill Validation & Download",
-    7:  "Final Prompt Generation",
-    8:  "GitHub Issue Creation",
-    9:  "Branch Creation",
+    1: "Plan Mode Decision",
+    2: "Plan Execution",
+    3: "Task Breakdown",
+    8: "GitHub Issue Creation",
+    9: "Branch Creation",
     10: "Implementation Execution",
     11: "Pull Request & Code Review",
     12: "Issue Closure",
@@ -59,16 +61,13 @@ STEP_LABELS: Dict[int, str] = {
 
 # Historical average durations in milliseconds (used for initial ETA estimation)
 # These values are seeded from observed pipeline runs and updated at runtime.
+# v1.15.2: removed dead entries for steps 4-7
 HISTORICAL_STEP_DURATIONS_MS: Dict[int, float] = {
-    1:  1200.0,
-    2:  8500.0,
-    3:  2800.0,
-    4:  1500.0,
-    5:  3200.0,
-    6:  4500.0,
-    7:  2100.0,
-    8:  1800.0,
-    9:  1400.0,
+    1: 1200.0,
+    2: 8500.0,
+    3: 2800.0,
+    8: 1800.0,
+    9: 1400.0,
     10: 12000.0,
     11: 5500.0,
     12: 1200.0,
@@ -78,27 +77,28 @@ HISTORICAL_STEP_DURATIONS_MS: Dict[int, float] = {
 
 # Status display tokens
 STATUS_ICONS: Dict[str, str] = {
-    "PENDING":  "[ ]",
-    "RUNNING":  "[>]",
-    "DONE":     "[x]",
-    "SKIPPED":  "[~]",
-    "FAILED":   "[!]",
-    "PARTIAL":  "[/]",
+    "PENDING": "[ ]",
+    "RUNNING": "[>]",
+    "DONE": "[x]",
+    "SKIPPED": "[~]",
+    "FAILED": "[!]",
+    "PARTIAL": "[/]",
 }
 
 STATUS_LABELS: Dict[str, str] = {
-    "PENDING":  "Pending",
-    "RUNNING":  "Running",
-    "DONE":     "Done",
-    "SKIPPED":  "Skipped",
-    "FAILED":   "Failed",
-    "PARTIAL":  "Partial",
+    "PENDING": "Pending",
+    "RUNNING": "Running",
+    "DONE": "Done",
+    "SKIPPED": "Skipped",
+    "FAILED": "Failed",
+    "PARTIAL": "Partial",
 }
 
 
 # ---------------------------------------------------------------------------
 # StepRecord - tracks a single step's execution state
 # ---------------------------------------------------------------------------
+
 
 class StepRecord:
     """Tracks state of a single pipeline step."""
@@ -157,8 +157,9 @@ class StepRecord:
 # ProgressDisplay - main display controller
 # ---------------------------------------------------------------------------
 
+
 class ProgressDisplay:
-    """Real-time step progress visualization for the 15-step pipeline (Step 0-14).
+    """Real-time step progress visualization for the pipeline (Step 0-14).
 
     Thread-safe: update_step() can be called from any thread. A background
     refresh thread redraws the display every ``refresh_interval`` seconds.
@@ -193,9 +194,7 @@ class ProgressDisplay:
         self.enable_refresh_thread = enable_refresh_thread
 
         # Step records keyed by step number
-        self._steps: Dict[int, StepRecord] = {
-            n: StepRecord(n) for n in range(1, total_steps + 1)
-        }
+        self._steps: Dict[int, StepRecord] = {n: StepRecord(n) for n in range(1, total_steps + 1)}
 
         self._lock = threading.Lock()
         self._started_at: Optional[float] = None
@@ -411,6 +410,7 @@ class ProgressDisplay:
 # ---------------------------------------------------------------------------
 # Module-level convenience functions
 # ---------------------------------------------------------------------------
+
 
 def create_display(session_id: str = "", total_steps: int = 14) -> ProgressDisplay:
     """Create and start a ProgressDisplay instance."""

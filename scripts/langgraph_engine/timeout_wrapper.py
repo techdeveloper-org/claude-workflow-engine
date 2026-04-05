@@ -16,34 +16,33 @@ Usage:
 
     result = run_with_timeout(
         fn=planner.execute,
-        step_number=1,
-        args=(toon, user_requirement),
-        fallback={"plan_required": True, "source": "timeout_fallback"}
+        step_number=8,
+        args=(user_requirement,),
+        fallback={"issue_created": False, "source": "timeout_fallback"}
     )
+
+# v1.15.2: removed fallback_step1, fallback_step2, fallback_step5, fallback_step7
+#           (Steps 1,2,3,4,5,6,7 removed from pipeline in v1.13.0).
+#           Removed timeout/label entries for dead steps 1-7 from STEP_TIMEOUTS/STEP_LABELS.
 """
 
-import time
 import threading
-from typing import Any, Callable, Dict, Optional, Tuple
+import time
 from datetime import datetime
-from loguru import logger
+from typing import Any, Callable, Dict, Optional, Tuple
 
+from loguru import logger
 
 # ---------------------------------------------------------------------------
 # Canonical timeout values (seconds) per Level 3 step
+# Active steps only: Pre-0 (0), Step 0, Steps 8-14
+# v1.15.2: removed dead entries for steps 1,2,3,4,5,6,7
 # ---------------------------------------------------------------------------
 
 STEP_TIMEOUTS: Dict[int, int] = {
-    0:  900,  # Task Analysis (Ollama LLM - let it take its time)
-    1:  900,  # Plan Mode Decision (Ollama classification)
-    2:  900,  # Plan Execution (convergence loop - multiple LLM iterations)
-    3:  120,  # Task Breakdown (parsing + validation, no LLM)
-    4:  120,  # TOON Refinement (local computation, no LLM)
-    5:  900,  # Skill & Agent Selection (filesystem scan + Ollama)
-    6:  120,  # Skill Validation & Download (network I/O possible)
-    7:  120,  # Final Prompt Generation (local formatting, no LLM)
-    8:  900,  # GitHub Issue Creation (Ollama title gen + GitHub API)
-    9:  120,  # Branch Creation (git operations)
+    0: 900,  # Task Analysis (Ollama LLM - let it take its time)
+    8: 900,  # GitHub Issue Creation (Ollama title gen + GitHub API)
+    9: 120,  # Branch Creation (git operations)
     10: 900,  # Implementation Execution (Claude/Ollama heavy lifting)
     11: 900,  # Pull Request & Code Review (network + possible LLM)
     12: 120,  # Issue Closure (network I/O)
@@ -52,16 +51,10 @@ STEP_TIMEOUTS: Dict[int, int] = {
 }
 
 # Human-readable step labels for log messages
+# v1.15.2: removed dead entries for steps 1,2,3,4,5,6,7
 STEP_LABELS: Dict[int, str] = {
-    1:  "Plan Mode Decision",
-    2:  "Plan Execution",
-    3:  "Task Breakdown",
-    4:  "TOON Refinement",
-    5:  "Skill & Agent Selection",
-    6:  "Skill Validation & Download",
-    7:  "Final Prompt Generation",
-    8:  "GitHub Issue Creation",
-    9:  "Branch Creation",
+    8: "GitHub Issue Creation",
+    9: "Branch Creation",
     10: "Implementation Execution",
     11: "Pull Request & Code Review",
     12: "Issue Closure",
@@ -73,6 +66,7 @@ STEP_LABELS: Dict[int, str] = {
 # ---------------------------------------------------------------------------
 # Internal result container for thread-safe value passing
 # ---------------------------------------------------------------------------
+
 
 class _StepResult:
     """Thread-safe container to pass result/error from worker thread."""
@@ -86,6 +80,7 @@ class _StepResult:
 # ---------------------------------------------------------------------------
 # Core timeout execution engine
 # ---------------------------------------------------------------------------
+
 
 class StepTimeout:
     """
@@ -127,7 +122,7 @@ class StepTimeout:
             kwargs:       Keyword arguments for fn.
             fallback:     Dict returned if timeout or exception occurs.
                           If None, a minimal error dict is returned.
-            step_label:   Label for log messages (e.g. "STEP 1: Plan Mode Decision").
+            step_label:   Label for log messages (e.g. "STEP 8: GitHub Issue Creation").
 
         Returns:
             Result dict from fn, or fallback dict on timeout/error.
@@ -167,8 +162,7 @@ class StepTimeout:
                 )
 
             logger.debug(
-                f"[TimeoutWrapper] {step_label} completed in {elapsed_ms:.0f}ms "
-                f"(limit={self.timeout_seconds}s)"
+                f"[TimeoutWrapper] {step_label} completed in {elapsed_ms:.0f}ms " f"(limit={self.timeout_seconds}s)"
             )
             result = container.value or {}
             # Inject timing metadata
@@ -225,6 +219,7 @@ class StepTimeout:
 # Convenience top-level function
 # ---------------------------------------------------------------------------
 
+
 def run_with_timeout(
     fn: Callable,
     step_number: int,
@@ -241,7 +236,7 @@ def run_with_timeout(
 
     Args:
         fn:             Callable to execute.
-        step_number:    Level 3 step number (1-14). Used for timeout lookup.
+        step_number:    Level 3 step number (8-14). Used for timeout lookup.
         args:           Positional arguments passed to fn.
         kwargs:         Keyword arguments passed to fn.
         fallback:       Return value if fn times out or raises. Should contain
@@ -253,19 +248,16 @@ def run_with_timeout(
 
     Example:
         result = run_with_timeout(
-            fn=planner.execute,
-            step_number=1,
-            args=(toon, user_requirement),
-            fallback={"plan_required": True, "source": "timeout_fallback", "risk_level": "high"}
+            fn=github_ops.create_issue,
+            step_number=8,
+            args=(user_requirement,),
+            fallback={"issue_created": False, "source": "timeout_fallback", "risk_level": "high"}
         )
     """
     timeout_s = custom_timeout if custom_timeout is not None else STEP_TIMEOUTS.get(step_number, 60)
     step_label = STEP_LABELS.get(step_number, f"Step {step_number}")
 
-    logger.info(
-        f"[TimeoutWrapper] Starting STEP {step_number}: {step_label} "
-        f"(timeout={timeout_s}s)"
-    )
+    logger.info(f"[TimeoutWrapper] Starting STEP {step_number}: {step_label} " f"(timeout={timeout_s}s)")
 
     wrapper = StepTimeout(timeout_seconds=timeout_s)
     return wrapper.run(
@@ -275,55 +267,3 @@ def run_with_timeout(
         fallback=fallback,
         step_label=f"STEP {step_number}: {step_label}",
     )
-
-
-# ---------------------------------------------------------------------------
-# Fallback result builders for each critical step
-# ---------------------------------------------------------------------------
-
-def fallback_step1() -> Dict[str, Any]:
-    """Safe fallback for Step 1 (Plan Mode Decision)."""
-    return {
-        "plan_required": True,
-        "reasoning": "Timeout fallback - defaulting to plan mode for safety",
-        "risk_level": "high",
-        "decision_reasoning": "Timeout occurred, defaulting to plan mode",
-        "source": "timeout_fallback",
-        "fallback": True,
-    }
-
-
-def fallback_step2() -> Dict[str, Any]:
-    """Safe fallback for Step 2 (Plan Execution)."""
-    return {
-        "success": False,
-        "plan": "Timeout during plan execution - proceed with minimal plan",
-        "files_affected": [],
-        "phases": [{"phase_number": 1, "title": "Implementation", "description": "Execute task", "tasks": []}],
-        "risks": {"risk_level": "high", "factors": ["Timeout during planning"], "mitigation": []},
-        "source": "timeout_fallback",
-    }
-
-
-def fallback_step5() -> Dict[str, Any]:
-    """Safe fallback for Step 5 (Skill & Agent Selection)."""
-    return {
-        "success": False,
-        "selected_skills": [],
-        "selected_agents": [],
-        "skill_count": 0,
-        "agent_count": 0,
-        "source": "timeout_fallback",
-        "reasoning": "Timeout during skill selection - no skills selected",
-    }
-
-
-def fallback_step7() -> Dict[str, Any]:
-    """Safe fallback for Step 7 (Final Prompt Generation)."""
-    return {
-        "success": False,
-        "prompt": "",
-        "prompt_length": 0,
-        "source": "timeout_fallback",
-        "reasoning": "Timeout during prompt generation",
-    }

@@ -59,7 +59,7 @@ CONTEXT_THRESHOLD_EMERGENCY = 0.95  # 95% - stop loading, trigger cleanup
 STREAMING_THRESHOLD = 1_000_000  # 1 MB
 STREAMING_CHUNK_SIZE = 65_536  # 64 KB per read chunk
 
-# Max content per file sent to TOON (5 KB snippet)
+# Max content per file (5 KB snippet)  # v1.15.2: removed stale "sent to TOON" reference
 MAX_CONTENT_CHARS = 5000
 
 

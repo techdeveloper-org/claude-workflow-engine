@@ -8,25 +8,32 @@ Configuration via environment variables:
 - INFERENCE_MODE: "auto" (default), "gpu_only", "npu_only"
 - OLLAMA_ENDPOINT: GPU endpoint (default: http://127.0.0.1:11434)
 - INTEL_AI_NPU_PATH: NPU path (default: ~/intel-ai/npu)
+
+# v1.15.2: removed step1_plan_mode_decision() and step5_skill_agent_selection()
+#           (Steps 1 and 5 removed from the pipeline in v1.13.0;
+#            InferenceRouter is never imported by live graph nodes).
 """
 
 import os
 from pathlib import Path
-from typing import Dict, Any, List, Literal
+from typing import Any, Dict, List, Literal
+
 from loguru import logger
 
 try:
     import sys as _sys
+
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
-    from utils.path_resolver import get_npu_path, get_gpu_path
+    from utils.path_resolver import get_gpu_path, get_npu_path
+
     _NPU_PATH_DEFAULT = str(get_npu_path())
     _GPU_PATH_DEFAULT = str(get_gpu_path())
 except ImportError:
-    _NPU_PATH_DEFAULT = str(Path.home() / 'intel-ai' / 'npu')
-    _GPU_PATH_DEFAULT = str(Path.home() / 'intel-ai' / 'gpu')
+    _NPU_PATH_DEFAULT = str(Path.home() / "intel-ai" / "npu")
+    _GPU_PATH_DEFAULT = str(Path.home() / "intel-ai" / "gpu")
 
-from .ollama_service import OllamaService
 from .npu_service import get_npu_service
+from .ollama_service import OllamaService
 
 
 class InferenceRouter:
@@ -47,9 +54,7 @@ class InferenceRouter:
             npu_path: NPU executable path (default: ~/intel-ai/npu or INTEL_AI_NPU_PATH)
         """
         if npu_path is None:
-            npu_path = str(
-                Path(os.getenv('INTEL_AI_NPU_PATH', _NPU_PATH_DEFAULT))
-            )
+            npu_path = str(Path(os.getenv("INTEL_AI_NPU_PATH", _NPU_PATH_DEFAULT)))
         self.mode = mode.lower()
         self.ollama_endpoint = ollama_endpoint
         self.npu_path = npu_path
@@ -69,7 +74,7 @@ class InferenceRouter:
         if self.mode in ["auto", "gpu_only"]:
             try:
                 self.ollama = OllamaService(endpoint=self.ollama_endpoint)
-                logger.info("✓ GPU (Ollama) initialized as primary backend")
+                logger.info("GPU (Ollama) initialized as primary backend")
             except Exception as e:
                 logger.warning(f"GPU initialization failed: {e}")
                 self.ollama = None
@@ -79,7 +84,7 @@ class InferenceRouter:
             try:
                 self.npu = get_npu_service(self.npu_path)
                 if self.npu:
-                    logger.info("✓ NPU initialized (optional fallback, prefer GPU)")
+                    logger.info("NPU initialized (optional fallback, prefer GPU)")
             except Exception as e:
                 logger.warning(f"NPU initialization failed: {e}")
                 self.npu = None
@@ -87,17 +92,14 @@ class InferenceRouter:
         # Validate at least one is available
         if not self.ollama and not self.npu:
             gpu_exe = os.getenv(
-                'INTEL_AI_GPU_EXE',
-                str(Path(_GPU_PATH_DEFAULT) / 'ollama'),
+                "INTEL_AI_GPU_EXE",
+                str(Path(_GPU_PATH_DEFAULT) / "ollama"),
             )
             raise RuntimeError(
-                "No inference backend available (GPU and NPU both failed). "
-                "Start GPU with: %s serve" % gpu_exe
+                "No inference backend available (GPU and NPU both failed). " "Start GPU with: %s serve" % gpu_exe
             )
 
-    def choose_backend(
-        self, task_type: str = "auto", complexity: int = 5
-    ) -> Literal["gpu", "npu"]:
+    def choose_backend(self, task_type: str = "auto", complexity: int = 5) -> Literal["gpu", "npu"]:
         """
         Choose optimal backend for task.
 
@@ -114,7 +116,7 @@ class InferenceRouter:
             return "npu"
 
         # Auto mode: smart routing
-        # Fast tasks → NPU, Complex tasks → GPU
+        # Fast tasks -> NPU, Complex tasks -> GPU
         if not self.npu:
             return "gpu"  # Only GPU available
         if not self.ollama:
@@ -220,47 +222,6 @@ class InferenceRouter:
             max_tokens=kwargs.get("max_tokens", 200),
         )
 
-    def step1_plan_mode_decision(self, toon: Dict[str, Any], user_requirement: str) -> Dict[str, Any]:
-        """Route to GPU (Ollama) for plan decision. GPU preferred over NPU for quality."""
-        logger.info("[STEP 1] Plan mode decision (fast classification on GPU)")
-
-        if self.ollama:
-            return self.ollama.step1_plan_mode_decision(toon, user_requirement)
-        elif self.npu:
-            logger.warning("GPU unavailable, falling back to NPU for step1")
-            return self.npu.step1_plan_mode_decision(toon, user_requirement)
-        else:
-            return {"plan_required": True, "reasoning": "No backend available"}
-
-    def step5_skill_agent_selection(
-        self,
-        blueprint: Dict[str, Any],
-        available_skills: List[str],
-        available_agents: List[str],
-    ) -> Dict[str, Any]:
-        """Route to GPU for complex skill selection."""
-        logger.info("[STEP 5] Skill selection (complex reasoning on GPU)")
-
-        if self.ollama:
-            return self.ollama.step5_skill_agent_selection(
-                blueprint, available_skills, available_agents
-            )
-        elif self.npu:
-            # Fallback to NPU with simpler prompt
-            logger.warning("Using NPU for skill selection (reduced context)")
-            return self.npu.chat(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"Select skills from: {', '.join(available_skills[:5])}",
-                    }
-                ],
-                model="medium_reasoning",
-                max_tokens=150,
-            )
-        else:
-            return {"skill_mappings": [], "final_skills_selected": [], "final_agents_selected": []}
-
 
 def get_inference_router() -> InferenceRouter:
     """Get or create singleton inference router."""
@@ -269,8 +230,6 @@ def get_inference_router() -> InferenceRouter:
         ollama_endpoint = os.getenv("OLLAMA_ENDPOINT", "http://127.0.0.1:11434")
         npu_path = os.getenv("INTEL_AI_NPU_PATH", _NPU_PATH_DEFAULT)
 
-        get_inference_router._instance = InferenceRouter(
-            mode=mode, ollama_endpoint=ollama_endpoint, npu_path=npu_path
-        )
+        get_inference_router._instance = InferenceRouter(mode=mode, ollama_endpoint=ollama_endpoint, npu_path=npu_path)
 
     return get_inference_router._instance

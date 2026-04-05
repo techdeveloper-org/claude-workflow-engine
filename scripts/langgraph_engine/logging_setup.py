@@ -6,17 +6,19 @@ Provides:
 2. Rich terminal output with progress bars
 3. Unified logger for all Level 3 execution
 4. Session-specific logs with automatic rotation
+
+# v1.15.2: removed log_toon_saved() method (TOON removed in v1.15.0).
 """
 
-from pathlib import Path
+import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from loguru import logger
-from rich.logging import RichHandler
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
-import logging
+from rich.logging import RichHandler
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn
 
 
 class LoggingSetup:
@@ -54,7 +56,7 @@ class LoggingSetup:
             format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}",
             rotation="100 MB",
             retention="7 days",
-            level="DEBUG"
+            level="DEBUG",
         )
 
         # Structured JSON log (machine-readable)
@@ -65,7 +67,7 @@ class LoggingSetup:
             rotation="100 MB",
             retention="7 days",
             serialize=True,  # JSON serialization
-            level="INFO"
+            level="INFO",
         )
 
         logger.info(f"Execution logs: {log_file}")
@@ -78,28 +80,14 @@ class LoggingSetup:
             logging.root.removeHandler(handler)
 
         # Add Rich handler
-        handler = RichHandler(
-            console=self.console,
-            markup=True,
-            rich_tracebacks=True,
-            show_time=True,
-            show_level=True
-        )
+        handler = RichHandler(console=self.console, markup=True, rich_tracebacks=True, show_time=True, show_level=True)
 
         # Configure Python logging to use Rich
-        logging.basicConfig(
-            level="INFO",
-            format="%(message)s",
-            handlers=[handler]
-        )
+        logging.basicConfig(level="INFO", format="%(message)s", handlers=[handler])
 
         logger.info("[green]✓[/green] Rich logging configured")
 
-    def get_progress(
-        self,
-        total_tasks: int,
-        description: str = "Executing"
-    ) -> Progress:
+    def get_progress(self, total_tasks: int, description: str = "Executing") -> Progress:
         """
         Create a Rich progress bar for task tracking.
 
@@ -122,7 +110,7 @@ class LoggingSetup:
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TimeRemainingColumn(),
             console=self.console,
-            transient=False  # Keep progress bar after completion
+            transient=False,  # Keep progress bar after completion
         )
 
     def log_step_start(self, step_number: int, step_name: str, description: str = ""):
@@ -133,15 +121,11 @@ class LoggingSetup:
 
     def log_step_complete(self, step_number: int, step_name: str, duration_ms: float):
         """Log successful step completion."""
-        logger.info(f"[STEP {step_number}] ✓ {step_name} ({duration_ms:.0f}ms)")
+        logger.info(f"[STEP {step_number}] {step_name} ({duration_ms:.0f}ms)")
 
     def log_step_error(self, step_number: int, step_name: str, error: str):
         """Log step failure."""
-        logger.error(f"[STEP {step_number}] ✗ {step_name}: {error}")
-
-    def log_toon_saved(self, version: int, file_path: Path):
-        """Log TOON save event."""
-        logger.info(f"[TOON] Saved v{version} to {file_path.name}")
+        logger.error(f"[STEP {step_number}] FAILED {step_name}: {error}")
 
     def log_github_event(self, event_type: str, details: str):
         """Log GitHub integration event."""
@@ -159,7 +143,7 @@ class LoggingSetup:
             "session_dir": str(self.session_dir),
             "execution_log": str(self.session_dir / "execution.log"),
             "structured_log": str(self.session_dir / "execution.jsonl"),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
 
@@ -167,7 +151,7 @@ class ExecutionLogger:
     """
     High-level execution logger for LEVEL 3 steps.
 
-    Provides consistent logging interface across all 15 steps (Step 0-14).
+    Provides consistent logging interface across all active steps (Step 0, Steps 8-14).
     """
 
     def __init__(self, session_dir: Path):
@@ -181,14 +165,14 @@ class ExecutionLogger:
         status: str,  # "running", "success", "failed", "skipped"
         message: str = "",
         duration_ms: float = 0,
-        error: str = None
+        error: str = None,
     ):
         """
         Log a complete execution step.
 
         Args:
-            step_number: Step number (1-14)
-            step_name: Step name (e.g., "Plan Mode Decision")
+            step_number: Step number (0, 8-14)
+            step_name: Step name (e.g., "GitHub Issue Creation")
             status: "running", "success", "failed", "skipped"
             message: Additional context
             duration_ms: Time taken
@@ -201,7 +185,7 @@ class ExecutionLogger:
             "timestamp": datetime.now().isoformat(),
             "duration_ms": duration_ms,
             "message": message,
-            "error": error
+            "error": error,
         }
 
         self.steps_log.append(log_entry)
@@ -227,7 +211,8 @@ class ExecutionLogger:
             file_path = self.setup.session_dir / "steps.json"
 
         import json
-        with open(file_path, 'w') as f:
+
+        with open(file_path, "w") as f:
             json.dump(self.steps_log, f, indent=2)
 
         logger.info(f"Execution log saved: {file_path}")
@@ -243,7 +228,7 @@ class ExecutionLogger:
             "successful": successful,
             "failed": failed,
             "total_time_ms": total_time,
-            "steps": self.steps_log
+            "steps": self.steps_log,
         }
 
 
@@ -255,7 +240,7 @@ def setup_logger(session_dir: Path, session_id: str) -> ExecutionLogger:
 
     Usage:
         exec_logger = setup_logger(session_dir, session_id)
-        exec_logger.log_execution_step(1, "Plan Mode Decision", "running")
-        exec_logger.log_execution_step(1, "Plan Mode Decision", "success", duration_ms=1234)
+        exec_logger.log_execution_step(8, "GitHub Issue Creation", "running")
+        exec_logger.log_execution_step(8, "GitHub Issue Creation", "success", duration_ms=1234)
     """
     return ExecutionLogger(session_dir)

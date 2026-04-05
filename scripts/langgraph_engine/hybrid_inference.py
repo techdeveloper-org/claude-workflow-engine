@@ -4,35 +4,40 @@ Hybrid Inference Manager - GPU-First Routing
 Smart routing between GPU (Ollama, fast and high-quality) and Claude (fallback).
 NPU routing has been removed as NPU is slow and produces unreadable output.
 
-Step Classification:
-- CLASSIFICATION: Step 1 (plan decision) → GPU qwen2.5:7b (fast classification)
-- LIGHTWEIGHT_ANALYSIS: Step 3, 5 → GPU granite4:3b or qwen2.5:7b (reasoning)
-- COMPLEX_REASONING: Step 0, 2, 4, 7 → Claude CLI (subscription-based, no API costs)
-- NO_LLM: Steps 6, 8-14 → Skip LLM entirely
+Step Classification (active steps only):
+- DEEP_LOCAL:        Step 0, 14 -> GPU qwen2.5:14b (quality, free local)
+- LIGHTWEIGHT:       Step 3 -> GPU granite4:3b or qwen2.5:7b (quick structured output)
+- COMPLEX_REASONING: Step 10 -> Claude CLI (needs tool access for code)
+- NO_LLM:            Steps 8, 9, 11, 12, 13 -> Skip LLM entirely
 
 Usage:
     manager = HybridInferenceManager()
 
-    # For Step 1: Plan Decision
+    # For Step 0: Task Analysis
     result = manager.invoke(
-        step="step1_plan_mode_decision",
-        prompt="Should we make a plan? ...",
+        step="step0_task_analysis",
+        prompt="Analyze this task...",
         context={...}
     )
 
     # Automatic routing:
-    # Step 1 → GPU Ollama (fast: <1s)
-    # Step 0 → Claude (quality: 2-3s, fallback if GPU unavailable)
+    # Step 0 -> Claude (quality: 2-3s, fallback if GPU unavailable)
+
+# v1.15.2: removed STEP_ROUTING entries for step1_plan_mode_decision,
+#           step4_toon_refinement, step5_skill_agent_selection,
+#           step6_skill_validation_download, step7_final_prompt_generation
+#           (Steps 1, 4, 5, 6, 7 removed from pipeline in v1.13.0).
 """
 
-import os
 import json
+import os
 import subprocess
 import tempfile
 import time
-from typing import Dict, Any, Optional
 from enum import Enum
 from pathlib import Path
+from typing import Any, Dict, Optional
+
 from loguru import logger
 
 try:
@@ -43,6 +48,7 @@ except ImportError:
 
 class StepType(Enum):
     """Classification of LLM step types."""
+
     CLASSIFICATION = "classification"  # Fast, simple decision (7B)
     LIGHTWEIGHT_ANALYSIS = "lightweight_analysis"  # Quick analysis (3B-7B)
     DEEP_LOCAL = "deep_local"  # Deep reasoning on local GPU 14B (FREE)
@@ -53,7 +59,7 @@ class StepType(Enum):
 class HybridInferenceManager:
     """Manages hybrid inference across NPU and GPU backends."""
 
-    # Step-to-routing map
+    # Step-to-routing map (active steps only: Pre-0, Step 0, Steps 8-14)
     #
     # DEEP_LOCAL steps: Try qwen2.5:14b (best quality, FREE)
     #   If 14b crashes (GPU RAM) -> fallback to Claude CLI (subscription, no extra cost)
@@ -62,6 +68,8 @@ class HybridInferenceManager:
     # CLASSIFICATION steps: qwen2.5:7b (fast, 7b is enough for yes/no)
     # LIGHTWEIGHT steps: llama3.2:3b (fast, 3b is enough for structured breakdown)
     # COMPLEX steps: Claude CLI only (needs tools for code implementation)
+    #
+    # v1.15.2: removed dead entries for steps 1, 4, 5, 6, 7
     STEP_ROUTING = {
         # DEEP LOCAL: 14b primary -> Claude CLI fallback
         "step0_task_analysis": {
@@ -78,34 +86,12 @@ class HybridInferenceManager:
             "fallback_model": "claude-opus-4-6",
             "description": "Detailed plan creation",
         },
-        "step5_skill_agent_selection": {
-            "type": StepType.DEEP_LOCAL,
-            "gpu_model": "qwen2.5:14b",
-            "ollama_model_key": "deep_reasoning",
-            "fallback_model": "claude-opus-4-6",
-            "description": "Skill selection from 43 skills",
-        },
-        "step7_final_prompt_generation": {
-            "type": StepType.DEEP_LOCAL,
-            "gpu_model": "qwen2.5:14b",
-            "ollama_model_key": "prompt_synthesis",
-            "fallback_model": "claude-opus-4-6",
-            "description": "Final prompt synthesis (quality = implementation quality)",
-        },
         "step14_final_summary_generation": {
             "type": StepType.DEEP_LOCAL,
             "gpu_model": "qwen2.5:14b",
             "ollama_model_key": "prompt_synthesis",
             "fallback_model": "claude-opus-4-6",
             "description": "Execution summary generation",
-        },
-        # CLASSIFICATION (GPU 7B - fast, simple yes/no)
-        "step1_plan_mode_decision": {
-            "type": StepType.CLASSIFICATION,
-            "gpu_model": "qwen2.5:7b",
-            "ollama_model_key": "fast_classification",
-            "fallback_model": "claude-opus-4-6",
-            "description": "Plan decision classification",
         },
         # LIGHTWEIGHT ANALYSIS (GPU 3B-7B - quick structured output)
         "step3_task_breakdown_validation": {
@@ -116,20 +102,12 @@ class HybridInferenceManager:
             "description": "Task breakdown analysis",
         },
         # COMPLEX REASONING (Claude ONLY - needs tools for code implementation)
-        "step4_toon_refinement": {
-            "type": StepType.NO_LLM,
-            "description": "TOON context refinement (rule-based, no LLM)",
-        },
         "step10_implementation_execution": {
             "type": StepType.COMPLEX_REASONING,
             "fallback_model": "claude-opus-4-6",
             "description": "Code implementation (needs Claude tools: Read, Edit, Write)",
         },
         # NO LLM NEEDED
-        "step6_skill_validation_download": {
-            "type": StepType.NO_LLM,
-            "description": "File-based skill validation",
-        },
         "step8_github_issue_creation": {
             "type": StepType.NO_LLM,
             "description": "GitHub CLI automation",
@@ -167,7 +145,7 @@ class HybridInferenceManager:
 
         try:
             self.router = InferenceRouter(mode=self.mode)
-            logger.info("✓ Hybrid inference manager initialized")
+            logger.info("Hybrid inference manager initialized")
         except Exception as e:
             logger.warning(f"Inference router initialization failed: {e}")
             self.router = None
@@ -183,7 +161,7 @@ class HybridInferenceManager:
         Invoke inference with automatic backend routing.
 
         Args:
-            step: Step name (e.g., 'step1_plan_mode_decision')
+            step: Step name (e.g., 'step0_task_analysis')
             prompt: The prompt/query for LLM (or user_message if system_prompt provided)
             context: Additional context data (DEPRECATED - use system_prompt instead)
             system_prompt: Optional system prompt (context foundation).
@@ -309,9 +287,7 @@ class HybridInferenceManager:
                         "timing": "fast",
                     }
             except Exception as e:
-                logger.warning(
-                    f"GPU inference failed for {step}: {e}, fallback to Claude"
-                )
+                logger.warning(f"GPU inference failed for {step}: {e}, fallback to Claude")
 
         # Fallback to Claude CLI -> Claude API
         return self._invoke_claude(prompt, context, step=step, system_prompt=system_prompt)
@@ -326,7 +302,7 @@ class HybridInferenceManager:
     ) -> Dict[str, Any]:
         """Deep reasoning using local GPU 14B model (FREE). Fallback: Claude CLI -> Claude API.
 
-        Used for Steps 0, 2, 5, 7, 14 - tasks that need strong reasoning
+        Used for Steps 0, 2, 14 - tasks that need strong reasoning
         but do NOT need Claude tools (Read, Edit, Write).
         qwen2.5:14b handles these at near-Claude quality for FREE.
         """
@@ -350,9 +326,7 @@ class HybridInferenceManager:
                 content = response.get("message", {}).get("content", "")
                 if content:
                     self.stats["npu_calls"] += 1  # reuse counter for local calls
-                    logger.info(
-                        f"  Deep local OK: {len(content)} chars from {gpu_model}"
-                    )
+                    logger.info(f"  Deep local OK: {len(content)} chars from {gpu_model}")
                     return {
                         "status": "ok",
                         "source": "gpu-14b",
@@ -364,9 +338,7 @@ class HybridInferenceManager:
                 else:
                     logger.warning(f"  Empty response from {gpu_model}")
             except Exception as e:
-                logger.warning(
-                    f"Deep local inference failed for {step}: {e}, fallback to Claude"
-                )
+                logger.warning(f"Deep local inference failed for {step}: {e}, fallback to Claude")
 
         # Fallback to Claude CLI -> Claude API
         return self._invoke_claude(prompt, context, step=step, system_prompt=system_prompt)
@@ -416,23 +388,13 @@ class HybridInferenceManager:
             # If we have system_prompt, use new format (system + message)
             if system_prompt:
                 # Create system prompt file
-                with tempfile.NamedTemporaryFile(
-                    mode='w',
-                    suffix='.txt',
-                    delete=False,
-                    encoding='utf-8'
-                ) as temp_file:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as temp_file:
                     temp_file.write(system_prompt)
                     temp_system_file = temp_file.name
                     temp_files.append(temp_system_file)
 
                 # Create user message file
-                with tempfile.NamedTemporaryFile(
-                    mode='w',
-                    suffix='.txt',
-                    delete=False,
-                    encoding='utf-8'
-                ) as temp_file:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as temp_file:
                     temp_file.write(prompt)
                     temp_message_file = temp_file.name
                     temp_files.append(temp_message_file)
@@ -455,12 +417,7 @@ class HybridInferenceManager:
                     full_prompt = f"{prompt}\n\n[CONTEXT]\n{context_str}"
 
                 # Create temporary file for prompt (to avoid shell escaping issues)
-                with tempfile.NamedTemporaryFile(
-                    mode='w',
-                    suffix='.txt',
-                    delete=False,
-                    encoding='utf-8'
-                ) as temp_file:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as temp_file:
                     temp_file.write(full_prompt)
                     temp_prompt_file = temp_file.name
                     temp_files.append(temp_prompt_file)
@@ -551,8 +508,7 @@ class HybridInferenceManager:
 
         except FileNotFoundError:
             logger.error(
-                "Claude CLI not found. Install with: pip install claude-code\n"
-                "Or ensure 'claude' command is in PATH"
+                "Claude CLI not found. Install with: pip install claude-code\n" "Or ensure 'claude' command is in PATH"
             )
             return {
                 "status": "error",
@@ -611,7 +567,6 @@ class HybridInferenceManager:
         logger.debug("Falling back to Claude API")
         try:
             import anthropic
-            import time
 
             start_time = time.time()
 
@@ -677,15 +632,9 @@ class HybridInferenceManager:
         """Get inference statistics."""
         return {
             **self.stats,
-            "npu_avg_ms": (
-                self.stats["npu_time_ms"] / self.stats["npu_calls"]
-                if self.stats["npu_calls"] > 0
-                else 0
-            ),
+            "npu_avg_ms": (self.stats["npu_time_ms"] / self.stats["npu_calls"] if self.stats["npu_calls"] > 0 else 0),
             "claude_avg_ms": (
-                self.stats["claude_time_ms"] / self.stats["claude_calls"]
-                if self.stats["claude_calls"] > 0
-                else 0
+                self.stats["claude_time_ms"] / self.stats["claude_calls"] if self.stats["claude_calls"] > 0 else 0
             ),
             "total_calls": self.stats["npu_calls"] + self.stats["claude_calls"],
         }
@@ -695,9 +644,9 @@ class HybridInferenceManager:
         stats = self.get_stats()
         print(
             f"""
-╔════════════════════════════════════════════════════════╗
-║           HYBRID INFERENCE STATISTICS                  ║
-╚════════════════════════════════════════════════════════╝
++=======================================================+
+|          HYBRID INFERENCE STATISTICS                  |
++=======================================================+
 
 NPU Calls:          {stats['npu_calls']} (avg: {stats['npu_avg_ms']:.0f}ms)
 Claude Calls:       {stats['claude_calls']} (avg: {stats['claude_avg_ms']:.0f}ms)
@@ -731,17 +680,8 @@ if __name__ == "__main__":
 
     print("Testing hybrid inference routing:\n")
 
-    # Test classification (should use NPU)
-    print("1. Classification (Step 1):")
-    result = manager.invoke(
-        step="step1_plan_mode_decision",
-        prompt="Should we create a detailed plan for a simple bug fix? Yes or No?",
-    )
-    print(f"   Source: {result.get('source')}")
-    print(f"   Timing: {result.get('timing')}\n")
-
-    # Test lightweight analysis (should use NPU)
-    print("2. Lightweight Analysis (Step 3):")
+    # Test lightweight analysis (should use GPU)
+    print("1. Lightweight Analysis (Step 3):")
     result = manager.invoke(
         step="step3_task_breakdown_validation",
         prompt="Break down: Add login page\n1. Create form\n2. Add validation\n3. Style with CSS",
@@ -750,7 +690,7 @@ if __name__ == "__main__":
     print(f"   Timing: {result.get('timing')}\n")
 
     # Test complex reasoning (should use Claude)
-    print("3. Complex Reasoning (Step 0):")
+    print("2. Complex Reasoning (Step 0):")
     result = manager.invoke(
         step="step0_task_analysis",
         prompt="Analyze task type and complexity: Implement OAuth2 authentication",
@@ -759,9 +699,9 @@ if __name__ == "__main__":
     print(f"   Timing: {result.get('timing')}\n")
 
     # Test no-LLM step
-    print("4. No-LLM Step (Step 6):")
+    print("3. No-LLM Step (Step 8):")
     result = manager.invoke(
-        step="step6_skill_validation_download",
+        step="step8_github_issue_creation",
         prompt="(not used)",
     )
     print(f"   Status: {result.get('status')}\n")

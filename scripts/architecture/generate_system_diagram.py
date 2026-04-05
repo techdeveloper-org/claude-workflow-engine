@@ -12,6 +12,11 @@ Output: docs/drawio/system-architecture.drawio
 
 Usage:
     python scripts/architecture/generate_system_diagram.py
+
+# v1.15.2: removed TOON Compress node from Level 1 zone.
+#           removed Step 4 (TOON Refinement), Step 5 (Skill & Agent Selection),
+#           Step 6 (Skill Validation), Step 7 (Final Prompt Generation) from Level 3.
+#           Steps 4-7 were removed from the active pipeline in v1.13.0.
 """
 
 import sys
@@ -232,7 +237,7 @@ def build():
     C.append(section_label(RX, 800, R_W, 18, "\u2015\u2015  Output  \u2015\u2015"))
     out_md = rsys(822, "docs/uml/*.md\nMermaid diagrams (13 types)", "#F0F0F0", "#666666")
     out_dio = rsys(877, "docs/drawio/*.drawio\nProfessional draw.io (12 types)", "#D5E8D4", "#82B366")
-    out_prm = rsys(932, "prompts/\nsystem + user + assistant (3 files)", "#E1D5E7", "#9673A6")
+    rsys(932, "prompts/\nsystem + user + assistant (3 files)", "#E1D5E7", "#9673A6")
     out_log = rsys(987, "~/.claude/logs/\nsessions / telemetry / errors", "#F0F0F0", "#666666")
 
     # ------------------------------------------------------------------
@@ -312,6 +317,8 @@ def build():
     C.append(arrow(fix_id, u_id, "retry \u2191", BACK_ARROW))
 
     # ---- LEVEL 1 ZONE ----
+    # v1.15.2: TOON Compress node removed (TOON removed in v1.15.0).
+    #          cx_id and ct_id now feed directly into m1_id (merge).
     L2Y = L1Y + 165
     C.append(
         box(
@@ -319,7 +326,7 @@ def build():
             L2Y,
             MW,
             130,
-            "LEVEL 1  \u2014  CONTEXT SYNC  (session + parallel analysis + TOON compression)",
+            "LEVEL 1  \u2014  CONTEXT SYNC  (session + parallel analysis)",
             "swimlane;startSize=26;fontStyle=1;fontSize=11;"
             "fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=2;html=1;collapsible=0;",
         )
@@ -328,15 +335,13 @@ def build():
     sess_id, sc = step_node(MX + 10, L2Y + 34, 148, 42, "Session Create\n~/.claude/logs/...", "#EAFAF1", "#82B366")
     cx_id, cxc = step_node(MX + 190, L2Y + 20, 148, 28, "Complexity\nAnalysis", "#EAFAF1", "#82B366")
     ct_id, ctc = step_node(MX + 190, L2Y + 56, 148, 28, "Context Loader\n(README/SRS/CLAUDE)", "#EAFAF1", "#82B366")
-    tn_id, tnc = step_node(MX + 370, L2Y + 34, 160, 42, "TOON Compress\n(context \u2192 tokens)", "#EAFAF1", "#82B366")
-    m1_id, m1c = step_node(MX + 560, L2Y + 34, 110, 42, "Merge", "#EAFAF1", "#82B366")
-    cl_id, clc = step_node(MX + 700, L2Y + 34, 130, 42, "Cleanup\n(memory free)", "#EAFAF1", "#82B366")
-    C.extend([sc, cxc, ctc, tnc, m1c, clc])
+    m1_id, m1c = step_node(MX + 370, L2Y + 34, 110, 42, "Merge", "#EAFAF1", "#82B366")
+    cl_id, clc = step_node(MX + 510, L2Y + 34, 130, 42, "Cleanup\n(memory free)", "#EAFAF1", "#82B366")
+    C.extend([sc, cxc, ctc, m1c, clc])
     C.append(arrow(sess_id, cx_id, "[parallel]", FLOW_ARROW))
     C.append(arrow(sess_id, ct_id, "", FLOW_ARROW))
-    C.append(arrow(cx_id, tn_id, "", FLOW_ARROW))
-    C.append(arrow(ct_id, tn_id, "", FLOW_ARROW))
-    C.append(arrow(tn_id, m1_id, "", FLOW_ARROW))
+    C.append(arrow(cx_id, m1_id, "", FLOW_ARROW))
+    C.append(arrow(ct_id, m1_id, "", FLOW_ARROW))
     C.append(arrow(m1_id, cl_id, "", FLOW_ARROW))
     # Level -1 -> Level 1 entry
     C.append(arrow(ok_out_id, sess_id, "[OK]", FLOW_ARROW))
@@ -459,43 +464,15 @@ def build():
     extern_link(s3_id, figma_id, "[Figma comps]")
     cur_y += s_gap
 
-    # Step 4
-    s4_id = step(MX + 10, cur_y, 230, 42, "Step 4  TOON Refinement\n(compress + deduplicate context)")
-    C.append(arrow(s3_id, s4_id, "", FLOW_ARROW))
-    cur_y += s_gap
-
-    # Step 5
-    s5_id = step(
-        MX + 10, cur_y, 260, 42, "Step 5  Skill & Agent Selection\n[LLM cross-session boost]  skill + agent", "#E8D5F5"
-    )
-    C.append(arrow(s4_id, s5_id, "", FLOW_ARROW))
-    cur_y += s_gap
-
-    # Step 6
-    s6_id = step(MX + 10, cur_y, 230, 42, "Step 6  Skill Validation")
-    C.append(arrow(s5_id, s6_id, "", FLOW_ARROW))
-    cur_y += s_gap
-
-    # Step 7
-    s7_id = step(
-        MX + 10,
-        cur_y,
-        280,
-        42,
-        "Step 7  Final Prompt Generation\n[LLM]  3 files + [Figma tokens if ENABLE_FIGMA]",
-        "#E8D5F5",
-    )
-    C.append(arrow(s6_id, s7_id, "", FLOW_ARROW))
-    extern_link(s7_id, llm_id)
-    extern_link(s7_id, figma_id, "[design tokens]")
-    extern_link(s7_id, out_prm, "write prompts/")
-    cur_y += s_gap
+    # Steps 4-7 removed in v1.13.0 (TOON Refinement, Skill & Agent Selection,
+    # Skill Validation, Final Prompt Generation).
+    # Step 3 now connects directly to Step 8.
 
     # Step 8
     s8_id = step(
         MX + 10, cur_y, 260, 42, "Step 8  GitHub Issue + [Jira if ENABLE_JIRA]\n(cross-linked, issue_number stored)"
     )
-    C.append(arrow(s7_id, s8_id, "", FLOW_ARROW))
+    C.append(arrow(s3_id, s8_id, "", FLOW_ARROW))
     extern_link(s8_id, gh_id, "create issue")
     extern_link(s8_id, jira_id, "[create + cross-link]")
     cur_y += s_gap

@@ -63,7 +63,7 @@ class StepKeys:
     SESSION_PRUNING_ERRORS = "session_pruning_errors"
     PATTERNS_DETECTED = "patterns_detected"
     PREFERENCES_DATA = "preferences_data"
-    TOON_SAVED = "toon_saved"
+    # v1.15.2: TOON_SAVED removed (TOON compression removed in v1.15.0)
     COMPLEXITY_SCORE = "complexity_score"
     GRAPH_COMPLEXITY_SCORE = "graph_complexity_score"
     COMBINED_COMPLEXITY_SCORE = "combined_complexity_score"

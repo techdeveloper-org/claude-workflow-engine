@@ -8,22 +8,26 @@ when cumulative usage crosses the total budget.
 
 Usage:
     budget = TokenBudget()
-    budget.check_or_raise("step_2", estimated_tokens=2000)  # raises if over budget
-    plan_response = generate_plan()
-    actual_tokens = count_tokens(plan_response)
-    budget.record_usage("step_2", actual_tokens)            # records + checks total
+    budget.check_or_raise("step_8", estimated_tokens=300)   # raises if over budget
+    issue_response = create_issue()
+    actual_tokens = count_tokens(issue_response)
+    budget.record_usage("step_8", actual_tokens)            # records + checks total
     # Convenience aliases (acceptance-criteria API):
-    budget.allocate("step_2", actual_tokens)                # alias for record_usage
-    rem = budget.remaining()                                # alias for get_remaining
+    budget.allocate("step_8", actual_tokens)                # alias for record_usage
+    rem = budget.remaining()                                 # alias for get_remaining
+
+# v1.15.2: removed ALLOCATIONS entries for step_1 through step_7
+#           (Steps 1,3,4,5,6,7 removed from pipeline in v1.13.0).
 """
 
-from typing import Dict, Optional, Any
-from loguru import logger
+from typing import Any, Dict, Optional
 
+from loguru import logger
 
 # ---------------------------------------------------------------------------
 # Exception
 # ---------------------------------------------------------------------------
+
 
 class BudgetExceededError(Exception):
     """Raised when the cumulative token usage exceeds the total budget."""
@@ -32,58 +36,46 @@ class BudgetExceededError(Exception):
         self.step = step
         self.spent = spent
         self.total = total
-        super().__init__(
-            message or f"Token budget exceeded at step '{step}': {spent}/{total} tokens used"
-        )
+        super().__init__(message or f"Token budget exceeded at step '{step}': {spent}/{total} tokens used")
 
 
 # ---------------------------------------------------------------------------
 # Token budget configuration
 # ---------------------------------------------------------------------------
 
+
 class TokenBudget:
     """
     Real-time token budget tracker for the Level 3 pipeline.
 
-    Budget allocation strategy (per acceptance criteria spec):
-        step_1:  1500    Plan/no-plan classification (upgraded for richer decisions)
-        step_2:  2000    Iterative planning (capped to leave room for execution)
-        step_3:   500    Task breakdown generation
-        step_4:   500    TOON refinement (lightweight update)
-        step_5:   500    Skill/agent selection
-        step_6:   200    Validation & download (no LLM)
-        step_7:  1500    Final prompt synthesis
-        step_8:   300    GitHub issue creation (template-based)
-        step_9:   100    Branch name generation
+    Budget allocation strategy (active steps only):
+        step_0:  900     Task Analysis (orchestration prompt + orchestrator call)
+        step_8:  300     GitHub issue creation (template-based)
+        step_9:  100     Branch name generation
         step_10: 1200    Implementation notes (logging only)
         step_11:  500    Code review
         step_12:  100    Issue closure (no LLM)
         step_13:  500    Documentation update
         step_14:  200    Summary generation
         reserve:  800    Safety buffer for unexpected overruns
-        --------
-        TOTAL:  10400    (stays under 10k token target + 400 reserve overhead)
+
+    v1.15.2: removed step_1 through step_7 (steps removed from pipeline in v1.13.0).
     """
 
     TOTAL_BUDGET: int = 10000
 
-    # Per-step soft allocations (acceptance criteria: total ~10k tokens)
+    # Per-step soft allocations (active steps: Pre-0/0, 8-14)
+    # v1.15.2: removed dead entries step_1 through step_7
     ALLOCATIONS: Dict[str, int] = {
-        "step_1":  1500,
-        "step_2":  2000,
-        "step_3":   500,
-        "step_4":   500,
-        "step_5":   500,
-        "step_6":   200,
-        "step_7":  1500,
-        "step_8":   300,
-        "step_9":   100,
+        "step_0": 900,
+        "step_8": 300,
+        "step_9": 100,
         "step_10": 1200,
-        "step_11":  500,
-        "step_12":  100,
-        "step_13":  500,
-        "step_14":  200,
-        "reserve":  800,
+        "step_11": 500,
+        "step_12": 100,
+        "step_13": 500,
+        "step_14": 200,
+        "reserve": 800,
     }
 
     # Warn when a step uses more than this fraction of its allocation
@@ -131,7 +123,7 @@ class TokenBudget:
         check_or_raise() instead.
 
         Args:
-            step: Step name (e.g. "step_2").
+            step: Step name (e.g. "step_8").
             estimated: Estimated token count for the upcoming operation.
 
         Returns:
@@ -238,8 +230,8 @@ class TokenBudget:
         verb "allocate" to signal they are *spending* from the budget.
 
         Args:
-            step_number: Step identifier.  Accepts an int (1-14) or a string
-                         like "step_1".  Integers are normalised to "step_N".
+            step_number: Step identifier.  Accepts an int (8-14) or a string
+                         like "step_8".  Integers are normalised to "step_N".
             tokens_used: Actual tokens consumed by this operation.
 
         Raises:
@@ -266,9 +258,9 @@ class TokenBudget:
         Normalise a step identifier to the canonical "step_N" string format.
 
         Accepts:
-            int 1-14  -> "step_1" .. "step_14"
-            str "1"   -> "step_1"
-            str "step_3" -> "step_3" (returned as-is)
+            int 8-14  -> "step_8" .. "step_14"
+            str "8"   -> "step_8"
+            str "step_10" -> "step_10" (returned as-is)
             any other str -> returned as-is
         """
         if isinstance(step, int):
@@ -337,8 +329,7 @@ class TokenBudget:
         for step, info in summary["per_step"].items():
             if info["usage"] > 0:
                 logger.info(
-                    f"[TokenBudget]   {step}: {info['usage']}/{info['allocation']} "
-                    f"({info['utilization_pct']}%)"
+                    f"[TokenBudget]   {step}: {info['usage']}/{info['allocation']} " f"({info['utilization_pct']}%)"
                 )
 
     # ---------------------------------------------------------------------------

@@ -20,6 +20,9 @@ Organized into logical sections:
 CHANGE LOG (v1.15.0):
   Removed TOON fields: toon_integrity_ok, level1_context_toon, toon_schema_valid,
     toon_schema_errors, toon_version (TOON compression node removed from pipeline).
+
+CHANGE LOG (v1.15.2):
+  Removed step4_toon_refined field (TOON removed in v1.15.0, stale field purged).
 """
 
 from typing import Annotated, Any, Dict, List, Optional, TypedDict
@@ -417,8 +420,8 @@ class FlowState(TypedDict, total=False):
     step3_phase_file_map: Annotated[Optional[Dict], _merge_dicts]  # {task_id: [files]} from graph analysis
     step3_graph_snapshot: Optional[Dict]  # Cached graph snapshot for Step 4 reuse
 
-    # Step 4: TOON Refinement (PHASE 2A - Kept as is)
-    step4_toon_refined: Optional[Dict]  # Refined TOON object
+    # Step 4: TOON Refinement (PHASE 2A)
+    # v1.15.2: step4_toon_refined removed (TOON removed in v1.15.0)
     step4_refinement_status: Optional[str]  # Refinement status
     step4_complexity_adjusted: Optional[int]  # Adjusted complexity
     step4_execution_time_ms: Optional[float]

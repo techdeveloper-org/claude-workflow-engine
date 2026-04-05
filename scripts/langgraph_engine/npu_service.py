@@ -1,10 +1,7 @@
 """
 Intel AI Boost NPU Service - Enhanced Multi-Model Support
 
-Provides interface to Intel AI Boost NPU for fast local inference on:
-- Step 1: Plan mode decision (super fast classification)
-- Step 3: Task breakdown (lightweight reasoning)
-- Step 5: Skill selection (pattern matching)
+Provides interface to Intel AI Boost NPU for fast local inference.
 
 Supported Models (GGUF format):
 - Gemma-2-2B: Ultra-fast (1.6GB) - classification, simple tasks
@@ -21,22 +18,27 @@ Configuration (environment variables):
 - INTEL_AI_NPU_EXE: NPU executable (default: {NPU_PATH}/llama-cli-npu[.exe])
 - Speed: 2-3x faster than GPU for simple tasks
 - Latency: <500ms for classification tasks
+
+# v1.15.2: removed step1_plan_mode_decision (Step 1 removed in v1.13.0).
 """
 
-import subprocess
 import json
 import os
+import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
 
 try:
     import sys as _sys
+
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
     from utils.path_resolver import get_npu_path
+
     _NPU_PATH_DEFAULT = str(get_npu_path())
 except ImportError:
-    _NPU_PATH_DEFAULT = str(Path.home() / 'intel-ai' / 'npu')
+    _NPU_PATH_DEFAULT = str(Path.home() / "intel-ai" / "npu")
 
 
 class NPUService:
@@ -53,29 +55,34 @@ class NPUService:
         """
         if npu_path is None:
             npu_path = os.getenv(
-                'INTEL_AI_NPU_PATH',
+                "INTEL_AI_NPU_PATH",
                 _NPU_PATH_DEFAULT,
             )
         self.npu_path = Path(npu_path)
 
         # Resolve executable (platform-aware)
         import sys as _sys
-        exe_name = 'llama-cli-npu.exe' if _sys.platform == 'win32' else 'llama-cli-npu'
-        npu_exe_env = os.environ.get('INTEL_AI_NPU_EXE')
+
+        exe_name = "llama-cli-npu.exe" if _sys.platform == "win32" else "llama-cli-npu"
+        npu_exe_env = os.environ.get("INTEL_AI_NPU_EXE")
         self.cli_exe = Path(npu_exe_env) if npu_exe_env else (self.npu_path / exe_name)
 
-        self.models_path = Path(os.getenv(
-            'INTEL_AI_MODELS_PATH',
-            str(self.npu_path.parent / "models"),
-        )) / "npu"
+        self.models_path = (
+            Path(
+                os.getenv(
+                    "INTEL_AI_MODELS_PATH",
+                    str(self.npu_path.parent / "models"),
+                )
+            )
+            / "npu"
+        )
 
         # Validate NPU setup
         if not self.cli_exe.exists():
             raise RuntimeError(
                 "NPU CLI not found at %s. "
                 "Set INTEL_AI_NPU_PATH or INTEL_AI_NPU_EXE env var. "
-                "Download from: https://github.com/intel-analytics/ipex-llm/releases"
-                % str(self.cli_exe)
+                "Download from: https://github.com/intel-analytics/ipex-llm/releases" % str(self.cli_exe)
             )
 
         if not self.models_path.exists():
@@ -107,23 +114,20 @@ class NPUService:
 
         # Task-optimized routing
         self.task_models = {
-            # Fast classification → ultra-fast models
+            # Fast classification -> ultra-fast models
             "classification": "ultra_fast",
             "plan_decision": "ultra_fast",
             "simple_analysis": "fast",
             "pattern_matching": "ultra_fast",
-
-            # Task breakdown → fast models
+            # Task breakdown -> fast models
             "task_breakdown": "fast",
             "simple_reasoning": "fast",
-
-            # Complex tasks → medium models
+            # Complex tasks -> medium models
             "reasoning": "medium",
             "agentic_coding": "medium",
             "skill_selection": "medium",
             "code_analysis": "medium",
-
-            # Deep reasoning → large models
+            # Deep reasoning -> large models
             "deep_reasoning": "large",
             "complex_architecture": "large",
             "synthesis": "large",
@@ -133,7 +137,7 @@ class NPUService:
         self.available_models = self._check_available_models()
         self.available_categories = self._categorize_models()
 
-        logger.info(f"✓ NPU service initialized at {self.npu_path}")
+        logger.info(f"NPU service initialized at {self.npu_path}")
         logger.info(f"  Available models: {len(self.available_models)}")
         logger.info(f"  Categories: {list(self.available_categories.keys())}")
 
@@ -171,9 +175,7 @@ class NPUService:
 
         return categorized
 
-    def select_model(
-        self, task_type: str = "simple_analysis", complexity: int = 5
-    ) -> Optional[Path]:
+    def select_model(self, task_type: str = "simple_analysis", complexity: int = 5) -> Optional[Path]:
         """
         Intelligently select best model for task.
 
@@ -306,41 +308,6 @@ class NPUService:
         except Exception as e:
             logger.error(f"NPU inference error: {e}")
             return {"error": str(e)}
-
-    def step1_plan_mode_decision(self, toon: Dict[str, Any], user_requirement: str) -> Dict[str, Any]:
-        """Fast plan decision on NPU (ultra-fast model)."""
-        prompt = f"""Analyze project TOON and user requirement.
-Determine if PLAN MODE is required (complexity {toon.get('complexity_score', 0)}/10).
-
-Respond with ONLY valid JSON:
-{{"plan_required": true/false, "reasoning": "brief", "risk_level": "low/medium/high"}}"""
-
-        response = self.chat(
-            messages=[{"role": "user", "content": prompt}],
-            task_type="classification",
-            complexity=2,
-            max_tokens=100,
-        )
-
-        if "error" in response:
-            logger.error(f"Step 1 plan decision failed: {response['error']}")
-            return {
-                "plan_required": True,
-                "reasoning": "NPU error, defaulting to plan mode",
-                "risk_level": "medium",
-            }
-
-        try:
-            content = response.get("message", {}).get("content", "{}")
-            result = json.loads(content)
-            return result
-        except json.JSONDecodeError:
-            logger.warning(f"Step 1 JSON parse error: {content}")
-            return {
-                "plan_required": True,
-                "reasoning": "JSON parse error, defaulting to plan mode",
-                "risk_level": "medium",
-            }
 
     def step3_task_breakdown(self, plan: str, complexity: int) -> Dict[str, Any]:
         """Break plan into tasks on NPU."""

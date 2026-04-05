@@ -1,12 +1,17 @@
 """
 Session Manager - File-based persistence for Level 3 execution.
 
-Manages session folders, TOON versioning, logs, and state.
+Manages session folders, logs, and state.
 Session structure: ~/.claude/logs/sessions/{session_id}/
+
+# v1.15.2: removed TOON persistence methods (save_toon_analysis, save_execution_blueprint,
+#           save_toon_with_skills, load_latest_toon, cleanup_old_toots) and the fatal
+#           `from .toon_models import ...` that caused ImportError after toon_models.py
+#           was deleted in v1.15.2.  save_session_metadata and add_execution_log now
+#           accept plain dicts and use json.dumps directly (no Pydantic dependency).
 """
 
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -21,8 +26,6 @@ try:
     _SESSION_LOGS_DIR = get_session_logs_dir()
 except ImportError:
     _SESSION_LOGS_DIR = Path.home() / ".claude" / "logs" / "sessions"
-
-from .toon_models import ExecutionBlueprint, ExecutionLog, SessionMetadata, ToonAnalysis, ToonWithSkills, serialize_toon
 
 
 class SessionManager:
@@ -44,50 +47,23 @@ class SessionManager:
 
         logger.info(f"Session {session_id} initialized at {self.session_dir}")
 
-    def save_session_metadata(self, metadata: SessionMetadata) -> Path:
-        """Save session metadata."""
+    def save_session_metadata(self, metadata: Dict[str, Any]) -> Path:
+        """Save session metadata as JSON."""
         file_path = self.session_dir / "session.json"
-        content = json.dumps(json.loads(serialize_toon(metadata)), indent=2)
+        content = json.dumps(metadata, indent=2, default=str)
         file_path.write_text(content)
         logger.info(f"Session metadata saved: {file_path}")
         return file_path
 
-    def save_toon_analysis(self, toon: ToonAnalysis) -> Path:
-        """Save Level 1 analysis TOON."""
-        timestamp = datetime.now().isoformat().replace(":", "-")
-        file_path = self.session_dir / f"toon_v1_analysis_{timestamp}.json"
-        content = json.dumps(json.loads(serialize_toon(toon)), indent=2)
-        file_path.write_text(content)
-        logger.info(f"TOON v1 (analysis) saved: {file_path}")
-        return file_path
-
-    def save_execution_blueprint(self, blueprint: ExecutionBlueprint) -> Path:
-        """Save Level 3 execution blueprint (after planning)."""
-        timestamp = datetime.now().isoformat().replace(":", "-")
-        file_path = self.session_dir / f"toon_blueprint_{timestamp}.json"
-        content = json.dumps(json.loads(serialize_toon(blueprint)), indent=2)
-        file_path.write_text(content)
-        logger.info(f"TOON blueprint saved: {file_path}")
-        return file_path
-
-    def save_toon_with_skills(self, toon: ToonWithSkills) -> Path:
-        """Save TOON with skill mappings (after Step 5)."""
-        timestamp = datetime.now().isoformat().replace(":", "-")
-        file_path = self.session_dir / f"toon_v3_skills_{timestamp}.json"
-        content = json.dumps(json.loads(serialize_toon(toon)), indent=2)
-        file_path.write_text(content)
-        logger.info(f"TOON v3 (skills) saved: {file_path}")
-        return file_path
-
     def save_prompt(self, prompt_text: str) -> Path:
-        """Save final execution prompt (Step 7)."""
+        """Save execution prompt (Step 0 output)."""
         file_path = self.session_dir / "prompt.txt"
         file_path.write_text(prompt_text)
         logger.info(f"Execution prompt saved: {file_path}")
         return file_path
 
     def save_task_breakdown(self, tasks: Dict[str, Any]) -> Path:
-        """Save task breakdown from Step 3."""
+        """Save task breakdown."""
         file_path = self.session_dir / "tasks.json"
         content = json.dumps(tasks, indent=2)
         file_path.write_text(content)
@@ -95,7 +71,7 @@ class SessionManager:
         return file_path
 
     def save_github_details(self, details: Dict[str, Any]) -> Path:
-        """Save GitHub issue/PR details (Step 8, 11)."""
+        """Save GitHub issue/PR details (Steps 8, 11)."""
         file_path = self.session_dir / "github.json"
         content = json.dumps(details, indent=2)
         file_path.write_text(content)
@@ -109,27 +85,6 @@ class SessionManager:
         file_path.write_text(content)
         logger.info(f"Execution logs saved: {file_path}")
         return file_path
-
-    def load_latest_toon(self, version: int = 1) -> Optional[Dict]:
-        """Load latest TOON of given version."""
-        if version == 1:
-            pattern = "toon_v1_analysis_*.json"
-        elif version == 2:
-            pattern = "toon_blueprint_*.json"
-        elif version == 3:
-            pattern = "toon_v3_skills_*.json"
-        else:
-            return None
-
-        files = list(self.session_dir.glob(pattern))
-        if not files:
-            logger.warning(f"No TOON v{version} files found")
-            return None
-
-        latest = sorted(files)[-1]
-        content = latest.read_text()
-        logger.info(f"Loaded TOON v{version} from {latest}")
-        return json.loads(content)
 
     def load_prompt(self) -> Optional[str]:
         """Load execution prompt."""
@@ -155,15 +110,15 @@ class SessionManager:
             return None
         return json.loads(file_path.read_text())
 
-    def add_execution_log(self, log: ExecutionLog) -> None:
-        """Add execution log entry."""
+    def add_execution_log(self, log: Dict[str, Any]) -> None:
+        """Add execution log entry (plain dict, no Pydantic dependency)."""
         logs_file = self.session_dir / "logs.json"
 
         logs = []
         if logs_file.exists():
             logs = json.loads(logs_file.read_text())
 
-        logs.append(json.loads(serialize_toon(log)))
+        logs.append(log)
         self.save_execution_logs(logs)
 
     def get_session_status(self) -> Dict[str, Any]:
@@ -177,19 +132,3 @@ class SessionManager:
             "has_tasks": (self.session_dir / "tasks.json").exists(),
             "has_github": (self.session_dir / "github.json").exists(),
         }
-
-    def cleanup_old_toots(self, keep_latest: int = 2) -> None:
-        """Keep only latest N TOON versions of each type."""
-        for version in [1, 2, 3]:
-            if version == 1:
-                pattern = "toon_v1_analysis_*.json"
-            elif version == 2:
-                pattern = "toon_blueprint_*.json"
-            else:
-                pattern = "toon_v3_skills_*.json"
-
-            files = sorted(self.session_dir.glob(pattern))
-            if len(files) > keep_latest:
-                for old_file in files[:-keep_latest]:
-                    old_file.unlink()
-                    logger.info(f"Deleted old TOON: {old_file.name}")

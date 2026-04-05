@@ -6,6 +6,11 @@ the prompt, saves the execution log, and accumulates session info.
 CHANGE LOG (v1.15.0):
   Removed TOON log line from _save_pipeline_execution_log() Level 1 section
   (TOON compression node removed from pipeline).
+
+CHANGE LOG (v1.15.2):
+  Removed step_info rows for steps 4-7 from _save_pipeline_execution_log()
+  (TOON Refinement, Skill & Agent Selection, Skill Validation, Final Prompt
+  Generation were removed from the pipeline in v1.13.0).
 """
 
 import sys
@@ -296,7 +301,9 @@ def _save_pipeline_execution_log(state: FlowState, final_status: str) -> None:
         log_lines.append(f"- Status: {state.get(StepKeys.LEVEL2_STATUS, 'unknown')}")
         log_lines.append("")
 
-        # Level 3 Steps
+        # Level 3 Steps (active steps only: Pre-0, Step 0, Steps 8-14)
+        # v1.15.2: removed rows for steps 4-7 (TOON Refinement, Skill & Agent Selection,
+        #          Skill Validation, Final Prompt Generation -- removed from pipeline in v1.13.0)
         log_lines.append("## Level 3: Execution Steps")
         log_lines.append("")
         log_lines.append("| Step | Name | Status | Duration | Details |")
@@ -307,10 +314,6 @@ def _save_pipeline_execution_log(state: FlowState, final_status: str) -> None:
             (1, "Plan Mode Decision", "step1_plan_required", "step1_reasoning"),
             (2, "Plan Execution", "step2_plan_status", "step2_phases"),
             (3, "Task Breakdown", "step3_validation_status", "step3_task_count"),
-            (4, "TOON Refinement", "step4_refinement_status", "step4_complexity_adjusted"),
-            (5, "Skill & Agent Selection", "step5_skill", "step5_agent"),
-            (6, "Skill Validation", "step6_validation_status", "step6_skill_ready"),
-            (7, "Final Prompt Generation", "step7_prompt_saved", "step7_prompt_size"),
             (8, "GitHub Issue Creation", "step8_status", "step8_issue_url"),
             (9, "Branch Creation", "step9_status", "step9_branch_name"),
             (10, "Implementation", "step10_implementation_status", "step10_llm_invoked"),
