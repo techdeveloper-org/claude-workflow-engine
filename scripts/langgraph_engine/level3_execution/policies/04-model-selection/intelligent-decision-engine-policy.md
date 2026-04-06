@@ -110,7 +110,7 @@ The engine receives ALL collected data (~500 tokens):
 Priority order (tried sequentially on failure):
 
 1. `meta-llama/llama-3.3-70b-instruct:free` - Best accuracy
-2. `qwen/qwen3-coder:free` - Code-specialized
+2. `mistralai/mistral-small-3.1-24b-instruct:free` - Code-specialized
 3. `mistralai/mistral-small-3.1-24b-instruct:free` - Fast fallback
 
 API Key Location: `~/.claude/config/openrouter-api-key`

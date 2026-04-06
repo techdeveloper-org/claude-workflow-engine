@@ -34,7 +34,7 @@ The system aims to:
 - LangGraph StateGraph orchestration (Level -1 through Level 3)
 - 13 FastMCP servers (295 tools) for GitHub, Jira, Figma, Jenkins, Git, LLM, etc.
 - Template-driven orchestration (single LLM call for full planning phase)
-- Hybrid LLM inference (Ollama → Claude CLI → Anthropic API → OpenAI API)
+- Hybrid LLM inference (Claude CLI → Anthropic API)
 - AST-based call graph analysis (Python/Java/TypeScript/Kotlin)
 - 13 UML diagram types (Mermaid + PlantUML + Kroki.io rendering)
 - Hook system (UserPromptSubmit, PreToolUse, PostToolUse, Stop)
@@ -52,7 +52,7 @@ The system aims to:
 - **Domain:** Software Development Automation / DevOps
 - **Target Users:** Solo developers, engineering teams using Claude Code CLI
 - **Deployment:** Local machine, triggered by Claude Code hooks on every user prompt
-- **Integration Points:** GitHub, Jira (Cloud+Server), Figma, Jenkins, SonarQube, Ollama, Anthropic API, OpenAI API
+- **Integration Points:** GitHub, Jira (Cloud+Server), Figma, Jenkins, SonarQube, Anthropic API
 
 ---
 
@@ -138,7 +138,7 @@ PipelineBuilder().add_level_minus1().add_level1().add_level3().build()
 
 ### FR-8: Hybrid LLM Inference
 
-**Description:** LLM calls must follow fallback chain: Ollama (local GPU) → Claude CLI → Anthropic API → OpenAI API. Model selection must be complexity-based.
+**Description:** LLM calls must follow fallback chain: Claude CLI → Anthropic API. Model selection must be complexity-based.
 **Priority:** High
 **Status:** Implemented
 **Key Module:** `scripts/langgraph_engine/llm_call.py`
@@ -265,7 +265,7 @@ User Prompt
 - [x] 8-step active SDLC automation (Pre-0, Step 0, Steps 8-14)
 - [x] 13 MCP servers (295 tools)
 - [x] Template-driven orchestration (single planning LLM call)
-- [x] Hybrid LLM inference (4 providers, GPU-first)
+- [x] Hybrid LLM inference (2 providers: claude_cli, anthropic)
 - [x] AST call graph analysis (4 languages)
 - [x] 13 UML diagram types
 - [x] Jira full lifecycle integration

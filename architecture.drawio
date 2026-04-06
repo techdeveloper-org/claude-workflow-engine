@@ -240,7 +240,7 @@
         </mxCell>
 
         <!-- Step 10 -->
-        <mxCell id="55" value="&lt;b&gt;Step 10&lt;/b&gt; · implementation&lt;br&gt;Hybrid LLM inference&lt;br&gt;ENABLE_SONARQUBE scan · ENABLE_FIGMA comment" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8DAEF;strokeColor=#8E44AD;fontSize=10;" vertex="1" parent="40">
+        <mxCell id="55" value="&lt;b&gt;Step 10&lt;/b&gt; · implementation&lt;br&gt;LLM inference (claude_cli/anthropic)&lt;br&gt;ENABLE_SONARQUBE scan · ENABLE_FIGMA comment" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8DAEF;strokeColor=#8E44AD;fontSize=10;" vertex="1" parent="40">
           <mxGeometry x="30" y="1115" width="200" height="65" as="geometry" />
         </mxCell>
 
@@ -325,7 +325,7 @@
         </mxCell>
 
         <!-- LLM Providers -->
-        <mxCell id="85" value="&lt;b&gt;LLM Providers&lt;/b&gt; (Hybrid Routing)&lt;br&gt;━━━━━━━━━━━━━━━━━━━━━&lt;br&gt;Ollama (local GPU) — always up&lt;br&gt;Anthropic API (SDK + retries)&lt;br&gt;Claude CLI (subprocess)&lt;br&gt;OpenAI API&lt;br&gt;&lt;font color='#666'&gt;Fallback: primary → Ollama&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#AED6F1;strokeColor=#2980B9;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="85" value="&lt;b&gt;LLM Providers&lt;/b&gt; (Fallback Chain)&lt;br&gt;━━━━━━━━━━━━━━━━━━━━━&lt;br&gt;Claude CLI (subprocess)&lt;br&gt;Anthropic API (SDK + retries)&lt;br&gt;&lt;font color='#666'&gt;Fallback: claude_cli → anthropic&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#AED6F1;strokeColor=#2980B9;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="2250" y="580" width="180" height="120" as="geometry" />
         </mxCell>
 
@@ -639,7 +639,7 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <!-- Step 10 → LLM -->
-        <mxCell id="ex5" value="hybrid inference" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#2980B9;fontSize=9;" edge="1" source="55" target="85" parent="1">
+        <mxCell id="ex5" value="LLM fallback" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#2980B9;fontSize=9;" edge="1" source="55" target="85" parent="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <!-- Step 13 → UML -->

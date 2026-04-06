@@ -35,6 +35,7 @@ try:
     from loguru import logger
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -51,6 +52,7 @@ STATUS_PARTIAL = "PARTIAL"
 # ---------------------------------------------------------------------------
 # MetricsCollector
 # ---------------------------------------------------------------------------
+
 
 class MetricsCollector:
     """Collect and persist execution metrics across all pipeline steps."""
@@ -101,7 +103,7 @@ class MetricsCollector:
             duration: Execution time in seconds.
             status:   One of SUCCESS / FAILED / SKIPPED / PARTIAL.
             tokens:   LLM tokens consumed during the step (0 if unknown).
-            model:    Model name used (e.g. "qwen2.5:7b").
+            model:    Model name used (e.g. "claude-sonnet-4-6").
             extra:    Additional key-value pairs to store with the metric.
         """
         key = f"step_{step}"
@@ -121,9 +123,7 @@ class MetricsCollector:
         self._save()
 
         icon = "OK" if status == STATUS_SUCCESS else status
-        logger.info(
-            f"[Metrics] Step {step:02d} | {icon} | {duration:.2f}s | {tokens} tokens"
-        )
+        logger.info(f"[Metrics] Step {step:02d} | {icon} | {duration:.2f}s | {tokens} tokens")
 
     def record_files_modified(
         self,
@@ -157,9 +157,7 @@ class MetricsCollector:
             self._all_files_modified.add(filepath)
 
         self._save()
-        logger.info(
-            f"[Metrics] Step {step:02d} | {operation} {len(files)} file(s)"
-        )
+        logger.info(f"[Metrics] Step {step:02d} | {operation} {len(files)} file(s)")
 
     def record_error(
         self,
@@ -290,6 +288,7 @@ class MetricsCollector:
     def print_summary(self) -> None:
         """Print a human-readable summary to stderr (hooks use stdout for JSON)."""
         import sys
+
         out = sys.stderr
         s = self.summary()
         print("\n" + "=" * 55, file=out)
@@ -311,7 +310,7 @@ class MetricsCollector:
             for key in sorted(s["by_step"].keys(), key=lambda k: int(k.split("_")[1])):
                 m = s["by_step"][key]
                 status_icon = "OK" if m["status"] == STATUS_SUCCESS else m["status"]
-                model_info = f"  [{m.get('model', '')}]" if m.get('model') else ""
+                model_info = f"  [{m.get('model', '')}]" if m.get("model") else ""
                 print(
                     f"    Step {m['step']:02d}  {status_icon:<10}"
                     f"  {m.get('duration_seconds', 0):.2f}s"
@@ -375,6 +374,7 @@ class MetricsCollector:
 # Convenience factory
 # ---------------------------------------------------------------------------
 
+
 def create_metrics_collector(session_id: str) -> MetricsCollector:
     """Create a MetricsCollector for the given session."""
     return MetricsCollector(session_id)
@@ -397,7 +397,7 @@ if __name__ == "__main__":
             duration=0.5 * i,
             status=STATUS_SUCCESS if i != 3 else STATUS_FAILED,
             tokens=100 * i,
-            model="qwen2.5:7b",
+            model="claude-sonnet-4-6",
         )
         if i == 3:
             mc.record_error(i, "NetworkError", "Retried with backoff", "Connection refused")

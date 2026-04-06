@@ -27,7 +27,7 @@ Collected after each of the 15 steps (0-14):
 | `step_status` | str | "success", "failed", "skipped" |
 | `step_tokens_in` | int | LLM input tokens (if LLM called) |
 | `step_tokens_out` | int | LLM output tokens (if LLM called) |
-| `step_model_used` | str | Model ID (e.g., "ollama/qwen2.5-coder:7b") |
+| `step_model_used` | str | Model ID (e.g., "claude-sonnet-4-6") |
 | `step_error` | str | Error message (if failed) |
 
 ### Per-Session Metrics
@@ -48,7 +48,7 @@ Per-provider aggregation:
 
 | Metric | Type | Source |
 |--------|------|--------|
-| `provider_name` | str | "ollama", "anthropic", "openai", "groq" |
+| `provider_name` | str | "claude_cli", "anthropic" |
 | `total_calls` | int | Number of LLM calls |
 | `total_tokens` | int | Total tokens consumed |
 | `avg_latency_ms` | float | Average response time |
@@ -83,7 +83,7 @@ Each step appends a line to `~/.claude/logs/telemetry/{session_id}.jsonl`:
   "step_name": "skill_selection",
   "duration_ms": 1234,
   "status": "success",
-  "model": "ollama/qwen2.5-coder:7b",
+  "model": "claude-sonnet-4-6",
   "tokens_in": 500,
   "tokens_out": 150
 }

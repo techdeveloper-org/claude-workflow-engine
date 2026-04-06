@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Level 3 Step 0 - Prompt Generator (Uses Local Ollama LLM)
+Level 3 Step 0 - Prompt Generator
 
-Uses local LLM to intelligently analyze task and determine:
+Uses LLM (claude_cli / anthropic via llm_call) to intelligently
+analyze the task and determine:
 - Task type (from LLM analysis, not keywords)
 - Complexity (1-10 scale from LLM)
 - Suggested model (haiku/sonnet/opus based on complexity)
@@ -13,56 +14,29 @@ Output: JSON with task_type, complexity, suggested_model, reasoning
 """
 
 import json
-import sys
 import os
+import sys
 from pathlib import Path
-import urllib.request
-import urllib.error
-
-OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
 
-class OllamaTaskAnalyzer:
-    """Use local Ollama LLM for intelligent task analysis."""
+class TaskAnalyzer:
+    """Use llm_call for intelligent task analysis (claude_cli / anthropic)."""
 
     def __init__(self):
-        self.endpoint = OLLAMA_ENDPOINT
-        self.model = OLLAMA_MODEL
         self.project_root = Path.cwd()
 
-    def call_ollama(self, prompt: str) -> str:
-        """Call LLM with prompt. Tries Ollama first, then claude CLI fallback."""
-        # Try shared llm_call (Ollama -> Claude CLI fallback)
+    def call_llm(self, prompt: str) -> str:
+        """Call LLM with prompt via llm_call provider chain."""
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
             from langgraph_engine.llm_call import llm_call
+
             result = llm_call(prompt, model="fast", temperature=0.3)
             if result:
                 return result
         except ImportError:
             pass
-
-        # Direct Ollama fallback
-        try:
-            num_ctx = 8192 if "14b" in self.model else 16384
-            payload = {
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-                "temperature": 0.3,
-                "options": {"num_ctx": num_ctx, "num_predict": 2048}
-            }
-            req = urllib.request.Request(
-                self.endpoint,
-                data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"}
-            )
-            with urllib.request.urlopen(req, timeout=30) as response:
-                result = json.loads(response.read().decode())
-                return result.get("response", "").strip()
-        except Exception as e:
-            return f"Error calling LLM: {str(e)}"
+        return "Error: llm_call not available"
 
     def detect_project_type(self) -> str:
         """Detect project type by looking for files."""
@@ -75,7 +49,7 @@ class OllamaTaskAnalyzer:
         return "Unknown"
 
     def analyze(self, task_description: str = None, context_data: dict = None) -> dict:
-        """Analyze task using Ollama LLM with full context from Level 1."""
+        """Analyze task using LLM with full context from Level 1."""
         if not task_description:
             if not sys.stdin.isatty():
                 task_description = sys.stdin.read().strip()
@@ -89,7 +63,7 @@ class OllamaTaskAnalyzer:
                 "complexity": 5,
                 "suggested_model": "sonnet",
                 "project_type": "Unknown",
-                "reasoning": "No task description provided"
+                "reasoning": "No task description provided",
             }
 
         project_type = self.detect_project_type()
@@ -102,7 +76,9 @@ class OllamaTaskAnalyzer:
             # Add context loading info
             context_pct = context_data.get("loaded_context", {}).get("context_percentage", 0)
             if context_pct > 0:
-                context_info.append(f"- Already loaded {context_pct}% of project context ({context_data.get('loaded_context', {}).get('files_loaded', 0)} files)")
+                context_info.append(
+                    f"- Already loaded {context_pct}% of project context ({context_data.get('loaded_context', {}).get('files_loaded', 0)} files)"
+                )
 
             # Add project info
             if context_data.get("project", {}).get("is_java_project"):
@@ -136,7 +112,7 @@ Respond ONLY with JSON:
 
 JSON only, no markdown:"""
 
-        llm_response = self.call_ollama(analysis_prompt)
+        llm_response = self.call_llm(analysis_prompt)
 
         # Parse LLM response
         try:
@@ -149,11 +125,7 @@ JSON only, no markdown:"""
                 analysis = json.loads(llm_response)
         except Exception:
             # Fallback if parsing fails
-            analysis = {
-                "task_type": "General Task",
-                "complexity": 5,
-                "reasoning": "LLM analysis parsing failed"
-            }
+            analysis = {"task_type": "General Task", "complexity": 5, "reasoning": "LLM analysis parsing failed"}
 
         # Get complexity and suggest model
         complexity = analysis.get("complexity", 5)
@@ -175,13 +147,13 @@ JSON only, no markdown:"""
             "complexity": complexity,
             "suggested_model": suggested_model,
             "project_type": project_type,
-            "reasoning": analysis.get("reasoning", "Analyzed by Ollama LLM")
+            "reasoning": analysis.get("reasoning", "Analyzed by LLM"),
         }
 
 
 def main():
     """Main entry point."""
-    analyzer = OllamaTaskAnalyzer()
+    analyzer = TaskAnalyzer()
 
     # Parse arguments
     task_description = None

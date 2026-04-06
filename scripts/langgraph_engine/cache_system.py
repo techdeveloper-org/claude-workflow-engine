@@ -2,7 +2,7 @@
 Enhanced Cache System - Multi-tier persistent caching for the 3-level pipeline.
 
 Three cache tiers with different TTLs:
-1. LLM Response Cache      - 1 hour  TTL  (Ollama / Claude API responses)
+1. LLM Response Cache      - 1 hour  TTL  (claude_cli / anthropic responses)
 2. File Analysis Cache     - 24 hour TTL  (codebase scan results, grep output)
 3. Skill Definitions Cache - 7 day   TTL  (SKILL.md / agent.md content)
 
@@ -22,10 +22,10 @@ Usage::
     cache = get_pipeline_cache()
 
     # LLM response
-    key = cache.llm.make_key("qwen2.5:7b", [{"role": "user", "content": "..."}])
+    key = cache.llm.make_key("claude-haiku-4-5", [{"role": "user", "content": "..."}])
     hit = cache.llm.get(key)
     if hit is None:
-        response = ollama.chat(...)
+        response = llm_call(...)
         cache.llm.set(key, response)
 
     # File analysis
@@ -50,6 +50,7 @@ try:
     from loguru import logger
 except ImportError:
     import logging
+
     logger = logging.getLogger(__name__)
 
 
@@ -57,9 +58,9 @@ except ImportError:
 # TTL constants (seconds)
 # ---------------------------------------------------------------------------
 
-_LLM_TTL_SECONDS: int = 3600           # 1 hour
+_LLM_TTL_SECONDS: int = 3600  # 1 hour
 _FILE_ANALYSIS_TTL_SECONDS: int = 86400  # 24 hours
-_SKILL_DEFS_TTL_SECONDS: int = 604800   # 7 days
+_SKILL_DEFS_TTL_SECONDS: int = 604800  # 7 days
 
 # In-memory layer max entries per tier (evict oldest when full)
 _MEMORY_MAX_ENTRIES: int = int(os.environ.get("CACHE_MEM_MAX", "512"))
@@ -348,7 +349,7 @@ class PipelineCache:
     Usage::
 
         cache = PipelineCache()
-        key = cache.llm.make_llm_key("qwen2.5:7b", messages)
+        key = cache.llm.make_llm_key("claude-sonnet-4-6", messages)
         hit = cache.llm.get(key)
     """
 

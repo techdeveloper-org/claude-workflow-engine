@@ -169,16 +169,11 @@ def setup_env():
 
     # LLM Provider
     print("\n  -- LLM Provider --")
-    config["LLM_PROVIDER"] = prompt_user("  LLM provider (auto/ollama/anthropic/openai)", default="auto")
-    config["OLLAMA_ENDPOINT"] = prompt_user("  Ollama endpoint", default="http://localhost:11434/api/generate")
+    config["LLM_PROVIDER"] = prompt_user("  LLM provider (auto/claude_cli/anthropic)", default="auto")
 
     anthropic_key = prompt_user("  Anthropic API key (leave empty to skip)", default="")
     if anthropic_key:
         config["ANTHROPIC_API_KEY"] = anthropic_key
-
-    openai_key = prompt_user("  OpenAI API key (leave empty to skip)", default="")
-    if openai_key:
-        config["OPENAI_API_KEY"] = openai_key
 
     # GitHub
     print("\n  -- GitHub --")
@@ -310,17 +305,6 @@ def verify_connectivity():
                 os.environ.setdefault(key.strip(), value.strip())
 
     checks = []
-
-    # Ollama
-    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
-    try:
-        import urllib.request
-
-        base = endpoint.replace("/api/generate", "")
-        with urllib.request.urlopen(base, timeout=3):
-            checks.append(("Ollama", True))
-    except Exception:
-        checks.append(("Ollama", False))
 
     # GitHub CLI auth
     try:

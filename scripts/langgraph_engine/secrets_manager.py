@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 REQUIRED_SECRETS = ["ANTHROPIC_API_KEY", "GITHUB_TOKEN"]
 
 # Optional secrets: warn if present but empty, silently skip if absent
-OPTIONAL_SECRETS = ["OPENAI_API_KEY", "JIRA_API_TOKEN", "SENTRY_DSN", "DD_API_KEY"]
+OPTIONAL_SECRETS = ["JIRA_API_TOKEN", "SENTRY_DSN", "DD_API_KEY"]
 
 # Thread lock for load_from_aws_secrets_manager (protects os.environ mutation)
 _aws_load_lock = threading.Lock()

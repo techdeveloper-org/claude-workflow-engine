@@ -340,7 +340,7 @@ class PipelineBuilder:
         else:
             # FULL MODE: Steps 10-14 (implementation + PR + merge + close)
 
-            # Step 10: Implementation (calls hybrid_inference in full mode)
+            # Step 10: Implementation (in full mode)
             g.add_node("level3_step10", step10_implementation_note)
             g.add_edge("level3_step9", "level3_step10")
 

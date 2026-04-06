@@ -114,8 +114,8 @@ def cmd_status(args):
 def cmd_health(args):
     """Check all dependencies and services.
 
-    Verifies: Python version, required packages, Ollama, GitHub CLI,
-    and required environment variables.
+    Verifies: Python version, required packages, GitHub CLI,
+    LLM provider configuration, and required environment variables.
     """
     print("Claude Workflow Engine - Health Check")
     print("=" * 50)
@@ -148,17 +148,14 @@ def cmd_health(args):
     except (FileNotFoundError, subprocess.TimeoutExpired):
         checks.append(("GitHub CLI (gh)", "not installed", False))
 
-    # Ollama
-    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://localhost:11434")
-    try:
-        import urllib.request
+    # LLM provider: claude CLI
+    import shutil
 
-        probe_url = endpoint.rstrip("/api/generate").rstrip("/")
-        req = urllib.request.Request(probe_url)
-        with urllib.request.urlopen(req, timeout=3):
-            checks.append(("Ollama", f"running ({endpoint})", True))
-    except Exception:
-        checks.append(("Ollama", f"not reachable ({endpoint})", False))
+    claude_path = shutil.which("claude")
+    if claude_path:
+        checks.append(("LLM: claude_cli", f"found ({claude_path})", True))
+    else:
+        checks.append(("LLM: claude_cli", "not on PATH (optional)", False))
 
     # Environment variables
     for var, required in [

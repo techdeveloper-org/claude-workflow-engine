@@ -19,8 +19,8 @@ Components / Tokens / Review" style="rounded=1;whiteSpace=wrap;html=1;fontSize=1
 Trigger Build / Poll Queue" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="1240" y="325" width="175" height="42" as="geometry"/></mxCell>
     <mxCell id="15" value="SonarQube  [ENABLE_SONARQUBE=1]
 Quality Gate / Scan" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=#F8CECC;strokeColor=#B85450;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="1240" y="380" width="175" height="42" as="geometry"/></mxCell>
-    <mxCell id="17" value="LLM Providers (4)
-Ollama / Anthropic / OpenAI / Groq" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=#E1D5E7;strokeColor=#9673A6;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="1240" y="450" width="175" height="42" as="geometry"/></mxCell>
+    <mxCell id="17" value="LLM Providers (2)
+Claude CLI / Anthropic" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=#E1D5E7;strokeColor=#9673A6;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="1240" y="450" width="175" height="42" as="geometry"/>
     <mxCell id="19" value="Qdrant Vector DB
 4 Collections (RAG Cache)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fontStyle=1;fillColor=#E1D5E7;strokeColor=#9673A6;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="1240" y="505" width="175" height="42" as="geometry"/></mxCell>
     <mxCell id="21" value="CallGraph Engine

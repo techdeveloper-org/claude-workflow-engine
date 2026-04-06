@@ -127,9 +127,8 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
         """
         Wrap step10 with explicit LLM error -> Claude API fallback pattern
         and file modification tracking.
-        The underlying step10_implementation_execution already handles
-        hybrid_inference internally, but we add a second layer here for
-        any uncaught LLM-related exceptions bubbling up.
+        Catches any uncaught LLM-related exceptions bubbling up from
+        step10_implementation_execution.
         """
         try:
             result = step10_implementation_execution(st)
@@ -149,7 +148,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
         except Exception as llm_exc:
             # Check if this looks like an LLM connectivity issue
             err_msg = str(llm_exc).lower()
-            is_llm_error = any(kw in err_msg for kw in ("ollama", "connection", "model", "timeout", "inference"))
+            is_llm_error = any(kw in err_msg for kw in ("connection", "model", "timeout", "inference", "api"))
             if is_llm_error:
                 infra = get_infra(st)
                 if infra["error_logger"]:

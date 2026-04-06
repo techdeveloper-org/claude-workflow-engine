@@ -8,10 +8,9 @@ Converts raw technical exceptions and pipeline error codes into:
 - Help command suggestions
 
 Covers all common error categories in the Claude Workflow Engine pipeline:
-- Ollama connection errors
+- LLM inference errors (claude_cli, anthropic)
 - GitHub API errors
 - File system errors
-- LLM inference errors
 - Skill/Agent load errors
 - Validation errors
 - Timeout errors
@@ -21,7 +20,7 @@ Usage:
     from .error_messages import ErrorMessages, format_error
 
     # Quick format
-    msg = format_error("OllamaConnectionError", detail="Connection refused on port 11434")
+    msg = format_error("LLMConnectionError", detail="Connection refused")
     print(msg.user_message)
     print(msg.recovery_steps)
 
@@ -36,9 +35,8 @@ Usage:
 """
 
 import os
-
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 # GitHub owner for help/troubleshooting links (configurable via env var)
 _GITHUB_OWNER = os.environ.get("CLAUDE_GITHUB_OWNER", "techdeveloper-org")
@@ -48,16 +46,17 @@ _GITHUB_OWNER = os.environ.get("CLAUDE_GITHUB_OWNER", "techdeveloper-org")
 # FormattedError dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FormattedError:
     """A fully formatted user-facing error message."""
 
-    error_type: str                         # Internal error category
-    user_message: str                       # Plain-language description
+    error_type: str  # Internal error category
+    user_message: str  # Plain-language description
     recovery_steps: List[str] = field(default_factory=list)
     troubleshooting_links: List[str] = field(default_factory=list)
     help_commands: List[str] = field(default_factory=list)
-    severity: str = "ERROR"                 # INFO / WARNING / ERROR / CRITICAL
+    severity: str = "ERROR"  # INFO / WARNING / ERROR / CRITICAL
     is_recoverable: bool = True
     context: Dict[str, Any] = field(default_factory=dict)
 
@@ -112,6 +111,7 @@ class FormattedError:
 # Error catalog - maps error_type -> template factory
 # ---------------------------------------------------------------------------
 
+
 class _ErrorCatalog:
     """
     Central registry of error templates.
@@ -143,70 +143,59 @@ class _ErrorCatalog:
 
     def _register(self, *names: str):
         """Decorator: register a template under one or more error type names."""
+
         def decorator(fn):
             for name in names:
                 self._templates[name.upper()] = fn
             return fn
+
         return decorator
 
     def _register_all(self):
         """Register all error templates."""
 
-        # --- Ollama / LLM inference errors ---
+        # --- LLM inference errors ---
 
-        @self._register("OllamaConnectionError", "OllamaNotRunning", "OllamaUnavailable")
-        def _ollama_connection(detail: str, context: dict) -> FormattedError:
-            port = _extract_port(detail) or "11434"
+        @self._register("LLMConnectionError", "LLMUnavailable")
+        def _llm_connection(detail: str, context: dict) -> FormattedError:
             return FormattedError(
-                error_type="OllamaConnectionError",
+                error_type="LLMConnectionError",
                 user_message=(
-                    "Cannot connect to the local Ollama server. "
-                    "The pipeline uses Ollama for local AI inference and it does not "
-                    f"appear to be running (port {port} is not responding)."
+                    "The LLM provider is unavailable. "
+                    "The pipeline requires at least one configured LLM provider "
+                    "(claude_cli or anthropic) to be reachable."
                 ),
                 recovery_steps=[
-                    "Start Ollama: open a terminal and run 'ollama serve'",
-                    "Verify Ollama is running: 'ollama list' should show available models",
-                    f"Confirm port {port} is free: no other service should use it",
-                    "If Ollama is not installed, download it from https://ollama.ai",
-                    "After starting Ollama, retry your request - the pipeline will reconnect automatically",
+                    "Check LLM_PROVIDER env var: set to 'claude_cli' or 'anthropic'",
+                    "For claude_cli: ensure the 'claude' CLI is installed and on your PATH",
+                    "For anthropic: ensure ANTHROPIC_API_KEY is set and valid",
+                    "Run 'cwe health' to check provider status",
                 ],
                 troubleshooting_links=[
-                    "https://github.com/ollama/ollama - Official Ollama documentation",
-                    "https://ollama.ai/download - Ollama installation page",
+                    "https://docs.anthropic.com/claude/reference/getting-started-with-the-api",
                 ],
                 help_commands=[
-                    "ollama serve",
-                    "ollama list",
-                    f"curl http://localhost:{port}/api/tags",
+                    "echo $ANTHROPIC_API_KEY",
+                    "claude --version",
                 ],
                 severity="ERROR",
                 is_recoverable=True,
                 context=context,
             )
 
-        @self._register("OllamaModelNotFound", "ModelNotFound")
-        def _ollama_model(detail: str, context: dict) -> FormattedError:
-            model = _extract_model(detail) or "qwen2.5:7b"
+        @self._register("ModelNotFound")
+        def _llm_model(detail: str, context: dict) -> FormattedError:
+            model = _extract_model(detail) or "unknown"
             return FormattedError(
-                error_type="OllamaModelNotFound",
+                error_type="ModelNotFound",
                 user_message=(
-                    f"The required AI model '{model}' is not available in Ollama. "
-                    "The pipeline needs this model to make intelligent decisions."
+                    f"The requested AI model '{model}' is not available. "
+                    "The pipeline needs a valid model to process requests."
                 ),
                 recovery_steps=[
-                    f"Download the model: run 'ollama pull {model}'",
-                    "Wait for the download to complete (may take several minutes)",
-                    "Verify the model is ready: 'ollama list' should show it",
-                    "Retry your request after the model is downloaded",
-                    "If disk space is limited, free space and retry the pull command",
-                ],
-                troubleshooting_links=[
-                    f"https://ollama.ai/library/{model.split(':')[0]} - Model documentation",
-                ],
-                help_commands=[
-                    f"ollama pull {model}",
-                    "ollama list",
+                    "Check the model name in your LLM_PROVIDER configuration",
+                    "For anthropic: verify ANTHROPIC_MODEL_FAST / ANTHROPIC_MODEL_DEEP are valid",
+                    "Retry with the default model by unsetting model override env vars",
                 ],
                 severity="ERROR",
                 is_recoverable=True,
@@ -221,19 +210,15 @@ class _ErrorCatalog:
                 error_type="LLMTimeoutError",
                 user_message=(
                     f"The AI inference request timed out{step_info}. "
-                    "This can happen when the local Ollama server is under load "
+                    "This can happen when the LLM provider is under load "
                     "or the task is very complex."
                 ),
                 recovery_steps=[
-                    "Wait a few seconds and retry - the server may be processing another request",
-                    "Check Ollama server load: 'ollama ps' shows active model processes",
+                    "Wait a few seconds and retry - the provider may be processing other requests",
                     "For large tasks, consider breaking the request into smaller parts",
-                    "If timeouts persist, restart Ollama: stop and run 'ollama serve' again",
+                    "Check your ANTHROPIC_API_KEY rate limits",
+                    "Try switching LLM_PROVIDER to another available provider",
                     "Reduce parallel tasks if multiple pipelines are running simultaneously",
-                ],
-                help_commands=[
-                    "ollama ps",
-                    "ollama serve",
                 ],
                 severity="WARNING",
                 is_recoverable=True,
@@ -390,7 +375,11 @@ class _ErrorCatalog:
                     "handle specific task types."
                 ),
                 recovery_steps=[
-                    f"Check if the skill file exists: 'ls ~/.claude/skills/**/{skill}*'" if skill else "Check the skills directory: 'ls ~/.claude/skills/'",
+                    (
+                        f"Check if the skill file exists: 'ls ~/.claude/skills/**/{skill}*'"
+                        if skill
+                        else "Check the skills directory: 'ls ~/.claude/skills/'"
+                    ),
                     "Download missing skills from the claude-global-library repository",
                     "If the skill was recently added, run: 'python auto_task_launcher.sh' to sync",
                     "Verify the skills directory structure: skills should be at ~/.claude/skills/<domain>/<skill-name>/skill.md",
@@ -566,6 +555,7 @@ _CATALOG = _ErrorCatalog()
 # ErrorMessages - public formatter class
 # ---------------------------------------------------------------------------
 
+
 class ErrorMessages:
     """Formats raw pipeline errors into user-friendly messages.
 
@@ -584,7 +574,7 @@ class ErrorMessages:
         Format an error into a user-friendly message.
 
         Args:
-            error_type:        Error category string (e.g. "OllamaConnectionError").
+            error_type:        Error category string (e.g. "LLMConnectionError").
             detail:            Raw error detail or exception message.
             context:           Optional pipeline context (step, session_id, etc.).
             severity_override: Override the template severity if needed.
@@ -638,15 +628,15 @@ class ErrorMessages:
         Return a help text string for a given topic or a general overview.
 
         Args:
-            topic: Optional topic keyword (ollama / github / skills / etc.)
+            topic: Optional topic keyword (llm / github / skills / etc.)
 
         Returns:
             Multi-line help string.
         """
         topic_lower = topic.lower() if topic else ""
 
-        if "ollama" in topic_lower:
-            return _OLLAMA_HELP
+        if "llm" in topic_lower or "provider" in topic_lower or "anthropic" in topic_lower:
+            return _LLM_HELP
         if "github" in topic_lower or "git" in topic_lower:
             return _GITHUB_HELP
         if "skill" in topic_lower:
@@ -657,6 +647,7 @@ class ErrorMessages:
 # ---------------------------------------------------------------------------
 # Module-level convenience function
 # ---------------------------------------------------------------------------
+
 
 def format_error(
     error_type: str,
@@ -683,52 +674,46 @@ def format_exception(
 _GENERAL_HELP = """
 Claude Workflow Engine Pipeline - Help
 
-The pipeline runs in 15 steps to process your request:
-  Steps  1-7:  Planning, skill selection, and prompt generation
-  Steps  8-12: GitHub workflow (issue, branch, implementation, PR, closure)
-  Steps 13-14: Documentation and summary
+The pipeline runs in 8 active steps to process your request:
+  Pre-0, Step 0: Pre-analysis and orchestration
+  Steps  8-12:  GitHub workflow (issue, branch, implementation, PR, closure)
+  Steps 13-14:  Documentation and summary
 
 Common issues:
-  - Ollama not running    -> run 'ollama serve' in a separate terminal
-  - GitHub auth failed   -> set GITHUB_TOKEN environment variable
-  - Skills missing       -> check ~/.claude/skills/ directory
+  - LLM provider unavailable -> check LLM_PROVIDER or ANTHROPIC_API_KEY
+  - GitHub auth failed       -> set GITHUB_TOKEN environment variable
+  - Skills missing           -> check ~/.claude/skills/ directory
 
 Enable debug output:
   set CLAUDE_DEBUG=1    (Windows)
   export CLAUDE_DEBUG=1 (Linux/Mac)
 
 For more help on a specific topic:
-  help ollama    - Ollama server setup
+  help llm       - LLM provider setup (claude_cli, anthropic)
   help github    - GitHub authentication
   help skills    - Skill management
 """
 
-_OLLAMA_HELP = """
-Ollama Setup Help
+_LLM_HELP = """
+LLM Provider Setup Help
 
-The pipeline uses Ollama for local AI inference (planning and skill selection).
+The pipeline supports two LLM providers (in auto-fallback order):
+  1. claude_cli  - Claude Code CLI (uses your Anthropic subscription)
+  2. anthropic   - Anthropic API direct (needs ANTHROPIC_API_KEY)
 
-1. Install Ollama:
-   Download from https://ollama.ai/download
+Configuration:
+  LLM_PROVIDER=auto          # auto-detect available providers (default)
+  LLM_PROVIDER=claude_cli    # use only claude CLI
+  LLM_PROVIDER=anthropic     # use only Anthropic API
+  LLM_FALLBACK=anthropic     # fallback provider chain (comma-separated)
 
-2. Start the server:
-   ollama serve
+For claude_cli:
+  1. Install Claude Code CLI: npm install -g @anthropic-ai/claude-code
+  2. Verify: claude --version
 
-3. Download required models:
-   ollama pull qwen2.5:7b
-
-4. Verify everything works:
-   ollama list
-   curl http://localhost:11434/api/tags
-
-If the server crashes:
-   - Check available memory (Ollama needs at least 4GB free)
-   - Try a smaller model: ollama pull qwen2.5:3b
-
-For GPU acceleration:
-   - NVIDIA: install CUDA drivers and cuDNN
-   - AMD:    install ROCm drivers
-   - Mac:    Metal acceleration is automatic
+For anthropic:
+  1. Get API key: https://console.anthropic.com/
+  2. Set: export ANTHROPIC_API_KEY=sk-ant-...
 """
 
 _GITHUB_HELP = """
@@ -784,9 +769,11 @@ Agents work the same way:
 # Helper extraction functions
 # ---------------------------------------------------------------------------
 
+
 def _extract_port(text: str) -> Optional[str]:
     """Try to extract a port number from an error message."""
     import re
+
     match = re.search(r":(\d{4,5})", text)
     return match.group(1) if match else None
 
@@ -794,6 +781,7 @@ def _extract_port(text: str) -> Optional[str]:
 def _extract_model(text: str) -> Optional[str]:
     """Try to extract a model name from an error message."""
     import re
+
     match = re.search(r"model[:\s'\"]+([a-zA-Z0-9_\-.:]+)", text, re.IGNORECASE)
     return match.group(1) if match else None
 
@@ -801,6 +789,7 @@ def _extract_model(text: str) -> Optional[str]:
 def _extract_path(text: str) -> Optional[str]:
     """Try to extract a file path from an error message."""
     import re
+
     match = re.search(r"['\"]([/\\][^'\"]+)['\"]", text)
     if match:
         return match.group(1)
@@ -811,6 +800,7 @@ def _extract_path(text: str) -> Optional[str]:
 def _extract_skill(text: str) -> Optional[str]:
     """Try to extract a skill name from an error message."""
     import re
+
     match = re.search(r"skill[:\s'\"]+([a-zA-Z0-9_\-]+)", text, re.IGNORECASE)
     return match.group(1) if match else None
 

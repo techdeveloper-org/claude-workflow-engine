@@ -1,15 +1,15 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.15.2
+**Version:** 1.15.3
 **Type:** LangGraph Orchestration Pipeline with Call Graph Intelligence + Template Fast-Path
-**Last Updated:** 2026-04-05
+**Last Updated:** 2026-04-06
 
 ---
 
 ## Project Overview
 
-Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 8-step active execution (Pre-0, Step 0, Steps 8-14) with GitHub integration and hybrid LLM inference across 4 providers.
+Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for automating Claude Code development workflows. It handles session sync, coding standards enforcement, and end-to-end 8-step active execution (Pre-0, Step 0, Steps 8-14) with GitHub integration and hybrid LLM inference across 2 providers (claude_cli, anthropic).
 
 ### Quick Info
 
@@ -20,8 +20,8 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Status** | Active Development |
 | **Primary Location** | scripts/langgraph_engine/ |
 | **MCP Servers** | 13 servers -- all in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories); 1 also keeps an in-engine copy in `src/mcp/` |
-| **Total Python Files** | 310+ |
-| **Test Files** | 75 |
+| **Total Python Files** | 304+ |
+| **Test Files** | 74 |
 | **Call Graph** | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 
 ---
@@ -103,6 +103,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | **v1.15.0** | **8** | **2 (subprocess)** | **~15s** | TOON compression removed from Level 1 |
 | **v1.15.1** | **8** | **2 (subprocess)** | **~15s** | Source cleanup: deprecated files removed |
 | **v1.15.2** | **8** | **2 (subprocess)** | **~15s** | Exhaustive artifact purge: TOON/plan-mode/skill-selection removed; prompt_gen bug fixes |
+| **v1.15.3** | **8** | **2 (subprocess)** | **~15s** | Dead LLM provider purge: Ollama, NPU, GPU, OpenAI, DeepSeek, inference_router removed; 2-provider chain only (claude_cli + anthropic) |
 
 ### Directory Layout
 
@@ -144,7 +145,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 |   +-- testing/                      # Testing policies (unchanged)
 +-- src/mcp/                          # In-engine copy of session-mgr (repo is source of truth) + bridge (session_hooks, base/)
 +-- tests/                            # 75 test files
-+-- docs/                             # 71 documentation files
++-- docs/                             # 69 documentation files
 +-- docs/uml/                         # Auto-generated UML diagrams (13 types)
 +-- rules/                            # 34 coding standard definitions (incl. doc governance + docstrings-only + microservices patterns)
 ```
@@ -397,7 +398,6 @@ kubectl apply -f k8s/secret.yaml -f k8s/configmap.yaml \
 ## Configuration
 
 See environment variables in `.env.example`:
-- `OLLAMA_ENDPOINT` - Ollama server URL
 - `ANTHROPIC_API_KEY` - Claude API key
 - `GITHUB_TOKEN` - GitHub personal access token
 - `CLAUDE_DEBUG` - Debug mode (0/1)
@@ -405,16 +405,16 @@ See environment variables in `.env.example`:
 
 ---
 
-**Last Updated:** 2026-04-05
+**Last Updated:** 2026-04-06
 
 
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: v1.15.2 -- exhaustive artifact purge: TOON/plan-mode/skill-selection removal, prompt_gen bug fixes, docs sync
+- **Task**: v1.15.3 -- dead LLM provider purge: Ollama/NPU/GPU/OpenAI/DeepSeek/inference_router removed; 2-provider chain (claude_cli + anthropic)
 - **Skill**: python-core
 - **Agent**: python-backend-engineer
-- **Date**: 2026-04-05
+- **Date**: 2026-04-06
 
 ## Dependency Notes
 

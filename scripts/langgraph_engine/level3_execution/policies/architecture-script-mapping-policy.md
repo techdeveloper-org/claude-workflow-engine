@@ -2,7 +2,7 @@
 
 **Version:** 2.0.0
 **Last Updated:** 2026-03-17
-**Total Architecture Scripts:** 6 (scripts/architecture/)
+**Total Architecture Scripts:** 3 (scripts/architecture/)
 
 ---
 
@@ -10,11 +10,11 @@
 
 This document maps all scripts that physically exist in `scripts/architecture/` to their pipeline step, purpose, and current execution status.
 
-**Important Migration Note:** The original architecture (v1.0.0) documented 65 scripts, the vast majority of which have been migrated into the LangGraph orchestration engine at `scripts/langgraph_engine/`. Only 6 scripts remain in `scripts/architecture/` as standalone modules. These 6 scripts are imported or invoked by the LangGraph subgraph nodes rather than by the old hook chain.
+**Important Migration Note:** The original architecture (v1.0.0) documented 65 scripts, the vast majority of which have been migrated into the LangGraph orchestration engine at `scripts/langgraph_engine/`. Only 3 scripts remain in `scripts/architecture/` as standalone modules. These scripts are imported or invoked by the LangGraph subgraph nodes rather than by the old hook chain.
 
 ---
 
-## Existing Architecture Scripts (6 Scripts)
+## Existing Architecture Scripts (3 Scripts)
 
 ### Level 02: Standards System
 
@@ -32,24 +32,6 @@ This document maps all scripts that physically exist in `scripts/architecture/` 
 |--------|------|--------------|---------|
 | `anti-hallucination-enforcement.py` | `scripts/architecture/03-execution-system/00-prompt-generation/` | Step 0 - Task analysis | Enforces anti-hallucination constraints during prompt construction |
 | `prompt-generator.py` | `scripts/architecture/03-execution-system/00-prompt-generation/` | Step 0 and Step 7 - Prompt generation | Generates structured prompts; called at task analysis and again at final prompt generation with full skill context |
-
-#### Step 1 - Task Breakdown (1 script)
-
-| Script | Path | Pipeline Step | Purpose |
-|--------|------|--------------|---------|
-| `task-auto-analyzer.py` | `scripts/architecture/03-execution-system/01-task-breakdown/` | Step 3 - Task/Phase breakdown | Automatic task breakdown and complexity analysis; feeds phase decomposition in Level 3 |
-
-#### Step 2 - Plan Mode (1 script)
-
-| Script | Path | Pipeline Step | Purpose |
-|--------|------|--------------|---------|
-| `auto-plan-mode-suggester.py` | `scripts/architecture/03-execution-system/02-plan-mode/` | Step 1 - Plan mode decision | Decides whether plan mode is required based on task complexity; input to `level3_step1_planner.py` |
-
-#### Step 5 - Skill and Agent Selection (1 script)
-
-| Script | Path | Pipeline Step | Purpose |
-|--------|------|--------------|---------|
-| `auto-skill-agent-selector.py` | `scripts/architecture/03-execution-system/05-skill-agent-selection/` | Step 5 - Skill and agent selection | Selects appropriate skills and agents for the task; skill selection via call graph and framework detection |
 
 ---
 
@@ -71,7 +53,7 @@ All scripts that existed in the original v1.0.0 policy (65 total) but are no lon
 | Context management (context-monitor, context-pruner) | `context_cache.py`, `context_deduplicator.py`, `token_manager.py` |
 | User preferences (load-preferences, preference-detector) | `skill_selection_criteria.py`, `patterns.py` |
 | Pattern detection (detect-patterns, apply-patterns) | `patterns.py`, `skill_selection_criteria.py` |
-| Model selection (model-auto-selector, intelligent-model-selector) | `version_selector.py`, `inference_router.py`, `hybrid_inference.py` |
+| Model selection (model-auto-selector, intelligent-model-selector) | `version_selector.py` |
 | Tool optimization (tool-usage-optimizer, smart-read, ast-navigator) | `subgraphs/level2_standards.py` tool optimization section |
 | Failure prevention (pre-execution-checker, failure-detector, failure-learner) | `recovery_handler.py`, `error_logger.py` |
 | Git commit (auto-commit-enforcer, auto-commit-detector, auto-commit) | `git_operations.py`, `github_facade.py` |

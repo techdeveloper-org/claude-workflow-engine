@@ -67,7 +67,7 @@ paths:
         Returns 200 if the pipeline is ready to accept new task requests.
 
         Readiness requires all liveness checks to pass AND:
-        - At least one LLM provider reachable (Anthropic, OpenAI, Ollama, or NPU)
+        - At least one LLM provider reachable (Claude CLI or Anthropic)
         - GitHub token validated (if ENABLE_JIRA=0 and GitHub integration is active)
 
         Used as a Kubernetes readiness probe. A non-200 response removes the
@@ -85,11 +85,9 @@ paths:
               example:
                 ready: true
                 providers:
+                  claude_cli: reachable
                   anthropic: reachable
-                  openai: reachable
-                  ollama: unreachable
-                  npu: unavailable
-                active_provider: anthropic
+                active_provider: claude_cli
                 github: authenticated
         "503":
           description: Pipeline is not ready
@@ -99,7 +97,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
               example:
                 error: not_ready
-                detail: "No LLM provider reachable. Check ANTHROPIC_API_KEY and OLLAMA_ENDPOINT."
+                detail: "No LLM provider reachable. Check ANTHROPIC_API_KEY."
                 timestamp: "2026-03-27T12:00:00Z"
 
   /metrics:
@@ -195,15 +193,9 @@ components:
             anthropic:
               type: string
               enum: [reachable, unreachable, unconfigured]
-            openai:
+            claude_cli:
               type: string
               enum: [reachable, unreachable, unconfigured]
-            ollama:
-              type: string
-              enum: [reachable, unreachable, unconfigured]
-            npu:
-              type: string
-              enum: [reachable, unreachable, unavailable]
         active_provider:
           type: string
           description: The provider that will be used for the next task

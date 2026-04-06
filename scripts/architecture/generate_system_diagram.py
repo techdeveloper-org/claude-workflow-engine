@@ -224,7 +224,7 @@ def build():
     figma_id = rsys(270, "Figma API  [ENABLE_FIGMA=1]\nComponents / Tokens / Review", "#D5E8D4", "#82B366")
     jenk_id = rsys(325, "Jenkins  [ENABLE_JENKINS=1]\nTrigger Build / Poll Queue", "#FFE6CC", "#D79B00")
     rsys(380, "SonarQube  [ENABLE_SONARQUBE=1]\nQuality Gate / Scan", "#F8CECC", "#B85450")
-    llm_id = rsys(450, "LLM Providers (4)\nOllama / Anthropic / OpenAI / Groq", "#E1D5E7", "#9673A6")
+    llm_id = rsys(450, "LLM Providers (2)\nClaude CLI / Anthropic", "#E1D5E7", "#9673A6")
     cg_id = rsys(505, "CallGraph Engine\nPython/Java/TS/Kotlin (578 cls)", "#E1D5E7", "#9673A6")
     rsys(555, "14 MCP Servers  (295 tools)\nAll registered in settings.json", "#F0F0F0", "#666666")
 

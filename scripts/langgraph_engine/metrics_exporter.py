@@ -75,7 +75,7 @@ if _HAS_PROMETHEUS:
     llm_calls_total = Counter(
         "llm_calls_total",
         "Total LLM inference calls",
-        ["provider", "model"],  # anthropic/claude-sonnet-4-6, ollama/llama3, etc.
+        ["provider", "model"],  # anthropic/claude-sonnet-4-6, claude_cli/sonnet, etc.
     )
 
     llm_tokens_total = Counter(

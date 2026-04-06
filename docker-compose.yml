@@ -4,13 +4,9 @@
 #
 # Services:
 #   engine  - The workflow orchestration pipeline (the main application)
-#   ollama  - Local LLM inference server (optional)
 #
 # Usage:
-#   Full stack (engine + Ollama):
-#     docker compose up
-#
-#   Engine only (standalone):
+#   Start the engine:
 #     docker compose up engine
 #
 #   Run a specific task:
@@ -34,7 +30,7 @@ services:
 
     # Load all environment variables from .env file.
     # Required vars: ANTHROPIC_API_KEY, GITHUB_TOKEN
-    # Optional vars: OLLAMA_ENDPOINT, CLAUDE_DEBUG, CLAUDE_HOOK_MODE
+    # Optional vars: CLAUDE_DEBUG, CLAUDE_HOOK_MODE
     # The .env file is excluded from the image via .dockerignore.
     env_file:
       - .env
@@ -42,8 +38,6 @@ services:
     # Override or supplement specific environment variables here.
     # These take precedence over values in .env.
     environment:
-      # Point Ollama client at the ollama service when running as a compose stack.
-      OLLAMA_ENDPOINT: "http://ollama:11434"
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       # Enable the lightweight HTTP health server on HEALTH_PORT
@@ -63,10 +57,6 @@ services:
       - session_logs:/app/logs
       - telemetry_data:/app/telemetry
 
-    depends_on:
-      ollama:
-        condition: service_started
-
     # The engine is a CLI tool, not a long-running server.
     # It exits after each pipeline run; compose will not restart it automatically.
     restart: "no"
@@ -85,45 +75,10 @@ services:
           memory: 512m
           cpus: "0.25"
 
-  # ---------------------------------------------------------------------------
-  # ollama: Local LLM inference server
-  # Provides GPU-accelerated inference for supported models.
-  # The engine routes to Ollama first (GPU-first hybrid strategy) and falls
-  # back to Anthropic/OpenAI cloud providers when Ollama is unreachable.
-  # ---------------------------------------------------------------------------
-  ollama:
-    image: ollama/ollama:latest
-    container_name: claude-workflow-ollama
-    restart: unless-stopped
-
-    ports:
-      - "11434:11434"
-
-    volumes:
-      - ollama_models:/root/.ollama
-
-    environment:
-      OLLAMA_HOST: "0.0.0.0"
-
-    # Expose GPU resources when available (requires nvidia container toolkit).
-    # Comment out the deploy section if running on CPU-only hardware.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
 # =============================================================================
 # Named Volumes
 # =============================================================================
 volumes:
-  # Persists Ollama model weights across container restarts.
-  # Large volume: each model is 4-40 GB depending on parameter count.
-  ollama_models:
-    driver: local
-
   # Persists pipeline session log files across container restarts.
   session_logs:
     driver: local

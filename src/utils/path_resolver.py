@@ -25,10 +25,6 @@ Path Standard:
     | Tool Opt Log  | (auto)                  | {LOGS}/tool-optimization.jsonl |
     | Skills        | CLAUDE_SKILLS_DIR       | {CLAUDE_HOME}/skills/       |
     | Agents        | CLAUDE_AGENTS_DIR       | {CLAUDE_HOME}/agents/       |
-    | Intel AI Root | INTEL_AI_PATH           | ~/intel-ai/                 |
-    | GPU Path      | INTEL_AI_GPU_PATH       | {INTEL_AI_PATH}/gpu/        |
-    | NPU Path      | INTEL_AI_NPU_PATH       | {INTEL_AI_PATH}/npu/        |
-    | Models Path   | INTEL_AI_MODELS_PATH    | {INTEL_AI_PATH}/models/     |
 
 Priority chain for data directory:
     0. CLAUDE_INSIGHT_DATA_DIR environment variable (set by IDE launcher)
@@ -52,12 +48,6 @@ Convenience functions (all delegate to path_resolver):
     get_session_logs_dir() -> Path
     get_claude_home() -> Path
     get_settings_file() -> Path
-    get_intel_ai_path() -> Path
-    get_gpu_path() -> Path
-    get_npu_path() -> Path
-    get_models_path() -> Path
-    get_gpu_executable() -> Path
-    get_npu_executable() -> Path
     get_telemetry_dir() -> Path
     get_level_logs_dir() -> Path
     get_cache_logs_dir() -> Path
@@ -72,9 +62,8 @@ Classes:
     PathResolver: Data directory resolver with three-tier priority fallback.
 """
 
-from pathlib import Path
 import os
-import sys
+from pathlib import Path
 
 
 def _env_path(var_name, default):
@@ -117,23 +106,14 @@ class PathResolver:
         self.project_root = Path(__file__).parent.parent.parent
 
         # ---- Claude Home (base for all Claude paths) ----
-        self.claude_home = _env_path(
-            'CLAUDE_HOME', Path.home() / '.claude'
-        )
-        self.global_memory = self.claude_home / 'memory'
+        self.claude_home = _env_path("CLAUDE_HOME", Path.home() / ".claude")
+        self.global_memory = self.claude_home / "memory"
 
         # ---- Logs root (overridable for monitoring repo) ----
-        self.logs_root = _env_path(
-            'CLAUDE_LOGS_DIR', self.claude_home / 'logs'
-        )
-
-        # ---- Intel AI paths (GPU/NPU/Models) ----
-        self.intel_ai_root = _env_path(
-            'INTEL_AI_PATH', Path.home() / 'intel-ai'
-        )
+        self.logs_root = _env_path("CLAUDE_LOGS_DIR", self.claude_home / "logs")
 
         # Priority 0: Environment variable (set by IDE)
-        env_data_dir = os.environ.get('CLAUDE_INSIGHT_DATA_DIR')
+        env_data_dir = os.environ.get("CLAUDE_INSIGHT_DATA_DIR")
         if env_data_dir:
             self.base_dir = Path(env_data_dir)
             self.mode = "IDE"
@@ -146,7 +126,7 @@ class PathResolver:
             self.has_global_memory = True
         # Priority 2: Local ./data/
         else:
-            self.base_dir = self.project_root / 'data'
+            self.base_dir = self.project_root / "data"
             self.mode = "LOCAL"
             self.has_global_memory = False
             self._ensure_local_structure()
@@ -161,12 +141,12 @@ class PathResolver:
             None
         """
         dirs = [
-            self.base_dir / 'sessions',
-            self.base_dir / 'logs',
-            self.base_dir / 'config',
-            self.base_dir / 'anomalies',
-            self.base_dir / 'forecasts',
-            self.base_dir / 'performance',
+            self.base_dir / "sessions",
+            self.base_dir / "logs",
+            self.base_dir / "config",
+            self.base_dir / "anomalies",
+            self.base_dir / "forecasts",
+            self.base_dir / "performance",
         ]
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
@@ -175,19 +155,19 @@ class PathResolver:
 
     def get_sessions_dir(self):
         """Get sessions directory."""
-        return self.base_dir / 'sessions'
+        return self.base_dir / "sessions"
 
     def get_logs_dir(self):
         """Get logs directory."""
-        return self.base_dir / 'logs'
+        return self.base_dir / "logs"
 
     def get_session_logs_dir(self):
         """Get per-session logs directory (flow-trace.json, etc.)."""
-        return self.base_dir / 'logs' / 'sessions'
+        return self.base_dir / "logs" / "sessions"
 
     def get_config_dir(self):
         """Get config directory."""
-        return self.base_dir / 'config'
+        return self.base_dir / "config"
 
     def get_data_dir(self, subdir=None):
         """Get data directory (optionally with subdirectory)."""
@@ -203,44 +183,44 @@ class PathResolver:
 
     def get_telemetry_dir(self):
         """Get telemetry directory for per-step JSONL files."""
-        d = self.logs_root / 'telemetry'
+        d = self.logs_root / "telemetry"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     def get_level_logs_dir(self):
         """Get level logs directory for per-level execution logs."""
-        d = self.logs_root / 'level'
+        d = self.logs_root / "level"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     def get_cache_logs_dir(self):
         """Get cache directory for cache stats and data."""
-        d = self.logs_root / 'cache'
+        d = self.logs_root / "cache"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     def get_error_logs_dir(self):
         """Get error logs directory."""
-        d = self.logs_root / 'errors'
+        d = self.logs_root / "errors"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     def get_flow_traces_dir(self):
         """Get flow traces directory for pipeline execution traces."""
-        d = self.logs_root / 'flow-traces'
+        d = self.logs_root / "flow-traces"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     def get_benchmarks_dir(self):
         """Get benchmarks directory for performance data."""
-        d = self.logs_root / 'benchmarks'
+        d = self.logs_root / "benchmarks"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
     def get_tool_opt_log(self):
         """Get tool optimization JSONL log file path."""
         self.logs_root.mkdir(parents=True, exist_ok=True)
-        return self.logs_root / 'tool-optimization.jsonl'
+        return self.logs_root / "tool-optimization.jsonl"
 
     def get_skills_dir(self):
         """Get skills directory.
@@ -248,7 +228,7 @@ class PathResolver:
         Override: CLAUDE_SKILLS_DIR env var.
         Default: {CLAUDE_HOME}/skills/
         """
-        return _env_path('CLAUDE_SKILLS_DIR', self.claude_home / 'skills')
+        return _env_path("CLAUDE_SKILLS_DIR", self.claude_home / "skills")
 
     def get_agents_dir(self):
         """Get agents directory.
@@ -256,7 +236,7 @@ class PathResolver:
         Override: CLAUDE_AGENTS_DIR env var.
         Default: {CLAUDE_HOME}/agents/
         """
-        return _env_path('CLAUDE_AGENTS_DIR', self.claude_home / 'agents')
+        return _env_path("CLAUDE_AGENTS_DIR", self.claude_home / "agents")
 
     # ---- Claude directories ----
 
@@ -270,7 +250,7 @@ class PathResolver:
         Override: CLAUDE_SCRIPTS_DIR env var.
         Default: {CLAUDE_HOME}/scripts/
         """
-        return _env_path('CLAUDE_SCRIPTS_DIR', self.claude_home / 'scripts')
+        return _env_path("CLAUDE_SCRIPTS_DIR", self.claude_home / "scripts")
 
     def get_policies_dir(self):
         """Get policies directory.
@@ -278,7 +258,7 @@ class PathResolver:
         Override: CLAUDE_POLICIES_DIR env var.
         Default: {CLAUDE_HOME}/policies/
         """
-        return _env_path('CLAUDE_POLICIES_DIR', self.claude_home / 'policies')
+        return _env_path("CLAUDE_POLICIES_DIR", self.claude_home / "policies")
 
     def get_settings_file(self):
         """Get settings.json file path.
@@ -286,69 +266,7 @@ class PathResolver:
         Override: CLAUDE_SETTINGS_FILE env var.
         Default: {CLAUDE_HOME}/settings.json
         """
-        return _env_path('CLAUDE_SETTINGS_FILE', self.claude_home / 'settings.json')
-
-    # ---- Intel AI directories ----
-
-    def get_intel_ai_path(self):
-        """Get Intel AI root directory.
-
-        Override: INTEL_AI_PATH env var.
-        Default: ~/intel-ai/
-        """
-        return self.intel_ai_root
-
-    def get_gpu_path(self):
-        """Get GPU (Ollama) directory.
-
-        Override: INTEL_AI_GPU_PATH env var.
-        Default: {INTEL_AI_PATH}/gpu/
-        """
-        return _env_path('INTEL_AI_GPU_PATH', self.intel_ai_root / 'gpu')
-
-    def get_npu_path(self):
-        """Get NPU directory.
-
-        Override: INTEL_AI_NPU_PATH env var.
-        Default: {INTEL_AI_PATH}/npu/
-        """
-        return _env_path('INTEL_AI_NPU_PATH', self.intel_ai_root / 'npu')
-
-    def get_models_path(self):
-        """Get models directory.
-
-        Override: INTEL_AI_MODELS_PATH env var.
-        Default: {INTEL_AI_PATH}/models/
-        """
-        return _env_path('INTEL_AI_MODELS_PATH', self.intel_ai_root / 'models')
-
-    def get_gpu_executable(self):
-        """Get GPU executable path (ollama or ollama.exe).
-
-        Override: INTEL_AI_GPU_EXE env var.
-        Default: {GPU_PATH}/ollama.exe (Windows) or {GPU_PATH}/ollama (Linux/Mac)
-        """
-        env_exe = os.environ.get('INTEL_AI_GPU_EXE')
-        if env_exe:
-            return Path(env_exe)
-        gpu_dir = self.get_gpu_path()
-        if sys.platform == 'win32':
-            return gpu_dir / 'ollama.exe'
-        return gpu_dir / 'ollama'
-
-    def get_npu_executable(self):
-        """Get NPU executable path (llama-cli-npu).
-
-        Override: INTEL_AI_NPU_EXE env var.
-        Default: {NPU_PATH}/llama-cli-npu.exe (Windows) or {NPU_PATH}/llama-cli-npu
-        """
-        env_exe = os.environ.get('INTEL_AI_NPU_EXE')
-        if env_exe:
-            return Path(env_exe)
-        npu_dir = self.get_npu_path()
-        if sys.platform == 'win32':
-            return npu_dir / 'llama-cli-npu.exe'
-        return npu_dir / 'llama-cli-npu'
+        return _env_path("CLAUDE_SETTINGS_FILE", self.claude_home / "settings.json")
 
     # ---- Mode info ----
 
@@ -363,11 +281,10 @@ class PathResolver:
     def get_mode_info(self):
         """Get current mode information."""
         return {
-            'mode': self.mode,
-            'base_dir': str(self.base_dir),
-            'claude_home': str(self.claude_home),
-            'intel_ai_path': str(self.intel_ai_root),
-            'has_global_memory': self.has_global_memory,
+            "mode": self.mode,
+            "base_dir": str(self.base_dir),
+            "claude_home": str(self.claude_home),
+            "has_global_memory": self.has_global_memory,
         }
 
 
@@ -376,6 +293,7 @@ path_resolver = PathResolver()
 
 
 # Convenience functions
+
 
 def get_sessions_dir():
     """Return the sessions directory path from the global PathResolver instance.
@@ -502,60 +420,6 @@ def get_settings_file():
         Path: Absolute path to settings.json.
     """
     return path_resolver.get_settings_file()
-
-
-def get_intel_ai_path():
-    """Return the Intel AI root directory.
-
-    Returns:
-        Path: Absolute path to Intel AI root (~/intel-ai/ or INTEL_AI_PATH).
-    """
-    return path_resolver.get_intel_ai_path()
-
-
-def get_gpu_path():
-    """Return the GPU directory path.
-
-    Returns:
-        Path: Absolute path to GPU directory.
-    """
-    return path_resolver.get_gpu_path()
-
-
-def get_npu_path():
-    """Return the NPU directory path.
-
-    Returns:
-        Path: Absolute path to NPU directory.
-    """
-    return path_resolver.get_npu_path()
-
-
-def get_models_path():
-    """Return the models directory path.
-
-    Returns:
-        Path: Absolute path to models directory.
-    """
-    return path_resolver.get_models_path()
-
-
-def get_gpu_executable():
-    """Return the GPU executable path.
-
-    Returns:
-        Path: Absolute path to ollama executable.
-    """
-    return path_resolver.get_gpu_executable()
-
-
-def get_npu_executable():
-    """Return the NPU executable path.
-
-    Returns:
-        Path: Absolute path to llama-cli-npu executable.
-    """
-    return path_resolver.get_npu_executable()
 
 
 def get_telemetry_dir():

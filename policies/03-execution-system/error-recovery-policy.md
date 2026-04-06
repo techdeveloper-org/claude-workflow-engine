@@ -57,7 +57,7 @@ For transient failures (network, rate limits):
 For LLM failures:
 
 ```
-Primary LLM (Ollama local)
+Primary LLM (Claude CLI)
     |-- FAIL --> Secondary LLM (Anthropic API)
                     |-- FAIL --> Manual prompt (ask user)
 ```
@@ -140,13 +140,13 @@ When a new failure pattern is detected:
   "level": "ERROR",
   "step": 5,
   "error_type": "LLMProviderError",
-  "message": "Ollama connection refused",
+  "message": "Claude CLI unavailable",
   "recovery_action": "fallback_to_anthropic",
   "recovery_success": true,
   "stack_trace": "...",
   "context": {
-    "model": "qwen2.5-coder:7b",
-    "endpoint": "http://localhost:11434"
+    "model": "claude-sonnet-4-6",
+    "provider": "anthropic"
   }
 }
 ```

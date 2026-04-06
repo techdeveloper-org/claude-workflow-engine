@@ -23,7 +23,7 @@ lizard>=1.17.0              # Multi-language cyclomatic complexity (Python/Java/
 # LLM & AI INTEGRATION
 # ============================================================================
 anthropic==0.50.0           # Anthropic SDK for Claude API
-requests>=2.31.0            # HTTP requests for Ollama API
+requests>=2.31.0            # HTTP requests for external API calls
 
 # ============================================================================
 # LANGGRAPH CHECKPOINTING

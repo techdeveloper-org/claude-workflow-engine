@@ -84,6 +84,7 @@ Engine does:
 | **v1.15.0** | **8** | **2 (subprocess)** | **~15s** | TOON compression removed from Level 1 |
 | **v1.15.1** | **8** | **2 (subprocess)** | **~15s** | Source cleanup: deprecated modules and associated tests, policy docs, and config entries removed |
 | **v1.15.2** | **8** | **2 (subprocess)** | **~15s** | Exhaustive artifact purge: TOON/plan-mode/skill-selection removed; prompt_gen bug fixes (argparse + /25 scale) |
+| **v1.15.3** | **8** | **2 (subprocess)** | **~15s** | Dead LLM provider purge: Ollama/NPU/GPU/OpenAI/DeepSeek/inference_router removed; 2-provider chain (claude_cli + anthropic) |
 
 > **Template Fast-Path (unchanged from v1.8.0):** Pre-built orchestration prompt skips Step 0 entirely, jumps to Step 8. Drops planning time to ~0s.
 
@@ -472,7 +473,7 @@ After:  Calculator.add ->> Calculator._validate: _validate(x)   (exact class + p
   "edges": [
     {
       "from": "...::Orchestrator.run",
-      "to": "...::HybridInferenceManager.invoke",
+      "to": "...::llm_call",
       "line": 145,
       "type": "method_call",
       "resolved": true
@@ -480,7 +481,7 @@ After:  Calculator.add ->> Calculator._validate: _validate(x)   (exact class + p
   ],
   "call_paths": [
     {
-      "path": ["main", "run_langgraph_engine", "Orchestrator.run", "HybridInferenceManager.invoke", "LazyClient.get"],
+      "path": ["main", "run_langgraph_engine", "Orchestrator.run", "llm_call", "LazyClient.get"],
       "depth": 5,
       "total_complexity": 45
     }
@@ -584,32 +585,26 @@ and points to `mcp-{name}/server.py` in the local workspace.
 >
 > **Total:** 13 server repos + 1 shared base = [14 repos](https://github.com/orgs/techdeveloper-org/repositories) under `techdeveloper-org`
 
-### Hybrid LLM Inference (4 providers)
+### Hybrid LLM Inference (2 providers)
 
-The engine supports 4 LLM providers. Each provider is **independently selectable** — you choose your primary, and Ollama always serves as the safety net fallback since it runs locally and never goes down.
+The engine supports 2 LLM providers. Each provider is **independently selectable** — you choose your primary and the engine falls back through the chain automatically.
 
 ```
 Provider options:
-  openai     → OpenAI GPT API   (needs OPENAI_API_KEY)
-  anthropic  → Anthropic Claude API  (needs ANTHROPIC_API_KEY)
   claude_cli → Claude Code CLI  (uses your Anthropic subscription)
-  ollama     → Local Ollama GPU (free, no API key, always available)
-  auto       → tries all in order: Ollama → Claude CLI → Anthropic → OpenAI
+  anthropic  → Anthropic Claude API  (needs ANTHROPIC_API_KEY)
+  auto       → tries all in order: Claude CLI → Anthropic
 
 Default fallback strategy:
-  LLM_PROVIDER=openai     → OpenAI first,     fallback → Ollama
-  LLM_PROVIDER=anthropic  → Anthropic first,  fallback → Ollama
-  LLM_PROVIDER=claude_cli → Claude CLI first, fallback → Ollama
-  LLM_PROVIDER=ollama     → Ollama only       (no fallback needed)
-  LLM_PROVIDER=auto       → all 4 in order    (full chain)
+  LLM_PROVIDER=claude_cli → Claude CLI first, fallback → anthropic
+  LLM_PROVIDER=anthropic  → Anthropic only
+  LLM_PROVIDER=auto       → both in order    (full chain)
 ```
-
-**Why Ollama as default fallback?** It runs locally — no API key, no rate limits, no network dependency. Even if your cloud API fails (wrong key, rate limit, outage), the pipeline continues uninterrupted.
 
 **Custom fallback** — override via `LLM_FALLBACK`:
 ```bash
-LLM_PROVIDER=openai
-LLM_FALLBACK=anthropic,ollama   # OpenAI → Anthropic → Ollama
+LLM_PROVIDER=claude_cli
+LLM_FALLBACK=anthropic   # Claude CLI → Anthropic
 ```
 
 - Complexity-based model selection (simple=fast model, complex=powerful model)
@@ -656,7 +651,7 @@ policies/
 | **8-Step Active Pipeline** | All active steps produce real output (Pre-0, Step 0, Steps 8-14). Steps 1-7 consolidated into Step 0 (v1.13-v1.14). |
 | **4-Level Architecture** | Level -1 → Level 1 → Level 2 → Level 3, fully operational |
 | **13 MCP Servers** | 295 tools — all 13 in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories); 1 also keeps an in-engine copy in `src/mcp/` |
-| **LLM Provider Routing** | Official Anthropic SDK (auto-retry, typed errors). 4 providers: Ollama · Anthropic · Claude CLI · OpenAI. Specific provider → Ollama fallback by default. |
+| **LLM Provider Routing** | Official Anthropic SDK (auto-retry, typed errors). 2 providers: Claude CLI · Anthropic. Auto fallback chain: claude_cli → anthropic. |
 | **GitHub Integration** | Issue, branch, PR, merge, review loop (Steps 8–12) |
 | **Jira Integration** | Dual issue tracking, full lifecycle: Create→InProgress→InReview→Done (Steps 8–12) |
 | **Figma Integration** | Component extraction (Step 3), design tokens (Step 7), fidelity review (Step 11) |
@@ -928,7 +923,6 @@ No pipeline interruption. No crash. Just a warning and normal execution.
 
 - Python 3.8+
 - GitHub CLI (`gh`) installed and authenticated
-- Ollama (optional, for local GPU inference)
 
 ### Installation
 
@@ -1480,43 +1474,33 @@ ENABLE_CI=false
 |----------|---------|-------------|
 | `CLAUDE_HOOK_MODE` | `1` | **Controls how many steps run.** `1` = Hook Mode (Pre-0, Step 0, Steps 8-9 -- generates prompt + creates issue/branch, you implement). `0` = Full Mode (all 8 active steps including implementation, PR, and issue closure). Use `1` for daily work, `0` for full automation. |
 | `CLAUDE_DEBUG` | `0` | **Enables verbose logging.** `1` = prints every LLM call, every state transition, every decision. Useful when a step fails and you need to see exactly what happened. |
-| `INFERENCE_MODE` | `auto` | **Which hardware to use for AI inference.** `auto` = smart routing (simple tasks to NPU, complex to GPU). `gpu_only` = only use Ollama GPU. `npu_only` = only use Intel NPU. Most users should leave this as `auto`. |
+| `LLM_PROVIDER` | `auto` | **Which AI provider to use.** `auto` = try all providers in fallback order (claude_cli -> anthropic). Most users should leave this as `auto`. |
 
 ### LLM Provider Settings
 
-Set your primary provider in `.env`. Ollama is always the default fallback unless you override it with `LLM_FALLBACK`.
+Set your primary provider in `.env`. The default fallback chain is `claude_cli → anthropic`. Override with `LLM_FALLBACK`.
 
 | Variable | Default | What It Does |
 |----------|---------|-------------|
-| `LLM_PROVIDER` | `auto` | **Which AI provider to use.** Options: `auto` (try all), `anthropic`, `openai`, `claude_cli`, `ollama`. When set to a specific provider, Ollama is automatically used as fallback. |
-| `LLM_FALLBACK` | _(ollama)_ | **Override the default fallback chain.** Comma-separated: `LLM_FALLBACK=anthropic,ollama`. Leave unset to use Ollama as fallback (recommended). |
-| `OLLAMA_ENDPOINT` | `http://localhost:11434` | **Where Ollama GPU server is running.** Change this if Ollama runs on a different port or remote machine. |
-| `OLLAMA_MODEL_FAST` | `qwen2.5:7b` | **Ollama model for fast tasks** (classification, JSON, yes/no). |
-| `OLLAMA_MODEL_DEEP` | `qwen2.5:14b` | **Ollama model for deep tasks** (planning, complex reasoning). |
+| `LLM_PROVIDER` | `auto` | **Which AI provider to use.** Options: `auto` (try all), `claude_cli`, `anthropic`. |
+| `LLM_FALLBACK` | _(auto chain)_ | **Override the default fallback chain.** Comma-separated: `LLM_FALLBACK=claude_cli,anthropic`. |
 | `ANTHROPIC_API_KEY` | _(none)_ | **Your Anthropic API key.** Required for `LLM_PROVIDER=anthropic`. Uses official `anthropic` Python SDK with auto-retry. Get from console.anthropic.com. |
 | `ANTHROPIC_MODEL_FAST` | `claude-haiku-4-5` | **Anthropic model for fast tasks.** |
 | `ANTHROPIC_MODEL_BALANCED` | `claude-sonnet-4-6` | **Anthropic model for balanced tasks.** |
 | `ANTHROPIC_MODEL_DEEP` | `claude-opus-4-6` | **Anthropic model for deep reasoning.** |
-| `OPENAI_API_KEY` | _(none)_ | **Your OpenAI API key.** Required for `LLM_PROVIDER=openai`. |
-| `OPENAI_MODEL_FAST` | `gpt-4o-mini` | **OpenAI model for fast tasks.** |
-| `OPENAI_MODEL_DEEP` | `gpt-4o` | **OpenAI model for deep tasks.** |
 | `GITHUB_TOKEN` | _(none)_ | **GitHub personal access token.** Required for Steps 8-12 (issue creation, branch, PR). Without this, the pipeline stops at Step 7. Falls back to `gh auth token` if not set. |
 
 **Quick setup examples:**
 
 ```bash
-# Use OpenAI, fall back to Ollama if it fails
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
+# Use Claude CLI (Anthropic subscription, no extra API key needed)
+LLM_PROVIDER=claude_cli
 
-# Use Anthropic Claude directly, fall back to Ollama
+# Use Anthropic Claude API directly
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Use local Ollama only (completely free, no API key)
-LLM_PROVIDER=ollama
-
-# Let engine decide (tries Ollama first, then cloud)
+# Let engine decide (tries claude_cli first, then anthropic)
 LLM_PROVIDER=auto
 ```
 
@@ -1615,42 +1599,17 @@ sessions = get_session_logs_dir()  # ~/.claude/logs/sessions/
 
 **21 files** in the engine import from `path_resolver.py`. Change one path there = all 21 files automatically update. Zero hardcoded absolute paths in the codebase.
 
-#### Intel AI Directories
-
-These are where GPU and NPU hardware inference runs from. Only needed if you use local AI models (Ollama, Intel AI Boost).
-
-| Variable | Default | What It Is | Why It Exists |
-|----------|---------|-----------|---------------|
-| `INTEL_AI_PATH` | `~/intel-ai/` | **Root directory for all Intel AI tools and models.** Contains GPU (Ollama), NPU (llama-cli), and model files. On Windows: `C:\Users\you\intel-ai\`, on Linux: `/home/you/intel-ai/`. | This is the base that GPU/NPU/Models paths are built from. Set this once and all sub-paths inherit it. If you installed Intel AI tools in a custom location, just set this one variable. |
-| `INTEL_AI_GPU_PATH` | `~/intel-ai/gpu/` | **Directory containing the Ollama GPU server.** Has `ollama.exe` (Windows) or `ollama` (Linux/Mac) and its configuration. | Ollama with Intel Arc GPU drivers for fast local inference. The engine starts and manages this server automatically. |
-| `INTEL_AI_NPU_PATH` | `~/intel-ai/npu/` | **Directory containing the Intel AI Boost NPU CLI.** Has `llama-cli-npu.exe` (Windows) for running models on Intel's Neural Processing Unit. | NPU is 2-3x faster than GPU for simple classification tasks. Used for Step 1 (plan decision) and Step 3 (task breakdown) where speed matters more than quality. |
-| `INTEL_AI_MODELS_PATH` | `~/intel-ai/models/` | **Where AI model files are stored.** Sub-directories: `gpu/` (Ollama models), `npu/` (GGUF files for NPU), `openvino-npu/` (OpenVINO optimized models). | Model files are large (1-8 GB each). Keeping them in one place makes it easy to manage, backup, or move them. The model discovery system scans this directory to find available models. |
-| `INTEL_AI_GPU_EXE` | `~/intel-ai/gpu/ollama[.exe]` | **Exact path to the Ollama executable.** Automatically appends `.exe` on Windows. | Override if your Ollama is installed system-wide (e.g., `/usr/local/bin/ollama` on Linux) instead of in the Intel AI directory. |
-| `INTEL_AI_NPU_EXE` | `~/intel-ai/npu/llama-cli-npu[.exe]` | **Exact path to the NPU CLI executable.** Automatically appends `.exe` on Windows. | Override if your NPU tools are in a non-standard location. |
-
 #### How Paths Work Across Platforms
 
 ```
 Windows user "alice":
   CLAUDE_HOME     = C:\Users\alice\.claude\
-  INTEL_AI_PATH   = C:\Users\alice\intel-ai\
-  GPU executable  = C:\Users\alice\intel-ai\gpu\ollama.exe
 
 Linux user "bob":
   CLAUDE_HOME     = /home/bob/.claude/
-  INTEL_AI_PATH   = /home/bob/intel-ai/
-  GPU executable  = /home/bob/intel-ai/gpu/ollama
 
 Mac user "carol":
   CLAUDE_HOME     = /Users/carol/.claude/
-  INTEL_AI_PATH   = /Users/carol/intel-ai/
-  GPU executable  = /Users/carol/intel-ai/gpu/ollama
-
-Custom override (any OS):
-  export INTEL_AI_PATH=/opt/ai-models
-  -> GPU path becomes /opt/ai-models/gpu/
-  -> NPU path becomes /opt/ai-models/npu/
-  -> Models path becomes /opt/ai-models/models/
 ```
 
 #### Quick Setup Example
@@ -1659,9 +1618,6 @@ Custom override (any OS):
 # Minimum required (most users)
 cp .env.example .env
 # Edit .env: set GITHUB_TOKEN=ghp_your_token
-
-# If Intel AI tools are in a custom location
-export INTEL_AI_PATH=/path/to/your/intel-ai
 
 # If Claude home is non-standard
 export CLAUDE_HOME=/path/to/your/.claude
@@ -1675,6 +1631,7 @@ export CLAUDE_HOME=/path/to/your/.claude
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v1.15.3** | 2026-04-06 | Dead LLM provider purge: Ollama, NPU, GPU, OpenAI, DeepSeek, inference_router, hybrid_inference deleted. LLM chain reduced to 2 providers (claude_cli + anthropic). All references removed from policies, docs, config, tests. |
 | **v1.15.2** | 2026-04-05 | Exhaustive artifact purge: TOON/plan-mode/skill-selection all deleted. prompt_gen_expert_caller.py argparse fix (--complexity=N form) + /10 -> /25 display. Stale test files removed. Policy dirs cleaned. |
 | **v1.14.0** | 2026-04-04 | Step 0 redesign: 2 claude CLI subprocess calls (prompt-gen-expert + orchestrator-agent). Template stored in `level3_execution/templates/`. `call_streaming_script()` helper with inherited stderr for real-time terminal output. Step 2 (Plan Mode) removed. Planning time: ~75s -> ~15s. |
 | **v1.13.0** | 2026-04-03 | Level 3 simplification: removed Steps 1,3,4,5,6,7. Pipeline 15 steps -> 9 steps. Step 0 collapsed all planning into 1 template call. `docs/impact_map.md` architecture blueprint created. |

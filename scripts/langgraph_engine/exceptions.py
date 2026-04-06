@@ -36,10 +36,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-
 # ---------------------------------------------------------------------------
 # Base exception
 # ---------------------------------------------------------------------------
+
 
 class WorkflowEngineError(Exception):
     """Base exception for all Claude Workflow Engine errors.
@@ -76,6 +76,7 @@ class WorkflowEngineError(Exception):
 # ---------------------------------------------------------------------------
 # Specialised exceptions
 # ---------------------------------------------------------------------------
+
 
 class PolicyExecutionError(WorkflowEngineError):
     """Raised when a policy script fails or returns a non-passing result.
@@ -137,7 +138,7 @@ class GitHubAPIError(WorkflowEngineError):
 class ConfigurationError(WorkflowEngineError):
     """Raised when required configuration is missing or invalid.
 
-    Examples: GITHUB_TOKEN not set, Ollama endpoint unreachable,
+    Examples: GITHUB_TOKEN not set, LLM_PROVIDER misconfigured,
     required policy directory absent, invalid JSON in a config file.
 
     Args:

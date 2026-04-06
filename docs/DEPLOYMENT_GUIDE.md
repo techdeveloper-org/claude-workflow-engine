@@ -15,8 +15,6 @@
 | Git | 2.40 | Required for GitPython |
 | Docker | 24.0 | Optional (local dev only) |
 | Docker Compose | 2.20 | Optional (local dev only) |
-| NVIDIA GPU driver | 525+ | Optional (Ollama GPU inference) |
-| Ollama | 0.1.30 | Optional (local LLM fallback) |
 
 ---
 
@@ -156,9 +154,7 @@ readinessProbe:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | Yes* | — | Claude API key. Required if Anthropic is the primary provider. |
-| `OPENAI_API_KEY` | No | — | OpenAI API key. Used as second fallback. |
 | `GITHUB_TOKEN` | Yes | — | GitHub personal access token (repo + issues scope). |
-| `OLLAMA_ENDPOINT` | No | `http://localhost:11434` | Ollama server URL for local LLM inference. |
 | `CLAUDE_HOOK_MODE` | No | `1` | `1` = Hook mode (Steps 0-9). `0` = Full mode (Steps 0-14). |
 | `CLAUDE_DEBUG` | No | `0` | `1` = verbose debug logging. |
 | `ENABLE_JIRA` | No | `0` | `1` = enable Jira issue tracking (Steps 8, 9, 11, 12). |
@@ -172,7 +168,7 @@ readinessProbe:
 | `FIGMA_TOKEN` | No* | — | Required when `ENABLE_FIGMA=1`. |
 | `SONARQUBE_URL` | No* | — | Required when `ENABLE_SONARQUBE=1`. |
 | `SONARQUBE_TOKEN` | No* | — | Required when `ENABLE_SONARQUBE=1`. |
-| `FORCE_LLM_PROVIDER` | No | — | Force a specific provider: `anthropic`, `openai`, `ollama`, `npu`. |
+| `FORCE_LLM_PROVIDER` | No | — | Force a specific provider: `claude_cli`, `anthropic`. |
 | `FORCE_GRAPH_REBUILD` | No | — | `1` = always rebuild call graph regardless of stale flag. |
 
 *Required only when the corresponding integration is enabled.

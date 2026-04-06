@@ -165,7 +165,7 @@ def _parse_simplify_response(response: str) -> List[str]:
 def run_simplify_review(diff_text: str) -> List[str]:
     """Run LLM-powered simplify review on PR diff for reuse, quality, efficiency.
 
-    Uses llm_call (Ollama -> claude CLI fallback) to analyze the diff
+    Uses llm_call (claude_cli / anthropic provider chain) to analyze the diff
     similar to Claude Code's /simplify command. Returns actionable issues.
     Non-blocking: returns empty list on failure.
 

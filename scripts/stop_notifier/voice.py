@@ -134,88 +134,6 @@ def get_session_summary_for_voice():
 
 
 # =============================================================================
-# LLM MESSAGE GENERATION (Local Ollama)
-# =============================================================================
-
-
-def generate_dynamic_message(event_type, context=""):
-    """
-    Call local Ollama LLM to generate a natural, dynamic voice message.
-    Returns message string or None (caller uses static fallback).
-    No cloud API required - local only.
-    """
-    log_s(f"[llm] Starting local Ollama call for {event_type}")
-
-    hour = datetime.now().hour
-    if hour < 12:
-        time_context = "morning"
-    elif hour < 17:
-        time_context = "afternoon"
-    else:
-        time_context = "evening"
-
-    # Build the user prompt based on event type
-    if event_type == "session_start":
-        user_prompt = f"It is {time_context}. A new coding session just started. " f"Generate a greeting for the user."
-        if context:
-            user_prompt += f" Context: {context}"
-
-    elif event_type == "task_complete":
-        user_prompt = "A coding task was just completed."
-        if context:
-            user_prompt += f" Here is what was done: {context}."
-        user_prompt += " Generate a brief completion notification."
-
-    elif event_type == "work_done":
-        user_prompt = (
-            f"All coding tasks for this session are done. It is {time_context}. "
-            f"Generate a comprehensive wrap-up summary like telling a short story. "
-            f"Mention what was accomplished, how many tasks, what types of work. "
-            f"Keep it 3-4 sentences, warm and appreciative tone."
-        )
-        if context:
-            user_prompt += f" Session details: {context}."
-
-    else:
-        user_prompt = f"Generate a brief notification. Context: {context}"
-
-    # OLLAMA ONLY: Local LLM (no cloud fallback)
-    # If Ollama unavailable, uses static fallback messages
-    try:
-        log_s(f"[ollama] Trying local: {OLLAMA_MODEL}")
-        payload = json.dumps(
-            {
-                "model": OLLAMA_MODEL,
-                "messages": [
-                    {"role": "system", "content": VOICE_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "max_tokens": 60,
-                "temperature": 0.7,
-            }
-        ).encode("utf-8")
-
-        req = urllib_request.Request(
-            OLLAMA_URL, data=payload, headers={"Content-Type": "application/json"}, method="POST"
-        )
-        with urllib_request.urlopen(req, timeout=60) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            message = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            if message:
-                message = message.replace("*", "").replace("#", "").replace("`", "")
-                message = message.replace("\n", " ").strip()
-                if message.startswith('"') and message.endswith('"'):
-                    message = message[1:-1]
-                log_s(f"[ollama] SUCCESS: {message[:80]}")
-                return message
-    except Exception as e:
-        log_s(f"[ollama] Unavailable (local only): {str(e)[:80]} -> using static fallback")
-
-    log_s("[llm] Ollama not available - using static fallback message")
-    return None
-
-
-# =============================================================================
 # SPEAK VIA voice-notifier.py
 # =============================================================================
 
@@ -289,43 +207,30 @@ def get_work_done_default():
 def handle_voice_flag(flag_path, event_type, get_default_fn, extra_context=""):
     """
     Unified voice handler for any flag type.
-    v4.0.0: Simple, reliable flow:
-      1. Read original message from flag
-      2. Build context (original message + extra_context like session summary)
-      3. Try LLM with context
-      4. If LLM fails -> use static default (NEVER speak raw flag content)
-      5. Speak the message
-      6. Always delete flag (no retry accumulation)
+    v4.3.0: Static messages only (Ollama removed):
+      1. Read original message from flag (for logging context only)
+      2. Use static default message
+      3. Speak the message
+      4. Always delete flag (no retry accumulation)
 
     Returns True if spoke something.
     """
     if not flag_path.exists():
         return False
 
-    # Step 1: Read original message from flag
+    # Step 1: Read original message from flag (logging only)
     original_message = read_flag_message(flag_path)
     log_s(f"[{event_type}] Flag found, original message: {original_message[:80]}")
 
-    # Step 2: Build LLM context from original message + session summary
-    llm_context = ""
-    if original_message:
-        llm_context = original_message
-    if extra_context:
-        llm_context = f"{llm_context}. {extra_context}" if llm_context else extra_context
+    # Step 2: Use static default message (no LLM call)
+    message = get_default_fn()
+    log_s(f"[{event_type}] Using static message: {message[:80]}")
 
-    # Step 3: Try LLM for dynamic message
-    message = generate_dynamic_message(event_type, llm_context)
-
-    # Step 4: If LLM fails, use static default (NEVER the raw flag content)
-    if not message:
-        message = get_default_fn()
-        log_s(f"[{event_type}] Using static fallback: {message[:80]}")
-
-    # Step 5: Speak
+    # Step 3: Speak
     print(f"[VOICE] {event_type} notification...")
     speak(message)
 
-    # Step 6: Always delete flag - no retry accumulation
+    # Step 4: Always delete flag - no retry accumulation
     delete_flag(flag_path)
 
     return True

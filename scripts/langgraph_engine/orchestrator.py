@@ -978,7 +978,7 @@ def create_flow_graph(hook_mode: bool = False):
     # Only used when running pipeline standalone (not as hook)
     # ========================================================================
 
-    # Step 10: Implementation (in full mode, calls hybrid_inference)
+    # Step 10: Implementation (in full mode)
     graph.add_node("level3_step10", step10_implementation_note)
     graph.add_edge("level3_step9", "level3_step10")
 

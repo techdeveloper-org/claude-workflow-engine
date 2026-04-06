@@ -184,7 +184,7 @@ If Anthropic embedded even a subset of this into Claude Code:
 **Why:** Stale context from Phase 1 can mislead Claude when working on Phase 2. The graph ensures each phase starts with a clean, accurate picture of its scope.
 
 ### Lesson 5: "Step 10 is Claude Code Itself"
-Claude's Step 10 (Implementation) should NOT be another LLM call to Ollama/API. It IS Claude Code doing the actual work. The pipeline generates the perfect prompt (Steps 0-7), creates the GitHub issue/branch (Steps 8-9), then Claude Code reads that prompt and implements. Steps 11-14 handle PR/review/merge after.
+Claude's Step 10 (Implementation) should NOT be another LLM call to an external API. It IS Claude Code doing the actual work. The pipeline generates the perfect prompt (Steps 0-7), creates the GitHub issue/branch (Steps 8-9), then Claude Code reads that prompt and implements. Steps 11-14 handle PR/review/merge after.
 
 ### Lesson 6: "Show Your Work via TaskCreate"
 When breaking tasks into phases, Claude should use TaskCreate to make the breakdown visible to the user - including which skills/agents are assigned to each phase. Transparency builds trust.

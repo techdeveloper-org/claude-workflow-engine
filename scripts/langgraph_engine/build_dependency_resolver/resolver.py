@@ -90,7 +90,6 @@ PYTHON_WELL_KNOWN = frozenset(
         "transformers",
         "langchain",
         "langgraph",
-        "openai",
         "anthropic",
         "loguru",
         "structlog",

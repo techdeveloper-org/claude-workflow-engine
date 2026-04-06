@@ -334,22 +334,11 @@ def print_flow_checkpoint(state: FlowState, verbose: bool = False) -> None:
     status = state.get("final_status", "UNKNOWN")
     session_id = state.get("session_id", "SESSION-UNKNOWN")
     context_pct = state.get("context_percentage", 0)
-    model = state.get("step4_model", "complex_reasoning")  # Ollama model (was: haiku for Claude)
+    model = state.get("step4_model", "complex_reasoning")
     synthesized_prompt = state.get("synthesized_prompt", "")
-
-    # Check Ollama status and warn if down
-    ollama_status = "UP"
-    try:
-        import urllib.request
-
-        urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=3)
-    except Exception:
-        ollama_status = "DOWN"
 
     print("\n[FLOW CHECKPOINT]")
     print(f"  Status: {status}")
-    if ollama_status == "DOWN":
-        print("  WARNING: Ollama is DOWN - LLM steps (0,1,5,8) will use fallback/fail")
     print(f"  Session: {session_id}")
     print(f"  Context: {context_pct:.1f}%")
     print(f"  Model: {model}")

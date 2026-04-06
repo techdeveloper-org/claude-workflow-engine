@@ -7,24 +7,16 @@ Design Patterns:
   - Singleton: Each provider instantiated once, reused across all calls
   - Factory: get_providers() builds the chain from configuration
 
-Providers (4 options):
-  1. ollama      - Local LLM (free, no API key, needs Ollama running)
-  2. claude_cli  - Claude Code CLI (uses your Anthropic subscription)
-  3. anthropic   - Anthropic API direct (needs ANTHROPIC_API_KEY)
-  4. openai      - OpenAI API (needs OPENAI_API_KEY)
+Providers (2 options):
+  1. claude_cli  - Claude Code CLI (uses your Anthropic subscription)
+  2. anthropic   - Anthropic API direct (needs ANTHROPIC_API_KEY)
 
 Configuration (env vars):
-  LLM_PROVIDER=auto            # auto | ollama | claude_cli | anthropic | openai
-  LLM_FALLBACK=claude_cli      # Fallback provider (comma-separated for chain)
-  OLLAMA_ENDPOINT=http://localhost:11434/api/generate
-  OLLAMA_MODEL_FAST=qwen2.5:7b
-  OLLAMA_MODEL_DEEP=qwen2.5:14b
+  LLM_PROVIDER=auto            # auto | claude_cli | anthropic
+  LLM_FALLBACK=anthropic       # Fallback provider (comma-separated for chain)
   ANTHROPIC_API_KEY=sk-ant-...
   ANTHROPIC_MODEL_FAST=claude-haiku-4-5-20251001
   ANTHROPIC_MODEL_DEEP=claude-opus-4-6-20250514
-  OPENAI_API_KEY=sk-...
-  OPENAI_MODEL_FAST=gpt-4o-mini
-  OPENAI_MODEL_DEEP=gpt-4o
 
 Model tiers (same across all providers):
   fast     -> classification, JSON, yes/no, titles
@@ -42,13 +34,12 @@ Usage (unchanged - backward compatible):
     response = llm_call(prompt, model="fast", temperature=0.1)
 """
 
-import os
-import json
 import logging
-import subprocess
+import os
 import shutil
+import subprocess
 from abc import ABC, abstractmethod
-from typing import Optional, List
+from typing import List, Optional
 
 _log = logging.getLogger(__name__)
 
@@ -56,6 +47,7 @@ _log = logging.getLogger(__name__)
 # =============================================================================
 # INTERFACE: LLMProvider (Strategy Pattern)
 # =============================================================================
+
 
 class LLMProvider(ABC):
     """Abstract interface for LLM providers.
@@ -103,76 +95,9 @@ class LLMProvider(ABC):
 
 
 # =============================================================================
-# IMPLEMENTATION: OllamaProvider
-# =============================================================================
-
-class OllamaProvider(LLMProvider):
-    """Local Ollama LLM provider (free, no API key needed)."""
-
-    def __init__(self):
-        self._endpoint = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434/api/generate")
-        self._model_fast = os.getenv("OLLAMA_MODEL_FAST", os.getenv("OLLAMA_MODEL", "qwen2.5:7b"))
-        self._model_deep = os.getenv("OLLAMA_MODEL_DEEP", "qwen2.5:14b")
-        self._available = None  # Lazy: checked on first call, not at import
-
-    @property
-    def name(self) -> str:
-        return "ollama"
-
-    def is_available(self) -> bool:
-        if self._available is None:
-            self._available = self._check_health()
-        return self._available
-
-    def _check_health(self) -> bool:
-        """Check Ollama server health (3s timeout)."""
-        try:
-            import urllib.request
-            from urllib.parse import urlparse
-            parsed = urlparse(self._endpoint)
-            health_url = f"{parsed.scheme}://{parsed.netloc}/api/tags"
-            with urllib.request.urlopen(urllib.request.Request(health_url), timeout=3) as resp:
-                return resp.status == 200
-        except Exception:
-            return False
-
-    def call(self, prompt, model="fast", temperature=0.3, timeout=120, json_mode=False):
-        if not self.is_available():
-            return None
-
-        import urllib.request
-
-        ollama_model = self._model_deep if model in ("deep", "complex_reasoning", "planning") else self._model_fast
-
-        try:
-            payload = {
-                "model": ollama_model,
-                "prompt": prompt,
-                "stream": False,
-                "temperature": temperature,
-                "options": {"num_ctx": 16384, "num_predict": 2048},
-            }
-            if json_mode:
-                payload["format"] = "json"
-
-            req = urllib.request.Request(
-                self._endpoint,
-                data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=min(timeout, 30)) as resp:
-                result = json.loads(resp.read().decode())
-                text = result.get("response", "").strip()
-                if text:
-                    return text
-        except Exception as exc:
-            _log.debug("OllamaProvider call failed: %s", exc)
-        return None
-
-
-# =============================================================================
 # IMPLEMENTATION: ClaudeCLIProvider
 # =============================================================================
+
 
 class ClaudeCLIProvider(LLMProvider):
     """Claude Code CLI provider (uses user's Anthropic subscription)."""
@@ -229,77 +154,9 @@ class ClaudeCLIProvider(LLMProvider):
 
 
 # =============================================================================
-# IMPLEMENTATION: OpenAIProvider
-# =============================================================================
-
-class OpenAIProvider(LLMProvider):
-    """OpenAI API provider (requires OPENAI_API_KEY)."""
-
-    MODEL_MAP = {
-        "fast": "gpt-4o-mini",
-        "balanced": "gpt-4o",
-        "deep": "gpt-4o",
-        "fast_classification": "gpt-4o-mini",
-        "complex_reasoning": "gpt-4o",
-        "synthesis": "gpt-4o",
-        "planning": "gpt-4o",
-        "code_review": "gpt-4o",
-    }
-
-    def __init__(self):
-        self._api_key = os.getenv("OPENAI_API_KEY", "")
-        self._base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1/chat/completions")
-        # Allow model override via env
-        self._model_fast = os.getenv("OPENAI_MODEL_FAST", self.MODEL_MAP["fast"])
-        self._model_deep = os.getenv("OPENAI_MODEL_DEEP", self.MODEL_MAP["deep"])
-        self._available = bool(self._api_key)
-
-    @property
-    def name(self) -> str:
-        return "openai"
-
-    def is_available(self) -> bool:
-        return self._available
-
-    def call(self, prompt, model="fast", temperature=0.3, timeout=120, json_mode=False):
-        if not self._available:
-            return None
-
-        import urllib.request
-
-        openai_model = self._model_deep if model in ("deep", "complex_reasoning", "planning") else self._model_fast
-
-        try:
-            payload = {
-                "model": openai_model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": temperature,
-                "max_tokens": 2048,
-            }
-            if json_mode:
-                payload["response_format"] = {"type": "json_object"}
-
-            req = urllib.request.Request(
-                self._base_url,
-                data=json.dumps(payload).encode(),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self._api_key}",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=min(timeout, 60)) as resp:
-                result = json.loads(resp.read().decode())
-                text = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-                if text:
-                    return text
-        except Exception as exc:
-            _log.debug("OpenAIProvider call failed: %s", exc)
-        return None
-
-
-# =============================================================================
 # IMPLEMENTATION: AnthropicProvider (Direct Claude API via SDK)
 # =============================================================================
+
 
 class AnthropicProvider(LLMProvider):
     """Anthropic API provider (direct Claude API, requires ANTHROPIC_API_KEY).
@@ -335,6 +192,7 @@ class AnthropicProvider(LLMProvider):
         if self._client is None:
             try:
                 import anthropic as _anthropic_sdk
+
                 kwargs = {"api_key": self._api_key, "max_retries": 2}
                 if self._base_url:
                     kwargs["base_url"] = self._base_url
@@ -381,9 +239,7 @@ class AnthropicProvider(LLMProvider):
                 temperature=temperature,
                 timeout=min(timeout, 60),
             )
-            text = next(
-                (block.text for block in response.content if block.type == "text"), ""
-            ).strip()
+            text = next((block.text for block in response.content if block.type == "text"), "").strip()
             return text if text else None
 
         except _anthropic_sdk.AuthenticationError:
@@ -418,9 +274,7 @@ DEFAULT_TEMPERATURES = {
 
 # Provider registry (Singleton instances)
 _PROVIDER_REGISTRY = {
-    "ollama": OllamaProvider,
     "claude_cli": ClaudeCLIProvider,
-    "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
 }
 
@@ -432,15 +286,13 @@ def _build_provider_chain() -> List[LLMProvider]:
 
     Configuration via env vars:
       LLM_PROVIDER=auto       -> try all available providers (default)
-      LLM_PROVIDER=ollama     -> Ollama only (no fallback needed, always local)
-      LLM_PROVIDER=anthropic  -> Anthropic API first, fallback to Ollama
-      LLM_PROVIDER=openai     -> OpenAI first, fallback to Ollama
-      LLM_PROVIDER=claude_cli -> Claude CLI first, fallback to Ollama
-      LLM_FALLBACK=anthropic  -> override the default Ollama fallback (comma-separated)
+      LLM_PROVIDER=anthropic  -> Anthropic API first, then LLM_FALLBACK chain
+      LLM_PROVIDER=claude_cli -> Claude CLI first, then LLM_FALLBACK chain
+      LLM_FALLBACK=anthropic  -> explicit fallback chain (comma-separated)
 
     Default fallback strategy:
-      - Specific provider set -> fallback to Ollama (always available locally)
-      - auto mode             -> try all providers in order
+      - auto mode             -> try all providers: claude_cli -> anthropic
+      - Specific provider set -> use that provider; apply LLM_FALLBACK if set
       - LLM_FALLBACK set      -> use user's explicit fallback (overrides default)
 
     Returns:
@@ -450,16 +302,13 @@ def _build_provider_chain() -> List[LLMProvider]:
     fallback_str = os.getenv("LLM_FALLBACK", "").strip()
 
     if primary == "auto":
-        # Auto mode: try Ollama -> Claude CLI -> Anthropic API -> OpenAI
-        order = ["ollama", "claude_cli", "anthropic", "openai"]
+        # Auto mode: try Claude CLI -> Anthropic API
+        order = ["claude_cli", "anthropic"]
     else:
         order = [primary]
         if fallback_str:
             # User explicitly defined fallbacks — respect their choice
             order.extend(f.strip() for f in fallback_str.split(",") if f.strip())
-        elif primary != "ollama":
-            # Default: always fall back to Ollama (local, always available)
-            order.append("ollama")
 
     chain = []
     for provider_name in order:
@@ -480,6 +329,7 @@ _provider_chain = _build_provider_chain()
 # PUBLIC API (Backward Compatible)
 # =============================================================================
 
+
 def llm_call(
     prompt: str,
     model: str = "fast",
@@ -494,7 +344,7 @@ def llm_call(
 
     Args:
         prompt: The prompt text to send.
-        model: "fast" (haiku/mini), "balanced" (sonnet/4o), "deep" (opus/4o).
+        model: "fast" (haiku), "balanced" (sonnet), "deep" (opus).
         temperature: Override temp (default: auto per model tier).
         timeout: Max seconds to wait.
         json_mode: If True, request JSON format.
@@ -533,23 +383,22 @@ def generate_llm_commit_title(commit_type: str = None, cwd: str = None) -> Optio
     """
     try:
         stat_result = subprocess.run(
-            ['git', 'diff', '--cached', '--stat'],
-            capture_output=True, text=True, timeout=5, cwd=cwd
+            ["git", "diff", "--cached", "--stat"], capture_output=True, text=True, timeout=5, cwd=cwd
         )
         stat_text = stat_result.stdout.strip() if stat_result.returncode == 0 else ""
 
-        diff_result = subprocess.run(
-            ['git', 'diff', '--cached'],
-            capture_output=True, text=True, timeout=5, cwd=cwd
-        )
+        diff_result = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True, timeout=5, cwd=cwd)
         diff_text = diff_result.stdout[:3000] if diff_result.returncode == 0 else ""
 
         if not stat_text and not diff_text:
             return None
 
         type_hint = f"Commit type: {commit_type}\n" if commit_type else ""
-        type_rule = (f"- Start with type prefix: {commit_type}:\n" if commit_type
-                     else "- Use conventional commit format: type: description\n")
+        type_rule = (
+            f"- Start with type prefix: {commit_type}:\n"
+            if commit_type
+            else "- Use conventional commit format: type: description\n"
+        )
 
         prompt = (
             f"Generate a git commit message for these changes.\n"

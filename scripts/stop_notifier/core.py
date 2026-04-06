@@ -32,7 +32,7 @@ def main():
            b. .task-complete-voice-{PID}  -> task completion notification
            c. .session-work-done-{PID}    -> all work done wrap-up
       4. Falls back to legacy shared flag paths for backward compatibility.
-      5. Generates voice messages via local Ollama LLM or static defaults.
+      5. Generates voice messages via static defaults.
       6. Launches voice-notifier.py as a detached background process.
 
     Always exits 0.  Errors in any phase are caught and logged to

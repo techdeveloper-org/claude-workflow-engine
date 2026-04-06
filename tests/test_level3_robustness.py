@@ -10,15 +10,14 @@ All tests are self-contained and do not require external services.
 ASCII-safe, UTF-8 encoded - Windows cp1252 compatible.
 """
 
+import json
 import os
 import sys
-import json
 import tempfile
 import time
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 # ---------------------------------------------------------------------------
 # Setup mocks before importing project modules
@@ -29,12 +28,20 @@ for _mod in ["loguru", "langgraph", "langgraph.graph", "anthropic"]:
     if _mod not in sys.modules:
         sys.modules[_mod] = types.ModuleType(_mod)
 
-import loguru
+import loguru  # noqa: E402
+
 if not hasattr(loguru, "logger") or not callable(getattr(loguru.logger, "info", None)):
-    _noop = lambda *a, **kw: None
-    loguru.logger = type("_Logger", (), {
-        "info": _noop, "debug": _noop, "warning": _noop, "error": _noop,
-    })()
+    _noop = lambda *a, **kw: None  # noqa: E731
+    loguru.logger = type(
+        "_Logger",
+        (),
+        {
+            "info": _noop,
+            "debug": _noop,
+            "warning": _noop,
+            "error": _noop,
+        },
+    )()
 
 # Add scripts/ to path
 _SCRIPTS_DIR = str(Path(__file__).parent.parent / "scripts")
@@ -46,39 +53,41 @@ if _SCRIPTS_DIR not in sys.path:
 # Tests: timeout_wrapper
 # ---------------------------------------------------------------------------
 
+
 class TestStepTimeout(unittest.TestCase):
     """Tests for StepTimeout and run_with_timeout."""
 
     def setUp(self):
         from langgraph_engine.timeout_wrapper import (
-            StepTimeout, run_with_timeout, STEP_TIMEOUTS,
-            fallback_step1, fallback_step2, fallback_step5, fallback_step7
+            STEP_TIMEOUTS,
+            StepTimeout,
+            fallback_step2,
+            fallback_step7,
+            run_with_timeout,
         )
+
         self.StepTimeout = StepTimeout
         self.run_with_timeout = run_with_timeout
         self.STEP_TIMEOUTS = STEP_TIMEOUTS
-        self.fallback_step1 = fallback_step1
         self.fallback_step2 = fallback_step2
-        self.fallback_step5 = fallback_step5
         self.fallback_step7 = fallback_step7
 
     def test_step_timeouts_coverage(self):
-        """All 14 Level 3 steps should have configured timeouts."""
+        """Active Level 3 steps (Pre-0, Step 0, Steps 8-14) should have configured timeouts."""
         for step_num in range(1, 15):
             self.assertIn(step_num, self.STEP_TIMEOUTS, f"Missing timeout for Step {step_num}")
             self.assertGreater(self.STEP_TIMEOUTS[step_num], 0)
 
     def test_canonical_step_timeouts(self):
         """Specific steps must meet spec requirements."""
-        # LLM-heavy steps use 900s to allow Ollama to complete without timeout.
+        # LLM-heavy steps use 900s to allow LLM calls to complete without timeout.
         # Steps without LLM calls use shorter durations (120s).
-        self.assertEqual(self.STEP_TIMEOUTS[1], 900, "Step 1 should be 900s (Ollama classification)")
         self.assertEqual(self.STEP_TIMEOUTS[2], 900, "Step 2 should be 900s (Plan Execution - LLM loop)")
-        self.assertEqual(self.STEP_TIMEOUTS[5], 900, "Step 5 should be 900s (Skill selection + Ollama)")
         self.assertEqual(self.STEP_TIMEOUTS[7], 120, "Step 7 should be 120s (local formatting, no LLM)")
 
     def test_fast_function_returns_result(self):
         """Function completing within timeout should return its result."""
+
         def fast():
             return {"status": "ok", "value": 99}
 
@@ -88,6 +97,7 @@ class TestStepTimeout(unittest.TestCase):
 
     def test_timeout_returns_fallback(self):
         """Function exceeding timeout must return fallback result."""
+
         def slow():
             time.sleep(10)
             return {"status": "never"}
@@ -106,6 +116,7 @@ class TestStepTimeout(unittest.TestCase):
 
     def test_exception_returns_error_result(self):
         """Function raising exception should return error result, not raise."""
+
         def failing():
             raise RuntimeError("test error")
 
@@ -119,23 +130,11 @@ class TestStepTimeout(unittest.TestCase):
         self.assertFalse(result.get("timed_out", True))  # Not a timeout, but an error
         self.assertIn("error", result)
 
-    def test_fallback_step1_safe_defaults(self):
-        """fallback_step1() must default to plan_required=True for safety."""
-        fb = self.fallback_step1()
-        self.assertTrue(fb["plan_required"], "Step 1 fallback must default to plan mode")
-        self.assertEqual(fb["source"], "timeout_fallback")
-
     def test_fallback_step2_has_phases(self):
         """fallback_step2() must have a phases list."""
         fb = self.fallback_step2()
         self.assertIn("phases", fb)
         self.assertIsInstance(fb["phases"], list)
-
-    def test_fallback_step5_empty_skills(self):
-        """fallback_step5() should return empty skill/agent lists."""
-        fb = self.fallback_step5()
-        self.assertEqual(fb["selected_skills"], [])
-        self.assertEqual(fb["selected_agents"], [])
 
     def test_run_with_timeout_custom_timeout(self):
         """custom_timeout parameter overrides STEP_TIMEOUTS lookup."""
@@ -157,11 +156,13 @@ class TestStepTimeout(unittest.TestCase):
 # Tests: conflict_resolver
 # ---------------------------------------------------------------------------
 
+
 class TestConflictResolver(unittest.TestCase):
     """Tests for ConflictResolver: skill, standard, and branch conflicts."""
 
     def setUp(self):
         from langgraph_engine.conflict_resolver import ConflictResolver
+
         self.session_dir = tempfile.mkdtemp()
         self.ConflictResolver = ConflictResolver
         self.resolver = ConflictResolver(session_dir=self.session_dir)
@@ -291,11 +292,13 @@ class TestConflictResolver(unittest.TestCase):
 # Tests: review_criteria
 # ---------------------------------------------------------------------------
 
+
 class TestReviewCriteria(unittest.TestCase):
     """Tests for ReviewCriteria code review checklist."""
 
     def setUp(self):
-        from langgraph_engine.review_criteria import ReviewCriteria, REVIEW_RULES, SEVERITY_BLOCKING, SEVERITY_WARNING
+        from langgraph_engine.review_criteria import REVIEW_RULES, SEVERITY_BLOCKING, SEVERITY_WARNING, ReviewCriteria
+
         self.tmpdir = tempfile.mkdtemp()
         self.criteria = ReviewCriteria(project_root=self.tmpdir)
         self.REVIEW_RULES = REVIEW_RULES
@@ -322,13 +325,16 @@ class TestReviewCriteria(unittest.TestCase):
 
     def test_bare_except_triggers_cq001(self):
         """CQ001 should be raised for bare 'except:' clauses."""
-        src = self._write_file("bad_service.py", """
+        src = self._write_file(
+            "bad_service.py",
+            """
 def fn():
     try:
         pass
     except:
         pass
-""")
+""",
+        )
         result = self.criteria.evaluate(files_changed=[src])
         rule_ids = [i["rule_id"] for i in result.issues]
         self.assertIn("CQ001", rule_ids, "CQ001 should trigger for bare except")
@@ -336,18 +342,23 @@ def fn():
 
     def test_hardcoded_secret_triggers_cq004(self):
         """CQ004 should detect hardcoded password assignments."""
-        src = self._write_file("db.py", """
+        src = self._write_file(
+            "db.py",
+            """
 def connect():
     password = \"mysupersecretpassword\"
     return password
-""")
+""",
+        )
         result = self.criteria.evaluate(files_changed=[src])
         rule_ids = [i["rule_id"] for i in result.issues]
         self.assertIn("CQ004", rule_ids, "CQ004 should trigger for hardcoded secret")
 
     def test_clean_code_passes(self):
         """Well-written code should pass all blocking rules."""
-        src = self._write_file("good_service.py", """
+        src = self._write_file(
+            "good_service.py",
+            """
 \"\"\"Good service module.\"\"\"
 
 
@@ -357,8 +368,11 @@ def get_item(item_id: int) -> dict:
         return {"id": item_id}
     except Exception as exc:
         raise RuntimeError("Not found") from exc
-""")
-        test_src = self._write_file("test_good_service.py", """
+""",
+        )
+        test_src = self._write_file(
+            "test_good_service.py",
+            """
 \"\"\"Tests for good_service.\"\"\"
 
 
@@ -367,7 +381,8 @@ def test_get_item_returns_dict():
     assert isinstance({}, dict)
     assert 1 > 0
     assert "a" in "abc"
-""")
+""",
+        )
         result = self.criteria.evaluate(
             files_changed=[src, test_src],
             pr_body="This PR adds a clean service module with proper error handling and tests.",
@@ -378,14 +393,17 @@ def test_get_item_returns_dict():
 
     def test_test_coverage_tc001(self):
         """TC001 triggers when source file has no corresponding test file."""
-        src = self._write_file("solo_service.py", """
+        src = self._write_file(
+            "solo_service.py",
+            """
 \"\"\"Solo module.\"\"\"
 
 
 def solo_fn() -> None:
     \"\"\"Does nothing.\"\"\"
     pass
-""")
+""",
+        )
         # No test file included
         result = self.criteria.evaluate(files_changed=[src])
         rule_ids = [i["rule_id"] for i in result.issues]

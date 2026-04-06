@@ -2,22 +2,23 @@
 # ruff: noqa: F821
 """
 Script Name: stop-notifier.py
-Version: 4.2.0 (Local Ollama only, removed cloud OpenRouter)
-Last Modified: 2026-03-08
-Description: Stop hook - speaks dynamic English voice updates via local Ollama LLM.
+Version: 4.3.0 (Static messages only, Ollama removed)
+Last Modified: 2026-04-06
+Description: Stop hook - speaks static English voice updates after each Claude response.
 
-v4.2.0: Local LLM only (Ollama)
-  - REMOVED: OpenRouter fallback (cloud API)
-  - NEW: Ollama-only, no internet dependency
+v4.3.0: Static messages only (Ollama removed)
+  - REMOVED: Ollama LLM call and all related constants/functions
+  - UNCHANGED: Voice notification pipeline (flag files, speak(), TTS)
   - UNCHANGED: WORK_DONE_SUMMARY environment variable support
-  - Static fallback if Ollama unavailable
+  - Static fallback messages are now the ONLY message source
+v4.2.0: Local LLM only (Ollama)
 v4.1.0: Direct voice notification on TaskUpdate(completed)
   - NEW: Accepts WORK_DONE_SUMMARY environment variable from post-tool-tracker.py
   - NEW: Called directly by post-tool-tracker.py when all tasks complete (no Stop hook wait)
   - Flow: TaskUpdate(completed) -> post-tool-tracker.py -> stop-notifier.py -> voice + summary
 v4.0.0: MAJOR FIXES + Session Summary Voice Integration
   - FIXED: increment_retry destroying original message (spoke '{"retries": 1}')
-  - FIXED: Simplified flow - no retry complexity, just try LLM -> fallback -> speak -> done
+  - FIXED: Simplified flow - no retry complexity, just fallback -> speak -> done
   - FIXED: API key empty file check
   - NEW: work_done/task_complete use session summary data for rich voice context
   - NEW: Loads comprehensive summary from session-summary-manager for voice output
@@ -29,24 +30,20 @@ VOICE TRIGGERS (3 flag files, checked in priority order):
   2. ~/.claude/.task-complete-voice    -> Task completed
   3. ~/.claude/.session-work-done      -> All work done (written by Claude)
 
-HOW IT WORKS (v4.0.0 - simplified):
+HOW IT WORKS (v4.3.0 - static messages only):
   1. Fires on every Claude 'Stop' event (after each AI response)
   2. Checks for any voice flag files (in priority order)
-  3. If flag EXISTS: reads original message, calls local Ollama LLM
-  4. If Ollama unavailable: uses static fallback (NEVER speaks raw JSON/garbage)
-  5. Always deletes flag after speaking (no retry accumulation)
-  6. For work_done: loads session summary for rich context in voice
-  7. If no flags: stays completely silent (most responses)
+  3. If flag EXISTS: reads original message, uses static fallback message
+  4. Always deletes flag after speaking (no retry accumulation)
+  5. For work_done: loads session summary for voice context
+  6. If no flags: stays completely silent (most responses)
 
 PERSONALITY: Boss-assistant style
   - Addresses user as "Sir"
   - Professional but warm Indian English
   - Short, clear, natural updates
 
-LLM: Local Ollama (http://127.0.0.1:11434) - NO cloud dependency
-Setup: ollama pull granite4:3b
-No API key required - all processing local
-
+Voice: Static messages only. No LLM dependency.
 Windows-Safe: ASCII only (no Unicode/emojis in print statements)
 """
 
@@ -153,22 +150,7 @@ VOICE_SCRIPT = CURRENT_DIR / "voice-notifier.py"
 _voice_disabled_flag = FLAG_DIR / ".voice-disabled"
 VOICE_ENABLED = os.environ.get("VOICE_ENABLED", "1") != "0" and not _voice_disabled_flag.exists()
 
-# LOCAL ONLY: Ollama (IPEX-LLM on Intel Arc GPU + NPU)
-# No cloud fallback - use static messages if Ollama unavailable
-OLLAMA_URL = "http://127.0.0.1:11434/v1/chat/completions"
-OLLAMA_MODEL = "granite4:3b"
-
-# Removed: OpenRouter fallback (cloud API) - 2026-03-08
-# Now: Ollama only -> if unavailable -> static fallback messages
-
-VOICE_SYSTEM_PROMPT = (
-    "You are Neerja, a professional Indian English-speaking female voice assistant. "
-    "You address the user as 'Sir'. You are warm, professional, and concise. "
-    "Generate a SHORT spoken notification message (1-2 sentences max, under 30 words). "
-    "The message will be spoken aloud via text-to-speech, so keep it natural and conversational. "
-    "Do NOT use any special characters, markdown, emojis, or formatting. "
-    "Just plain spoken English text. Be specific about what happened if context is provided."
-)
+# Voice is delivered via static messages only (no LLM dependency).
 
 
 # =============================================================================

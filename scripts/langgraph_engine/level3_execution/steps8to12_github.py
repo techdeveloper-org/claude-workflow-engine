@@ -27,7 +27,6 @@ from ..github_merge_validation import (
     validate_project_after_merge,
 )
 from ..github_operation_router import GitHubOperationRouter
-from ..ollama_service import OllamaService
 from .github_code_review import (
     analyze_diff_for_issues,
     check_docker_best_practices,
@@ -118,12 +117,7 @@ class Level3GitHubWorkflow:
                 + "=" * 70
             )
 
-        # Initialize Ollama service for intelligent label detection
-        try:
-            self.ollama = OllamaService()
-        except Exception as e:
-            logger.warning(f"Ollama service not available: {e}. Will use keyword-based label detection.")
-            self.ollama = None
+        # Label detection uses llm_call or keyword matching
 
     # ===== STEP 8: GITHUB ISSUE CREATION =====
 
@@ -202,25 +196,23 @@ class Level3GitHubWorkflow:
     def _determine_issue_label(self, description: str) -> Optional[str]:
         """Determine issue label using LLM-based intelligent classification.
 
-        First tries Ollama LLM for sophisticated analysis, falls back to keyword matching.
+        First tries llm_call for sophisticated analysis, falls back to keyword matching.
 
         Returns one of: bug, feature, enhancement, test, documentation, task
         """
-        # Try LLM-based classification first
-        if self.ollama:
-            try:
-                label = self._classify_with_llm(description)
-                if label:
-                    logger.info(f"LLM classified issue as: {label}")
-                    return label
-            except Exception as e:
-                logger.warning(f"LLM classification failed: {e}. Using keyword fallback.")
+        try:
+            label = self._classify_with_llm(description)
+            if label:
+                logger.info(f"LLM classified issue as: {label}")
+                return label
+        except Exception as e:
+            logger.warning(f"LLM classification failed: {e}. Using keyword fallback.")
 
         # Fallback to keyword-based classification
         return self._classify_with_keywords(description)
 
     def _classify_with_llm(self, description: str) -> Optional[str]:
-        """Use Ollama LLM to intelligently classify issue label.
+        """Use llm_call to intelligently classify issue label.
 
         Args:
             description: Issue description text
@@ -228,44 +220,35 @@ class Level3GitHubWorkflow:
         Returns:
             One of: bug, feature, enhancement, test, documentation, task
         """
-        system_prompt = """You are an expert software engineer analyzing GitHub issue descriptions to classify them.
+        try:
+            from ..llm_call import llm_call
+        except ImportError:
+            return None
 
-Classify the issue into ONE of these categories:
-- bug: Something is broken, errors, crashes, not working as expected
-- feature: New functionality, new capability requested
-- enhancement: Improvement to existing feature, optimization, refactoring
-- test: Testing related, unit tests, integration tests, test coverage
-- documentation: Documentation, README, comments, API docs
-- task: General task, chore, maintenance work
-
-IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no quotes. Just one word."""
-
-        prompt = f"Classify this GitHub issue:/n/n{description}"
+        prompt = (
+            "You are an expert software engineer analyzing GitHub issue descriptions to classify them.\n\n"
+            "Classify the issue into ONE of these categories:\n"
+            "- bug: Something is broken, errors, crashes, not working as expected\n"
+            "- feature: New functionality, new capability requested\n"
+            "- enhancement: Improvement to existing feature, optimization, refactoring\n"
+            "- test: Testing related, unit tests, integration tests, test coverage\n"
+            "- documentation: Documentation, README, comments, API docs\n"
+            "- task: General task, chore, maintenance work\n\n"
+            "IMPORTANT: Respond with ONLY the label name, nothing else. No explanation, no quotes. Just one word.\n\n"
+            f"Issue description:\n{description}"
+        )
 
         try:
-            messages = [{"role": "user", "content": prompt}]
+            response = llm_call(prompt, model="fast_classification", temperature=0.1, timeout=15)
+            if not response:
+                return None
 
-            def _call_ollama():
-                resp = self.ollama.chat(
-                    messages=messages, model="fast_classification", temperature=0.3, system_prompt=system_prompt
-                )
-                if "error" in resp:
-                    raise RuntimeError(resp["error"])
-                return resp
-
-            # Use retry with exponential backoff for transient LLM errors
-            response = _llm_call_with_retry(_call_ollama, "Step 8 Label Classification")
-
-            label = response.get("message", {}).get("content", "").strip().lower()
-
-            # Validate label is one of expected values
+            label = response.strip().lower().splitlines()[0].strip()
             valid_labels = ["bug", "feature", "enhancement", "test", "documentation", "task"]
             if label in valid_labels:
                 return label
-            else:
-                logger.warning(f"LLM returned invalid label: {label}. Using keyword fallback.")
-                return None
-
+            logger.warning(f"LLM returned invalid label: {label}. Using keyword fallback.")
+            return None
         except Exception as e:
             logger.error(f"LLM classification error: {e}")
             return None

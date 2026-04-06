@@ -158,10 +158,7 @@ usually due to a slow provider or a very large context window.
 
 **Fix:**
 - Check which provider is active: `grep "active_provider" logs/pipeline_*.log`
-- If Ollama is the active provider, the model may be running on CPU instead of GPU:
-  ```bash
-  nvidia-smi  # Check GPU utilization -- should be ~100% during inference
-  ```
+- Switch to a faster provider: `LLM_PROVIDER=claude_cli`
 - Reduce context size by trimming the task description or disabling Figma token
   injection for this run: `ENABLE_FIGMA=0`
 - Increase the timeout in `scripts/langgraph_engine/orchestrator.py`:

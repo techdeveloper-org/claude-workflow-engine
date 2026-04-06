@@ -76,7 +76,7 @@ jobs:
   # --- Job 1: Test -----------------------------------------------------------
   # Runs pytest across two Python versions using a matrix strategy.
   # Full test run uses continue-on-error because some tests require external
-  # services (Ollama, GitHub API) that are not available in CI.
+  # services (GitHub API, Anthropic API) that are not available in CI.
   test:
     name: Test (Python ${{ matrix.python-version }})
     needs: check-enabled
@@ -110,7 +110,7 @@ jobs:
         run: pytest tests/ --tb=short -q --collect-only
 
       # Run the full test suite. continue-on-error=true because many tests
-      # require external services (GitHub token, Ollama endpoint)
+      # require external services (GitHub token, Anthropic API)
       # that are not available in CI.
       - name: Run tests
         continue-on-error: true

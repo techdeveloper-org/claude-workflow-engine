@@ -40,10 +40,10 @@ from loguru import logger
 # ---------------------------------------------------------------------------
 
 STEP_TIMEOUTS: Dict[int, int] = {
-    0: 900,  # Task Analysis (Ollama LLM - let it take its time)
-    8: 900,  # GitHub Issue Creation (Ollama title gen + GitHub API)
+    0: 900,  # Task Analysis (LLM - let it take its time)
+    8: 900,  # GitHub Issue Creation (LLM title gen + GitHub API)
     9: 120,  # Branch Creation (git operations)
-    10: 900,  # Implementation Execution (Claude/Ollama heavy lifting)
+    10: 900,  # Implementation Execution (Claude heavy lifting)
     11: 900,  # Pull Request & Code Review (network + possible LLM)
     12: 120,  # Issue Closure (network I/O)
     13: 120,  # Project Documentation Update (file writes)
