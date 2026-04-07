@@ -151,7 +151,7 @@ class Level3DocumentationManager:
                 uml_result = uml_gen.generate_all()
                 for name, syntax in uml_result.items():
                     uml_gen.save_diagram(name, syntax)
-                created.extend(["docs/uml/%s.md" % n for n in uml_result])
+                created.extend(["uml/%s.md" % n for n in uml_result])
                 logger.info("UML: generated %d diagrams", len(uml_result))
 
                 # Also generate draw.io versions for all diagrams
@@ -253,7 +253,7 @@ class Level3DocumentationManager:
                 ]:
                     syntax = method_args()
                     uml_gen.save_diagram(diagram_type, syntax)
-                    updated_files.append("docs/uml/%s.md" % diagram_type)
+                    updated_files.append("uml/%s.md" % diagram_type)
                 logger.info("UML: refreshed 5 diagrams (3 structural + sequence + call graph)")
 
                 # Also refresh draw.io versions using same analysis data
@@ -295,14 +295,14 @@ class Level3DocumentationManager:
         """Generate draw.io (.drawio) files for all SDLC diagram types.
 
         Called automatically from create_all_docs() and update_existing_docs()
-        after Mermaid diagrams are generated. Saves files to docs/drawio/.
+        after Mermaid diagrams are generated. Saves files to drawio/.
 
         Args:
             analysis_data: Dict with keys: classes, call_chains, states, etc.
             diagram_types: List of types to generate. None = all 12 supported types.
 
         Returns:
-            List of relative file paths created (e.g. "docs/drawio/class-diagram.drawio").
+            List of relative file paths created (e.g. "drawio/class-diagram.drawio").
         """
         try:
             try:
@@ -313,8 +313,12 @@ class Level3DocumentationManager:
             logger.debug("DrawioConverter not available, skipping draw.io generation")
             return []
 
-        output_dir = self.project_root / "docs" / "drawio"
+        import os as _os
+
+        _env = _os.environ.get("DRAWIO_OUTPUT_DIR", "").strip()
+        output_dir = Path(_env) if (_env and Path(_env).is_absolute()) else self.project_root / (_env or "drawio")
         output_dir.mkdir(parents=True, exist_ok=True)
+        _rel = _os.path.relpath(str(output_dir), str(self.project_root))
 
         types = diagram_types or DrawioConverter.SUPPORTED_TYPES
         converter = DrawioConverter()
@@ -325,13 +329,13 @@ class Level3DocumentationManager:
                 xml = converter.convert(dtype, analysis_data)
                 out_path = output_dir / ("%s-diagram.drawio" % dtype)
                 out_path.write_text(xml, encoding="utf-8")
-                generated.append("docs/drawio/%s-diagram.drawio" % dtype)
+                generated.append("%s/%s-diagram.drawio" % (_rel, dtype))
                 logger.debug("draw.io: saved %s", out_path.name)
             except Exception as e:
                 logger.debug("draw.io: %s failed: %s", dtype, e)
 
         if generated:
-            logger.info("draw.io: generated %d diagrams in docs/drawio/", len(generated))
+            logger.info("draw.io: generated %d diagrams in %s/", len(generated), _rel)
         return generated
 
     def _find_srs(self) -> Optional[Path]:

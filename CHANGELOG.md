@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.16.1] - 2026-04-07
+
+### Changed — Diagram Output Restructure + Configurable Paths
+
+- **`uml/` moved to project root** — previously `docs/uml/`, now at `<target_project>/uml/` (top-level, not nested under docs)
+- **`drawio/` moved to project root** — previously `docs/drawio/`, now at `<target_project>/drawio/` (top-level)
+- **`UML_OUTPUT_DIR` env var** — overrides the UML output directory; relative paths resolved against target project root, absolute paths used as-is; defaults to `uml/`
+- **`DRAWIO_OUTPUT_DIR` env var** — overrides the draw.io output directory; same resolution logic; defaults to `drawio/`
+- **`.env.example`** — added `DIAGRAM OUTPUT DIRECTORIES` section documenting both new env vars
+- **`rules/11-documentation-files.md`** — exemption list updated: `uml/` and `drawio/` at root are now auto-generated exempt dirs
+
+### Files Updated
+
+| File | Change |
+|------|--------|
+| `scripts/langgraph_engine/diagrams/legacy_generator.py` | `__init__` reads `UML_OUTPUT_DIR`; absolute/relative path logic |
+| `scripts/langgraph_engine/level3_execution/documentation_manager.py` | `_generate_drawio_diagrams()` reads `DRAWIO_OUTPUT_DIR`; relative path in return values |
+| `scripts/architecture/generate_system_diagram.py` | `__main__` block reads `DRAWIO_OUTPUT_DIR` |
+| `scripts/tools/create_mcp_repos.py` | Fixed stale `DRAWIO_OUTPUT_DIR` default (`docs/diagrams/` → `drawio/`) |
+| `tests/test_uml_generators.py` | Updated test assertions to expect `uml/` not `docs/uml/` |
+| `CLAUDE.md`, `README.md`, `rules/11-documentation-files.md` | Directory layout references updated |
+
+### Why
+
+Diagram output directories belong at the target project root alongside source code, not buried inside `docs/`. This matches the convention for auto-generated artifacts. Env var configurability allows different projects to direct output wherever needed (e.g. `diagrams/uml`, `/tmp/preview`, a custom CI artifacts path).
+
+---
+
 ## [1.8.0] - 2026-03-28
 
 ### Added — Orchestration Template Fast-Path

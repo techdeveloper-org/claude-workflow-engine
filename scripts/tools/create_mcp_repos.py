@@ -374,7 +374,7 @@ SERVERS = [
         ],
         "env_vars": [
             ("ANTHROPIC_API_KEY", "Required for Tier 2/3 LLM-assisted diagrams"),
-            ("UML_OUTPUT_DIR", "Directory for generated diagram files (default: docs/uml/)"),
+            ("UML_OUTPUT_DIR", "Directory for generated diagram files (default: uml/)"),
             ("KROKI_SERVER", "Kroki rendering server URL (default: https://kroki.io)"),
         ],
         "benefits": [
@@ -399,7 +399,7 @@ SERVERS = [
             ("convert_mermaid_to_drawio", "Convert Mermaid diagram markup to .drawio format"),
         ],
         "env_vars": [
-            ("DRAWIO_OUTPUT_DIR", "Output directory for .drawio files (default: docs/diagrams/)"),
+            ("DRAWIO_OUTPUT_DIR", "Output directory for .drawio files (default: drawio/)"),
             ("GITHUB_RAW_BASE_URL", "GitHub raw URL base for shareable URL generation"),
         ],
         "benefits": [

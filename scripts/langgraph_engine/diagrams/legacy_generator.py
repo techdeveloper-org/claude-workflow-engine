@@ -53,9 +53,13 @@ def _make_attr_info(name, type_hint="", visibility="+"):
 class UMLDiagramGenerator:
     """Generate Mermaid/PlantUML syntax from analysis results."""
 
-    def __init__(self, project_root, output_dir="docs/uml", call_graph=None):
+    def __init__(self, project_root, output_dir=None, call_graph=None):
+        import os
+
         self.project_root = Path(project_root)
-        self.output_dir = self.project_root / output_dir
+        _env = os.environ.get("UML_OUTPUT_DIR", "").strip()
+        _dir = _env or output_dir or "uml"
+        self.output_dir = Path(_dir) if Path(_dir).is_absolute() else self.project_root / _dir
         self.analyzer = UMLAstAnalyzer(project_root)
         self._call_graph = call_graph  # pre-built CallGraph or None (lazy)
 
@@ -988,7 +992,7 @@ class UMLDiagramGenerator:
         return results
 
     def save_diagram(self, name, syntax, format="md"):
-        """Save diagram to docs/uml/{name}.md with proper markdown wrapper.
+        """Save diagram to uml/{name}.md with proper markdown wrapper.
 
         Returns the output file path.
         """

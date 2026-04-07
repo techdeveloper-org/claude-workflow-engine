@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** — from task analysis to merged PR, automatically.
 
-**Version:** 1.16.0 | **Status:** Alpha | **Last Updated:** 2026-04-07
+**Version:** 1.16.1 | **Status:** Alpha | **Last Updated:** 2026-04-07
 
 ---
 
@@ -68,7 +68,8 @@ python scripts/3-level-flow.py \
 | v1.15.0 | 8 | 2 (subprocess) | ~15s | TOON compression removed from Level 1 |
 | v1.15.2 | 8 | 2 (subprocess) | ~15s | Exhaustive artifact purge: TOON/plan-mode/skill-selection |
 | v1.15.3 | 8 | 2 (subprocess) | ~15s | Dead LLM provider purge: Ollama/NPU/GPU/OpenAI/DeepSeek removed |
-| **v1.16.0** | **8** | **2 (subprocess)** | **~15s** | **Level 2 script purge: all level2_standards/ Python removed; policies/ .md files read directly** |
+| v1.16.0 | 8 | 2 (subprocess) | ~15s | Level 2 script purge: all level2_standards/ Python removed; policies/ .md files read directly |
+| **v1.16.1** | **8** | **2 (subprocess)** | **~15s** | **uml/ + drawio/ moved to project root; UML_OUTPUT_DIR + DRAWIO_OUTPUT_DIR env vars added** |
 
 ---
 
@@ -275,7 +276,8 @@ claude-workflow-engine/
 +-- policies/                         # README pointing to level packages
 +-- tests/                            # 74 test files
 +-- docs/                             # Documentation files
-+-- docs/uml/                         # Auto-generated UML diagrams
++-- uml/                              # Auto-generated UML diagrams (13 types)
++-- drawio/                           # Auto-generated draw.io diagrams (13 types)
 +-- rules/                            # 34 coding standard definitions
 +-- k8s/                              # Kubernetes manifests (Deployment, ConfigMap, HPA)
 +-- VERSION                           # Single version source

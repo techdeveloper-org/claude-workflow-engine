@@ -4,13 +4,9 @@ Tests for UML diagram generation (uml_generators.py).
 Tests AST analysis, Mermaid/PlantUML generation, and Kroki rendering.
 """
 
-import os
 import sys
-import ast
-import tempfile
-import shutil
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,20 +15,20 @@ scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
 if scripts_dir not in sys.path:
     sys.path.insert(0, scripts_dir)
 
-from langgraph_engine.uml_generators import (
+from langgraph_engine.uml_generators import (  # noqa: E402
+    KrokiRenderer,
     UMLAstAnalyzer,
     UMLDiagramGenerator,
-    KrokiRenderer,
-    _simplify_type,
     _clean_mermaid,
     _clean_plantuml,
     _plantuml_stub,
+    _simplify_type,
 )
-
 
 # ==================================================================
 # Fixtures
 # ==================================================================
+
 
 @pytest.fixture
 def tmp_project(tmp_path):
@@ -122,6 +118,7 @@ def generator(tmp_project):
 # TestUMLAstAnalyzer
 # ==================================================================
 
+
 class TestUMLAstAnalyzer:
 
     def test_extract_classes_simple(self, analyzer, tmp_project):
@@ -166,9 +163,7 @@ class TestUMLAstAnalyzer:
         speak = next(m for m in animal["methods"] if m["name"] == "speak")
         assert speak["visibility"] == "+"
 
-        private = next(
-            m for m in animal["methods"] if m["name"] == "_private_method"
-        )
+        private = next(m for m in animal["methods"] if m["name"] == "_private_method")
         assert private["visibility"] == "-"
 
     def test_extract_classes_self_attributes(self, analyzer, tmp_project):
@@ -179,10 +174,7 @@ class TestUMLAstAnalyzer:
         assert "name" in attr_names
         assert "age" in attr_names
         # Private attribute
-        internal = next(
-            (a for a in animal["attributes"] if a["name"] == "_internal"),
-            None
-        )
+        internal = next((a for a in animal["attributes"] if a["name"] == "_internal"), None)
         if internal:
             assert internal["visibility"] == "-"
 
@@ -199,12 +191,8 @@ class TestUMLAstAnalyzer:
         imports = analyzer.extract_imports(tmp_project / "src" / "utils.py")
         assert "os" in imports["imports"]
         assert "json" in imports["imports"]
-        assert any(
-            fi["name"] == "Path" for fi in imports["from_imports"]
-        )
-        assert any(
-            fi["name"] == "Animal" for fi in imports["from_imports"]
-        )
+        assert any(fi["name"] == "Path" for fi in imports["from_imports"])
+        assert any(fi["name"] == "Animal" for fi in imports["from_imports"])
 
     def test_build_dependency_graph(self, analyzer):
         """Build module-level dependency map."""
@@ -217,18 +205,14 @@ class TestUMLAstAnalyzer:
 
     def test_extract_call_chains(self, analyzer, tmp_project):
         """Extract function call chains."""
-        chains = analyzer.extract_call_chains(
-            tmp_project / "src" / "utils.py", "helper"
-        )
+        chains = analyzer.extract_call_chains(tmp_project / "src" / "utils.py", "helper")
         assert len(chains) > 0
         callees = [c["callee"] for c in chains]
         assert "Animal" in callees or "speak" in callees
 
     def test_extract_call_chains_no_match(self, analyzer, tmp_project):
         """No matching entry function returns empty."""
-        chains = analyzer.extract_call_chains(
-            tmp_project / "src" / "utils.py", "nonexistent_func"
-        )
+        chains = analyzer.extract_call_chains(tmp_project / "src" / "utils.py", "nonexistent_func")
         assert chains == []
 
 
@@ -236,13 +220,12 @@ class TestUMLAstAnalyzer:
 # TestUMLDiagramGenerator
 # ==================================================================
 
+
 class TestUMLDiagramGenerator:
 
     def test_generate_class_diagram_mermaid(self, generator, tmp_project):
         """Generate valid Mermaid classDiagram syntax."""
-        classes = generator.analyzer.extract_all_classes(
-            tmp_project / "src"
-        )
+        classes = generator.analyzer.extract_all_classes(tmp_project / "src")
         syntax = generator.generate_class_diagram(classes)
         assert syntax.startswith("classDiagram")
         assert "class Animal" in syntax
@@ -257,9 +240,7 @@ class TestUMLDiagramGenerator:
 
     def test_generate_class_diagram_methods_attrs(self, generator, tmp_project):
         """Class diagram includes methods and attributes."""
-        classes = generator.analyzer.extract_classes(
-            tmp_project / "src" / "models.py"
-        )
+        classes = generator.analyzer.extract_classes(tmp_project / "src" / "models.py")
         syntax = generator.generate_class_diagram(classes)
         assert "speak" in syntax
         assert "name" in syntax
@@ -290,7 +271,7 @@ class TestUMLDiagramGenerator:
         assert len(results) >= 3
 
     def test_save_diagram_creates_file(self, generator):
-        """Save diagram writes file to docs/uml/."""
+        """Save diagram writes file to uml/."""
         syntax = "classDiagram\n    class Foo"
         path = generator.save_diagram("test-diagram", syntax)
         assert Path(path).exists()
@@ -325,6 +306,7 @@ class TestUMLDiagramGenerator:
 # TestKrokiRenderer
 # ==================================================================
 
+
 class TestKrokiRenderer:
 
     def test_render_plantuml_svg(self):
@@ -336,9 +318,7 @@ class TestKrokiRenderer:
 
         with patch("langgraph_engine.uml_generators.KrokiRenderer.render") as mock:
             mock.return_value = b"<svg>test</svg>"
-            result = renderer.render(
-                "@startuml\nclass A\n@enduml", "plantuml", "svg"
-            )
+            result = renderer.render("@startuml\nclass A\n@enduml", "plantuml", "svg")
         assert result == b"<svg>test</svg>"
 
     def test_render_mermaid_svg(self):
@@ -346,16 +326,13 @@ class TestKrokiRenderer:
         renderer = KrokiRenderer()
         with patch("langgraph_engine.uml_generators.KrokiRenderer.render") as mock:
             mock.return_value = b"<svg>mermaid</svg>"
-            result = renderer.render(
-                "classDiagram\n    class A", "mermaid", "svg"
-            )
+            result = renderer.render("classDiagram\n    class A", "mermaid", "svg")
         assert result == b"<svg>mermaid</svg>"
 
     def test_render_failure_graceful(self):
         """API error returns None."""
         renderer = KrokiRenderer()
         with patch.dict("sys.modules", {"requests": MagicMock()}) as _:
-            import importlib
             mock_requests = sys.modules["requests"]
             mock_resp = MagicMock()
             mock_resp.status_code = 500
@@ -372,13 +349,8 @@ class TestKrokiRenderer:
         renderer = KrokiRenderer()
         out = tmp_path / "test.svg"
 
-        with patch.object(
-            renderer, "render", return_value=b"<svg>ok</svg>"
-        ):
-            path = renderer.render_to_file(
-                "@startuml\nA\n@enduml",
-                str(out), "plantuml", "svg"
-            )
+        with patch.object(renderer, "render", return_value=b"<svg>ok</svg>"):
+            path = renderer.render_to_file("@startuml\nA\n@enduml", str(out), "plantuml", "svg")
         assert path is not None
         assert Path(path).exists()
         assert Path(path).read_bytes() == b"<svg>ok</svg>"
@@ -395,6 +367,7 @@ class TestKrokiRenderer:
 # ==================================================================
 # Test utility functions
 # ==================================================================
+
 
 class TestUtilities:
 
@@ -448,6 +421,7 @@ class TestUtilities:
 # Integration test
 # ==================================================================
 
+
 class TestIntegration:
 
     def test_analyze_and_generate_this_project(self):
@@ -456,13 +430,11 @@ class TestIntegration:
         analyzer = UMLAstAnalyzer(str(project_root))
 
         # Should find classes in the project
-        classes = analyzer.extract_all_classes(
-            project_root / "scripts" / "langgraph_engine"
-        )
+        classes = analyzer.extract_all_classes(project_root / "scripts" / "langgraph_engine")
         assert len(classes) > 0, "Should find classes in langgraph_engine"
 
         # Generate class diagram
-        gen = UMLDiagramGenerator(str(project_root), "docs/uml")
+        gen = UMLDiagramGenerator(str(project_root), "uml")
         syntax = gen.generate_class_diagram(classes[:20])
         assert "classDiagram" in syntax
         assert len(syntax.split("\n")) > 2
@@ -496,7 +468,7 @@ class TestIntegration:
             assert Path(path).exists()
 
         # Check output directory
-        uml_dir = tmp_path / "docs" / "uml"
+        uml_dir = tmp_path / "uml"
         assert uml_dir.exists()
         md_files = list(uml_dir.glob("*.md"))
         assert len(md_files) >= 1
@@ -505,6 +477,7 @@ class TestIntegration:
 # ==================================================================
 # TestCallGraphIntegration
 # ==================================================================
+
 
 class TestCallGraphIntegration:
     """Tests for UMLDiagramGenerator methods that integrate with CallGraph."""
@@ -533,6 +506,7 @@ class TestCallGraphIntegration:
     def test_get_call_graph_with_prebuilt(self, tmp_project):
         """When call_graph is injected at construction, _get_call_graph returns it."""
         from langgraph_engine.call_graph_builder import build_call_graph
+
         cg = build_call_graph(str(tmp_project))
         if cg is None:
             # Build failed - skip assertion on identity but verify None returned
@@ -545,6 +519,7 @@ class TestCallGraphIntegration:
     def test_classes_from_call_graph(self, tmp_project):
         """_classes_from_call_graph() returns list of ClassInfo dicts."""
         from langgraph_engine.call_graph_builder import build_call_graph
+
         cg = build_call_graph(str(tmp_project))
         if cg is None or not cg.classes:
             return  # CallGraph build failed or no classes; not a test error
@@ -575,6 +550,7 @@ class TestCallGraphIntegration:
     def test_dep_graph_from_call_graph(self, tmp_project):
         """_dep_graph_from_call_graph() returns dict mapping module -> set of deps."""
         from langgraph_engine.call_graph_builder import build_call_graph
+
         cg = build_call_graph(str(tmp_project))
         gen = UMLDiagramGenerator(str(tmp_project))
         dep_graph = gen._dep_graph_from_call_graph(cg)
@@ -595,6 +571,7 @@ class TestCallGraphIntegration:
     def test_call_chains_from_call_graph(self, tmp_project):
         """_call_chains_from_call_graph() returns list of chain dicts."""
         from langgraph_engine.call_graph_builder import build_call_graph
+
         cg = build_call_graph(str(tmp_project))
         if cg is None:
             return
@@ -616,6 +593,7 @@ class TestCallGraphIntegration:
     def test_call_chains_has_fqn_data(self, tmp_project):
         """call_chains produced from CallGraph have non-empty caller_fqn and callee_fqn."""
         from langgraph_engine.call_graph_builder import build_call_graph
+
         cg = build_call_graph(str(tmp_project))
         if cg is None:
             return
@@ -627,9 +605,7 @@ class TestCallGraphIntegration:
 
         # At least some chains must have caller_fqn populated (containing "::")
         fqn_chains = [c for c in chains if "::" in c.get("caller_fqn", "")]
-        assert len(fqn_chains) > 0, (
-            "Expected at least one chain with FQN caller_fqn"
-        )
+        assert len(fqn_chains) > 0, "Expected at least one chain with FQN caller_fqn"
 
     def test_call_chains_returns_none_on_empty_cg(self, tmp_project):
         """_call_chains_from_call_graph() returns None when cg is None."""
@@ -650,6 +626,7 @@ class TestCallGraphIntegration:
 # ==================================================================
 # TestCallGraphDiagram
 # ==================================================================
+
 
 class TestCallGraphDiagram:
     """Tests for generate_call_graph_diagram()."""
@@ -714,6 +691,7 @@ class TestCallGraphDiagram:
     def test_call_graph_diagram_with_prebuilt_graph(self, tmp_path):
         """generate_call_graph_diagram() accepts a pre-built CallGraph object."""
         from langgraph_engine.call_graph_builder import build_call_graph
+
         project = self._make_two_class_project(tmp_path)
         cg = build_call_graph(str(project))
         gen = UMLDiagramGenerator(str(project))
@@ -743,6 +721,7 @@ class TestCallGraphDiagram:
 # ==================================================================
 # TestGenerateAllCompleteness
 # ==================================================================
+
 
 class TestGenerateAllCompleteness:
     """Tests that generate_all() produces all expected diagram keys."""
@@ -821,6 +800,7 @@ class TestGenerateAllCompleteness:
 # TestSequenceDiagramFQN
 # ==================================================================
 
+
 class TestSequenceDiagramFQN:
     """Tests for sequence diagram generation using FQN-aware call chains."""
 
@@ -832,9 +812,7 @@ class TestSequenceDiagramFQN:
         # Must have at least a participant or an arrow
         has_participant = "participant" in syntax
         has_arrow = "->>" in syntax
-        assert has_participant or has_arrow, (
-            "Sequence diagram has no participants or arrows: %s" % syntax[:300]
-        )
+        assert has_participant or has_arrow, "Sequence diagram has no participants or arrows: %s" % syntax[:300]
 
     def test_sequence_fallback_legacy(self, tmp_project):
         """generate_sequence_diagram() with legacy chains (no caller_fqn) works."""

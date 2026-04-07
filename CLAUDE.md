@@ -1,9 +1,9 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.16.0
+**Version:** 1.16.1
 **Type:** LangGraph Orchestration Pipeline with Call Graph Intelligence + Template Fast-Path
-**Last Updated:** 2026-04-06
+**Last Updated:** 2026-04-07
 
 ---
 
@@ -105,6 +105,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | **v1.15.2** | **8** | **2 (subprocess)** | **~15s** | Exhaustive artifact purge: TOON/plan-mode/skill-selection removed; prompt_gen bug fixes |
 | **v1.15.3** | **8** | **2 (subprocess)** | **~15s** | Dead LLM provider purge: Ollama, NPU, GPU, OpenAI, DeepSeek, inference_router removed; 2-provider chain only (claude_cli + anthropic) |
 | **v1.16.0** | **8** | **2 (subprocess)** | **~15s** | Level 2 script purge: all level2_standards/ Python removed; level1_cleanup routes directly to level3_init; policies/ .md files retained |
+| **v1.16.1** | **8** | **2 (subprocess)** | **~15s** | uml/ + drawio/ moved to project root (out of docs/); UML_OUTPUT_DIR + DRAWIO_OUTPUT_DIR env vars |
 
 ### Directory Layout
 
@@ -148,7 +149,8 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 +-- src/mcp/                          # In-engine copy of session-mgr (repo is source of truth) + bridge (session_hooks, base/)
 +-- tests/                            # 75 test files
 +-- docs/                             # 69 documentation files
-+-- docs/uml/                         # Auto-generated UML diagrams (13 types)
++-- uml/                              # Auto-generated UML diagrams (13 types)
++-- drawio/                           # Auto-generated draw.io diagrams (13 types)
 +-- rules/                            # 34 coding standard definitions (incl. doc governance + docstrings-only + microservices patterns)
 ```
 
@@ -413,10 +415,10 @@ See environment variables in `.env.example`:
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: v1.16.0 -- Level 2 script purge: all level2_standards/ Python removed; level1_cleanup routes to level3_init directly
+- **Task**: v1.16.1 -- uml/ + drawio/ moved to project root; UML_OUTPUT_DIR + DRAWIO_OUTPUT_DIR env vars added
 - **Skill**: python-core
 - **Agent**: python-backend-engineer
-- **Date**: 2026-04-06
+- **Date**: 2026-04-07
 
 ## Dependency Notes
 

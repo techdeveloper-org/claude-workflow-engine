@@ -8,7 +8,7 @@ Generates a professional draw.io diagram showing the entire system:
   - Supporting systems (CallGraph, MCP servers, Hook scripts)
   - Hook Mode vs Full Mode execution paths
 
-Output: docs/drawio/system-architecture.drawio
+Output: drawio/system-architecture.drawio
 
 Usage:
     python scripts/architecture/generate_system_diagram.py
@@ -235,8 +235,8 @@ def build():
     rsys(742, "stop-notifier.py\nSession save on stop", "#FDEBD0", "#D79B00")
 
     C.append(section_label(RX, 800, R_W, 18, "\u2015\u2015  Output  \u2015\u2015"))
-    out_md = rsys(822, "docs/uml/*.md\nMermaid diagrams (13 types)", "#F0F0F0", "#666666")
-    out_dio = rsys(877, "docs/drawio/*.drawio\nProfessional draw.io (12 types)", "#D5E8D4", "#82B366")
+    out_md = rsys(822, "uml/*.md\nMermaid diagrams (13 types)", "#F0F0F0", "#666666")
+    out_dio = rsys(877, "drawio/*.drawio\nProfessional draw.io (12 types)", "#D5E8D4", "#82B366")
     rsys(932, "prompts/\nsystem + user + assistant (3 files)", "#E1D5E7", "#9673A6")
     out_log = rsys(987, "~/.claude/logs/\nsessions / telemetry / errors", "#F0F0F0", "#666666")
 
@@ -604,8 +604,8 @@ def build():
         "#6A4080",
     )
     C.append(arrow(s12_id, s13_id, "", FLOW_ARROW))
-    extern_link(s13_id, out_md, "docs/uml/*.md")
-    extern_link(s13_id, out_dio, "docs/drawio/*.drawio")
+    extern_link(s13_id, out_md, "uml/*.md")
+    extern_link(s13_id, out_dio, "drawio/*.drawio")
     cur_y += s_gap
 
     # Step 14
@@ -695,7 +695,10 @@ def generate():
 
 if __name__ == "__main__":
     project_root = Path(__file__).resolve().parent.parent.parent
-    out_dir = project_root / "docs" / "drawio"
+    import os as _os
+
+    _env = _os.environ.get("DRAWIO_OUTPUT_DIR", "").strip()
+    out_dir = Path(_env) if (_env and Path(_env).is_absolute()) else project_root / (_env or "drawio")
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "system-architecture.drawio"
 
