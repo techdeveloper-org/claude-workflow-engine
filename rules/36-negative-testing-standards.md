@@ -1,5 +1,5 @@
 ---
-description: "Level 2.3 - Negative (error-path) test scenarios for every Spring Boot layer"
+description: "Level 2.3 - Negative (error-path) test scenarios for every Spring Boot layer including security/path-params/error-structure"
 paths:
   - "src/test/**/*.java"
 priority: high
@@ -554,6 +554,158 @@ class CacheEventPublisherNegativeTest {
 The event publisher does not (and should not) validate whether the entity ID exists in
 the database. That is the caller's responsibility. Testing that it still publishes for
 unknown IDs ensures the publisher is a pure fire-and-forget transport layer.
+
+---
+
+---
+
+## 9. Security Layer — Negative Tests (SEC3–SEC6)
+
+### What We Follow
+Every protected endpoint must reject unauthenticated requests (401), invalid tokens (401),
+and malicious input payloads (400/422). The error response must never leak internal details.
+
+### How To Implement
+
+```java
+// CORRECT -- Security negative tests
+@ExtendWith(MockitoExtension.class)
+class SecurityNegativeTest {
+
+    // SEC3: Unauthenticated request returns 401
+    @Test
+    @DisplayName("should return 401 Unauthorized when no Authorization header is present")
+    void shouldReturn401WhenNoAuthorizationHeader() {
+        mockMvc.perform(get("/api/v1/resources/1")
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
+    // SEC4: Expired/invalid token returns 401, not 403 or 500
+    @Test
+    @DisplayName("should return 401 when Authorization header has invalid/expired JWT")
+    void shouldReturn401WhenTokenIsInvalid() {
+        mockMvc.perform(get("/api/v1/resources/1")
+                .header("Authorization", "Bearer invalid.jwt.token")
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.message").doesNotContain("StackTrace"))
+            .andExpect(jsonPath("$.message").doesNotContain("io.jsonwebtoken"));
+    }
+
+    // SEC5: SQL injection in name field returns 400, not 500
+    @Test
+    @DisplayName("should return 400 when name field contains SQL injection payload")
+    void shouldReturn400WhenNameContainsSqlInjection() {
+        String sqlInjection = "'; DROP TABLE resources; --";
+        mockMvc.perform(post("/api/v1/resources")
+                .header("Authorization", "Bearer " + validJwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"" + sqlInjection + "\", \"path\": \"/safe\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false));
+
+        // Service must NOT be invoked -- validation rejects before business logic
+        verify(resourceService, never()).add(any());
+    }
+
+    // SEC6: XSS payload in name field is handled safely
+    @Test
+    @DisplayName("should handle XSS payload safely -- store verbatim or reject, never execute")
+    void shouldHandleXssPayloadSafely() {
+        String xssPayload = "<script>alert('xss')</script>";
+        MvcResult result = mockMvc.perform(post("/api/v1/resources")
+                .header("Authorization", "Bearer " + validJwtToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"" + xssPayload + "\", \"path\": \"/safe\"}"))
+            .andReturn();
+
+        int status = result.getResponse().getStatus();
+        // Either stored verbatim (201) or rejected (400/422) -- never 500
+        assertThat(status).isIn(201, 400, 422);
+    }
+}
+```
+
+### Why This Matters
+A 500 response to SQL injection leaks database schema information. An invalid JWT that
+returns 200 instead of 401 means the auth filter is disabled or misconfigured.
+
+---
+
+## 10. Path Parameters — Negative Tests (PP1)
+
+### What We Follow
+Non-numeric path parameters must be rejected at the framework level before reaching
+the service layer.
+
+### How To Implement
+
+```java
+// PP1: Non-numeric ID in path returns 400
+@Test
+@DisplayName("should return 400 when path parameter is non-numeric string")
+void shouldReturn400WhenPathParamIsNonNumeric() {
+    mockMvc.perform(get("/api/v1/resources/abc")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isBadRequest());
+}
+```
+
+### Why This Matters
+Spring MVC auto-converts path params to Long. A non-numeric value causes a
+`MethodArgumentTypeMismatchException` which the global handler must convert to 400.
+
+---
+
+## 11. Error Structure — Negative Tests (ERR1–ERR2)
+
+### What We Follow
+Unhandled exceptions must produce a structured `ApiResponse` envelope, not a naked
+stack trace or Spring Boot's default Whitelabel error page.
+
+### How To Implement
+
+```java
+// ERR1: Unhandled exception returns ApiResponse envelope with success=false
+@Test
+@DisplayName("should return 500 with ApiResponse envelope when unhandled exception occurs")
+void shouldReturn500WithApiResponseEnvelopeOnUnhandledException() {
+    when(resourceService.getById(anyLong())).thenThrow(new RuntimeException("unexpected"));
+
+    mockMvc.perform(get("/api/v1/resources/1")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.success").value(false))
+        .andExpect(jsonPath("$.message").isNotEmpty());
+}
+
+// ERR2: 500 error response does not leak stack trace or class names
+@Test
+@DisplayName("should not leak stack trace or internal class names in 500 response")
+void shouldNotLeakStackTraceIn500Response() {
+    when(resourceService.getById(anyLong())).thenThrow(new RuntimeException("db pool exhausted"));
+
+    MvcResult result = mockMvc.perform(get("/api/v1/resources/1")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andReturn();
+
+    String body = result.getResponse().getContentAsString();
+    assertThat(body).doesNotContain("RuntimeException");
+    assertThat(body).doesNotContain("at com.");
+    assertThat(body).doesNotContain(".java:");
+}
+```
+
+### Why This Matters
+Spring Boot's default error handler returns `{"timestamp":...,"status":500,"error":"Internal Server Error","path":"/api/..."}`
+which does not match the `ApiResponse` envelope. Clients parsing `response.success` crash on this format.
 
 ---
 

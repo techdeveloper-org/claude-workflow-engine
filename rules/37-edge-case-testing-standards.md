@@ -1,5 +1,5 @@
 ---
-description: "Level 2.3 - Edge case test scenarios for boundary values, nulls, and combined failures"
+description: "Level 2.3 - Edge case test scenarios for boundary values, nulls, combined failures, security/path-params/error-structure"
 paths:
   - "src/test/**/*.java"
 priority: high
@@ -549,6 +549,125 @@ class CacheEventPublisherEdgeCaseTest {
 Copy-paste errors when implementing three event methods in the same class are extremely
 common. This test catches the case where `publishDelete` calls `buildEvent(UPDATE, id)`
 instead of `buildEvent(DELETE, id)`.
+
+---
+
+---
+
+## 9. Security Layer — Edge Case Tests (SEC7–SEC8)
+
+### What We Follow
+Edge cases in security: oversized request bodies and missing Content-Type headers.
+
+### How To Implement
+
+```java
+// SEC7: Oversized request body returns 413 or 400, not 500
+@Test
+@DisplayName("should return 413 or 400 when request body exceeds size limit")
+void shouldReturn413Or400WhenBodyExceedsSizeLimit() {
+    String hugeBody = "{\"name\": \"" + "A".repeat(10_000_000) + "\", \"path\": \"/test\"}";
+    MvcResult result = mockMvc.perform(post("/api/v1/resources")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(hugeBody))
+        .andReturn();
+
+    int status = result.getResponse().getStatus();
+    assertThat(status).isIn(400, 413, 422);
+    assertThat(status).isNotEqualTo(500);
+}
+
+// SEC8: Missing Content-Type header returns 415 or 400
+@Test
+@DisplayName("should return 415 or 400 when Content-Type header is missing on POST")
+void shouldReturn415Or400WhenContentTypeMissing() {
+    mockMvc.perform(post("/api/v1/resources")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .content("{\"name\": \"Test\", \"path\": \"/test\"}"))
+        .andExpect(status().isIn(400, 415));
+}
+```
+
+### Why This Matters
+An oversized body without a size limit causes OutOfMemoryError on the JVM, crashing the
+entire application. Missing Content-Type without handling causes a 500 instead of 415.
+
+---
+
+## 10. Path Parameters — Edge Case Tests (PP2–PP4)
+
+### What We Follow
+Boundary path parameter values: negative IDs, zero, and integer overflow.
+
+### How To Implement
+
+```java
+// PP2: Negative ID returns 400 or 404
+@Test
+@DisplayName("should return 400 or 404 when path parameter is negative integer")
+void shouldReturn400Or404WhenPathParamIsNegative() {
+    MvcResult result = mockMvc.perform(get("/api/v1/resources/-1")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andReturn();
+    assertThat(result.getResponse().getStatus()).isIn(400, 404);
+}
+
+// PP3: Zero ID returns 400 or 404
+@Test
+@DisplayName("should return 400 or 404 when path parameter is zero")
+void shouldReturn400Or404WhenPathParamIsZero() {
+    MvcResult result = mockMvc.perform(get("/api/v1/resources/0")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andReturn();
+    assertThat(result.getResponse().getStatus()).isIn(400, 404);
+}
+
+// PP4: Overflow integer ID returns 400
+@Test
+@DisplayName("should return 400 when path parameter exceeds Long.MAX_VALUE")
+void shouldReturn400WhenPathParamExceedsLongMaxValue() {
+    mockMvc.perform(get("/api/v1/resources/99999999999999999999")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isBadRequest());
+}
+```
+
+### Why This Matters
+Spring MVC parses path params as Long. Values beyond Long.MAX_VALUE cause
+`NumberFormatException` which must be caught by the global handler and returned as 400.
+
+---
+
+## 11. Error Structure — Edge Case Tests (ERR3)
+
+### What We Follow
+Even 500 errors must return JSON, not HTML. Clients parsing JSON will crash on an HTML response.
+
+### How To Implement
+
+```java
+// ERR3: Error response Content-Type is application/json even for 500
+@Test
+@DisplayName("should return application/json Content-Type even on 500 error")
+void shouldReturnJsonContentTypeOn500Error() {
+    when(resourceService.getById(anyLong())).thenThrow(new RuntimeException("crash"));
+
+    mockMvc.perform(get("/api/v1/resources/1")
+            .header("Authorization", "Bearer " + validJwtToken)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isInternalServerError())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
+}
+```
+
+### Why This Matters
+Spring Boot's Whitelabel error page returns `text/html` by default. If the global
+exception handler is missing or misconfigured, clients receive `<html>Whitelabel Error...`
+instead of `{"success":false,...}`. This breaks every JSON-parsing client.
 
 ---
 

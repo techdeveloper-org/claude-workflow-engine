@@ -1,5 +1,5 @@
 ---
-description: "Level 2.3 - Positive (happy-path) test scenarios for every Spring Boot layer"
+description: "Level 2.3 - Positive (happy-path) test scenarios for every Spring Boot layer including security/path-params/error-structure"
 paths:
   - "src/test/**/*.java"
 priority: high
@@ -559,14 +559,20 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().getMessage()).isNotEmpty();
     }
 
-    // P76: DataIntegrityViolationException → 409
+    // P76: DataIntegrityViolationException → 409 with full body verification
     @Test
-    @DisplayName("should return 409 CONFLICT for DataIntegrityViolationException")
+    @DisplayName("should return 409 CONFLICT with success=false and non-leaking message for DataIntegrityViolationException")
     void shouldReturn409ForDataIntegrityViolationException() {
         ResponseEntity<ApiResponse<Void>> response =
             handler.handleDataIntegrity(new DataIntegrityViolationException("constraint"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().isSuccess()).isFalse();
+        assertThat(response.getBody().getMessage()).isNotBlank();
+        // Must not leak internal constraint details (SQL table names, column names)
+        assertThat(response.getBody().getMessage()).doesNotContain("constraint");
+        assertThat(response.getStatusCodeValue()).isEqualTo(response.getBody().getStatus());
     }
 
     // P77: ResponseEntity status matches body status field
@@ -740,6 +746,62 @@ class CacheEventPublisherTest {
 Incorrect event type or wrong entity type in the published payload causes the consumer
 to either ignore the event or invalidate the wrong cache key — both are invisible without
 this test.
+
+---
+
+---
+
+## 9. Security Layer — Positive Tests (SEC1–SEC2)
+
+### What We Follow
+Protected endpoints must succeed with valid authentication. Public endpoints (health, readiness)
+must be accessible without authentication.
+
+### How To Implement
+
+```java
+// CORRECT -- Security positive tests with MockMvc + @WithMockUser
+@ExtendWith(MockitoExtension.class)
+class SecurityPositiveTest {
+
+    // SEC1: Authenticated request to protected endpoint succeeds
+    @Test
+    @DisplayName("should return 200 OK when request has valid authentication")
+    void shouldReturn200WhenRequestHasValidAuth() {
+        // Using MockMvc with security context
+        mockMvc.perform(get("/api/v1/resources/1")
+                .header("Authorization", "Bearer " + validJwtToken)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.id").value(1));
+    }
+
+    // SEC2: Health endpoint accessible without authentication
+    @Test
+    @DisplayName("should return 200 OK on /actuator/health without authentication")
+    void shouldReturn200OnHealthEndpointWithoutAuth() {
+        mockMvc.perform(get("/actuator/health"))
+            .andExpect(status().isOk());
+    }
+}
+```
+
+### Why This Matters
+If the auth filter rejects valid tokens, the entire API is inaccessible. If health endpoints
+require auth, Kubernetes liveness/readiness probes fail and the pod enters CrashLoopBackOff.
+
+---
+
+## 10. Path Parameters — Positive Tests (PP — no positive IDs, positive path tests are already in P20)
+
+No additional positive path parameter tests needed — P20 (GET by valid ID → 200) already covers the happy path.
+
+---
+
+## 11. Error Structure — Positive Tests (ERR — no positive IDs)
+
+No additional positive error structure tests needed — P74-P77 already verify correct error response structure on success paths.
 
 ---
 

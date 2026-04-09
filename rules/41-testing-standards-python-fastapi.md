@@ -2041,6 +2041,9 @@ def test_sec2_health_endpoint_requires_no_auth(client):
 def test_sec3_unauthenticated_request_returns_401(client):
     response = client.get("/api/resources/1")
     assert response.status_code == 401
+    body = response.json()
+    assert body["success"] is False
+    assert "message" in body
 ```
 
 ### SEC4: Invalid or expired token returns 401
@@ -2052,12 +2055,16 @@ def test_sec4_invalid_token_returns_401(client):
         headers={"Authorization": "Bearer invalid.token.here"},
     )
     assert response.status_code == 401
+    body = response.json()
+    assert body["success"] is False
+    # Must not leak stack trace or token details
+    assert "Traceback" not in body.get("message", "")
 ```
 
 ### SEC5: SQL injection payload in request body returns 400 or 422, never 500
 
 ```python
-def test_sec5_sql_injection_in_name_returns_422(client, valid_token):
+def test_sec5_sql_injection_in_name_returns_422(client, valid_token, mock_service):
     response = client.post(
         "/api/resources",
         headers={"Authorization": f"Bearer {valid_token}"},
@@ -2065,6 +2072,8 @@ def test_sec5_sql_injection_in_name_returns_422(client, valid_token):
     )
     assert response.status_code in (400, 422)
     assert response.status_code != 500
+    # Service must NOT be invoked — validation rejects before reaching business logic
+    mock_service.add.assert_not_called()
 ```
 
 ### SEC6: XSS payload in request body is handled safely

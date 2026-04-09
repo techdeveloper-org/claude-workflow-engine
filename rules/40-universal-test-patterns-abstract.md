@@ -605,8 +605,7 @@ Cross-Cutting Patterns:
 | Negative | 35 |
 | Edge Case | 31 |
 | Cross-Cutting Patterns | 7 |
-| **Total Scenarios** | **110 core + 7 cross-cutting** |
-| **Total with Cross-Cutting** | **117** |
+| **Total Scenarios** | **122** |
 
 **Breakdown by Layer:**
 
