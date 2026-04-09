@@ -1,5 +1,5 @@
 ---
-description: "Level 2.3 - Go testing standards: 107 scenarios across 8 layers (positive/negative/edge)"
+description: "Level 2.3 - Go testing standards: 122 scenarios across 8 layers + security/path/error-structure extensions (positive/negative/edge)"
 paths:
   - "**/*_test.go"
 priority: high
@@ -10,7 +10,7 @@ conditional: "Go project detected (go.mod present)"
 
 **PURPOSE:** Define the mandatory test scenarios for every Go REST service layer. This file
 is the Go implementation of the universal patterns defined in `40-universal-test-patterns-abstract.md`.
-Every scenario ID (P1–P105, N9–N106, E11–E107) maps 1:1 to the abstract catalog.
+Every scenario ID (P1–P105, N9–N106, E11–E107, SEC1–SEC8, PP1–PP4, ERR1–ERR3) maps 1:1 to the abstract catalog.
 Missing any scenario causes a gap in observable contract coverage.
 
 **APPLIES WHEN:** Go REST service with standard library HTTP handlers or any Go HTTP framework
@@ -1019,7 +1019,22 @@ func TestUpdate_DuplicateNameOnOther_ReturnsError(t *testing.T) {
     repo.AssertNotCalled(t, "Save")
 }
 
-// N45: Repository error on Save propagates to caller.
+// N45: Update with duplicate path on a different resource returns ErrDuplicateResource.
+func TestUpdate_DuplicatePathOnOther_ReturnsError(t *testing.T) {
+    repo := new(MockResourceRepository)
+    existing := &ResourceEntity{ID: 1, Name: "Name", Path: "/old"}
+    repo.On("FindByID", mock.Anything, int64(1)).Return(existing, nil)
+    repo.On("ExistsByNameILikeAndIDNot", mock.Anything, "Name", int64(1)).Return(false, nil)
+    repo.On("ExistsByPathILikeAndIDNot", mock.Anything, "/taken", int64(1)).Return(true, nil)
+
+    svc := NewResourceService(repo, nil)
+    _, err := svc.Update(context.Background(), 1, ResourceForm{Name: "Name", Path: "/taken"})
+
+    assert.ErrorIs(t, err, ErrDuplicateResource)
+    repo.AssertNotCalled(t, "Save")
+}
+
+// N45B: Repository error on Save propagates to caller.
 func TestAdd_RepositoryError_Propagates(t *testing.T) {
     repo := new(MockResourceRepository)
     repoErr := errors.New("db connection failed")
@@ -2171,6 +2186,326 @@ mockSvc.AssertExpectations(t)
 validator, or publisher must include all corresponding scenarios from this catalog before
 the coverage gate runs. Missing scenarios will cause branch/method coverage failures
 under `go test -cover` enforcement.
+
+---
+
+## Layer 9 — Security Tests (SEC1–SEC8)
+
+Use `net/http/httptest` + `testify/assert`. All security tests live in `handler_security_test.go`.
+
+### Why This Matters
+
+Security tests verify that the HTTP surface rejects unauthenticated access, sanitises
+malicious input, and never leaks internal state (stack traces, goroutine dumps, file
+paths) through error responses. A 500 response to an injection payload or an unchecked
+JWT means the handler is cooperating with an attacker.
+
+```go
+// SEC1: Authenticated request with valid Bearer token → 200 OK.
+func TestSEC1_ValidBearerToken_Returns200(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    mockSvc.On("GetAll", mock.Anything).Return([]ResourceDTO{{ID: 1, Name: "r"}}, nil)
+    handler := NewResourceHandler(mockSvc)
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources", nil)
+    req.Header.Set("Authorization", "Bearer valid-test-token")
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusOK, rec.Code)
+    mockSvc.AssertExpectations(t)
+}
+
+// SEC2: Health endpoint accessible without authentication → 200.
+// Health probes must not require auth; Kubernetes liveness/readiness depends on this.
+func TestSEC2_HealthEndpoint_NoAuthRequired_Returns200(t *testing.T) {
+    req := httptest.NewRequest(http.MethodGet, "/health", nil)
+    rec := httptest.NewRecorder()
+    healthHandler(rec, req)
+
+    assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+// SEC3: Missing Authorization header → 401, body.Success = false.
+// CORRECT
+func TestSEC3_MissingAuthHeader_Returns401(t *testing.T) {
+    handler := NewResourceHandler(new(MockResourceService))
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources", nil)
+    // No Authorization header set
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusUnauthorized, rec.Code)
+    var body ApiResponse[any]
+    require.NoError(t, json.NewDecoder(rec.Body).Decode(&body))
+    assert.False(t, body.Success)
+}
+
+// WRONG — checking only status code without verifying body contract
+// func TestSEC3_Wrong(t *testing.T) {
+//     ...
+//     assert.Equal(t, http.StatusUnauthorized, rec.Code)
+//     // Missing: body.Success must be false; body must be valid JSON
+// }
+
+// SEC4: Malformed or expired JWT → 401, error message does NOT contain goroutine
+//       dumps or internal file paths.
+func TestSEC4_MalformedJWT_Returns401_NoStackTrace(t *testing.T) {
+    handler := NewResourceHandler(new(MockResourceService))
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources", nil)
+    req.Header.Set("Authorization", "Bearer this.is.not.a.valid.jwt")
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+    body := rec.Body.String()
+    assert.NotContains(t, body, "goroutine",
+        "response must not contain goroutine dumps")
+    assert.NotContains(t, body, ".go:",
+        "response must not contain internal file paths")
+}
+
+// SEC5: SQL injection payload in name field → 400 or rejected, NOT 500.
+// The handler must validate / reject before passing to the service layer.
+func TestSEC5_SQLInjectionInName_Returns400NotPanic(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    // Service should never be called when the payload is malicious
+    handler := NewResourceHandler(mockSvc)
+
+    payload := `{"name": "'; DROP TABLE resources; --", "path": "/test"}`
+    req := httptest.NewRequest(http.MethodPost, "/api/v1/resources",
+        strings.NewReader(payload))
+    req.Header.Set("Content-Type", "application/json")
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    // Must be 400, not 500 (which would imply the DB was hit with raw input)
+    assert.Equal(t, http.StatusBadRequest, rec.Code,
+        "SQL injection payload must be rejected at the handler layer")
+    mockSvc.AssertNotCalled(t, "Add", mock.Anything, mock.Anything)
+}
+
+// WRONG — accepting any non-500 without verifying service was not called
+// func TestSEC5_Wrong(t *testing.T) {
+//     ...
+//     assert.NotEqual(t, http.StatusInternalServerError, rec.Code)
+//     // Missing: service should not have been called at all
+// }
+
+// SEC6: XSS payload in name field → stored or rejected, but NEVER 500.
+// The handler must not panic when processing script tags in string fields.
+func TestSEC6_XSSPayloadInName_NotPanic_Not500(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    // If the handler passes the payload through to the service, the service
+    // must also not panic (configure mock to return normally or a validation error).
+    mockSvc.On("Add", mock.Anything, mock.Anything).
+        Return(nil, errors.New("validation error")).Maybe()
+    handler := NewResourceHandler(mockSvc)
+
+    payload := `{"name": "<script>alert(1)</script>", "path": "/test"}`
+    req := httptest.NewRequest(http.MethodPost, "/api/v1/resources",
+        strings.NewReader(payload))
+    req.Header.Set("Content-Type", "application/json")
+    rec := httptest.NewRecorder()
+
+    // Must not panic — test framework recovers panics and marks test as failed
+    assert.NotPanics(t, func() { handler.ServeHTTP(rec, req) })
+    assert.NotEqual(t, http.StatusInternalServerError, rec.Code,
+        "XSS payload must not cause 500; handler should validate or sanitise")
+}
+
+// SEC7: Oversized body (10 MB) → 413 or 400, NOT 500.
+// Requires http.MaxBytesReader to be applied in the handler middleware.
+func TestSEC7_OversizedBody_Returns413Or400(t *testing.T) {
+    handler := NewResourceHandler(new(MockResourceService))
+
+    // Generate a 10 MB body
+    largeBody := strings.NewReader(strings.Repeat("x", 10*1024*1024))
+    req := httptest.NewRequest(http.MethodPost, "/api/v1/resources", largeBody)
+    req.Header.Set("Content-Type", "application/json")
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Contains(t, []int{http.StatusRequestEntityTooLarge, http.StatusBadRequest},
+        rec.Code,
+        "10 MB body must be rejected with 413 or 400, not 500")
+}
+
+// WRONG — not enforcing http.MaxBytesReader in production middleware means this
+// test passes trivially because the handler reads the entire body into memory,
+// causing OOM in production under load.
+//
+// CORRECT pattern in middleware:
+//   r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB limit
+//   defer r.Body.Close()
+
+// SEC8: Missing Content-Type header → 415 or 400, NOT 500.
+func TestSEC8_MissingContentType_Returns415Or400(t *testing.T) {
+    handler := NewResourceHandler(new(MockResourceService))
+
+    req := httptest.NewRequest(http.MethodPost, "/api/v1/resources",
+        strings.NewReader(`{"name":"test","path":"/t"}`))
+    // Content-Type deliberately omitted
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Contains(t, []int{http.StatusUnsupportedMediaType, http.StatusBadRequest},
+        rec.Code,
+        "missing Content-Type must be rejected with 415 or 400")
+}
+```
+
+---
+
+## Path Parameter Edge Cases (PP1–PP4)
+
+These tests verify that the URL routing layer rejects structurally invalid path
+parameters before they reach the service or database. Failing to reject them allows
+error amplification: a badly-routed request may hit the database with a nonsense query,
+producing a different (potentially information-leaking) error response.
+
+```go
+// PP1: Non-numeric path parameter → 400 Bad Request.
+func TestGetResource_NonNumericID_Returns400(t *testing.T) {
+    handler := NewResourceHandler(new(MockResourceService))
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources/abc", nil)
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// PP2: Negative ID → 400 Bad Request or 404 Not Found.
+// Both are acceptable; the key requirement is that the service is not called with -1.
+func TestGetResource_NegativeID_Returns400Or404(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    handler := NewResourceHandler(mockSvc)
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources/-1", nil)
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Contains(t, []int{http.StatusBadRequest, http.StatusNotFound}, rec.Code,
+        "negative ID must be rejected before reaching the service")
+    mockSvc.AssertNotCalled(t, "GetByID", mock.Anything, int64(-1))
+}
+
+// PP3: Zero ID → 400 Bad Request or 404 Not Found.
+// ID=0 is never a valid primary key; the handler must reject it explicitly.
+func TestGetResource_ZeroID_Returns400Or404(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    handler := NewResourceHandler(mockSvc)
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources/0", nil)
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Contains(t, []int{http.StatusBadRequest, http.StatusNotFound}, rec.Code,
+        "zero ID must be rejected before reaching the service")
+    mockSvc.AssertNotCalled(t, "GetByID", mock.Anything, int64(0))
+}
+
+// PP4: Overflow int64 path parameter → 400 Bad Request.
+// strconv.ParseInt overflows silently on some implementations; the handler must
+// return 400 rather than wrapping to a negative int64 and hitting the database.
+func TestGetResource_OverflowID_Returns400(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    handler := NewResourceHandler(mockSvc)
+
+    req := httptest.NewRequest(http.MethodGet,
+        "/api/v1/resources/99999999999999999999", nil)
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusBadRequest, rec.Code,
+        "int64 overflow ID must produce 400, not a wrapped negative ID query")
+    mockSvc.AssertNotCalled(t, "GetByID", mock.Anything, mock.Anything)
+}
+```
+
+---
+
+## Internal Error Structure (ERR1–ERR3)
+
+These tests verify that when the application encounters an unexpected error it returns
+a structured JSON response and never leaks runtime internals (goroutine stack dumps,
+source file paths, package names) to the caller. Leaking stack traces is an information
+disclosure vulnerability (OWASP A05 Security Misconfiguration).
+
+```go
+// ERR1: Unhandled service panic/error produces a structured JSON response with
+//       status 500 and body.Success = false.
+func TestUnhandledPanic_ReturnsStructuredJSON(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    mockSvc.On("GetByID", mock.Anything, int64(1)).
+        Return(nil, errors.New("unexpected internal error"))
+    handler := NewResourceHandler(mockSvc)
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources/1", nil)
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusInternalServerError, rec.Code)
+
+    var body ApiResponse[any]
+    require.NoError(t, json.NewDecoder(rec.Body).Decode(&body),
+        "500 response must be valid JSON, not a plain-text stack trace")
+    assert.False(t, body.Success,
+        "500 response body.Success must be false")
+}
+
+// WRONG — catching the status code but not validating JSON structure
+// func TestERR1_Wrong(t *testing.T) {
+//     ...
+//     assert.Equal(t, http.StatusInternalServerError, rec.Code)
+//     // Missing: JSON decode check; body might be a raw Go panic dump
+// }
+
+// ERR2: Internal server error response body does NOT contain goroutine dumps or
+//       Go source file paths.
+func TestInternalError_NoStackTrace(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    mockSvc.On("GetByID", mock.Anything, int64(1)).
+        Return(nil, errors.New("db connection refused"))
+    handler := NewResourceHandler(mockSvc)
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources/1", nil)
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    body := rec.Body.String()
+    assert.NotContains(t, body, "goroutine",
+        "500 body must not contain a goroutine dump")
+    assert.NotContains(t, body, ".go:",
+        "500 body must not contain Go source file references")
+    assert.NotContains(t, body, "runtime/debug",
+        "500 body must not contain Go runtime package paths")
+}
+
+// ERR3: Internal server error response Content-Type is application/json.
+// A plain-text or HTML 500 response breaks all client JSON parsers.
+func TestInternalError_ContentTypeJSON(t *testing.T) {
+    mockSvc := new(MockResourceService)
+    mockSvc.On("GetByID", mock.Anything, int64(1)).
+        Return(nil, errors.New("unexpected"))
+    handler := NewResourceHandler(mockSvc)
+
+    req := httptest.NewRequest(http.MethodGet, "/api/v1/resources/1", nil)
+    rec := httptest.NewRecorder()
+    handler.ServeHTTP(rec, req)
+
+    assert.Equal(t, http.StatusInternalServerError, rec.Code)
+    ct := rec.Header().Get("Content-Type")
+    assert.Contains(t, ct, "application/json",
+        "500 response Content-Type must be application/json")
+}
+```
+
+---
 
 **SEE ALSO:**
 - `40-universal-test-patterns-abstract.md` — language-agnostic source of truth for all 107 scenario IDs

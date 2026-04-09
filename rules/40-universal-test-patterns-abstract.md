@@ -1,5 +1,5 @@
 ---
-description: "Level 2.3 - Language-agnostic universal test patterns for REST microservices (107 scenarios across 8 layers)"
+description: "Level 2.3 - Language-agnostic universal test patterns for REST microservices (122 scenarios across 8 layers)"
 paths:
   - "src/test/**"
   - "tests/**"
@@ -601,12 +601,12 @@ Cross-Cutting Patterns:
 
 | Category | Count |
 |----------|-------|
-| Positive | 42 |
-| Negative | 28 |
-| Edge Case | 25 |
+| Positive | 44 |
+| Negative | 35 |
+| Edge Case | 31 |
 | Cross-Cutting Patterns | 7 |
-| **Total Scenarios** | **95 core + 7 cross-cutting** |
-| **Total with Cross-Cutting** | **102** |
+| **Total Scenarios** | **110 core + 7 cross-cutting** |
+| **Total with Cross-Cutting** | **117** |
 
 **Breakdown by Layer:**
 
@@ -620,7 +620,86 @@ Cross-Cutting Patterns:
 | Layer 6 — Error Handler | P74–P77 (4) | N78–N79 (2) | E80–E81 (2) | 8 |
 | Layer 7 — Validation | P82–P87 (6) | N88–N96 (9) | E97–E101 (5) | 20 |
 | Layer 8 — Event Publisher | P102–P105 (4) | N106 (1) | E107 (1) | 6 |
-| **Total** | **52** | **30** | **25** | **107** |
+| Layer 9 — Security | SEC1–SEC2 (2) | SEC3–SEC6 (4) | SEC7–SEC8 (2) | 8 |
+| Layer 10 — Path Parameters | — | PP1 (1) | PP2–PP4 (3) | 4 |
+| Layer 11 — Error Structure | — | ERR1–ERR2 (2) | ERR3 (1) | 3 |
+| **Total** | **54** | **37** | **31** | **122** |
+
+---
+
+## Layer ID Ranges
+
+| Layer | ID Range | Count | Notes |
+|-------|----------|-------|-------|
+| 1 — Bootstrap | P1–P8, N9–N10, E11 | 11 | |
+| 2 — Configuration | P12–P15, N16, E17 | 6 | |
+| 3 — Controller/Handler | P18–P23, N24–N27, E28–E30 | 13 | |
+| 4 — Service | P31–P39, N40–N45, E46–E50 | 20 | |
+| 5 — Entity/Model | P51–P61, N62–N66, E67–E73 | 23 | |
+| 6 — Error Handler | P74–P77, N78–N79, E80–E81 | 8 | |
+| 7 — Validation | P82–P87, N88–N96, E97–E101 | 20 | |
+| 8 — Event Publisher | P102–P105, N106, E107 | 6 | |
+| **9 — Security** | **SEC1–SEC8** | **8** | **NEW** |
+| **10 — Path Parameters** | **PP1–PP4** | **4** | **NEW** |
+| **11 — Error Structure** | **ERR1–ERR3** | **3** | **NEW** |
+| **Total** | | **122** | Was 107, added 15 |
+
+Gaps in numbering (e.g., P8→P12, P15→P18) are intentional layer-boundary reservations.
+
+---
+
+## Layer 9: Security Tests (SEC1–SEC8)
+
+**Applicable To:** Every REST service exposed to untrusted input (public APIs, mobile backends, SPAs).
+**Isolation Principle:** Use the HTTP test client (supertest/TestClient/httptest) to send malicious payloads. Assert the response status code and verify no internal details leak.
+
+### Positive Scenarios
+
+| ID | Scenario | What To Verify | Assertion Target (Generic) | Universality |
+|----|----------|---------------|---------------------------|--------------|
+| SEC1 | Authenticated request to protected endpoint succeeds | Valid auth token → 200 OK | Response status 200, body has expected data | Every app with auth needs this baseline |
+| SEC2 | Health/readiness endpoints are publicly accessible without auth | GET /health → 200 without token | No 401 on unauthenticated health check | Kubernetes probes fail without this |
+
+### Negative Scenarios
+
+| ID | Scenario | What To Verify | Assertion Target (Generic) | Universality |
+|----|----------|---------------|---------------------------|--------------|
+| SEC3 | Unauthenticated request to protected endpoint returns 401 | No token → 401 Unauthorized | Status 401, body success=false, no data leaked | Fundamental auth contract |
+| SEC4 | Expired/invalid token returns 401, not 403 or 500 | Malformed JWT → 401 | Status 401, error message does not contain stack trace | Token validation is present in every secured app |
+| SEC5 | SQL injection in name field returns 400/422, not 500 | name=`'; DROP TABLE resources; --` → 400 | No 500 Internal Server Error, no SQL error in response | Prevents info disclosure via DB errors |
+| SEC6 | XSS payload in name field is handled safely | name=`<script>alert(1)</script>` → stored verbatim or rejected 422 | Response does not execute or reflect unescaped HTML | Every web API processes user strings |
+
+### Edge Case Scenarios
+
+| ID | Scenario | What To Verify | Assertion Target (Generic) | Universality |
+|----|----------|---------------|---------------------------|--------------|
+| SEC7 | Oversized request body returns 413 or 400, not 500 | POST with 10MB JSON body → 413/400 | No OOM crash, no 500, correct status code | Every API has a body size limit |
+| SEC8 | Missing Content-Type header returns 415 or 400, not 500 | POST without Content-Type → 415/400 | Graceful rejection, not a parsing crash | Malformed requests are common in the wild |
+
+---
+
+## Additional Scenarios: Path Parameters (PP1–PP4)
+
+**Applicable To:** Every REST endpoint that accepts path parameters (e.g., GET /resources/{id}).
+**Isolation Principle:** Send malformed path parameters via HTTP test client.
+
+| ID | Type | Scenario | What To Verify | Assertion Target |
+|----|------|----------|---------------|-----------------|
+| PP1 | Negative | Non-numeric ID in path (GET /resources/abc) | Returns 400, not 500 | No NumberFormatException/ValueError in response body |
+| PP2 | Edge | Negative integer ID (GET /resources/-1) | Returns 400 or 404, not 500 | Graceful handling, not a crash |
+| PP3 | Edge | Zero ID (GET /resources/0) | Returns 400 or 404, not 500 | Zero is not a valid auto-generated ID |
+| PP4 | Edge | Very large ID beyond integer range (GET /resources/99999999999999999999) | Returns 400, not 500 | No integer overflow crash |
+
+## Additional Scenarios: Internal Error Structure (ERR1–ERR3)
+
+**Applicable To:** Every REST service that can encounter unexpected errors.
+**Isolation Principle:** Force a 500 error via mocked dependency failure.
+
+| ID | Type | Scenario | What To Verify | Assertion Target |
+|----|------|----------|---------------|-----------------|
+| ERR1 | Negative | Unhandled exception produces structured error response | 500 response uses ApiResponse envelope with success=false | No naked exception trace in response body |
+| ERR2 | Negative | Error response does not leak stack trace | 500 body.message is generic (e.g., "Internal Server Error") | No file paths, line numbers, or class names in message |
+| ERR3 | Edge | Error response Content-Type is application/json | Even 500 errors return JSON, not text/html | Clients parsing JSON don't get unexpected HTML error pages |
 
 ---
 

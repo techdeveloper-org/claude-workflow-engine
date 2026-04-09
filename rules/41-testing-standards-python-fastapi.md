@@ -1,5 +1,5 @@
 ---
-description: "Level 2.3 - Python/FastAPI testing standards: 107 scenarios across 8 layers (positive/negative/edge)"
+description: "Level 2.3 - Python/FastAPI testing standards: 122 scenarios across 11 layers (positive/negative/edge)"
 paths:
   - "tests/**/*.py"
   - "test_*.py"
@@ -645,10 +645,8 @@ class TestResourceServicePositive:
 
         await service.get_all()
 
-        mock_repo.find_all_sorted.assert_called_once()
-        call_kwargs = mock_repo.find_all_sorted.call_args
-        # Verify sort field and direction are passed correctly
-        assert call_kwargs is not None
+        # MUST verify exact sort arguments — not just assert_called_once()
+        mock_repo.find_all_sorted.assert_called_once_with(sort_by="id", direction="ASC")
 
     # P35: Get all returns items in ID-ascending order
     @pytest.mark.asyncio
@@ -1985,6 +1983,27 @@ Event Publisher Layer:
 - [ ] N106: UPDATE with non-existent ID still publishes (no existence check)
 - [ ] E107: CREATE/UPDATE/DELETE event_type values are all distinct
 
+Security Layer:
+- [ ] SEC1: Authenticated request succeeds with valid token
+- [ ] SEC2: Health endpoint accessible without auth
+- [ ] SEC3: Unauthenticated request returns 401
+- [ ] SEC4: Invalid/expired token returns 401
+- [ ] SEC5: SQL injection input returns 400/422, not 500
+- [ ] SEC6: XSS payload handled safely
+- [ ] SEC7: Oversized body returns 413/400
+- [ ] SEC8: Missing Content-Type returns 415/400
+
+Path Parameters:
+- [ ] PP1: Non-numeric ID returns 422
+- [ ] PP2: Negative ID returns 400/404
+- [ ] PP3: Zero ID returns 400/404
+- [ ] PP4: Overflow ID returns 422
+
+Error Structure:
+- [ ] ERR1: 500 returns ApiResponse envelope
+- [ ] ERR2: 500 message has no stack trace
+- [ ] ERR3: 500 Content-Type is application/json
+
 ---
 
 **ENFORCEMENT:** Every PR introducing a new FastAPI layer (router, service, entity, handler,
@@ -1992,7 +2011,209 @@ form, publisher) must include all corresponding test scenarios from this catalog
 coverage gate runs. Missing tests will cause `pytest --cov` branch/statement coverage
 failures under the 100% per-module enforcement gate.
 
+## 9. Security Layer (SEC1–SEC8)
+
+**Purpose:** Verify authentication enforcement, input sanitization, and request size limits
+align with OWASP Top 10 (A01 Broken Access Control, A03 Injection, A05 Misconfiguration).
+
+### SEC1: Authenticated request succeeds with valid token
+
+```python
+def test_sec1_authenticated_request_succeeds(client, valid_token):
+    response = client.get(
+        "/api/resources/1",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert response.status_code == 200
+```
+
+### SEC2: Health endpoint accessible without authentication
+
+```python
+def test_sec2_health_endpoint_requires_no_auth(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+```
+
+### SEC3: Unauthenticated request to protected endpoint returns 401
+
+```python
+def test_sec3_unauthenticated_request_returns_401(client):
+    response = client.get("/api/resources/1")
+    assert response.status_code == 401
+```
+
+### SEC4: Invalid or expired token returns 401
+
+```python
+def test_sec4_invalid_token_returns_401(client):
+    response = client.get(
+        "/api/resources/1",
+        headers={"Authorization": "Bearer invalid.token.here"},
+    )
+    assert response.status_code == 401
+```
+
+### SEC5: SQL injection payload in request body returns 400 or 422, never 500
+
+```python
+def test_sec5_sql_injection_in_name_returns_422(client, valid_token):
+    response = client.post(
+        "/api/resources",
+        headers={"Authorization": f"Bearer {valid_token}"},
+        json={"name": "'; DROP TABLE resources; --", "path": "/safe"},
+    )
+    assert response.status_code in (400, 422)
+    assert response.status_code != 500
+```
+
+### SEC6: XSS payload in request body is handled safely
+
+```python
+def test_sec6_xss_payload_in_name_does_not_cause_500(client, valid_token):
+    response = client.post(
+        "/api/resources",
+        headers={"Authorization": f"Bearer {valid_token}"},
+        json={"name": "<script>alert('xss')</script>", "path": "/safe"},
+    )
+    # Must not crash the server; response body must not echo raw script tag
+    assert response.status_code in (200, 201, 400, 422)
+    assert response.status_code != 500
+    if response.status_code in (200, 201):
+        body = response.json()
+        assert "<script>" not in str(body)
+```
+
+### SEC7: Oversized request body returns 413 or 400, never 500
+
+```python
+def test_sec7_oversized_body_returns_413_or_400(client, valid_token):
+    huge_name = "A" * 10_000_000  # 10 MB string
+    response = client.post(
+        "/api/resources",
+        headers={"Authorization": f"Bearer {valid_token}"},
+        json={"name": huge_name, "path": "/test"},
+    )
+    assert response.status_code in (400, 413, 422)
+    assert response.status_code != 500
+```
+
+### SEC8: Request without Content-Type header returns 415 or 400
+
+```python
+def test_sec8_missing_content_type_returns_415_or_400(client, valid_token):
+    response = client.post(
+        "/api/resources",
+        headers={"Authorization": f"Bearer {valid_token}"},
+        data='{"name": "test", "path": "/test"}',  # raw bytes, no content-type
+    )
+    assert response.status_code in (400, 415, 422)
+```
+
+---
+
+## 10. Path Parameter Edge Cases (PP1–PP4)
+
+**Purpose:** Confirm that FastAPI's typed path parameter validation rejects invalid IDs at
+the framework layer before any service or repository code is reached.
+
+### PP1: Non-numeric path ID returns 422 Unprocessable Entity
+
+```python
+def test_pp1_non_numeric_id_returns_422(client):
+    response = client.get("/api/resources/abc")
+    assert response.status_code == 422
+```
+
+### PP2: Negative path ID returns 400 or 404
+
+```python
+def test_pp2_negative_id_returns_400_or_404(client, valid_token):
+    response = client.get(
+        "/api/resources/-1",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert response.status_code in (400, 404)
+```
+
+### PP3: Zero path ID returns 400 or 404
+
+```python
+def test_pp3_zero_id_returns_400_or_404(client, valid_token):
+    response = client.get(
+        "/api/resources/0",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert response.status_code in (400, 404)
+```
+
+### PP4: Integer overflow path ID returns 422
+
+```python
+def test_pp4_very_large_id_returns_422(client):
+    # Value exceeds Python/FastAPI int32 boundary — framework must reject before service
+    response = client.get("/api/resources/99999999999999999999")
+    assert response.status_code == 422
+```
+
+---
+
+## 11. Internal Error Structure (ERR1–ERR3)
+
+**Purpose:** Ensure unhandled exceptions are caught by the global exception handler and
+always return a structured `ApiResponse` envelope with no internal detail leakage.
+
+### ERR1: Unhandled exception returns ApiResponse envelope with success=False
+
+```python
+def test_err1_unhandled_exception_returns_structured_response(
+    client, valid_token, mock_service
+):
+    mock_service.get_by_id.side_effect = RuntimeError("unexpected DB failure")
+    response = client.get(
+        "/api/resources/1",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert response.status_code == 500
+    body = response.json()
+    assert "success" in body
+    assert body["success"] is False
+    assert "message" in body
+```
+
+### ERR2: 500 response body contains no stack trace text
+
+```python
+def test_err2_500_does_not_leak_stack_trace(client, valid_token, mock_service):
+    mock_service.get_by_id.side_effect = RuntimeError("db connection pool exhausted")
+    response = client.get(
+        "/api/resources/1",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    body = response.json()
+    message = body.get("message", "")
+    assert "Traceback" not in message
+    assert "File " not in message
+    assert "RuntimeError" not in message
+    assert "line " not in message
+```
+
+### ERR3: 500 response Content-Type is application/json
+
+```python
+def test_err3_500_content_type_is_json(client, valid_token, mock_service):
+    mock_service.get_by_id.side_effect = RuntimeError("unexpected error")
+    response = client.get(
+        "/api/resources/1",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert response.status_code == 500
+    assert "application/json" in response.headers.get("content-type", "")
+```
+
+---
+
 **SEE ALSO:**
-- `40-universal-test-patterns-abstract.md` — language-agnostic source of truth for all 107 scenario IDs
+- `40-universal-test-patterns-abstract.md` — language-agnostic source of truth for all 122 scenario IDs
 - `28-test-coverage-enforcement.md` — 100% per-module coverage gate configuration
 - `38-test-mocking-strategy.md` — which isolation strategy to use per layer

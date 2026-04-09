@@ -1,5 +1,5 @@
 ---
-description: "Level 2.3 - Node.js/TypeScript/Express testing standards: 107 scenarios across 8 layers (positive/negative/edge)"
+description: "Level 2.3 - Node.js/TypeScript/Express testing standards: 122 scenarios across 11 layers (positive/negative/edge/security/path-params/error-structure)"
 paths:
   - "src/**/*.test.ts"
   - "src/**/*.spec.ts"
@@ -12,11 +12,12 @@ conditional: "Node.js/TypeScript project detected (package.json with express or 
 # Node.js/TypeScript/Express Testing Standards (Level 2.3)
 
 **PURPOSE:** Define the mandatory test scenarios that every Node.js/TypeScript REST microservice
-must cover, organized by application layer. Each scenario ID (P1–P105, N9–N106, E11–E107)
-maps 1-to-1 with the language-agnostic abstract defined in `40-universal-test-patterns-abstract.md`.
-This file is the authoritative Node.js implementation reference — it prescribes HOW to write
-every scenario using Jest 29+, supertest, Zod, Prisma/TypeORM, and ioredis. When the abstract
-adds or removes a scenario, this file must be updated to match.
+must cover, organized by application layer. Each scenario ID (P1–P105, N9–N106, E11–E107,
+SEC1–SEC8, PP1–PP4, ERR1–ERR3) maps 1-to-1 with the language-agnostic abstract defined in
+`40-universal-test-patterns-abstract.md`. This file is the authoritative Node.js implementation
+reference — it prescribes HOW to write every scenario using Jest 29+, supertest, Zod,
+Prisma/TypeORM, and ioredis. When the abstract adds or removes a scenario, this file must be
+updated to match.
 
 **APPLIES WHEN:** Any Node.js/TypeScript REST microservice with Express (or Fastify/NestJS)
 following the Route → Controller → Service → Repository architectural pattern, with Zod input
@@ -188,22 +189,27 @@ describe('Application Bootstrap', () => {
     expect(typeof app).toBe('function'); // Express app is a function
   });
 
-  // P2: App registers JSON body parser middleware
-  it('P2 — should register express.json() middleware', () => {
+  // P2: App parses JSON request bodies (behavioral test — no Express internals)
+  it('P2 — should parse JSON request bodies correctly', async () => {
     const { app } = require('@/app');
-    const jsonMiddleware = app._router.stack.some(
-      (layer: { name: string }) => layer.name === 'jsonParser'
-    );
-    expect(jsonMiddleware).toBe(true);
+    const res = await request(app)
+      .post('/api/v1/resources')
+      .set('Content-Type', 'application/json')
+      .send({ name: 'Test', path: '/test' });
+    // If JSON parsing works, we get a structured response (not 415 Unsupported Media Type)
+    expect(res.status).not.toBe(415);
+    expect(res.headers['content-type']).toMatch(/json/);
   });
 
-  // P3: App registers URL-encoded body parser (form submissions)
-  it('P3 — should register express.urlencoded() middleware', () => {
+  // P3: App parses URL-encoded form submissions (behavioral test)
+  it('P3 — should parse URL-encoded form data correctly', async () => {
     const { app } = require('@/app');
-    const urlencodedMiddleware = app._router.stack.some(
-      (layer: { name: string }) => layer.name === 'urlencodedParser'
-    );
-    expect(urlencodedMiddleware).toBe(true);
+    const res = await request(app)
+      .post('/api/v1/resources')
+      .set('Content-Type', 'application/x-www-form-urlencoded')
+      .send('name=Test&path=/test');
+    // If urlencoded parsing works, we get a structured response (not 415)
+    expect(res.status).not.toBe(415);
   });
 
   // P4: Server start function has correct signature (port, callback)
@@ -1831,9 +1837,396 @@ Anti-patterns cause three classes of production failure:
 
 ---
 
+## Layer 9 — Security Tests (SEC1–SEC8)
+
+These tests verify that the API enforces authentication, rejects malformed credentials, and
+handles deliberately hostile input without leaking internals or crashing.
+
+**Setup:** All security tests use supertest with an Express app instance. JWT tokens are
+generated with the same secret the app uses so SEC1/SEC2 test the happy path; all other
+scenarios send deliberately broken or absent credentials/payloads.
+
+```typescript
+// tests/security/auth-and-input.security.test.ts
+import request from 'supertest';
+import jwt from 'jsonwebtoken';
+import { app } from '@/app';
+
+const JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
+
+function signToken(payload: object, expiresIn = '1h'): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn } as jwt.SignOptions);
+}
+
+// SEC1 — valid JWT Bearer token reaches the protected route
+it('SEC1 — valid Bearer token returns 200', async () => {
+  const token = signToken({ sub: 'user-1', role: 'admin' });
+
+  const response = await request(app)
+    .get('/api/resources')
+    .set('Authorization', `Bearer ${token}`);
+
+  expect(response.status).toBe(200);
+  expect(response.body.success).toBe(true);
+});
+
+// SEC2 — health endpoint is public (no auth required)
+it('SEC2 — GET /health returns 200 without Authorization header', async () => {
+  const response = await request(app).get('/health');
+
+  expect(response.status).toBe(200);
+});
+
+// SEC3 — missing Authorization header on protected route → 401
+it('SEC3 — missing Authorization header returns 401', async () => {
+  const response = await request(app).get('/api/resources');
+
+  expect(response.status).toBe(401);
+  expect(response.body.success).toBe(false);
+  expect(response.body.message).toMatch(/unauthorized|missing|token/i);
+});
+
+// SEC4 — malformed/expired JWT → 401, no stack trace in body
+it('SEC4 — expired JWT returns 401 with no stack trace', async () => {
+  const expiredToken = signToken({ sub: 'user-1' }, '-1s'); // already expired
+
+  const response = await request(app)
+    .get('/api/resources')
+    .set('Authorization', `Bearer ${expiredToken}`);
+
+  expect(response.status).toBe(401);
+  expect(response.body.success).toBe(false);
+  // No stack trace lines in the message
+  expect(response.body.message).not.toMatch(/at\s+\w+\s*\(/);
+  expect(response.body.message).not.toMatch(/\.ts:\d+/);
+});
+
+// SEC5 — SQL injection in name field → 400/422, NOT 500
+it('SEC5 — SQL injection payload in name field returns 400 not 500', async () => {
+  const token = signToken({ sub: 'user-1', role: 'admin' });
+
+  const response = await request(app)
+    .post('/api/resources')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ name: "'; DROP TABLE resources; --", path: '/test' });
+
+  expect(response.status).toBeGreaterThanOrEqual(400);
+  expect(response.status).toBeLessThan(500);
+  expect(response.body.success).toBe(false);
+});
+
+// SEC6 — XSS payload in name field is stored verbatim or rejected; never executed
+it('SEC6 — XSS payload in name field is rejected or stored as plain text', async () => {
+  const token = signToken({ sub: 'user-1', role: 'admin' });
+  const xssPayload = '<script>alert(1)</script>';
+
+  const response = await request(app)
+    .post('/api/resources')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ name: xssPayload, path: '/xss-test' });
+
+  if (response.status === 201) {
+    // If stored, it must be stored as-is (plain text) — not HTML-decoded or executed
+    expect(response.body.data.name).toBe(xssPayload);
+    // Content-Type must be JSON, never text/html that would execute scripts
+    expect(response.headers['content-type']).toMatch(/application\/json/);
+  } else {
+    // Validation rejected it — equally valid; just must not be a 500
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
+  }
+});
+
+// SEC7 — oversized JSON body → 413/400, NOT 500
+it('SEC7 — 10 MB JSON body returns 413 or 400, not 500', async () => {
+  const token = signToken({ sub: 'user-1', role: 'admin' });
+  const oversized = { name: 'x'.repeat(10 * 1024 * 1024), path: '/big' };
+
+  const response = await request(app)
+    .post('/api/resources')
+    .set('Authorization', `Bearer ${token}`)
+    .send(oversized);
+
+  expect(response.status).toBeGreaterThanOrEqual(400);
+  expect(response.status).toBeLessThan(500);
+});
+
+// SEC8 — missing Content-Type on POST → 415/400, NOT 500
+it('SEC8 — POST without Content-Type header returns 415 or 400, not 500', async () => {
+  const token = signToken({ sub: 'user-1', role: 'admin' });
+
+  const response = await request(app)
+    .post('/api/resources')
+    .set('Authorization', `Bearer ${token}`)
+    .set('Content-Type', '')
+    .send('not-json');
+
+  expect(response.status).toBeGreaterThanOrEqual(400);
+  expect(response.status).toBeLessThan(500);
+});
+```
+
+### CORRECT vs WRONG — Security Tests
+
+```typescript
+// WRONG — Security anti-pattern: asserting on status 200 without checking auth enforcement
+describe('WRONG — skipping auth check', () => {
+  it('returns data without setting Authorization header', async () => {
+    const response = await request(app).get('/api/resources');
+    // BUG: if this passes with 200, auth middleware is not wired in
+    expect(response.status).toBe(200); // WRONG: should be 401
+  });
+});
+
+// CORRECT — Always test both the authorized AND unauthorized paths
+describe('CORRECT — explicit auth boundary tests', () => {
+  it('SEC1 — returns 200 with valid token', async () => {
+    const token = signToken({ sub: 'u1' });
+    await request(app)
+      .get('/api/resources')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+  });
+
+  it('SEC3 — returns 401 without token', async () => {
+    await request(app).get('/api/resources').expect(401);
+  });
+});
+```
+
+```typescript
+// WRONG — Using a hardcoded fake token string instead of a real signed JWT
+describe('WRONG — fake token string', () => {
+  it('SEC4 variant — sends a random string as Bearer token', async () => {
+    const response = await request(app)
+      .get('/api/resources')
+      .set('Authorization', 'Bearer not-a-real-jwt'); // WRONG: may hit parse errors, not auth logic
+    expect(response.status).toBe(401);
+  });
+});
+
+// CORRECT — Use jwt.sign() with a past expiry to produce a structurally valid but expired token
+it('CORRECT — SEC4 uses jwt.sign with past expiry', async () => {
+  const expiredToken = jwt.sign({ sub: 'u1' }, JWT_SECRET, { expiresIn: '-1s' });
+  await request(app)
+    .get('/api/resources')
+    .set('Authorization', `Bearer ${expiredToken}`)
+    .expect(401);
+});
+```
+
+### Why This Matters
+
+Security test gaps are the most common source of production vulnerabilities in microservices:
+1. Missing SEC3/SEC4 tests mean auth middleware is never regression-tested — a mis-wired router
+   can silently remove auth protection after a refactor, and no test catches it until production.
+2. SEC5/SEC6 tests confirm that input validation (Zod schema) runs before any DB query —
+   catching cases where a developer adds a new route and forgets to wire the validation middleware.
+3. SEC7/SEC8 guard against resource exhaustion and parser crashes that Express exposes to the
+   public without body-parser limits or content-type enforcement.
+
+---
+
+## Path Parameter Edge Cases (PP1–PP4)
+
+These tests verify that the API correctly validates `:id` path parameters and never passes
+unvalidated values to the repository or database layer.
+
+```typescript
+// tests/integration/path-params.test.ts
+import request from 'supertest';
+import { app } from '@/app';
+
+// PP1 — non-numeric string ID → 400
+it('PP1 — GET /resources/abc returns 400 for non-numeric id', async () => {
+  const response = await request(app).get('/api/resources/abc');
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+  expect(response.body.message).toMatch(/id|param|numeric|integer/i);
+});
+
+// PP2 — negative numeric ID → 400 or 404
+it('PP2 — GET /resources/-1 returns 400 or 404 for negative id', async () => {
+  const response = await request(app).get('/api/resources/-1');
+
+  expect([400, 404]).toContain(response.status);
+  expect(response.body.success).toBe(false);
+});
+
+// PP3 — zero ID → 400 or 404
+it('PP3 — GET /resources/0 returns 400 or 404 for zero id', async () => {
+  const response = await request(app).get('/api/resources/0');
+
+  expect([400, 404]).toContain(response.status);
+  expect(response.body.success).toBe(false);
+});
+
+// PP4 — ID beyond Number.MAX_SAFE_INTEGER → 400
+it('PP4 — GET /resources/99999999999999999999 returns 400 for out-of-range id', async () => {
+  const oversizedId = '99999999999999999999'; // > Number.MAX_SAFE_INTEGER (2^53 - 1)
+
+  const response = await request(app).get(`/api/resources/${oversizedId}`);
+
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+});
+```
+
+### CORRECT vs WRONG — Path Parameter Tests
+
+```typescript
+// WRONG — Letting non-numeric IDs reach the service/repository
+describe('WRONG — no param validation in controller', () => {
+  it('passes string "abc" to repository as-is', async () => {
+    // If repository receives "abc", it may throw an unhandled DB error → 500
+    // which leaks internal details and is not a test-controlled failure
+    const response = await request(app).get('/api/resources/abc');
+    expect(response.status).toBe(500); // WRONG: should be 400 from validation
+  });
+});
+
+// CORRECT — Zod coercion at the controller boundary rejects before service is called
+it('CORRECT — PP1 controller validates :id with z.coerce.number().int().positive()', async () => {
+  // The controller uses: z.coerce.number().int().positive().parse(req.params.id)
+  // Zod throws ZodError → caught by error middleware → 400 response
+  const response = await request(app).get('/api/resources/abc');
+  expect(response.status).toBe(400);
+  expect(response.body.success).toBe(false);
+});
+```
+
+### Why This Matters
+
+Path parameter validation failures are a common source of unhandled exceptions that bubble
+up as 500 errors. Without PP1–PP4:
+1. `parseInt('abc', 10)` returns `NaN`, which propagates silently through service and repository
+   until it hits a DB driver that either errors with a cryptic message or performs a full table scan.
+2. Negative or zero IDs may trigger unexpected DB behavior (auto-increment PKs are always > 0),
+   returning confusing 500s instead of clean 400/404 responses.
+3. Integers beyond `Number.MAX_SAFE_INTEGER` lose precision in JavaScript, causing ID collisions
+   that can accidentally match a different record.
+
+---
+
+## Internal Error Structure (ERR1–ERR3)
+
+These tests verify that when the service layer throws an unhandled exception, the Express
+error middleware intercepts it and returns a structured JSON envelope — never a stack trace,
+never HTML, and never a plain string body.
+
+```typescript
+// tests/integration/error-structure.test.ts
+import request from 'supertest';
+import { app } from '@/app';
+import { ResourceService } from '@/services/resource.service';
+
+// ERR1 — unhandled exception returns 500 with structured envelope
+it('ERR1 — unhandled service exception returns 500 JSON envelope', async () => {
+  jest.spyOn(ResourceService.prototype, 'getAll').mockRejectedValue(
+    new Error('Unexpected DB connection loss')
+  );
+
+  const response = await request(app).get('/api/resources');
+
+  expect(response.status).toBe(500);
+  expect(response.body).toMatchObject({
+    success: false,
+    status: 500,
+    message: expect.any(String),
+  });
+});
+
+// ERR2 — 500 response body does NOT contain stack trace or file paths
+it('ERR2 — 500 response message contains no stack trace or file paths', async () => {
+  jest.spyOn(ResourceService.prototype, 'getAll').mockRejectedValue(
+    new Error('Unexpected DB connection loss')
+  );
+
+  const response = await request(app).get('/api/resources');
+
+  expect(response.status).toBe(500);
+
+  const bodyText = JSON.stringify(response.body);
+  // Stack trace lines look like: "at Object.<anonymous> (/path/to/file.ts:42:7)"
+  expect(bodyText).not.toMatch(/at\s+\w[\w.<>]*\s*\(/);
+  // File path patterns
+  expect(bodyText).not.toMatch(/\.ts:\d+:\d+/);
+  expect(bodyText).not.toMatch(/\.js:\d+:\d+/);
+  // Absolute path fragments
+  expect(bodyText).not.toMatch(/[A-Za-z]:\\|\/home\/|\/usr\/|\/var\//);
+});
+
+// ERR3 — 500 response Content-Type is application/json, not text/html
+it('ERR3 — 500 response Content-Type is application/json', async () => {
+  jest.spyOn(ResourceService.prototype, 'getAll').mockRejectedValue(
+    new Error('Unexpected DB connection loss')
+  );
+
+  const response = await request(app).get('/api/resources');
+
+  expect(response.status).toBe(500);
+  expect(response.headers['content-type']).toMatch(/application\/json/);
+  // Confirm it is NOT the default Express HTML error page
+  expect(response.headers['content-type']).not.toMatch(/text\/html/);
+});
+```
+
+### CORRECT vs WRONG — Error Structure Tests
+
+```typescript
+// WRONG — Error middleware sends back the raw Error object
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  res.status(500).json({ error: err }); // WRONG: serializes stack trace into response body
+});
+
+// CORRECT — Error middleware strips sensitive fields, returns envelope only
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const isDev = process.env.NODE_ENV === 'development';
+  res.status(500).json({
+    success: false,
+    status: 500,
+    // In production: generic message. In dev: err.message only (never err.stack)
+    message: isDev ? err.message : 'Internal server error',
+  });
+});
+```
+
+```typescript
+// WRONG — Test only asserts on status code, not envelope shape or content-type
+it('WRONG — only checks status 500', async () => {
+  jest.spyOn(ResourceService.prototype, 'getAll').mockRejectedValue(new Error('boom'));
+  const response = await request(app).get('/api/resources');
+  expect(response.status).toBe(500); // WRONG: passes even if body is HTML or contains stack trace
+});
+
+// CORRECT — Assert all three: status, envelope shape, and content-type
+it('CORRECT — full 500 assertion', async () => {
+  jest.spyOn(ResourceService.prototype, 'getAll').mockRejectedValue(new Error('boom'));
+  const response = await request(app).get('/api/resources');
+
+  expect(response.status).toBe(500);
+  expect(response.body).toMatchObject({ success: false, status: 500, message: expect.any(String) });
+  expect(response.headers['content-type']).toMatch(/application\/json/);
+  expect(JSON.stringify(response.body)).not.toMatch(/at\s+\w[\w.<>]*\s*\(/);
+});
+```
+
+### Why This Matters
+
+Unstructured 500 responses are one of the most exploited information disclosure vectors:
+1. Express's default error handler returns `text/html` with a stack trace in development mode.
+   Without ERR3, a misconfigured `NODE_ENV` in production leaks full stack traces in HTML.
+2. Stack traces in API responses (ERR2) expose file system layout, library versions, and internal
+   method names — directly useful for targeted attacks.
+3. Without ERR1 asserting the envelope shape, error middleware may be registered in the wrong
+   order (after the route, not after all routes) and the test suite never catches the gap.
+
+---
+
 ## SEE ALSO
 
-- `40-universal-test-patterns-abstract.md` — Language-agnostic scenario definitions and universality rationale for all 107 scenario IDs
+- `40-universal-test-patterns-abstract.md` — Language-agnostic scenario definitions and universality rationale for all 122 scenario IDs
 - `35-positive-testing-standards.md` — Spring Boot positive scenario implementations (Java reference)
 - `36-negative-testing-standards.md` — Spring Boot negative scenario implementations (Java reference)
 - `37-edge-case-testing-standards.md` — Spring Boot edge case implementations (Java reference)
