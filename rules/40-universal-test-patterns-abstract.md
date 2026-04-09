@@ -711,9 +711,9 @@ Gaps in numbering (e.g., P8→P12, P15→P18) are intentional layer-boundary res
 | 37-edge-case-testing-standards.md | Java / Spring Boot | Complete | E-series scenarios from this abstract |
 | 38-test-mocking-strategy.md | Java / Spring Boot | Complete | Mocking Strategy Reference from this abstract |
 | 39-cross-cutting-test-patterns.md | Java / Spring Boot | Complete | Cross-Cutting Patterns section from this abstract |
-| 41-testing-standards-python-fastapi.md | Python / FastAPI | Derived from this abstract | All 107 scenarios + 7 cross-cutting |
-| 42-testing-standards-nodejs-express.md | Node.js / TypeScript / Express | Derived from this abstract | All 107 scenarios + 7 cross-cutting |
-| 43-testing-standards-go.md | Go / net/http or Gin | Derived from this abstract | All 107 scenarios + 7 cross-cutting |
+| 41-testing-standards-python-fastapi.md | Python / FastAPI | Derived from this abstract | All 122 scenarios |
+| 42-testing-standards-nodejs-express.md | Node.js / TypeScript / Express | Derived from this abstract | All 122 scenarios |
+| 43-testing-standards-go.md | Go / net/http or Gin | Derived from this abstract | All 122 scenarios |
 
 ---
 

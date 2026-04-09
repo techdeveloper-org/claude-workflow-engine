@@ -749,8 +749,6 @@ this test.
 
 ---
 
----
-
 ## 9. Security Layer — Positive Tests (SEC1–SEC2)
 
 ### What We Follow

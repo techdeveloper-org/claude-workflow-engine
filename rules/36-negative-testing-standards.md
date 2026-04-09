@@ -557,8 +557,6 @@ unknown IDs ensures the publisher is a pure fire-and-forget transport layer.
 
 ---
 
----
-
 ## 9. Security Layer — Negative Tests (SEC3–SEC6)
 
 ### What We Follow

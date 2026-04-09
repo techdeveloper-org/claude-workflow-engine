@@ -552,8 +552,6 @@ instead of `buildEvent(DELETE, id)`.
 
 ---
 
----
-
 ## 9. Security Layer — Edge Case Tests (SEC7–SEC8)
 
 ### What We Follow
