@@ -106,10 +106,49 @@ GENERATE THE FOLLOWING (all mandatory — skip nothing):
 13. Include Model Fallback Protocol: all agent invocations follow the fallback chain
     (sonnet -> opus -> escalate to user) on rate limit errors.
 
-### STEP 11 — OUTPUT
-14. Output the COMPLETE ready-to-paste orchestration prompt.
-    Nothing blank, no [BRACKETS], no placeholders. Every section filled.
-    The output must be directly pasteable into a new Claude Code conversation.
+### STEP 11 — MULTI-AGENT PROMPT BUNDLE (MANDATORY)
+14. After completing the full orchestration plan above, generate an optimized execution-ready
+    prompt for EVERY agent identified in the execution plan.
+
+    For EACH agent produce this block:
+    ===================================================================
+    AGENT: {agent-name}
+    Phase:        {phase A/B/C/D/E}
+    Parallel With: {agent-name, agent-name | NONE}
+    Depends On:   {agent-name | NONE}
+    ===================================================================
+    PROMPT:
+    {Full optimized prompt — apply these rules:
+     - Structure: objective -> input context -> step-by-step instructions -> output format -> constraints
+     - Place critical constraints at BOTH start AND end (primacy + recency effect)
+     - For parallel agents: state explicitly what NOT to depend on from parallel peers
+     - For sequential agents: inject upstream agent's expected output as context
+     - No placeholders — every variable filled with actual values from this project
+     - Immediately usable as agent invocation instruction — no editing needed}
+
+    End with:
+    -------------------------------------------------------------------
+    EXECUTION SUMMARY
+    Parallel Groups:
+      Group 1: [{agent-name}, {agent-name}]  <- run simultaneously
+      Group 2: [{agent-name}]
+    Sequential Chain: {agent-name} -> {agent-name} -> {agent-name}
+    Total Agent Calls: {N}
+    Status: READY FOR EXECUTION
+    -------------------------------------------------------------------
+
+    IMPORTANT: solution-architect, consensus-agent, and qa-testing-agent MUST be included
+    in the bundle — they are part of every Squad/Enterprise workflow.
+
+### STEP 12 — FINAL OUTPUT
+15. Output in this exact order:
+    (1) ORCHESTRATION PROMPT (Steps 1-10 filled — paste this as context for orchestrator)
+    (2) MULTI-AGENT PROMPT BUNDLE (Step 11 — orchestrator uses these prompts verbatim for each agent)
+
+    Nothing blank. No [BRACKETS]. No placeholders. Every section filled with real values.
+    The complete output must be directly pasteable into a new Claude Code conversation.
+    When user provides this output to orchestrator-agent, orchestrator skips prompt generation
+    and executes directly using the bundle prompts.
 
 ORCHESTRATION TEMPLATE FORMAT TO FILL:
 
