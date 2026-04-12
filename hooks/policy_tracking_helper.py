@@ -12,31 +12,31 @@ Last Modified: 2026-03-05
 Windows-Safe: No Unicode chars (ASCII only, cp1252 compatible)
 """
 
-import sys
 import json
-from pathlib import Path
+import sys
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Windows-safe encoding
-if sys.platform == 'win32':
+if sys.platform == "win32":
     import io
+
     try:
-        if getattr(sys.stdout, 'encoding', 'utf-8') != 'utf-8':
+        if getattr(sys.stdout, "encoding", "utf-8") != "utf-8":
             try:
-                sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
             except (AttributeError, io.UnsupportedOperation):
-                if hasattr(sys.stdout, 'buffer'):
-                    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        if getattr(sys.stderr, 'encoding', 'utf-8') != 'utf-8':
+                if hasattr(sys.stdout, "buffer"):
+                    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        if getattr(sys.stderr, "encoding", "utf-8") != "utf-8":
             try:
-                sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+                sys.stderr.reconfigure(encoding="utf-8", errors="replace")
             except (AttributeError, io.UnsupportedOperation):
-                if hasattr(sys.stderr, 'buffer'):
-                    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+                if hasattr(sys.stderr, "buffer"):
+                    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
     except Exception:
         pass  # Never crash on encoding setup
-
 
 
 def get_session_id():
@@ -49,15 +49,15 @@ def get_session_id():
         str: Session ID (e.g. SESSION-20260307-131645-8F7H) or unknown.
     """
     try:
-        session_file = Path.home() / '.claude' / 'memory' / '.current-session.json'
+        session_file = Path.home() / ".claude" / "memory" / ".current-session.json"
         if session_file.exists():
-            data = json.loads(session_file.read_text(encoding='utf-8'))
-            sid = data.get('current_session_id', '')
-            if sid.startswith('SESSION-'):
+            data = json.loads(session_file.read_text(encoding="utf-8"))
+            sid = data.get("current_session_id", "")
+            if sid.startswith("SESSION-"):
                 return sid
     except Exception:
         pass
-    return 'unknown'
+    return "unknown"
 
 
 def record_policy_execution(
@@ -69,7 +69,7 @@ def record_policy_execution(
     output_results: Dict[str, Any],
     decision: str,
     duration_ms: int,
-    sub_operations: Optional[List[Dict]] = None
+    sub_operations: Optional[List[Dict]] = None,
 ) -> bool:
     """
     Record a policy execution to flow-trace.json.
@@ -104,17 +104,15 @@ def record_policy_execution(
         ... )
     """
     try:
-        session_dir = Path.home() / '.claude' / 'memory' / 'logs' / 'sessions' / session_id
-        flow_trace_file = session_dir / 'flow-trace.json'
+        session_dir = Path.home() / ".claude" / "memory" / "logs" / "sessions" / session_id
+        flow_trace_file = session_dir / "flow-trace.json"
 
         # Ensure directory exists
         session_dir.mkdir(parents=True, exist_ok=True)
 
         # Load existing flow-trace or create new one
         if flow_trace_file.exists():
-            flow_trace = json.loads(
-                flow_trace_file.read_text(encoding='utf-8')
-            )
+            flow_trace = json.loads(flow_trace_file.read_text(encoding="utf-8"))
         else:
             flow_trace = _create_empty_flow_trace(session_id)
 
@@ -127,7 +125,7 @@ def record_policy_execution(
             "duration_ms": duration_ms,
             "input": input_params,
             "output": output_results,
-            "decision": decision
+            "decision": decision,
         }
 
         if sub_operations:
@@ -143,25 +141,18 @@ def record_policy_execution(
         if "execution_summary" not in flow_trace:
             flow_trace["execution_summary"] = {}
 
-        flow_trace["execution_summary"]["total_policies_executed"] = len(
-            flow_trace["all_policies_executed"]
-        )
+        flow_trace["execution_summary"]["total_policies_executed"] = len(flow_trace["all_policies_executed"])
 
         # Update decisions timeline
         if "decisions_timeline" not in flow_trace:
             flow_trace["decisions_timeline"] = []
 
-        flow_trace["decisions_timeline"].append({
-            "timestamp": policy_record["timestamp"],
-            "policy": policy_name,
-            "decision": decision
-        })
+        flow_trace["decisions_timeline"].append(
+            {"timestamp": policy_record["timestamp"], "policy": policy_name, "decision": decision}
+        )
 
         # Save updated flow-trace
-        flow_trace_file.write_text(
-            json.dumps(flow_trace, indent=2),
-            encoding='utf-8'
-        )
+        flow_trace_file.write_text(json.dumps(flow_trace, indent=2), encoding="utf-8")
 
         return True
 
@@ -176,7 +167,7 @@ def record_sub_operation(
     operation_name: str,
     input_params: Dict[str, Any],
     output_results: Dict[str, Any],
-    duration_ms: int
+    duration_ms: int,
 ) -> Dict[str, Any]:
     """
     Create a sub-operation record for inclusion in a policy execution.
@@ -211,7 +202,7 @@ def record_sub_operation(
         "timestamp": datetime.now().isoformat(),
         "duration_ms": duration_ms,
         "input": input_params,
-        "output": output_results
+        "output": output_results,
     }
 
 
@@ -226,17 +217,11 @@ def _create_empty_flow_trace(session_id: str) -> Dict[str, Any]:
         dict: Empty flow-trace structure
     """
     return {
-        "meta": {
-            "session_id": session_id,
-            "created_at": datetime.now().isoformat(),
-            "schema_version": "1.0"
-        },
+        "meta": {"session_id": session_id, "created_at": datetime.now().isoformat(), "schema_version": "1.0"},
         "user_input": {},
         "all_policies_executed": [],
-        "execution_summary": {
-            "total_policies_executed": 0
-        },
-        "decisions_timeline": []
+        "execution_summary": {"total_policies_executed": 0},
+        "decisions_timeline": [],
     }
 
 
@@ -251,15 +236,13 @@ def get_flow_trace_summary(session_id: str) -> Optional[Dict[str, Any]]:
         dict: Summary with counts, slowest/fastest policies, decisions
     """
     try:
-        session_dir = Path.home() / '.claude' / 'memory' / 'logs' / 'sessions' / session_id
-        flow_trace_file = session_dir / 'flow-trace.json'
+        session_dir = Path.home() / ".claude" / "memory" / "logs" / "sessions" / session_id
+        flow_trace_file = session_dir / "flow-trace.json"
 
         if not flow_trace_file.exists():
             return None
 
-        flow_trace = json.loads(
-            flow_trace_file.read_text(encoding='utf-8')
-        )
+        flow_trace = json.loads(flow_trace_file.read_text(encoding="utf-8"))
 
         policies = flow_trace.get("all_policies_executed", [])
 
@@ -271,11 +254,8 @@ def get_flow_trace_summary(session_id: str) -> Optional[Dict[str, Any]]:
             "total_duration_ms": sum(p.get("duration_ms", 0) for p in policies),
             "slowest_policy": sorted_by_speed[-1] if sorted_by_speed else None,
             "fastest_policy": sorted_by_speed[0] if sorted_by_speed else None,
-            "average_duration_ms": (
-                sum(p.get("duration_ms", 0) for p in policies) / len(policies)
-                if policies else 0
-            ),
-            "decisions_count": len(flow_trace.get("decisions_timeline", []))
+            "average_duration_ms": (sum(p.get("duration_ms", 0) for p in policies) / len(policies) if policies else 0),
+            "decisions_count": len(flow_trace.get("decisions_timeline", [])),
         }
 
         return summary

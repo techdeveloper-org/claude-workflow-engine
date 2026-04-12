@@ -24,11 +24,13 @@ if os.environ.get("CLAUDE_WORKFLOW_RUNNING") == "1":
 
 else:
     # ------------------------------------------------------------------
-    # Resolve paths to scripts/ directory (parent of this package)
+    # Resolve paths to hooks/ directory (parent of this package)
     # ------------------------------------------------------------------
-    _SCRIPTS_DIR = str(Path(__file__).resolve().parent.parent)
-    if _SCRIPTS_DIR not in sys.path:
-        sys.path.insert(0, _SCRIPTS_DIR)
+    _HOOKS_DIR = str(Path(__file__).resolve().parent.parent)
+    _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
+    _SCRIPTS_DIR = str(Path(_PROJECT_ROOT) / "scripts")
+    if _HOOKS_DIR not in sys.path:
+        sys.path.insert(0, _HOOKS_DIR)
 
     # ------------------------------------------------------------------
     # Metrics emitter (fire-and-forget, never blocks)
@@ -55,13 +57,7 @@ else:
     # ------------------------------------------------------------------
     _policy_tracking_available = False
     try:
-        _scripts_root = Path(__file__).resolve().parent.parent
-        while _scripts_root != _scripts_root.parent:
-            if (_scripts_root / "policy_tracking_helper.py").exists():
-                if str(_scripts_root) not in sys.path:
-                    sys.path.insert(0, str(_scripts_root))
-                break
-            _scripts_root = _scripts_root.parent
+        # policy_tracking_helper.py is a sibling in hooks/ (already on sys.path)
         from policy_tracking_helper import get_session_id, record_policy_execution, record_sub_operation
 
         _policy_tracking_available = True
@@ -82,7 +78,7 @@ else:
     # ------------------------------------------------------------------
     _failure_detector = None
     try:
-        _fp_path = Path(__file__).parent.parent / "architecture" / "03-execution-system" / "failure-prevention"
+        _fp_path = Path(_SCRIPTS_DIR) / "architecture" / "03-execution-system" / "failure-prevention"
         sys.path.insert(0, str(_fp_path))
         from common_failures_prevention import FailureDetector
 
@@ -786,7 +782,7 @@ else:
                                 try:
                                     import subprocess as _subprocess
 
-                                    _stop_script = os.path.join(_SCRIPTS_DIR, "stop-notifier.py")
+                                    _stop_script = os.path.join(_HOOKS_DIR, "stop-notifier.py")
                                     if os.path.exists(_stop_script):
                                         _env = os.environ.copy()
                                         _env["WORK_DONE_SUMMARY"] = summary_text

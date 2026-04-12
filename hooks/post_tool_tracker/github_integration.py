@@ -22,8 +22,9 @@ def _get_github_issue_manager():
     if _github_issue_manager is None:
         try:
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            # github_issue_manager lives in the scripts/ directory (parent of this package)
-            scripts_dir = str(Path(script_dir).parent)
+            # github_issue_manager lives in the scripts/ directory (project root / scripts/)
+            project_root = str(Path(script_dir).parent.parent)
+            scripts_dir = str(Path(project_root) / "scripts")
             if scripts_dir not in sys.path:
                 sys.path.insert(0, scripts_dir)
             import github_issue_manager

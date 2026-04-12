@@ -17,9 +17,9 @@ except ImportError:
     FLAG_DIR = Path.home() / ".claude"
     try:
         _pe_dir = os.path.dirname(os.path.abspath(__file__))
-        _scripts_dir = os.path.dirname(_pe_dir)
-        if _scripts_dir not in sys.path:
-            sys.path.insert(0, _scripts_dir)
+        _hooks_dir = os.path.dirname(_pe_dir)
+        if _hooks_dir not in sys.path:
+            sys.path.insert(0, _hooks_dir)
         from project_session import get_project_session_file
 
         CURRENT_SESSION_FILE = get_project_session_file()
@@ -156,10 +156,17 @@ def _load_failure_kb():
 
     _failure_kb_cache = {}
     try:
-        # __file__ is scripts/pre_tool_enforcer/loaders.py
-        # go up one level to scripts/
-        script_dir = Path(__file__).parent.parent
-        kb_path = script_dir / "architecture" / "03-execution-system" / "failure-prevention" / "failure-kb.json"
+        # __file__ is hooks/pre_tool_enforcer/loaders.py
+        # go up two levels to project root, then into scripts/
+        _project_root = Path(__file__).parent.parent.parent
+        kb_path = (
+            _project_root
+            / "scripts"
+            / "architecture"
+            / "03-execution-system"
+            / "failure-prevention"
+            / "failure-kb.json"
+        )
         if kb_path.exists():
             with open(kb_path, "r", encoding="utf-8") as f:
                 _failure_kb_cache = json.load(f)

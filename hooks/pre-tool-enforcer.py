@@ -2,7 +2,7 @@
 """
 BACKWARD-COMPAT SHIM for pre-tool-enforcer.py
 
-Pre-tool enforcement logic has been refactored into scripts/pre_tool_enforcer/
+Pre-tool enforcement logic has been refactored into hooks/pre_tool_enforcer/
 package. This file delegates to that package while preserving the original
 script invocation contract (Claude Code hooks call this file directly).
 

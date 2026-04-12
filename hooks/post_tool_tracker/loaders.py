@@ -34,9 +34,9 @@ def _get_session_id_from_progress(session_state_file=None, flag_dir=None):
     # Primary: use project_session helper (per-project + legacy fallback)
     try:
         _pt_dir = os.path.dirname(os.path.abspath(__file__))
-        scripts_dir = str(Path(_pt_dir).parent)
-        if scripts_dir not in sys.path:
-            sys.path.insert(0, scripts_dir)
+        hooks_dir = str(Path(_pt_dir).parent)
+        if hooks_dir not in sys.path:
+            sys.path.insert(0, hooks_dir)
         from project_session import read_session_id
 
         sid = read_session_id()

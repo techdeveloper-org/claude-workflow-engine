@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # BACKWARD-COMPAT SHIM
-# Stop notification logic moved to scripts/stop_notifier/
+# Stop notification logic moved to hooks/stop_notifier/
 # This file is invoked directly by Claude Code hooks.
 import importlib.util as _ilu
 from pathlib import Path as _Path

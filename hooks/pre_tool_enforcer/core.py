@@ -16,12 +16,14 @@ if os.environ.get("CLAUDE_WORKFLOW_RUNNING") == "1":
 import json
 
 # ---------------------------------------------------------------------------
-# Ensure scripts/ directory is on sys.path (for sibling imports)
+# Ensure hooks/ directory is on sys.path (for sibling imports)
 # ---------------------------------------------------------------------------
-_core_dir = Path(__file__).resolve().parent  # scripts/pre_tool_enforcer/
-_scripts_dir = _core_dir.parent  # scripts/
-if str(_scripts_dir) not in sys.path:
-    sys.path.insert(0, str(_scripts_dir))
+_core_dir = Path(__file__).resolve().parent  # hooks/pre_tool_enforcer/
+_hooks_dir = _core_dir.parent  # hooks/
+_project_root = _hooks_dir.parent  # project root
+_scripts_dir = _project_root / "scripts"  # scripts/ (for architecture/ refs)
+if str(_hooks_dir) not in sys.path:
+    sys.path.insert(0, str(_hooks_dir))
 
 # ---------------------------------------------------------------------------
 # Metrics emitter (fire-and-forget, never blocks)
@@ -46,13 +48,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 # Policy tracking integration
 # ---------------------------------------------------------------------------
-_scripts_root = Path(__file__).resolve().parent.parent
-while _scripts_root != _scripts_root.parent:
-    if (_scripts_root / "policy_tracking_helper.py").exists():
-        if str(_scripts_root) not in sys.path:
-            sys.path.insert(0, str(_scripts_root))
-        break
-    _scripts_root = _scripts_root.parent
+# policy_tracking_helper.py is a sibling in hooks/ (already on sys.path)
 
 try:
     from policy_tracking_helper import record_policy_execution
@@ -492,7 +488,7 @@ def main():
 
     # Warm up token-optimizer MCP module (non-blocking)
     try:
-        _src_mcp_dir = _scripts_dir.parent / "src" / "mcp"
+        _src_mcp_dir = _project_root / "src" / "mcp"
         if str(_src_mcp_dir) not in sys.path:
             sys.path.insert(0, str(_src_mcp_dir))
         from token_optimization_mcp_server import context_budget_status

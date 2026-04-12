@@ -1,5 +1,5 @@
 {
-  "_comment": "Template for ~/.claude/settings.json. Replace {CLAUDE_SCRIPTS} with your actual scripts path. On Windows: C:/Users/<username>/.claude/scripts, On Linux/Mac: /home/<username>/.claude/scripts. Or set CLAUDE_SCRIPTS_DIR env var.",
+  "_comment": "Template for ~/.claude/settings.json. Replace {CLAUDE_SCRIPTS} with your scripts path and {CLAUDE_HOOKS} with your hooks path. On Windows: C:/Users/<username>/.claude/scripts and C:/Users/<username>/.claude/hooks.",
   "permissions": {
     "defaultMode": "default"
   },
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python {CLAUDE_SCRIPTS}/pre-tool-enforcer.py",
+            "command": "python {CLAUDE_HOOKS}/pre-tool-enforcer.py",
             "timeout": 12
           }
         ]
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python {CLAUDE_SCRIPTS}/post-tool-tracker.py",
+            "command": "python {CLAUDE_HOOKS}/post-tool-tracker.py",
             "timeout": 30
           }
         ]
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python {CLAUDE_SCRIPTS}/post-tool-tracker.py",
+            "command": "python {CLAUDE_HOOKS}/post-tool-tracker.py",
             "timeout": 10
           }
         ]
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python {CLAUDE_SCRIPTS}/stop-notifier.py",
+            "command": "python {CLAUDE_HOOKS}/stop-notifier.py",
             "timeout": 60
           }
         ]

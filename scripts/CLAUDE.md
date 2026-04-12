@@ -11,22 +11,17 @@
 
 ## Scripts Directory Overview
 
-This directory contains the pipeline entry point, hook scripts, and operational tools. The core `langgraph_engine/` package lives at the project root.
+This directory contains the pipeline entry point and operational tools. Hook scripts have been moved to `hooks/` at the project root. The core `langgraph_engine/` package lives at the project root.
 
 ### Key Files
 
 | File | Purpose |
 |------|---------|
 | `3-level-flow.py` | Main pipeline entry point |
-| `pre-tool-enforcer.py` | PreToolUse hook entry point (shim -> pre_tool_enforcer/) |
-| `post-tool-tracker.py` | PostToolUse hook entry point (shim -> post_tool_tracker/) |
-| `stop-notifier.py` | Stop hook entry point (shim -> stop_notifier/) |
-| `ide_paths.py` | Path constants — imported by hook packages as bare module |
-| `project_session.py` | Session utilities — imported by hook packages as bare module |
-| `policy_tracking_helper.py` | Policy tracking — imported by hook packages as bare module |
 | `setup/` | One-time environment setup scripts (setup_wizard.py, install-auto-hooks.sh, etc.) |
 | `bin/` | Windows .bat operational launchers |
 | `tools/` | Developer utilities: sync-version.py, release.py, metrics-emitter.py, voice-notifier.py, etc. |
+| `/hooks/` | All Claude Code hooks (PreToolUse, PostToolUse, Stop) — moved from scripts/ |
 | `/CHANGELOG.md` | Full project changelog (root) |
 | `/SRS.md` | System Requirements Specification (root) |
 
@@ -77,6 +72,8 @@ langgraph_engine/
 - Level 2 helper nodes removed from `helper_nodes/` (emergency_archive, optimize_context_after_level2, level2_select_standards_node).
 - Pipeline re-wired: `level1_cleanup` → `level3_init` directly (no Level 2 graph nodes).
 - `level2_standards/` directory removed entirely; policies already in `policies/02-standards-system/`.
+- Hook scripts (pre-tool-enforcer, post-tool-tracker, stop-notifier + packages + shared utils) moved to `hooks/` at project root.
+- `policy_framework/` deleted (unused).
 
 ### Running the Pipeline
 

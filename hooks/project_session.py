@@ -12,7 +12,7 @@ Usage:
 
 from pathlib import Path
 
-MEMORY_BASE = Path.home() / '.claude' / 'memory'
+MEMORY_BASE = Path.home() / ".claude" / "memory"
 
 
 def get_project_session_file():
@@ -21,7 +21,7 @@ def get_project_session_file():
     Returns:
         Path: ~/.claude/memory/.current-session.json
     """
-    return MEMORY_BASE / '.current-session.json'
+    return MEMORY_BASE / ".current-session.json"
 
 
 def get_legacy_session_file():
@@ -30,7 +30,7 @@ def get_legacy_session_file():
     Returns:
         Path: ~/.claude/memory/.current-session.json
     """
-    return MEMORY_BASE / '.current-session.json'
+    return MEMORY_BASE / ".current-session.json"
 
 
 def read_session_id():
@@ -43,11 +43,12 @@ def read_session_id():
     try:
         if session_file.exists():
             import json
-            with open(session_file, 'r', encoding='utf-8') as f:
+
+            with open(session_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            sid = data.get('current_session_id', '')
-            if sid and sid.startswith('SESSION-'):
+            sid = data.get("current_session_id", "")
+            if sid and sid.startswith("SESSION-"):
                 return sid
     except Exception:
         pass
-    return ''
+    return ""

@@ -45,9 +45,9 @@ def main():
         import subprocess
         from pathlib import Path
 
-        script_dir = Path(__file__).parent
+        _scripts_dir = Path(__file__).resolve().parent.parent.parent / "scripts"
         git_commit_script = (
-            script_dir / "architecture" / "03-execution-system" / "09-git-commit" / "git-auto-commit-policy.py"
+            _scripts_dir / "architecture" / "03-execution-system" / "09-git-commit" / "git-auto-commit-policy.py"
         )
         if git_commit_script.exists():
             _commit_ok = False
@@ -75,12 +75,10 @@ def main():
     # SESSION END MAINTENANCE (non-blocking, before voice)
     # Architecture scripts: auto-save-session, archive-old-sessions, failure-detector
     # =========================================================================
-    script_dir = Path(__file__).parent
-
     # 1. Auto-save session state before cleanup (3 retries)
     # Architecture: 01-sync-system/session-management/auto-save-session.py
     try:
-        save_script = script_dir / "architecture" / "01-sync-system" / "session-management" / "auto-save-session.py"
+        save_script = _scripts_dir / "architecture" / "01-sync-system" / "session-management" / "auto-save-session.py"
         if save_script.exists():
             project_name = Path.cwd().name
             _save_ok = False
@@ -108,7 +106,7 @@ def main():
     # Architecture: 01-sync-system/session-management/archive-old-sessions.py
     try:
         archive_script = (
-            script_dir / "architecture" / "01-sync-system" / "session-management" / "archive-old-sessions.py"
+            _scripts_dir / "architecture" / "01-sync-system" / "session-management" / "archive-old-sessions.py"
         )
         if archive_script.exists():
             _arch_ok = False
@@ -133,7 +131,7 @@ def main():
     # 2b. Session log pruning - prune old sessions (30-day max, keep 10)
     # Architecture: 01-sync-system/session-pruner.py
     try:
-        pruner_script = script_dir / "architecture" / "01-sync-system" / "session-pruner.py"
+        pruner_script = _scripts_dir / "architecture" / "01-sync-system" / "session-pruner.py"
         if pruner_script.exists():
             _prune_ok = False
             for _attempt in range(1, 4):
@@ -162,7 +160,11 @@ def main():
     # Architecture: 03-execution-system/failure-prevention/common-failures-prevention.py --analyze
     try:
         failure_script = (
-            script_dir / "architecture" / "03-execution-system" / "failure-prevention" / "common-failures-prevention.py"
+            _scripts_dir
+            / "architecture"
+            / "03-execution-system"
+            / "failure-prevention"
+            / "common-failures-prevention.py"
         )
         if failure_script.exists():
             _fail_ok = False
@@ -189,7 +191,9 @@ def main():
     # 4. Preference auto-detection - learn user preferences from session
     # Architecture: 01-sync-system/user-preferences/preference-auto-tracker.py
     try:
-        pref_script = script_dir / "architecture" / "01-sync-system" / "user-preferences" / "preference-auto-tracker.py"
+        pref_script = (
+            _scripts_dir / "architecture" / "01-sync-system" / "user-preferences" / "preference-auto-tracker.py"
+        )
         if pref_script.exists():
             _r = subprocess.run([sys.executable, str(pref_script)], timeout=10, capture_output=True)
             if _r.returncode == 0:
@@ -204,7 +208,7 @@ def main():
     # Script: 03-execution-system/02-plan-mode/plan-session-archiver.py
     try:
         plan_archiver_script = (
-            script_dir / "architecture" / "03-execution-system" / "02-plan-mode" / "plan-session-archiver.py"
+            _scripts_dir / "architecture" / "03-execution-system" / "02-plan-mode" / "plan-session-archiver.py"
         )
         if plan_archiver_script.exists():
             _plan_session_id = get_current_session_id()

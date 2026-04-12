@@ -37,7 +37,7 @@ os.environ.pop("CLAUDE_WORKFLOW_RUNNING", None)
 import importlib.util as _ilu  # noqa: E402
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+_HOOKS_DIR = _REPO_ROOT / "hooks"
 
 # Ensure project root is on sys.path for langgraph_engine imports
 if str(_REPO_ROOT) not in sys.path:
@@ -65,7 +65,7 @@ with patch.dict(
         ),
     },
 ):
-    _spec = _ilu.spec_from_file_location("pre_tool_enforcer", _SCRIPTS_DIR / "pre-tool-enforcer.py")
+    _spec = _ilu.spec_from_file_location("pre_tool_enforcer", _HOOKS_DIR / "pre-tool-enforcer.py")
     pte = _ilu.module_from_spec(_spec)
     sys.modules["pre_tool_enforcer"] = pte
     _spec.loader.exec_module(pte)

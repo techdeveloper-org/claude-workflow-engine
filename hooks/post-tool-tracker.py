@@ -2,7 +2,7 @@
 """
 BACKWARD-COMPAT SHIM for post-tool-tracker.py
 
-Post-tool tracking logic has been refactored into scripts/post_tool_tracker/
+Post-tool tracking logic has been refactored into hooks/post_tool_tracker/
 package. This file delegates to that package while preserving the original
 script invocation contract (Claude Code hooks call this file directly).
 

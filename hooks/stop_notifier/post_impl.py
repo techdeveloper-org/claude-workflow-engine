@@ -158,7 +158,7 @@ def _create_pr_from_pipeline_data():
         pr_body = "\n".join(pr_body_parts)
 
         # 5. Create PR via GitHub MCP (direct import)
-        _src_mcp = Path(__file__).resolve().parent.parent / "src" / "mcp"
+        _src_mcp = Path(__file__).resolve().parent.parent.parent / "src" / "mcp"
         if str(_src_mcp) not in sys.path:
             sys.path.insert(0, str(_src_mcp))
 
@@ -264,7 +264,7 @@ def _step12_close_issue(session_dir):
             return
 
         # Close issue via MCP
-        _src_mcp = Path(__file__).resolve().parent.parent / "src" / "mcp"
+        _src_mcp = Path(__file__).resolve().parent.parent.parent / "src" / "mcp"
         if str(_src_mcp) not in sys.path:
             sys.path.insert(0, str(_src_mcp))
 

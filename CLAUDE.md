@@ -111,7 +111,17 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 
 ```
 /
-+-- scripts/                          # Pipeline scripts and hooks
++-- hooks/                            # Claude Code hook scripts (PreToolUse, PostToolUse, Stop)
+|   +-- pre-tool-enforcer.py          # PreToolUse hook entry point (shim -> pre_tool_enforcer/)
+|   +-- post-tool-tracker.py          # PostToolUse hook entry point (shim -> post_tool_tracker/)
+|   +-- stop-notifier.py              # Stop hook entry point (shim -> stop_notifier/)
+|   +-- pre_tool_enforcer/            # PreToolUse hook package (canonical)
+|   +-- post_tool_tracker/            # PostToolUse hook package (canonical)
+|   +-- stop_notifier/                # Stop hook package (canonical)
+|   +-- ide_paths.py                  # Path constants (imported by hook packages)
+|   +-- project_session.py            # Session utilities (imported by hook packages)
+|   +-- policy_tracking_helper.py     # Policy tracking (imported by hook packages)
++-- scripts/                          # Pipeline scripts and tools
 |   +-- langgraph_engine/             # Core orchestration engine
 |   |   +-- core/                     # Cross-cutting abstractions (LazyLoader, ErrorHandler, NodeResult, etc.)
 |   |   +-- state/                    # FlowState split into 6 focused modules
@@ -129,19 +139,10 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 |   +-- setup/                        # One-time environment setup (install-auto-hooks.sh, setup-global-claude.sh/.ps1, setup_wizard.py, etc.)
 |   +-- bin/                          # Windows .bat operational launchers (start/stop claude-insight, sync-insight, sync-library)
 |   +-- tools/                        # Developer utilities: release.py, sync-version.py, metrics-emitter.py, voice-notifier.py, session-start.sh, etc.
-|   +-- pre_tool_enforcer/            # PreToolUse hook package (canonical)
-|   +-- post_tool_tracker/            # PostToolUse hook package (canonical)
-|   +-- stop_notifier/                # Stop hook package (canonical)
 |   +-- github_operations/            # GitHub helper operations
 |   +-- github_pr_workflow/           # PR workflow package (canonical)
 |   +-- helpers/                      # Shared helper utilities
 |   +-- 3-level-flow.py               # Main pipeline entry point
-|   +-- pre-tool-enforcer.py          # PreToolUse hook entry point (shim -> pre_tool_enforcer/)
-|   +-- post-tool-tracker.py          # PostToolUse hook entry point (shim -> post_tool_tracker/)
-|   +-- stop-notifier.py              # Stop hook entry point (shim -> stop_notifier/)
-|   +-- ide_paths.py                  # Path constants (imported by hook packages)
-|   +-- project_session.py            # Session utilities (imported by hook packages)
-|   +-- policy_tracking_helper.py     # Policy tracking (imported by hook packages)
 +-- policies/                         # All pipeline policies organized by level (00-auto-fix, 01-sync, 02-standards, 03-execution, testing)
 |   +-- testing/                      # Testing policies (unchanged)
 +-- src/mcp/                          # In-engine copy of session-mgr (repo is source of truth) + bridge (session_hooks, base/)
@@ -172,7 +173,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | Level 2 | policies/02-standards-system/ | Standards policies (.md files, no pipeline nodes) |
 | Level 3 | langgraph_engine/level3_execution/subgraph.py | 8-step active execution (Pre-0, Step 0, Steps 8-14) -- ACTIVE (nodes in level3_execution/nodes/) |
 | Pre-Analysis Node | langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan before Step 0; template fast-path detection |
-| Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
+| Hooks | hooks/pre-tool-enforcer.py, post-tool-tracker.py, stop-notifier.py | Tool enforcement + session maintenance |
 | Call Graph Builder | langgraph_engine/call_graph_builder.py | AST-based FQN call stack (compat shim -> parsers/) |
 | Call Graph Analyzer | langgraph_engine/call_graph_analyzer.py | Pipeline impact analysis (Steps 2/10/11) |
 | UML Generators | langgraph_engine/uml_generators.py | Compat shim -> diagrams/DiagramFactory |

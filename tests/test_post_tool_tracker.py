@@ -33,7 +33,7 @@ os.environ.pop("CLAUDE_WORKFLOW_RUNNING", None)
 import importlib.util as _ilu  # noqa: E402
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+_HOOKS_DIR = _REPO_ROOT / "hooks"
 
 # Ensure project root is on sys.path for langgraph_engine imports
 if str(_REPO_ROOT) not in sys.path:
@@ -64,7 +64,7 @@ with patch.dict(
         "post_tool_tracker_mcp_server": MagicMock(),
     },
 ):
-    _spec = _ilu.spec_from_file_location("post_tool_tracker", _SCRIPTS_DIR / "post-tool-tracker.py")
+    _spec = _ilu.spec_from_file_location("post_tool_tracker", _HOOKS_DIR / "post-tool-tracker.py")
     ptt = _ilu.module_from_spec(_spec)
     sys.modules["post_tool_tracker"] = ptt
     _spec.loader.exec_module(ptt)

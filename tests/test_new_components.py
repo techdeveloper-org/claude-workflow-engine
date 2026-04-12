@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).parent.parent
 SYNC_SYSTEM_DIR = REPO_ROOT / "scripts" / "architecture" / "01-sync-system"
 CODE_GRAPH_DIR = REPO_ROOT / "scripts" / "architecture" / "03-execution-system" / "00-code-graph-analysis"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
+HOOKS_DIR = REPO_ROOT / "hooks"
 
 
 def _load_module(script_path: Path, module_name: str) -> Any:
@@ -341,7 +342,7 @@ def _load_pre_tool_enforcer():
     if module_key in sys.modules:
         return sys.modules[module_key]
 
-    script_path = SCRIPTS_DIR / "pre-tool-enforcer.py"
+    script_path = HOOKS_DIR / "pre-tool-enforcer.py"
     assert script_path.exists(), "pre-tool-enforcer.py not found at {}".format(script_path)
     mod = _load_module(script_path, module_key)
     sys.modules[module_key] = mod

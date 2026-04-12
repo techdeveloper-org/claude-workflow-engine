@@ -189,9 +189,9 @@ LLM_PROVIDER=claude_cli -> Claude CLI first, fallback -> anthropic
 | Hook | Script | Purpose |
 |------|--------|---------|
 | UserPromptSubmit | 3-level-flow.py | Runs full pipeline on every user message |
-| PreToolUse | pre-tool-enforcer.py | Tool validation + Level 1 checkpoint enforcement |
-| PostToolUse | post-tool-tracker.py | Progress tracking, flag clearing, GitHub integration |
-| Stop | stop-notifier.py | Voice notification + session save on session end |
+| PreToolUse | hooks/pre-tool-enforcer.py | Tool validation + Level 1 checkpoint enforcement |
+| PostToolUse | hooks/post-tool-tracker.py | Progress tracking, flag clearing, GitHub integration |
+| Stop | hooks/stop-notifier.py | Voice notification + session save on session end |
 
 ---
 
@@ -261,18 +261,19 @@ claude-workflow-engine/
 |   |   +-- level3_execution/         # Level 3: 8-step SDLC (subgraph.py + nodes/ + sonarqube/)
 |   |   +-- call_graph_analyzer.py    # Impact analysis, snapshots, diff (Steps Pre-0/10/11)
 |   |   +-- [60+ shared modules]      # LLM, caching, metrics, git, standards, etc.
-|   +-- pre_tool_enforcer/            # PreToolUse hook package
-|   +-- post_tool_tracker/            # PostToolUse hook package
-|   +-- stop_notifier/                # Stop hook package
 |   +-- setup/                        # One-time setup scripts
 |   +-- bin/                          # Windows .bat launchers
 |   +-- tools/                        # Developer utilities (release, sync, metrics, voice)
 |   +-- 3-level-flow.py               # Pipeline entry point
++-- hooks/                            # Claude Code hook scripts
 |   +-- pre-tool-enforcer.py          # PreToolUse hook shim
 |   +-- post-tool-tracker.py          # PostToolUse hook shim
 |   +-- stop-notifier.py              # Stop hook shim
+|   +-- pre_tool_enforcer/            # PreToolUse hook package
+|   +-- post_tool_tracker/            # PostToolUse hook package
+|   +-- stop_notifier/                # Stop hook package
 +-- src/mcp/                          # In-engine session-mgr copy + bridge (session_hooks)
-+-- policies/                         # README pointing to level packages
++-- policies/                         # Pipeline policies by level (00-auto-fix, 01-sync, 02-standards, 03-execution)
 +-- tests/                            # 74 test files
 +-- docs/                             # Documentation files
 +-- uml/                              # Auto-generated UML diagrams (13 types)
