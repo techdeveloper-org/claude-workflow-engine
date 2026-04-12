@@ -1,5 +1,5 @@
 """
-Tests for scripts/langgraph_engine/call_graph_analyzer.py
+Tests for langgraph_engine/call_graph_analyzer.py
 
 Tests cover all four public functions:
     analyze_impact_before_change
@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 # Ensure the langgraph_engine package is importable from the test runner
+sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 import pytest
@@ -25,10 +26,10 @@ from langgraph_engine.call_graph_analyzer import (
     snapshot_call_graph,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers: create reusable Python source files in tmp_path
 # ---------------------------------------------------------------------------
+
 
 def _write(path, content):
     """Write text to path, creating parent directories as needed."""
@@ -77,11 +78,7 @@ def _make_high_callers_project(tmp_path):
     hub.py defines HubService.core() which is the shared dependency.
     callers.py defines 9 methods that each call HubService.core().
     """
-    hub_src = (
-        "class HubService:\n"
-        "    def core(self):\n"
-        "        return 42\n"
-    )
+    hub_src = "class HubService:\n" "    def core(self):\n" "        return 42\n"
     # Build 9 caller methods
     lines = ["from hub import HubService\n", "\n", "class Callers:\n"]
     for i in range(9):
@@ -129,11 +126,7 @@ def _make_project_with_tests(tmp_path):
     module_b.py defines ServiceB.
     tests/test_module_b.py imports module_b.
     """
-    b_src = (
-        "class ServiceB:\n"
-        "    def process(self, data):\n"
-        "        return data\n"
-    )
+    b_src = "class ServiceB:\n" "    def process(self, data):\n" "        return data\n"
     test_src = (
         "import module_b\n"
         "\n"
@@ -152,11 +145,7 @@ def _make_danger_zone_project(tmp_path):
     shared.py defines SharedHelper.helper().
     caller_N.py each call SharedHelper.helper().
     """
-    shared_src = (
-        "class SharedHelper:\n"
-        "    def helper(self):\n"
-        "        return True\n"
-    )
+    shared_src = "class SharedHelper:\n" "    def helper(self):\n" "        return True\n"
     _write(tmp_path / "shared.py", shared_src)
 
     for i in range(5):
@@ -176,6 +165,7 @@ def _make_danger_zone_project(tmp_path):
 # ===========================================================================
 # TestAnalyzeImpactBeforeChange
 # ===========================================================================
+
 
 class TestAnalyzeImpactBeforeChange:
 
@@ -229,14 +219,12 @@ class TestAnalyzeImpactBeforeChange:
         assert isinstance(safe_zones, list)
         # leaf_only has zero callers so it must be a safe zone
         # At least one FQN should contain 'leaf_only'
-        fqn_names = [fqn.split("::")[-1] if "::" in fqn else fqn for fqn in safe_zones]
+        _fqn_names = [fqn.split("::")[-1] if "::" in fqn else fqn for fqn in safe_zones]
         # Accept if any safe zone refers to leaf_only method
         has_leaf_only = any("leaf_only" in fqn for fqn in safe_zones)
         # Only assert if the graph was built with methods detected
         if result["affected_methods"]:
-            assert has_leaf_only, (
-                "Expected 'leaf_only' in safe_change_zones. Got: %s" % safe_zones
-            )
+            assert has_leaf_only, "Expected 'leaf_only' in safe_change_zones. Got: %s" % safe_zones
 
     def test_danger_zones(self, tmp_path):
         """Methods with 5+ callers must appear in danger_zones."""
@@ -257,8 +245,7 @@ class TestAnalyzeImpactBeforeChange:
         # There should be at least one danger zone for helper with 5 callers
         if result["affected_methods"]:
             assert len(danger_zones) >= 1, (
-                "Expected at least 1 danger zone but found none. "
-                "affected_methods: %s" % result["affected_methods"]
+                "Expected at least 1 danger zone but found none. " "affected_methods: %s" % result["affected_methods"]
             )
 
     def test_cross_file_deps(self, tmp_path):
@@ -312,14 +299,14 @@ class TestAnalyzeImpactBeforeChange:
         # Must not raise; value is True (empty graph) or False (build failed)
         assert result["call_graph_available"] in (True, False)
         # Standard output keys must be present regardless of availability
-        for key in ("affected_methods", "risk_level", "safe_change_zones",
-                    "danger_zones", "cross_file_deps"):
+        for key in ("affected_methods", "risk_level", "safe_change_zones", "danger_zones", "cross_file_deps"):
             assert key in result, "Missing key: %s" % key
 
 
 # ===========================================================================
 # TestGetImplementationContext
 # ===========================================================================
+
 
 class TestGetImplementationContext:
 
@@ -333,8 +320,13 @@ class TestGetImplementationContext:
         assert result["call_graph_available"] is True
 
         # Required keys
-        for key in ("call_paths_through_targets", "entry_points_affected",
-                    "cross_file_dependencies", "suggested_test_scope", "stats"):
+        for key in (
+            "call_paths_through_targets",
+            "entry_points_affected",
+            "cross_file_dependencies",
+            "suggested_test_scope",
+            "stats",
+        ):
             assert key in result, "Missing key: %s" % key
 
         # Stats has required sub-keys
@@ -369,9 +361,7 @@ class TestGetImplementationContext:
         assert isinstance(scope, list)
         # The test file references 'module_b' so it should appear
         has_test = any("test_module_b" in f for f in scope)
-        assert has_test, (
-            "Expected test_module_b.py in suggested_test_scope. Got: %s" % scope
-        )
+        assert has_test, "Expected test_module_b.py in suggested_test_scope. Got: %s" % scope
 
     def test_cross_file_dependencies(self, tmp_path):
         """cross_file_dependencies is returned as a dict of module_stem -> [dep_stems]."""
@@ -397,14 +387,20 @@ class TestGetImplementationContext:
         assert "call_graph_available" in result
 
         if result["call_graph_available"]:
-            for key in ("call_paths_through_targets", "entry_points_affected",
-                        "cross_file_dependencies", "suggested_test_scope", "stats"):
+            for key in (
+                "call_paths_through_targets",
+                "entry_points_affected",
+                "cross_file_dependencies",
+                "suggested_test_scope",
+                "stats",
+            ):
                 assert key in result
 
 
 # ===========================================================================
 # TestReviewChangeImpact
 # ===========================================================================
+
 
 class TestReviewChangeImpact:
 
@@ -459,9 +455,16 @@ class TestReviewChangeImpact:
         assert "call_graph_available" in result
 
         if result["call_graph_available"]:
-            for key in ("new_edges", "removed_edges", "orphaned_methods",
-                        "breaking_changes", "cyclomatic_change",
-                        "max_call_depth", "risk_assessment", "summary"):
+            for key in (
+                "new_edges",
+                "removed_edges",
+                "orphaned_methods",
+                "breaking_changes",
+                "cyclomatic_change",
+                "max_call_depth",
+                "risk_assessment",
+                "summary",
+            ):
                 assert key in result
 
     def test_review_empty_modified_files(self, tmp_path):
@@ -531,6 +534,7 @@ class TestReviewChangeImpact:
 # TestSnapshotCallGraph
 # ===========================================================================
 
+
 class TestSnapshotCallGraph:
 
     def test_snapshot_returns_dict(self, tmp_path):
@@ -593,12 +597,13 @@ class TestSnapshotCallGraph:
         # stats fields that to_dict() always includes
         stats = result["stats"]
         for expected_key in (
-            "total_classes", "total_methods", "total_call_edges",
-            "files_analyzed", "max_call_depth",
+            "total_classes",
+            "total_methods",
+            "total_call_edges",
+            "files_analyzed",
+            "max_call_depth",
         ):
-            assert expected_key in stats, (
-                "Missing stats key: %s. Got: %s" % (expected_key, list(stats.keys()))
-            )
+            assert expected_key in stats, "Missing stats key: %s. Got: %s" % (expected_key, list(stats.keys()))
 
         # call_paths key is present (list, possibly empty)
         assert "call_paths" in result
@@ -613,6 +618,7 @@ class TestSnapshotCallGraph:
 # ===========================================================================
 # Helpers for phase subgraph tests: 3-file project
 # ===========================================================================
+
 
 def _make_three_file_project(tmp_path):
     """Create a 3-file project with a realistic layered architecture.
@@ -686,11 +692,7 @@ def _make_high_callers_phase_project(tmp_path):
 
     Returns (project_root, models_path, callers_path) as strings.
     """
-    models_src = (
-        "class User:\n"
-        "    def core_validate(self):\n"
-        "        return True\n"
-    )
+    models_src = "class User:\n" "    def core_validate(self):\n" "        return True\n"
     lines = ["from models import User\n", "\n", "class MultiCaller:\n"]
     for i in range(6):
         lines.append("    def caller_%d(self):\n" % i)
@@ -709,14 +711,13 @@ def _make_high_callers_phase_project(tmp_path):
 # TestExtractPhaseSubgraph
 # ===========================================================================
 
+
 class TestExtractPhaseSubgraph:
 
     def test_subgraph_scoped_to_phase_files(self, tmp_path):
         """methods_in_phase only includes models.py methods; expanded set adds callers."""
-        from langgraph_engine.call_graph_analyzer import (
-            extract_phase_subgraph,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -749,10 +750,8 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_includes_callers(self, tmp_path):
         """1-hop callers from services.py appear in the expanded method set."""
-        from langgraph_engine.call_graph_analyzer import (
-            extract_phase_subgraph,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -764,23 +763,17 @@ class TestExtractPhaseSubgraph:
         all_method_ids = {m.get("id", "") for m in result["nodes"]["methods"]}
 
         # At least one method from services.py should appear (1-hop callers)
-        services_methods_in_scope = [
-            mid for mid in all_method_ids
-            if "services.py" in mid or "UserService" in mid
-        ]
+        services_methods_in_scope = [mid for mid in all_method_ids if "services.py" in mid or "UserService" in mid]
         # Guard: if AST parsing detected the cross-file call, callers should be included
         if result["stats"]["methods_in_scope"] > result["stats"]["methods_in_phase"]:
-            assert len(services_methods_in_scope) > 0, (
-                "Expected services.py methods in expanded scope. "
-                "Scope methods: %s" % sorted(all_method_ids)
-            )
+            assert (
+                len(services_methods_in_scope) > 0
+            ), "Expected services.py methods in expanded scope. " "Scope methods: %s" % sorted(all_method_ids)
 
     def test_subgraph_includes_callees(self, tmp_path):
         """1-hop callees from models.py appear when services.py is the phase."""
-        from langgraph_engine.call_graph_analyzer import (
-            extract_phase_subgraph,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -792,22 +785,16 @@ class TestExtractPhaseSubgraph:
         all_method_ids = {m.get("id", "") for m in result["nodes"]["methods"]}
 
         # At least one method from models.py should appear (1-hop callees)
-        models_methods_in_scope = [
-            mid for mid in all_method_ids
-            if "models.py" in mid or "User." in mid
-        ]
+        models_methods_in_scope = [mid for mid in all_method_ids if "models.py" in mid or "User." in mid]
         if result["stats"]["methods_in_scope"] > result["stats"]["methods_in_phase"]:
-            assert len(models_methods_in_scope) > 0, (
-                "Expected models.py methods as callees in scope. "
-                "Scope methods: %s" % sorted(all_method_ids)
-            )
+            assert (
+                len(models_methods_in_scope) > 0
+            ), "Expected models.py methods as callees in scope. " "Scope methods: %s" % sorted(all_method_ids)
 
     def test_subgraph_empty_phase_files(self, tmp_path):
         """Empty phase_files returns an empty structure without raising."""
-        from langgraph_engine.call_graph_analyzer import (
-            extract_phase_subgraph,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -822,10 +809,8 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_no_rebuild(self, tmp_path):
         """Function works on a plain dict snapshot without needing CallGraph object."""
-        from langgraph_engine.call_graph_analyzer import (
-            extract_phase_subgraph,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -847,10 +832,8 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_stats(self, tmp_path):
         """stats dict contains all required keys."""
-        from langgraph_engine.call_graph_analyzer import (
-            extract_phase_subgraph,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -866,23 +849,20 @@ class TestExtractPhaseSubgraph:
             "classes_in_scope",
         ]
         for key in required_keys:
-            assert key in stats, (
-                "Missing stats key: %s. Got: %s" % (key, sorted(stats.keys()))
-            )
+            assert key in stats, "Missing stats key: %s. Got: %s" % (key, sorted(stats.keys()))
 
 
 # ===========================================================================
 # TestGetPhaseScopedContext
 # ===========================================================================
 
+
 class TestGetPhaseScopedContext:
 
     def test_phase_context_basic(self, tmp_path):
         """Basic call: call_graph_available=True, phase_files returned, risk_level valid."""
-        from langgraph_engine.call_graph_analyzer import (
-            get_phase_scoped_context,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -896,16 +876,13 @@ class TestGetPhaseScopedContext:
         assert result["phase_files"] == ["models.py"]
         assert result["risk_level"] in ("low", "medium", "high")
 
-        for key in ("danger_zones", "safe_change_zones", "entry_points",
-                    "cross_phase_callers", "summary", "subgraph"):
+        for key in ("danger_zones", "safe_change_zones", "entry_points", "cross_phase_callers", "summary", "subgraph"):
             assert key in result, "Missing key: %s" % key
 
     def test_phase_context_danger_zones(self, tmp_path):
         """Method called by 6+ callers must appear in danger_zones."""
-        from langgraph_engine.call_graph_analyzer import (
-            get_phase_scoped_context,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+
         project_root, models_path, callers_path = _make_high_callers_phase_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -920,20 +897,14 @@ class TestGetPhaseScopedContext:
 
         # If the graph detected the 6 callers, danger_zones must be non-empty
         if result["subgraph"]["stats"].get("methods_in_phase", 0) > 0:
-            has_high_caller = any(
-                d.get("callers_count", 0) >= 5 for d in danger_zones
-            )
+            has_high_caller = any(d.get("callers_count", 0) >= 5 for d in danger_zones)
             # core_validate is called 6 times; must appear once graph is built
-            assert has_high_caller, (
-                "Expected danger zone with 5+ callers. Got: %s" % danger_zones
-            )
+            assert has_high_caller, "Expected danger zone with 5+ callers. Got: %s" % danger_zones
 
     def test_phase_context_safe_zones(self, tmp_path):
         """Methods with 0 callers should appear in safe_change_zones."""
-        from langgraph_engine.call_graph_analyzer import (
-            get_phase_scoped_context,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -953,10 +924,8 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_cross_phase_callers(self, tmp_path):
         """services.py methods calling models.py appear in cross_phase_callers."""
-        from langgraph_engine.call_graph_analyzer import (
-            get_phase_scoped_context,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -976,22 +945,17 @@ class TestGetPhaseScopedContext:
 
         # If the graph detected cross-file calls, some callers from services.py
         # should appear as cross-phase callers into models.py
-        if result["subgraph"]["stats"].get("methods_in_scope", 0) > result["subgraph"]["stats"].get("methods_in_phase", 0):
+        if result["subgraph"]["stats"].get("methods_in_scope", 0) > result["subgraph"]["stats"].get(
+            "methods_in_phase", 0
+        ):
             caller_fqns = [c["fqn"] for c in cross_callers]
-            has_services_caller = any(
-                "services.py" in c["file"] or "UserService" in c["fqn"]
-                for c in cross_callers
-            )
-            assert has_services_caller, (
-                "Expected services.py as cross-phase caller. Got: %s" % caller_fqns
-            )
+            has_services_caller = any("services.py" in c["file"] or "UserService" in c["fqn"] for c in cross_callers)
+            assert has_services_caller, "Expected services.py as cross-phase caller. Got: %s" % caller_fqns
 
     def test_phase_context_entry_points(self, tmp_path):
         """Public phase methods not called by other phase methods are entry points."""
-        from langgraph_engine.call_graph_analyzer import (
-            get_phase_scoped_context,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -1009,9 +973,7 @@ class TestGetPhaseScopedContext:
             # Entry points must not start with underscore (private methods excluded)
             method_name = fqn.split("::")[-1] if "::" in fqn else fqn
             method_name = method_name.split(".")[-1] if "." in method_name else method_name
-            assert not method_name.startswith("_"), (
-                "Private method should not be an entry point: %s" % fqn
-            )
+            assert not method_name.startswith("_"), "Private method should not be an entry point: %s" % fqn
 
     def test_phase_context_no_snapshot(self, tmp_path):
         """None snapshot returns call_graph_available=False gracefully."""
@@ -1022,16 +984,21 @@ class TestGetPhaseScopedContext:
         assert isinstance(result, dict)
         assert result["call_graph_available"] is False
         # Must still have all expected keys
-        for key in ("phase_files", "danger_zones", "safe_change_zones",
-                    "entry_points", "cross_phase_callers", "risk_level", "summary"):
+        for key in (
+            "phase_files",
+            "danger_zones",
+            "safe_change_zones",
+            "entry_points",
+            "cross_phase_callers",
+            "risk_level",
+            "summary",
+        ):
             assert key in result, "Missing key: %s" % key
 
     def test_phase_context_no_phase_files(self, tmp_path):
         """Empty phase_files returns a graceful result without crashing."""
-        from langgraph_engine.call_graph_analyzer import (
-            get_phase_scoped_context,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -1042,16 +1009,13 @@ class TestGetPhaseScopedContext:
         assert "call_graph_available" in result
         # Must not raise; phase_files must be empty
         assert result["phase_files"] == []
-        for key in ("danger_zones", "safe_change_zones", "entry_points",
-                    "cross_phase_callers", "risk_level"):
+        for key in ("danger_zones", "safe_change_zones", "entry_points", "cross_phase_callers", "risk_level"):
             assert key in result
 
     def test_phase_context_summary(self, tmp_path):
         """Summary string contains 'Phase:' and 'risk='."""
-        from langgraph_engine.call_graph_analyzer import (
-            get_phase_scoped_context,
-            snapshot_call_graph,
-        )
+        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
         snap = snapshot_call_graph(project_root)
@@ -1063,9 +1027,5 @@ class TestGetPhaseScopedContext:
         assert result.get("call_graph_available") is True
         summary = result["summary"]
         assert isinstance(summary, str)
-        assert "Phase:" in summary, (
-            "Expected 'Phase:' in summary. Got: %r" % summary
-        )
-        assert "risk=" in summary, (
-            "Expected 'risk=' in summary. Got: %r" % summary
-        )
+        assert "Phase:" in summary, "Expected 'Phase:' in summary. Got: %r" % summary
+        assert "risk=" in summary, "Expected 'risk=' in summary. Got: %r" % summary

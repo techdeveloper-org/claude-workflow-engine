@@ -121,7 +121,7 @@ jobs:
       # Controlled by ENABLE_COVERAGE flag (default: true).
       - name: Coverage report + threshold enforcement
         if: needs.check-enabled.outputs.coverage_enabled == 'true'
-        run: pytest tests/ --tb=short -q --cov=scripts --cov=src --cov-report=term-missing --cov-fail-under=50
+        run: pytest tests/ --tb=short -q --cov=langgraph_engine --cov=scripts --cov=src --cov-report=term-missing --cov-fail-under=50
 
   # --- Job 2: Lint -----------------------------------------------------------
   # Runs ruff on scripts/ and src/ to catch syntax errors, undefined names,
@@ -147,4 +147,4 @@ jobs:
       # E = pycodestyle errors, W = pycodestyle warnings, F = pyflakes.
       # E501 (line too long) is intentionally excluded.
       - name: Run ruff
-        run: ruff check scripts/ src/ --select E,W,F --ignore E501
+        run: ruff check langgraph_engine/ scripts/ src/ --select E,W,F --ignore E501

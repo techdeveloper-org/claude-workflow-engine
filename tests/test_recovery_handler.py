@@ -5,15 +5,15 @@ ASCII-safe, UTF-8 encoded - Windows cp1252 compatible.
 """
 
 import importlib.util
-import json
 import sys
 import types
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Pre-import stubs: heavy transitive dependencies stubbed before any load
 # ---------------------------------------------------------------------------
+
 
 def _stub(name, **attrs):
     m = types.ModuleType(name)
@@ -26,13 +26,15 @@ def _stub(name, **attrs):
 _stub("loguru", logger=MagicMock())
 
 # scripts/ on sys.path so relative imports inside the package can resolve
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 _SCRIPTS = str(Path(__file__).resolve().parent.parent / "scripts")
-if _SCRIPTS not in sys.path:
-    sys.path.insert(0, _SCRIPTS)
+for _p in [_REPO_ROOT, _SCRIPTS]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 # Stub langgraph_engine as a bare module so the package __init__ is skipped.
 # We load individual sub-modules directly via spec_from_file_location below.
-_LE_ROOT = Path(_SCRIPTS) / "langgraph_engine"
+_LE_ROOT = Path(_REPO_ROOT) / "langgraph_engine"
 
 _le = types.ModuleType("langgraph_engine")
 _le.__path__ = [str(_LE_ROOT)]
@@ -52,14 +54,12 @@ def _load_module(name, rel_path):
 
 
 # Stub checkpoint_manager (provides CheckpointManager)
-_mock_cp_mod = _stub("langgraph_engine.checkpoint_manager",
-                     CheckpointManager=MagicMock(),
-                     create_checkpoint_manager=MagicMock())
+_mock_cp_mod = _stub(
+    "langgraph_engine.checkpoint_manager", CheckpointManager=MagicMock(), create_checkpoint_manager=MagicMock()
+)
 
 # Stub error_logger (provides ErrorLogger)
-_mock_el_mod = _stub("langgraph_engine.error_logger",
-                     ErrorLogger=MagicMock(),
-                     create_logger=MagicMock())
+_mock_el_mod = _stub("langgraph_engine.error_logger", ErrorLogger=MagicMock(), create_logger=MagicMock())
 
 # Also stub the plain-name fallback used inside recovery_handler
 sys.modules.setdefault("checkpoint_manager", _mock_cp_mod)
@@ -81,6 +81,7 @@ _MAX_STEP_RETRIES = _rh_mod._MAX_STEP_RETRIES
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _make_handler(tmp_path, session_id="test-session"):
     return RecoveryHandler(session_id=session_id, base_log_dir=str(tmp_path))
 
@@ -88,6 +89,7 @@ def _make_handler(tmp_path, session_id="test-session"):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestRecoveryHandlerInit:
     """test_recovery_handler_init - Creates with session_id, initializes components."""
@@ -104,12 +106,12 @@ class TestInstallSignalHandlers:
 
     def test_install_signal_handlers_main_thread(self, tmp_path):
         import signal as _signal
+
         handler = _make_handler(tmp_path)
         with patch.object(_rh_mod, "signal") as mock_signal:
             mock_signal.SIGINT = _signal.SIGINT
             mock_signal.SIGTERM = _signal.SIGTERM
-            with patch("threading.current_thread") as mock_ct, \
-                 patch("threading.main_thread") as mock_mt:
+            with patch("threading.current_thread") as mock_ct, patch("threading.main_thread") as mock_mt:
                 same = object()
                 mock_ct.return_value = same
                 mock_mt.return_value = same
@@ -118,9 +120,9 @@ class TestInstallSignalHandlers:
 
     def test_install_signal_handlers_non_main_thread_skips(self, tmp_path):
         handler = _make_handler(tmp_path)
-        with patch("threading.current_thread", return_value=object()), \
-             patch("threading.main_thread", return_value=object()), \
-             patch.object(_rh_mod, "signal") as mock_signal:
+        with patch("threading.current_thread", return_value=object()), patch(
+            "threading.main_thread", return_value=object()
+        ), patch.object(_rh_mod, "signal") as mock_signal:
             handler.install_signal_handlers()
             mock_signal.signal.assert_not_called()
 
@@ -133,9 +135,7 @@ class TestUpdateState:
         state = {"session_id": "s1", "user_message": "do something"}
         with patch.object(_rh_mod, "_register_globals") as mock_reg:
             handler.update_state(step=3, state=state)
-            mock_reg.assert_called_once_with(
-                3, state, handler.checkpoint_manager, handler.error_logger
-            )
+            mock_reg.assert_called_once_with(3, state, handler.checkpoint_manager, handler.error_logger)
 
 
 class TestSaveStepCheckpoint:
@@ -256,7 +256,5 @@ class TestResumeFromCheckpointPublicApi:
                 checkpoint_id="my-session:step-05",
             )
 
-        mock_instance.resume_session.assert_called_once_with(
-            checkpoint_id="my-session:step-05"
-        )
+        mock_instance.resume_session.assert_called_once_with(checkpoint_id="my-session:step-05")
         assert result is False

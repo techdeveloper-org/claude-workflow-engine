@@ -20,11 +20,9 @@ Windows-safe: ASCII only, no Unicode characters.
 import json
 import os
 import sys
-from pathlib import Path
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 # Prevent module-level workflow guard from skipping the entire module
 os.environ.pop("CLAUDE_WORKFLOW_RUNNING", None)
@@ -32,32 +30,40 @@ os.environ.pop("CLAUDE_WORKFLOW_RUNNING", None)
 # ---------------------------------------------------------------------------
 # The script filename uses hyphens so we must use importlib.util to load it.
 # ---------------------------------------------------------------------------
-import importlib.util as _ilu
+import importlib.util as _ilu  # noqa: E402
 
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+
+# Ensure project root is on sys.path for langgraph_engine imports
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # ---------------------------------------------------------------------------
 # Mock all heavy external dependencies before importing the module
 # ---------------------------------------------------------------------------
-with patch.dict("sys.modules", {
-    "ide_paths": MagicMock(
-        SESSION_STATE_FILE=Path("/tmp/.claude/memory/logs/session-progress.json"),
-        TRACKER_LOG=Path("/tmp/.claude/memory/logs/tool-tracker.jsonl"),
-        FLAG_DIR=Path("/tmp/.claude"),
-    ),
-    "project_session": MagicMock(
-        read_session_id=lambda: "SESSION-TEST-001",
-    ),
-    "metrics_emitter": MagicMock(),
-    "policy_tracking_helper": MagicMock(
-        record_policy_execution=lambda *a, **kw: None,
-        record_sub_operation=lambda *a, **kw: None,
-        get_session_id=lambda *a, **kw: "SESSION-TEST-001",
-    ),
-    "common_failures_prevention": MagicMock(),
-    "github_issue_manager": MagicMock(),
-    "post_tool_tracker_mcp_server": MagicMock(),
-}):
+with patch.dict(
+    "sys.modules",
+    {
+        "ide_paths": MagicMock(
+            SESSION_STATE_FILE=Path("/tmp/.claude/memory/logs/session-progress.json"),
+            TRACKER_LOG=Path("/tmp/.claude/memory/logs/tool-tracker.jsonl"),
+            FLAG_DIR=Path("/tmp/.claude"),
+        ),
+        "project_session": MagicMock(
+            read_session_id=lambda: "SESSION-TEST-001",
+        ),
+        "metrics_emitter": MagicMock(),
+        "policy_tracking_helper": MagicMock(
+            record_policy_execution=lambda *a, **kw: None,
+            record_sub_operation=lambda *a, **kw: None,
+            get_session_id=lambda *a, **kw: "SESSION-TEST-001",
+        ),
+        "common_failures_prevention": MagicMock(),
+        "github_issue_manager": MagicMock(),
+        "post_tool_tracker_mcp_server": MagicMock(),
+    },
+):
     _spec = _ilu.spec_from_file_location("post_tool_tracker", _SCRIPTS_DIR / "post-tool-tracker.py")
     ptt = _ilu.module_from_spec(_spec)
     sys.modules["post_tool_tracker"] = ptt
@@ -67,6 +73,7 @@ with patch.dict("sys.modules", {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_progress_file(tmp_path, state=None):
     """Write a minimal session-progress.json and return its path."""
@@ -94,6 +101,7 @@ def _make_tracker_log(tmp_path):
 # ===========================================================================
 # is_error_response
 # ===========================================================================
+
 
 class TestIsErrorResponse:
     def test_dict_with_is_error_false_returns_true(self):
@@ -126,6 +134,7 @@ class TestIsErrorResponse:
 # estimate_context_pct
 # ===========================================================================
 
+
 class TestEstimateContextPct:
     def test_empty_counts_returns_fixed_overhead(self):
         result = ptt.estimate_context_pct({}, content_chars=0)
@@ -157,6 +166,7 @@ class TestEstimateContextPct:
 # get_response_content_length
 # ===========================================================================
 
+
 class TestGetResponseContentLength:
     def test_dict_with_string_content(self):
         response = {"content": "hello world"}
@@ -183,6 +193,7 @@ class TestGetResponseContentLength:
 # load_session_progress: missing file returns defaults
 # ===========================================================================
 
+
 class TestLoadSessionProgress:
     def test_missing_file_returns_defaults(self, tmp_path):
         missing_file = tmp_path / "nonexistent" / "session-progress.json"
@@ -206,6 +217,7 @@ class TestLoadSessionProgress:
 # ===========================================================================
 # save/load round-trip
 # ===========================================================================
+
 
 class TestSaveLoadSessionProgress:
     def test_save_then_load_returns_same_data(self, tmp_path):
@@ -242,6 +254,7 @@ class TestSaveLoadSessionProgress:
 # ===========================================================================
 # log_tool_entry: JSONL append
 # ===========================================================================
+
 
 class TestLogToolEntry:
     def test_creates_jsonl_file_and_appends_entry(self, tmp_path):
@@ -284,6 +297,7 @@ class TestLogToolEntry:
 # ===========================================================================
 # check_level_3_8_phase_requirement
 # ===========================================================================
+
 
 class TestCheckLevel38PhaseRequirement:
     def test_blocks_write_before_taskcreate_high_complexity(self):
@@ -329,32 +343,25 @@ class TestCheckLevel38PhaseRequirement:
 # check_level_3_9_build_validation
 # ===========================================================================
 
+
 class TestCheckLevel39BuildValidation:
     def test_no_block_for_non_taskupdate(self):
-        blocked, _ = ptt.check_level_3_9_build_validation(
-            "Bash", {"command": "ls"}, False, {}
-        )
+        blocked, _ = ptt.check_level_3_9_build_validation("Bash", {"command": "ls"}, False, {})
         assert blocked is False
 
     def test_no_block_when_build_not_failed(self):
         state = {"last_build_failed": False}
-        blocked, _ = ptt.check_level_3_9_build_validation(
-            "TaskUpdate", {"status": "completed"}, False, state
-        )
+        blocked, _ = ptt.check_level_3_9_build_validation("TaskUpdate", {"status": "completed"}, False, state)
         assert blocked is False
 
     def test_no_block_when_status_not_completed(self):
         state = {"last_build_failed": True}
-        blocked, _ = ptt.check_level_3_9_build_validation(
-            "TaskUpdate", {"status": "in_progress"}, False, state
-        )
+        blocked, _ = ptt.check_level_3_9_build_validation("TaskUpdate", {"status": "in_progress"}, False, state)
         assert blocked is False
 
     def test_no_block_when_is_error_true(self):
         state = {"last_build_failed": True}
-        blocked, _ = ptt.check_level_3_9_build_validation(
-            "TaskUpdate", {"status": "completed"}, True, state
-        )
+        blocked, _ = ptt.check_level_3_9_build_validation("TaskUpdate", {"status": "completed"}, True, state)
         assert blocked is False
 
     def test_blocks_when_build_failed_and_completing_task(self):
@@ -362,9 +369,7 @@ class TestCheckLevel39BuildValidation:
             "last_build_failed": True,
             "last_build_failed_label": "pytest",
         }
-        blocked, msg = ptt.check_level_3_9_build_validation(
-            "TaskUpdate", {"status": "completed"}, False, state
-        )
+        blocked, msg = ptt.check_level_3_9_build_validation("TaskUpdate", {"status": "completed"}, False, state)
         assert blocked is True
         assert "BLOCKED" in msg or "build" in msg.lower()
         assert "pytest" in msg
@@ -373,6 +378,7 @@ class TestCheckLevel39BuildValidation:
 # ===========================================================================
 # check_level_3_11_git_status
 # ===========================================================================
+
 
 class TestCheckLevel311GitStatus:
     def test_no_block_for_non_bash_tool(self):
@@ -391,31 +397,26 @@ class TestCheckLevel311GitStatus:
         dirty_output = " M scripts/test.py\n?? newfile.txt\n"
         mock_result = MagicMock(stdout=dirty_output, returncode=0)
         with patch("subprocess.run", return_value=mock_result):
-            blocked, msg = ptt.check_level_3_11_git_status(
-                "Bash", {"command": "git push origin feature/test"}
-            )
+            blocked, msg = ptt.check_level_3_11_git_status("Bash", {"command": "git push origin feature/test"})
         assert blocked is True
         assert "BLOCKED" in msg or "uncommitted" in msg.lower()
 
     def test_allows_push_when_working_tree_clean(self):
         mock_result = MagicMock(stdout="", returncode=0)
         with patch("subprocess.run", return_value=mock_result):
-            blocked, _ = ptt.check_level_3_11_git_status(
-                "Bash", {"command": "git push origin feature/test"}
-            )
+            blocked, _ = ptt.check_level_3_11_git_status("Bash", {"command": "git push origin feature/test"})
         assert blocked is False
 
     def test_fail_open_on_subprocess_error(self):
         with patch("subprocess.run", side_effect=OSError("git not found")):
-            blocked, _ = ptt.check_level_3_11_git_status(
-                "Bash", {"command": "git push origin main"}
-            )
+            blocked, _ = ptt.check_level_3_11_git_status("Bash", {"command": "git push origin main"})
         assert blocked is False, "Should fail-open when git status check errors"
 
 
 # ===========================================================================
 # _detect_result_failure: file not found pattern
 # ===========================================================================
+
 
 class TestDetectResultFailure:
     def test_returns_none_when_no_failure_detector(self):
@@ -452,13 +453,12 @@ class TestDetectResultFailure:
 # _clear_session_flags: removes flag files
 # ===========================================================================
 
+
 class TestClearSessionFlags:
     def test_clears_session_folder_flag(self, tmp_path):
         session_id = "SESSION-CLR-001"
         flag_name = "task-breakdown-pending"
-        flag_dir = (
-            tmp_path / ".claude" / "memory" / "logs" / "sessions" / session_id / "flags"
-        )
+        flag_dir = tmp_path / ".claude" / "memory" / "logs" / "sessions" / session_id / "flags"
         flag_dir.mkdir(parents=True, exist_ok=True)
         flag_file = flag_dir / (flag_name + ".json")
         flag_file.write_text(json.dumps({"session_id": session_id}), encoding="utf-8")

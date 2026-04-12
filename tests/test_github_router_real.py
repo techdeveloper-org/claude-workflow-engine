@@ -15,8 +15,9 @@ import os
 import sys
 from pathlib import Path
 
-# Add scripts to path
-sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+# Add project root and scripts to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from loguru import logger
 
@@ -27,32 +28,33 @@ logger.add(sys.stdout, format="<green>[{time:HH:mm:ss}]</green> {message}", leve
 
 def test_credentials():
     """Test GitHub credentials availability."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 1: GITHUB CREDENTIALS")
-    print("="*70)
+    print("=" * 70)
 
     # Check GITHUB_TOKEN
-    token = os.getenv('GITHUB_TOKEN')
+    token = os.getenv("GITHUB_TOKEN")
     if token:
-        print(f"✅ GITHUB_TOKEN is set")
+        print("✅ GITHUB_TOKEN is set")
         print(f"   Token: {token[:10]}...{token[-10:]}")
     else:
-        print(f"❌ GITHUB_TOKEN not set")
-        print(f"   Set with: export GITHUB_TOKEN=ghp_your_token")
+        print("❌ GITHUB_TOKEN not set")
+        print("   Set with: export GITHUB_TOKEN=ghp_your_token")
         return False
 
     # Check gh CLI
     import subprocess
+
     try:
-        result = subprocess.run(['gh', 'auth', 'status'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
-            print(f"✅ gh CLI is authenticated")
+            print("✅ gh CLI is authenticated")
             # Extract username from gh auth output
-            for line in result.stdout.split('\n'):
-                if 'Logged in to' in line or 'account' in line:
+            for line in result.stdout.split("\n"):
+                if "Logged in to" in line or "account" in line:
                     print(f"   {line.strip()}")
         else:
-            print(f"❌ gh CLI authentication failed")
+            print("❌ gh CLI authentication failed")
             return False
     except Exception as e:
         print(f"❌ gh CLI not available: {e}")
@@ -63,9 +65,9 @@ def test_credentials():
 
 def test_router_gh_cli_only():
     """Test router with gh CLI only (use_mcp=False)."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 2: ROUTER WITH GH CLI (use_mcp=False)")
-    print("="*70)
+    print("=" * 70)
 
     try:
         from langgraph_engine.github_operation_router import GitHubOperationRouter
@@ -73,7 +75,7 @@ def test_router_gh_cli_only():
         print("Initializing router (use_mcp=False, fallback_to_gh=True)...")
         router = GitHubOperationRouter(use_mcp=False, fallback_to_gh=True)
 
-        print(f"✅ Router initialized successfully")
+        print("✅ Router initialized successfully")
         print(f"   MCP enabled: {router.use_mcp}")
         print(f"   Fallback enabled: {router.fallback_to_gh}")
         print(f"   MCP instance: {router.mcp}")
@@ -83,24 +85,25 @@ def test_router_gh_cli_only():
     except Exception as e:
         print(f"❌ Router initialization failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def test_router_mcp_enabled():
     """Test router with MCP enabled (use_mcp=True)."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 3: ROUTER WITH MCP ENABLED (use_mcp=True)")
-    print("="*70)
+    print("=" * 70)
 
     try:
         from langgraph_engine.github_operation_router import GitHubOperationRouter
 
         print("Initializing router (use_mcp=True, fallback_to_gh=True)...")
-        token = os.getenv('GITHUB_TOKEN')
+        token = os.getenv("GITHUB_TOKEN")
         router = GitHubOperationRouter(use_mcp=True, fallback_to_gh=True, token=token)
 
-        print(f"✅ Router initialized successfully")
+        print("✅ Router initialized successfully")
         print(f"   MCP enabled: {router.use_mcp}")
         print(f"   Fallback enabled: {router.fallback_to_gh}")
         print(f"   MCP instance: {router.mcp is not None}")
@@ -118,9 +121,9 @@ def test_router_mcp_enabled():
 
 def test_router_api_compatibility():
     """Test that router has all required methods."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 4: ROUTER API COMPATIBILITY")
-    print("="*70)
+    print("=" * 70)
 
     try:
         from langgraph_engine.github_operation_router import GitHubOperationRouter
@@ -128,12 +131,12 @@ def test_router_api_compatibility():
         router = GitHubOperationRouter(use_mcp=False, fallback_to_gh=True)
 
         required_methods = [
-            'create_issue',
-            'add_issue_comment',
-            'close_issue',
-            'create_pull_request',
-            'merge_pull_request',
-            'add_pr_comment'
+            "create_issue",
+            "add_issue_comment",
+            "close_issue",
+            "create_pull_request",
+            "merge_pull_request",
+            "add_pr_comment",
         ]
 
         all_present = True
@@ -145,9 +148,9 @@ def test_router_api_compatibility():
                 all_present = False
 
         if all_present:
-            print(f"\n✅ All 6 required methods present")
+            print("\n✅ All 6 required methods present")
         else:
-            print(f"\n❌ Some methods missing")
+            print("\n❌ Some methods missing")
             return False
 
         return True
@@ -175,13 +178,14 @@ def main():
         except Exception as e:
             print(f"\n❌ Test '{name}' crashed: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((name, False))
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST SUMMARY")
-    print("="*70)
+    print("=" * 70)
 
     passed = sum(1 for _, result in results if result)
     total = len(results)
@@ -196,7 +200,7 @@ def main():
         print("\n🎉 ALL TESTS PASSED! Router is ready for real usage!")
         return 0
     else:
-        print(f"\n⚠️  Some tests failed. Check output above.")
+        print("\n⚠️  Some tests failed. Check output above.")
         return 1
 
 

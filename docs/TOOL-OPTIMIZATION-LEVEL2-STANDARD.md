@@ -24,7 +24,7 @@ This ensures **60-85% token savings** on tool calls across the entire pipeline.
 
 ### Level 2: Standards Definition
 
-**File:** `scripts/langgraph_engine/subgraphs/level2_standards.py`
+**File:** `langgraph_engine/subgraphs/level2_standards.py`
 
 ```python
 def node_tool_optimization_standards(state: FlowState) -> dict:
@@ -48,7 +48,7 @@ def node_tool_optimization_standards(state: FlowState) -> dict:
 
 ### FlowState: Standard Storage
 
-**File:** `scripts/langgraph_engine/flow_state.py`
+**File:** `langgraph_engine/flow_state.py`
 
 ```python
 # Tool Optimization Standards (loaded at Level 2, enforced by PreToolUse hook)
@@ -58,7 +58,7 @@ tool_optimization_loaded: Optional[bool]  # True after Level 2 loads rules
 
 ### Orchestrator: Pass-Through to Level 3
 
-**File:** `scripts/langgraph_engine/orchestrator.py`
+**File:** `langgraph_engine/orchestrator.py`
 
 In `optimize_context_after_level2()`:
 ```python

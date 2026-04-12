@@ -224,7 +224,7 @@ step7_system_prompt_file  (str, path to written prompt file)
 ## 3. STEP 0 MODIFICATION SPEC
 
 ### Target File
-`scripts/langgraph_engine/level3_execution/nodes/step_wrappers_0to4.py`
+`langgraph_engine/level3_execution/nodes/step_wrappers_0to4.py`
 Function: `step0_task_analysis_node(state)`
 
 ### Injection Points (add BEFORE the _run_step call)
@@ -416,9 +416,9 @@ for observability correctness, note:
 ## 6. BACKWARD-COMPAT SHIMS (DO NOT TOUCH)
 
 The following shim files must NOT be modified or deleted:
-- `scripts/langgraph_engine/flow_state.py` — shim -> state/
-- `scripts/langgraph_engine/uml_generators.py` — shim -> diagrams/
-- `scripts/langgraph_engine/call_graph_builder.py` — shim -> parsers/
+- `langgraph_engine/flow_state.py` — shim -> state/
+- `langgraph_engine/uml_generators.py` — shim -> diagrams/
+- `langgraph_engine/call_graph_builder.py` — shim -> parsers/
 
 None of these shims reference the removed step nodes. Confirmed safe.
 

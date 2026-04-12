@@ -12,21 +12,19 @@ All tests use tmp_path fixture for isolation. No real disk dependencies outside 
 ASCII-only: cp1252 safe for Windows.
 """
 
-import sys
 import json
-import time
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "mcp"))
-
-import pytest
-from unittest.mock import patch
 
 
 # ---------------------------------------------------------------------------
 # AtomicJsonStore
 # ---------------------------------------------------------------------------
+
 
 class TestAtomicJsonStoreSaveLoad:
 
@@ -108,9 +106,7 @@ class TestAtomicJsonStoreFallback:
 
         # Write a valid backup
         bak_path = tmp_path / "data.json.bak"
-        bak_path.write_text(
-            json.dumps({"recovered": True}), encoding="utf-8"
-        )
+        bak_path.write_text(json.dumps({"recovered": True}), encoding="utf-8")
 
         # Corrupt the primary file
         (tmp_path / "data.json").write_text("not valid json{{", encoding="utf-8")
@@ -130,10 +126,7 @@ class TestAtomicJsonStoreFallback:
         """load() calls default_factory when file is absent and no default is given."""
         from base.persistence import AtomicJsonStore
 
-        store = AtomicJsonStore(
-            tmp_path / "missing.json",
-            default_factory=lambda: {"from_factory": True}
-        )
+        store = AtomicJsonStore(tmp_path / "missing.json", default_factory=lambda: {"from_factory": True})
         result = store.load()
         assert result == {"from_factory": True}
 
@@ -166,10 +159,7 @@ class TestAtomicJsonStoreModify:
         from base.persistence import AtomicJsonStore
 
         store = AtomicJsonStore(tmp_path / "new.json")
-        result = store.modify(
-            lambda d: d.update({"created": True}),
-            default={}
-        )
+        result = store.modify(lambda d: d.update({"created": True}), default={})
         assert result.get("created") is True
         assert store.exists
 
@@ -199,6 +189,7 @@ class TestAtomicJsonStoreDelete:
 # ---------------------------------------------------------------------------
 # JsonlAppender
 # ---------------------------------------------------------------------------
+
 
 class TestJsonlAppenderBasic:
 
@@ -279,9 +270,11 @@ class TestJsonlAppenderFiltered:
 
         # Manually set timestamps to simulate date filtering
         (tmp_path / "dated.jsonl").write_text(
-            json.dumps({"ts": "match", "timestamp": "2026-03-17T10:00:00"}) + "\n" +
-            json.dumps({"ts": "no-match", "timestamp": "2026-03-18T10:00:00"}) + "\n",
-            encoding="utf-8"
+            json.dumps({"ts": "match", "timestamp": "2026-03-17T10:00:00"})
+            + "\n"
+            + json.dumps({"ts": "no-match", "timestamp": "2026-03-18T10:00:00"})
+            + "\n",
+            encoding="utf-8",
         )
 
         results = log.read_filtered(date="2026-03-17")
@@ -326,13 +319,7 @@ class TestJsonlAppenderMalformed:
         from base.persistence import JsonlAppender
 
         log_path = tmp_path / "mixed.jsonl"
-        log_path.write_text(
-            '{"valid": 1}\n'
-            'not valid json at all\n'
-            '{"valid": 2}\n'
-            '{broken\n',
-            encoding="utf-8"
-        )
+        log_path.write_text('{"valid": 1}\n' "not valid json at all\n" '{"valid": 2}\n' "{broken\n", encoding="utf-8")
 
         log = JsonlAppender(log_path)
         entries = log.read_all()
@@ -346,11 +333,13 @@ class TestJsonlAppenderMalformed:
 # SessionIdResolver
 # ---------------------------------------------------------------------------
 
+
 class TestSessionIdResolverCaching:
 
     def setup_method(self):
         """Reset singleton before each test for isolation."""
         from base.persistence import SessionIdResolver
+
         SessionIdResolver.reset()
 
     def test_session_id_resolver_get_caching(self, tmp_path):
@@ -358,10 +347,7 @@ class TestSessionIdResolverCaching:
         from base.persistence import SessionIdResolver
 
         session_file = tmp_path / ".current-session.json"
-        session_file.write_text(
-            json.dumps({"current_session_id": "SESSION-20260317-001"}),
-            encoding="utf-8"
-        )
+        session_file.write_text(json.dumps({"current_session_id": "SESSION-20260317-001"}), encoding="utf-8")
 
         resolver = SessionIdResolver(config_dir=tmp_path)
         first = resolver.get()
@@ -377,20 +363,14 @@ class TestSessionIdResolverCaching:
         from base.persistence import SessionIdResolver
 
         session_file = tmp_path / ".current-session.json"
-        session_file.write_text(
-            json.dumps({"current_session_id": "SESSION-OLD-001"}),
-            encoding="utf-8"
-        )
+        session_file.write_text(json.dumps({"current_session_id": "SESSION-OLD-001"}), encoding="utf-8")
 
         resolver = SessionIdResolver(config_dir=tmp_path)
         first = resolver.get()
         assert first == "SESSION-OLD-001"
 
         # Write updated session ID and simulate TTL expiry
-        session_file.write_text(
-            json.dumps({"current_session_id": "SESSION-NEW-002"}),
-            encoding="utf-8"
-        )
+        session_file.write_text(json.dumps({"current_session_id": "SESSION-NEW-002"}), encoding="utf-8")
 
         # Force re-resolution by bypassing cache
         second = resolver.get(force_refresh=True)
@@ -401,19 +381,13 @@ class TestSessionIdResolverCaching:
         from base.persistence import SessionIdResolver
 
         session_file = tmp_path / ".current-session.json"
-        session_file.write_text(
-            json.dumps({"current_session_id": "SESSION-FIRST-001"}),
-            encoding="utf-8"
-        )
+        session_file.write_text(json.dumps({"current_session_id": "SESSION-FIRST-001"}), encoding="utf-8")
 
         resolver = SessionIdResolver(config_dir=tmp_path)
         resolver.get()  # Populate cache
 
         # Update file and invalidate
-        session_file.write_text(
-            json.dumps({"current_session_id": "SESSION-SECOND-002"}),
-            encoding="utf-8"
-        )
+        session_file.write_text(json.dumps({"current_session_id": "SESSION-SECOND-002"}), encoding="utf-8")
         resolver.invalidate()
 
         result = resolver.get()
@@ -432,6 +406,7 @@ class TestSessionIdResolverPriority:
 
     def setup_method(self):
         from base.persistence import SessionIdResolver
+
         SessionIdResolver.reset()
 
     def test_session_id_resolver_priority_current_session_first(self, tmp_path):
@@ -440,36 +415,26 @@ class TestSessionIdResolverPriority:
 
         # Write primary (higher priority)
         primary = tmp_path / ".current-session.json"
-        primary.write_text(
-            json.dumps({"current_session_id": "SESSION-PRIMARY-001"}),
-            encoding="utf-8"
-        )
+        primary.write_text(json.dumps({"current_session_id": "SESSION-PRIMARY-001"}), encoding="utf-8")
 
         # Write fallback (lower priority)
         logs_dir = tmp_path / "logs"
         logs_dir.mkdir()
         fallback = logs_dir / "session-progress.json"
-        fallback.write_text(
-            json.dumps({"session_id": "SESSION-FALLBACK-002"}),
-            encoding="utf-8"
-        )
+        fallback.write_text(json.dumps({"session_id": "SESSION-FALLBACK-002"}), encoding="utf-8")
 
         resolver = SessionIdResolver(config_dir=tmp_path)
         result = resolver.get()
         assert result == "SESSION-PRIMARY-001"
 
-    def test_session_id_resolver_falls_back_to_progress_when_primary_missing(
-            self, tmp_path):
+    def test_session_id_resolver_falls_back_to_progress_when_primary_missing(self, tmp_path):
         """Falls back to session-progress.json when current-session.json is absent."""
         from base.persistence import SessionIdResolver
 
         logs_dir = tmp_path / "logs"
         logs_dir.mkdir()
         fallback = logs_dir / "session-progress.json"
-        fallback.write_text(
-            json.dumps({"session_id": "SESSION-FALLBACK-003"}),
-            encoding="utf-8"
-        )
+        fallback.write_text(json.dumps({"session_id": "SESSION-FALLBACK-003"}), encoding="utf-8")
 
         resolver = SessionIdResolver(config_dir=tmp_path)
         result = resolver.get()
@@ -480,10 +445,7 @@ class TestSessionIdResolverPriority:
         from base.persistence import SessionIdResolver
 
         primary = tmp_path / ".current-session.json"
-        primary.write_text(
-            json.dumps({"current_session_id": "invalid-format"}),
-            encoding="utf-8"
-        )
+        primary.write_text(json.dumps({"current_session_id": "invalid-format"}), encoding="utf-8")
 
         resolver = SessionIdResolver(config_dir=tmp_path)
         result = resolver.get()

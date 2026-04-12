@@ -385,7 +385,7 @@ SERVERS = [
         ],
         "pip_deps": ["mcp", "fastmcp"],
         "engine_dep": True,
-        "engine_note": "Depends on scripts/langgraph_engine/uml_generators.py and diagrams/ package from claude-workflow-engine",
+        "engine_note": "Depends on langgraph_engine/uml_generators.py and diagrams/ package from claude-workflow-engine",
     },
     {
         "repo": "mcp-drawio-diagram",
@@ -410,7 +410,7 @@ SERVERS = [
         ],
         "pip_deps": ["mcp", "fastmcp"],
         "engine_dep": True,
-        "engine_note": "Depends on scripts/langgraph_engine/diagrams/ package and call_graph_builder.py from claude-workflow-engine",
+        "engine_note": "Depends on langgraph_engine/diagrams/ package and call_graph_builder.py from claude-workflow-engine",
     },
 ]
 

@@ -236,7 +236,7 @@ CLAUDE_DEBUG=1 python scripts/3-level-flow.py --message "your task" --summary
 pytest tests/                          # all tests
 pytest tests/test_*mcp*.py            # MCP server tests
 pytest tests/integration/             # integration tests
-pytest tests/ --cov=scripts/langgraph_engine --cov-report=html
+pytest tests/ --cov=langgraph_engine --cov-report=html
 ```
 
 ---
@@ -314,14 +314,14 @@ claude-workflow-engine/
 | Feature | Module |
 |---------|--------|
 | Health + Readiness endpoints | `scripts/health_server.py` — `ENABLE_HEALTH_SERVER=1` |
-| Prometheus metrics (9 metrics) | `scripts/langgraph_engine/metrics_exporter.py` — `ENABLE_METRICS=1` |
-| Structured JSON logging | `scripts/langgraph_engine/core/structured_logger.py` — `LOG_FORMAT=json` |
-| OpenTelemetry tracing | `scripts/langgraph_engine/tracing.py` — `ENABLE_TRACING=1` |
-| Sentry error tracking | `scripts/langgraph_engine/error_tracking.py` — no-op without `SENTRY_DSN` |
-| Secrets validation | `scripts/langgraph_engine/secrets_manager.py` — startup check + AWS SM |
+| Prometheus metrics (9 metrics) | `langgraph_engine/metrics_exporter.py` — `ENABLE_METRICS=1` |
+| Structured JSON logging | `langgraph_engine/core/structured_logger.py` — `LOG_FORMAT=json` |
+| OpenTelemetry tracing | `langgraph_engine/tracing.py` — `ENABLE_TRACING=1` |
+| Sentry error tracking | `langgraph_engine/error_tracking.py` — no-op without `SENTRY_DSN` |
+| Secrets validation | `langgraph_engine/secrets_manager.py` — startup check + AWS SM |
 | Rate limiting | `src/mcp/rate_limiter.py` — TokenBucket, 100/min tools, 10/min LLM |
 | Input validation | `src/mcp/input_validator.py` — null-byte strip, prompt injection detection |
-| Audit logging | `scripts/langgraph_engine/audit_logger.py` — append-only JSON, credential redaction |
+| Audit logging | `langgraph_engine/audit_logger.py` — append-only JSON, credential redaction |
 | Secrets scanner (CI gate) | `scripts/secrets_check.py` — 6 regex patterns, exit 1 on finding |
 | Kubernetes manifests | `k8s/` — Deployment (2 replicas), ConfigMap, Secret, HPA |
 | Pre-commit hooks | `.pre-commit-config.yaml` — ruff, black, isort, secrets-check |

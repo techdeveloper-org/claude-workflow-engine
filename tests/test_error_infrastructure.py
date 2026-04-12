@@ -12,11 +12,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Add scripts to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts" / "langgraph_engine"))
+# Add project root and langgraph_engine to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent / "langgraph_engine"))
 
-from error_logger import ErrorLogger
 from backup_manager import BackupManager
+from error_logger import ErrorLogger
 
 
 def test_error_logger():
@@ -48,9 +49,7 @@ def test_error_logger():
     )
 
     # Test 4: Log retry attempt
-    logger.log_retry_attempt(
-        "Level -1", attempt=1, max_attempts=3, status="FAILED", reason="Encoding check failed"
-    )
+    logger.log_retry_attempt("Level -1", attempt=1, max_attempts=3, status="FAILED", reason="Encoding check failed")
 
     # Test 5: Log error
     logger.log_error(
@@ -86,7 +85,7 @@ def test_backup_manager():
     manager = BackupManager("test-session-002")
 
     # Create a temporary test file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         test_file = Path(f.name)
         f.write("print('original content')\n")
 
@@ -97,7 +96,7 @@ def test_backup_manager():
 
         # Test 2: Modify file
         test_file.write_text("print('original content')\nprint('modified')\n")
-        print(f"✅ File modified")
+        print("✅ File modified")
 
         # Test 3: Generate diff
         diff_path = manager.generate_diff(str(test_file), "Level -1")
@@ -144,7 +143,7 @@ def test_integration():
     backup = BackupManager(session_id)
 
     # Create test file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         test_file = Path(f.name)
         f.write("x = 1\n")
 
@@ -154,7 +153,7 @@ def test_integration():
         backup.backup_file(str(test_file), "Level -1", "Integration test")
 
         # Attempt modification
-        original = test_file.read_text()
+        _original = test_file.read_text()
         test_file.write_text("x = 1\ny = 2\n")
         logger.log_validation_result("Level -1", "File modification", True)
 
@@ -163,7 +162,7 @@ def test_integration():
             logger.log_validation_result("Level -1", "File integrity check", True)
 
             # Generate diff
-            diff = backup.generate_diff(str(test_file), "Level -1", "integration_test")
+            _diff = backup.generate_diff(str(test_file), "Level -1", "integration_test")
             logger.log_decision("Level -1", "Modification complete", "File is valid and changes tracked")
         else:
             logger.log_error("Level -1", "Validation failed", severity="ERROR")
@@ -200,6 +199,7 @@ def main():
     except Exception as e:
         print(f"\n❌ TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

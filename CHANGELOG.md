@@ -22,8 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 | File | Change |
 |------|--------|
-| `scripts/langgraph_engine/diagrams/legacy_generator.py` | `__init__` reads `UML_OUTPUT_DIR`; absolute/relative path logic |
-| `scripts/langgraph_engine/level3_execution/documentation_manager.py` | `_generate_drawio_diagrams()` reads `DRAWIO_OUTPUT_DIR`; relative path in return values |
+| `langgraph_engine/diagrams/legacy_generator.py` | `__init__` reads `UML_OUTPUT_DIR`; absolute/relative path logic |
+| `langgraph_engine/level3_execution/documentation_manager.py` | `_generate_drawio_diagrams()` reads `DRAWIO_OUTPUT_DIR`; relative path in return values |
 | `scripts/architecture/generate_system_diagram.py` | `__main__` block reads `DRAWIO_OUTPUT_DIR` |
 | `scripts/tools/create_mcp_repos.py` | Fixed stale `DRAWIO_OUTPUT_DIR` default (`docs/diagrams/` → `drawio/`) |
 | `tests/test_uml_generators.py` | Updated test assertions to expect `uml/` not `docs/uml/` |

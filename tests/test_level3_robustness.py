@@ -43,8 +43,11 @@ if not hasattr(loguru, "logger") or not callable(getattr(loguru.logger, "info", 
         },
     )()
 
-# Add scripts/ to path
+# Add project root (for langgraph_engine/) and scripts/ to path
+_PROJECT_ROOT = str(Path(__file__).parent.parent)
 _SCRIPTS_DIR = str(Path(__file__).parent.parent / "scripts")
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 

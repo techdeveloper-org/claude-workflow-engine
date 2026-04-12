@@ -18,7 +18,7 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Languages** | Python |
 | **Frameworks** | LangGraph 0.2.0+, LangChain, FastMCP (mcp package) |
 | **Status** | Active Development |
-| **Primary Location** | scripts/langgraph_engine/ |
+| **Primary Location** | langgraph_engine/ |
 | **MCP Servers** | 13 servers -- all in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories); 1 also keeps an in-engine copy in `src/mcp/` |
 | **Total Python Files** | 304+ |
 | **Test Files** | 74 |
@@ -158,47 +158,47 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Orchestrator | scripts/langgraph_engine/orchestrator.py | Main StateGraph pipeline |
-| Flow State | scripts/langgraph_engine/flow_state.py | Backward-compat shim -> re-exports from state/ |
-| State Package | scripts/langgraph_engine/state/ | FlowState, StepKeys, reducers, WorkflowContextOptimizer |
-| Core Package | scripts/langgraph_engine/core/ | LazyLoader, get_logger, node_error_handler, NodeResult, create_step_node |
-| Routing Package | scripts/langgraph_engine/routing/ | All routing functions split by level |
-| Helper Nodes | scripts/langgraph_engine/helper_nodes/ | Helper node functions split by concern |
-| Pipeline Builder | scripts/langgraph_engine/pipeline_builder.py | Builder Pattern: chainable add_level*().build() |
-| Diagrams Package | scripts/langgraph_engine/diagrams/ | Strategy Pattern: DiagramFactory + 13 generators |
-| Parsers Package | scripts/langgraph_engine/parsers/ | Abstract Factory: ParserRegistry + 4 language parsers |
-| SonarQube Package | scripts/langgraph_engine/level3_execution/sonarqube/ | Facade: api_client, lightweight, aggregator, auto_fixer |
-| Integrations Package | scripts/langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
-| Level -1 | scripts/langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical) |
-| Level 1 | scripts/langgraph_engine/level1_sync/ | Session/context sync (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
-| Level 2 | scripts/langgraph_engine/level2_standards/ | Standards loading (canonical) |
-| Level 3 | scripts/langgraph_engine/level3_execution/subgraph.py | 8-step active execution (Pre-0, Step 0, Steps 8-14) -- ACTIVE (nodes in level3_execution/nodes/) |
-| Pre-Analysis Node | scripts/langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan before Step 0; template fast-path detection |
+| Orchestrator | langgraph_engine/orchestrator.py | Main StateGraph pipeline |
+| Flow State | langgraph_engine/flow_state.py | Backward-compat shim -> re-exports from state/ |
+| State Package | langgraph_engine/state/ | FlowState, StepKeys, reducers, WorkflowContextOptimizer |
+| Core Package | langgraph_engine/core/ | LazyLoader, get_logger, node_error_handler, NodeResult, create_step_node |
+| Routing Package | langgraph_engine/routing/ | All routing functions split by level |
+| Helper Nodes | langgraph_engine/helper_nodes/ | Helper node functions split by concern |
+| Pipeline Builder | langgraph_engine/pipeline_builder.py | Builder Pattern: chainable add_level*().build() |
+| Diagrams Package | langgraph_engine/diagrams/ | Strategy Pattern: DiagramFactory + 13 generators |
+| Parsers Package | langgraph_engine/parsers/ | Abstract Factory: ParserRegistry + 4 language parsers |
+| SonarQube Package | langgraph_engine/level3_execution/sonarqube/ | Facade: api_client, lightweight, aggregator, auto_fixer |
+| Integrations Package | langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
+| Level -1 | langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical) |
+| Level 1 | langgraph_engine/level1_sync/ | Session/context sync (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
+| Level 2 | langgraph_engine/level2_standards/ | Standards loading (canonical) |
+| Level 3 | langgraph_engine/level3_execution/subgraph.py | 8-step active execution (Pre-0, Step 0, Steps 8-14) -- ACTIVE (nodes in level3_execution/nodes/) |
+| Pre-Analysis Node | langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan before Step 0; template fast-path detection |
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |
-| Call Graph Builder | scripts/langgraph_engine/call_graph_builder.py | AST-based FQN call stack (compat shim -> parsers/) |
-| Call Graph Analyzer | scripts/langgraph_engine/call_graph_analyzer.py | Pipeline impact analysis (Steps 2/10/11) |
-| UML Generators | scripts/langgraph_engine/uml_generators.py | Compat shim -> diagrams/DiagramFactory |
-| Doc Manager | scripts/langgraph_engine/level3_execution/documentation_manager.py | Circular SDLC doc cycle (Step 0/13) |
+| Call Graph Builder | langgraph_engine/call_graph_builder.py | AST-based FQN call stack (compat shim -> parsers/) |
+| Call Graph Analyzer | langgraph_engine/call_graph_analyzer.py | Pipeline impact analysis (Steps 2/10/11) |
+| UML Generators | langgraph_engine/uml_generators.py | Compat shim -> diagrams/DiagramFactory |
+| Doc Manager | langgraph_engine/level3_execution/documentation_manager.py | Circular SDLC doc cycle (Step 0/13) |
 | Session Bridge | src/mcp/session_hooks.py | MCP direct import bridge |
-| Metrics Aggregator | scripts/langgraph_engine/metrics_aggregator.py | Session/step/LLM/tool stats from logs |
-| SonarQube Scanner | scripts/langgraph_engine/sonarqube_scanner.py | Legacy entry point -> sonarqube/ package |
-| Quality Gate | scripts/langgraph_engine/quality_gate.py | 4-gate merge enforcement |
-| Test Generator | scripts/langgraph_engine/test_generator.py | Template-based unit tests (4 languages) |
-| Jira Workflow | scripts/langgraph_engine/level3_execution/steps8to12_jira.py | Dual GitHub+Jira integration (Steps 8/9/11/12) |
-| Figma Workflow | scripts/langgraph_engine/level3_execution/figma_workflow.py | Design-to-code (components, tokens, review) |
+| Metrics Aggregator | langgraph_engine/metrics_aggregator.py | Session/step/LLM/tool stats from logs |
+| SonarQube Scanner | langgraph_engine/sonarqube_scanner.py | Legacy entry point -> sonarqube/ package |
+| Quality Gate | langgraph_engine/quality_gate.py | 4-gate merge enforcement |
+| Test Generator | langgraph_engine/test_generator.py | Template-based unit tests (4 languages) |
+| Jira Workflow | langgraph_engine/level3_execution/steps8to12_jira.py | Dual GitHub+Jira integration (Steps 8/9/11/12) |
+| Figma Workflow | langgraph_engine/level3_execution/figma_workflow.py | Design-to-code (components, tokens, review) |
 | Health Server | scripts/health_server.py | Stdlib HTTP: GET /health + GET /readiness (daemon thread) |
-| Secrets Manager | scripts/langgraph_engine/secrets_manager.py | Startup secrets validation + AWS SM integration + rotation hints |
-| Audit Logger | scripts/langgraph_engine/audit_logger.py | Append-only JSON audit log, daily rotation, credential redaction |
-| Metrics Exporter | scripts/langgraph_engine/metrics_exporter.py | Prometheus: 9 metrics, start_metrics_server(port) |
-| Structured Logger | scripts/langgraph_engine/core/structured_logger.py | JSON log sink (LOG_FORMAT=json), ContextVar session/step injection |
-| Tracing | scripts/langgraph_engine/tracing.py | OpenTelemetry OTLP/console, create_span() context manager |
-| Error Tracking | scripts/langgraph_engine/error_tracking.py | Sentry capture_exception(), no-op without SENTRY_DSN |
+| Secrets Manager | langgraph_engine/secrets_manager.py | Startup secrets validation + AWS SM integration + rotation hints |
+| Audit Logger | langgraph_engine/audit_logger.py | Append-only JSON audit log, daily rotation, credential redaction |
+| Metrics Exporter | langgraph_engine/metrics_exporter.py | Prometheus: 9 metrics, start_metrics_server(port) |
+| Structured Logger | langgraph_engine/core/structured_logger.py | JSON log sink (LOG_FORMAT=json), ContextVar session/step injection |
+| Tracing | langgraph_engine/tracing.py | OpenTelemetry OTLP/console, create_span() context manager |
+| Error Tracking | langgraph_engine/error_tracking.py | Sentry capture_exception(), no-op without SENTRY_DSN |
 | Rate Limiter | src/mcp/rate_limiter.py | TokenBucket per client, 100/min tools, 10/min LLM |
 | Input Validator | src/mcp/input_validator.py | Null-byte strip, length limit, prompt injection detection |
 | Secrets Scanner | scripts/secrets_check.py | CI gate: 6 regex patterns, exit 1 on finding |
 | Pin Requirements | scripts/pin_requirements.py | Generates requirements.pinned.txt + requirements.bounds.txt |
-| PromptGen Caller | scripts/langgraph_engine/level3_execution/architecture/prompt_gen_expert_caller.py | Step 0 Call 1: fills orchestration template via claude CLI |
-| Orchestrator Caller | scripts/langgraph_engine/level3_execution/architecture/orchestrator_agent_caller.py | Step 0 Call 2: executes orchestration plan, streams live to terminal |
+| PromptGen Caller | langgraph_engine/level3_execution/architecture/prompt_gen_expert_caller.py | Step 0 Call 1: fills orchestration template via claude CLI |
+| Orchestrator Caller | langgraph_engine/level3_execution/architecture/orchestrator_agent_caller.py | Step 0 Call 2: executes orchestration plan, streams live to terminal |
 
 ### MCP Servers (13 servers, 295 tools) -- All Extracted to Separate Repos
 
@@ -254,8 +254,8 @@ Step 11 (Review): review_change_impact() -> compare before/after graphs
                  Detects breaking changes, orphaned methods, risk assessment
 ```
 
-Key module: `scripts/langgraph_engine/call_graph_analyzer.py`
-Data source: `scripts/langgraph_engine/call_graph_builder.py`
+Key module: `langgraph_engine/call_graph_analyzer.py`
+Data source: `langgraph_engine/call_graph_builder.py`
 State fields: `pre_analysis_result`, `step10_pre_change_graph`, `step11_impact_review`
 
 **Stale Graph Guard (v1.6.1):**
@@ -363,7 +363,7 @@ pytest tests/test_secrets_manager.py tests/test_audit_logger.py
 pytest tests/test_call_graph_builder.py tests/test_call_graph_analyzer.py
 
 # With coverage report
-pytest tests/ --cov=scripts/langgraph_engine --cov-report=html:docs/coverage
+pytest tests/ --cov=langgraph_engine --cov-report=html:docs/coverage
 ```
 
 ### First-Time Setup

@@ -42,6 +42,11 @@ _this_scripts_dir = Path(__file__).resolve().parent
 if str(_this_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_this_scripts_dir))
 
+# langgraph_engine/ lives at project root (one level above scripts/)
+_project_root = _this_scripts_dir.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 # ============================================================================
 # IMPORTS & SETUP
 # ============================================================================

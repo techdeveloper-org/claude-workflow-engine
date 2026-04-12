@@ -9,17 +9,19 @@ Tests:
 These tests verify ZERO breaking changes to existing code.
 """
 
-import pytest
-import os
-from unittest.mock import Mock, MagicMock, patch
 from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pytest
 
 # Test imports - may fail if PyGithub not installed
 try:
     from github import GithubException
+
     PYGITHUB_AVAILABLE = True
 except ImportError:
     PYGITHUB_AVAILABLE = False
+
     # Provide a stub so tests that reference GithubException still work
     class GithubException(Exception):
         def __init__(self, status, data=None, headers=None, message=""):
@@ -27,8 +29,11 @@ except ImportError:
             self.data = data
             super().__init__(str(status))
 
+
 # Import modules to test
 import sys
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from langgraph_engine.github_mcp import GitHubMCP
@@ -46,10 +51,9 @@ class TestGitHubMCP:
         installed and Github/GithubException are absent from the module.
         Yields to keep patches active for the full duration of each test.
         """
-        with patch('langgraph_engine.github_mcp.PYGITHUB_AVAILABLE', True), \
-             patch('langgraph_engine.github_mcp.Github', create=True) as mock_github, \
-             patch('langgraph_engine.github_mcp.GithubException',
-                   create=True, new=GithubException):
+        with patch("langgraph_engine.github_mcp.PYGITHUB_AVAILABLE", True), patch(
+            "langgraph_engine.github_mcp.Github", create=True
+        ) as mock_github, patch("langgraph_engine.github_mcp.GithubException", create=True, new=GithubException):
             # Mock the Github client
             mock_user = Mock()
             mock_user.login = "test_user"
@@ -74,10 +78,7 @@ class TestGitHubMCP:
 
         # Create issue
         result = mock_github_mcp.create_issue(
-            title="Test Issue",
-            body="Test body",
-            labels=["bug"],
-            assignee="test_user"
+            title="Test Issue", body="Test body", labels=["bug"], assignee="test_user"
         )
 
         # Verify
@@ -91,10 +92,7 @@ class TestGitHubMCP:
         # Mock failure
         mock_github_mcp.repo.create_issue.side_effect = GithubException(400, "Bad request")
 
-        result = mock_github_mcp.create_issue(
-            title="Test Issue",
-            body="Test body"
-        )
+        result = mock_github_mcp.create_issue(title="Test Issue", body="Test body")
 
         assert result["success"] is False
         assert "error" in result
@@ -119,10 +117,7 @@ class TestGitHubMCP:
         mock_issue.create_comment.return_value = mock_comment
         mock_github_mcp.repo.get_issue.return_value = mock_issue
 
-        result = mock_github_mcp.add_issue_comment(
-            issue_number=42,
-            comment="Test comment"
-        )
+        result = mock_github_mcp.add_issue_comment(issue_number=42, comment="Test comment")
 
         assert result["success"] is True
         assert "comment_url" in result
@@ -133,10 +128,7 @@ class TestGitHubMCP:
         mock_issue = Mock()
         mock_github_mcp.repo.get_issue.return_value = mock_issue
 
-        result = mock_github_mcp.close_issue(
-            issue_number=42,
-            closing_comment=None
-        )
+        result = mock_github_mcp.close_issue(issue_number=42, closing_comment=None)
 
         assert result["success"] is True
         assert result["issue_number"] == 42
@@ -151,10 +143,7 @@ class TestGitHubMCP:
         mock_github_mcp.repo.create_pull.return_value = mock_pr
 
         result = mock_github_mcp.create_pull_request(
-            title="Test PR",
-            body="Test body",
-            head_branch="feature/test",
-            base_branch="main"
+            title="Test PR", body="Test body", head_branch="feature/test", base_branch="main"
         )
 
         assert result["success"] is True
@@ -169,11 +158,7 @@ class TestGitHubMCP:
         mock_github_mcp.repo.get_pull.return_value = mock_pr
         mock_github_mcp.repo.get_git_ref = Mock()
 
-        result = mock_github_mcp.merge_pull_request(
-            pr_number=10,
-            commit_message="Merge test",
-            delete_branch=True
-        )
+        result = mock_github_mcp.merge_pull_request(pr_number=10, commit_message="Merge test", delete_branch=True)
 
         assert result["success"] is True
         assert result["merged"] is True
@@ -198,10 +183,7 @@ class TestGitHubMCP:
         mock_pr.create_issue_comment.return_value = mock_comment
         mock_github_mcp.repo.get_pull.return_value = mock_pr
 
-        result = mock_github_mcp.add_pr_comment(
-            pr_number=10,
-            comment="Test comment"
-        )
+        result = mock_github_mcp.add_pr_comment(pr_number=10, comment="Test comment")
 
         assert result["success"] is True
         assert "comment_url" in result
@@ -213,18 +195,15 @@ class TestGitHubOperationRouter:
     @pytest.fixture
     def mock_router(self):
         """Create mock router for testing."""
-        with patch('langgraph_engine.github_operation_router.GitHubIntegration') as mock_gh_cli:
-            with patch('langgraph_engine.github_operation_router.GitHubMCP') as mock_mcp:
+        with patch("langgraph_engine.github_operation_router.GitHubIntegration") as mock_gh_cli:
+            with patch("langgraph_engine.github_operation_router.GitHubMCP") as mock_mcp:
                 mock_gh_cli_instance = Mock()
                 mock_mcp_instance = Mock()
 
                 mock_gh_cli.return_value = mock_gh_cli_instance
                 mock_mcp.return_value = mock_mcp_instance
 
-                router = GitHubOperationRouter(
-                    use_mcp=True,
-                    fallback_to_gh=True
-                )
+                router = GitHubOperationRouter(use_mcp=True, fallback_to_gh=True)
                 router.mcp = mock_mcp_instance
                 router.gh_cli = mock_gh_cli_instance
 
@@ -235,13 +214,10 @@ class TestGitHubOperationRouter:
         mock_router.mcp.create_issue.return_value = {
             "success": True,
             "issue_number": 42,
-            "issue_url": "https://github.com/owner/repo/issues/42"
+            "issue_url": "https://github.com/owner/repo/issues/42",
         }
 
-        result = mock_router.create_issue(
-            title="Test",
-            body="Body"
-        )
+        result = mock_router.create_issue(title="Test", body="Body")
 
         assert result["success"] is True
         assert result["issue_number"] == 42
@@ -250,20 +226,14 @@ class TestGitHubOperationRouter:
 
     def test_create_issue_mcp_fails_fallback_succeeds(self, mock_router):
         """Test MCP fails, gh CLI fallback succeeds."""
-        mock_router.mcp.create_issue.return_value = {
-            "success": False,
-            "error": "MCP failed"
-        }
+        mock_router.mcp.create_issue.return_value = {"success": False, "error": "MCP failed"}
         mock_router.gh_cli.create_issue.return_value = {
             "success": True,
             "issue_number": 42,
-            "issue_url": "https://github.com/owner/repo/issues/42"
+            "issue_url": "https://github.com/owner/repo/issues/42",
         }
 
-        result = mock_router.create_issue(
-            title="Test",
-            body="Body"
-        )
+        result = mock_router.create_issue(title="Test", body="Body")
 
         assert result["success"] is True
         assert result["issue_number"] == 42
@@ -277,13 +247,10 @@ class TestGitHubOperationRouter:
         mock_router.gh_cli.create_issue.return_value = {
             "success": True,
             "issue_number": 42,
-            "issue_url": "https://github.com/owner/repo/issues/42"
+            "issue_url": "https://github.com/owner/repo/issues/42",
         }
 
-        result = mock_router.create_issue(
-            title="Test",
-            body="Body"
-        )
+        result = mock_router.create_issue(title="Test", body="Body")
 
         assert result["success"] is True
         # MCP should NOT be called
@@ -294,14 +261,8 @@ class TestGitHubOperationRouter:
     def test_merge_pr_has_fallback_protection(self, mock_router):
         """Test merge_pull_request always has fallback protection."""
         # Simulate MCP fails
-        mock_router.mcp.merge_pull_request.return_value = {
-            "success": False,
-            "error": "MCP error"
-        }
-        mock_router.gh_cli.merge_pull_request.return_value = {
-            "success": True,
-            "merged": True
-        }
+        mock_router.mcp.merge_pull_request.return_value = {"success": False, "error": "MCP error"}
+        mock_router.gh_cli.merge_pull_request.return_value = {"success": True, "merged": True}
 
         result = mock_router.merge_pull_request(pr_number=10)
 
@@ -313,12 +274,12 @@ class TestGitHubOperationRouter:
         """Test router has all GitHubIntegration methods."""
         # Verify all methods exist and are callable
         methods = [
-            'create_issue',
-            'add_issue_comment',
-            'close_issue',
-            'create_pull_request',
-            'merge_pull_request',
-            'add_pr_comment'
+            "create_issue",
+            "add_issue_comment",
+            "close_issue",
+            "create_pull_request",
+            "merge_pull_request",
+            "add_pr_comment",
         ]
 
         for method_name in methods:
@@ -332,7 +293,7 @@ class TestGitHubOperationRouter:
             "success": True,
             "issue_number": 42,
             "issue_url": "https://github.com/owner/repo/issues/42",
-            "created_at": "2026-03-13T10:00:00"
+            "created_at": "2026-03-13T10:00:00",
         }
 
         result = mock_router.create_issue(title="Test", body="Body")
@@ -351,26 +312,20 @@ class TestIntegration:
         # This is more of a smoke test
         # Real integration would need actual GitHub token
 
-        with patch('langgraph_engine.github_operation_router.GitHubIntegration'):
-            with patch('langgraph_engine.github_operation_router.GitHubMCP'):
+        with patch("langgraph_engine.github_operation_router.GitHubIntegration"):
+            with patch("langgraph_engine.github_operation_router.GitHubMCP"):
                 # Should not raise any exceptions
-                router = GitHubOperationRouter(
-                    use_mcp=True,
-                    fallback_to_gh=True
-                )
+                router = GitHubOperationRouter(use_mcp=True, fallback_to_gh=True)
                 assert router is not None
 
     def test_mcp_initialization_failure_falls_back(self):
         """Test when MCP initialization fails, still uses gh CLI."""
-        with patch('langgraph_engine.github_operation_router.GitHubIntegration'):
-            with patch('langgraph_engine.github_operation_router.GitHubMCP') as mock_mcp:
+        with patch("langgraph_engine.github_operation_router.GitHubIntegration"):
+            with patch("langgraph_engine.github_operation_router.GitHubMCP") as mock_mcp:
                 mock_mcp.side_effect = RuntimeError("MCP failed")
 
                 # Should not raise, should use gh CLI
-                router = GitHubOperationRouter(
-                    use_mcp=True,
-                    fallback_to_gh=True
-                )
+                router = GitHubOperationRouter(use_mcp=True, fallback_to_gh=True)
 
                 assert router.mcp is None
                 assert router.gh_cli is not None

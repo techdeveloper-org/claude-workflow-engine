@@ -23,7 +23,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add scripts/ to sys.path so source modules are importable
+# Add project root and scripts/ to sys.path so source modules are importable
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 
@@ -521,7 +522,7 @@ class TestPipelineBenchmark:
         self.tmp_path = tmp_path
         sys.path.insert(
             0,
-            str(Path(__file__).resolve().parent.parent / "scripts" / "langgraph_engine"),
+            str(Path(__file__).resolve().parent.parent / "langgraph_engine"),
         )
         try:
             import importlib
@@ -636,7 +637,7 @@ class TestMetricsDashboard:
         self.tmp_path = tmp_path
         sys.path.insert(
             0,
-            str(Path(__file__).resolve().parent.parent / "scripts" / "langgraph_engine"),
+            str(Path(__file__).resolve().parent.parent / "langgraph_engine"),
         )
         import importlib
 

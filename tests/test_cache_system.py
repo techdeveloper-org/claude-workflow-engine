@@ -10,11 +10,12 @@ import sys
 import time
 import types
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Pre-import stubs
 # ---------------------------------------------------------------------------
+
 
 def _stub(name, **attrs):
     m = types.ModuleType(name)
@@ -26,11 +27,13 @@ def _stub(name, **attrs):
 
 _stub("loguru", logger=MagicMock())
 
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 _SCRIPTS = str(Path(__file__).resolve().parent.parent / "scripts")
-if _SCRIPTS not in sys.path:
-    sys.path.insert(0, _SCRIPTS)
+for _p in [_REPO_ROOT, _SCRIPTS]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-_LE_ROOT = Path(_SCRIPTS) / "langgraph_engine"
+_LE_ROOT = Path(_REPO_ROOT) / "langgraph_engine"
 
 # Stub langgraph_engine as a bare namespace (skip __init__.py)
 _le = types.ModuleType("langgraph_engine")
@@ -67,6 +70,7 @@ def _reset_singleton():
 # ---------------------------------------------------------------------------
 # _MemoryLayer tests
 # ---------------------------------------------------------------------------
+
 
 class TestMemoryLayerSetGet:
     """test_memory_layer_set_get - Store and retrieve value."""
@@ -105,14 +109,14 @@ class TestMemoryLayerLruEviction:
         # Keep mock active for both set AND get so TTL expiry check is frozen
         with patch.object(_cs_mod, "_now_ts") as mock_ts:
             mock_ts.return_value = 1000.0
-            layer.set("a", "v_a", ttl_seconds=10)    # expires at 1010
-            layer.set("b", "v_b", ttl_seconds=100)   # expires at 1100
-            layer.set("c", "v_c", ttl_seconds=50)    # expires at 1050
+            layer.set("a", "v_a", ttl_seconds=10)  # expires at 1010
+            layer.set("b", "v_b", ttl_seconds=100)  # expires at 1100
+            layer.set("c", "v_c", ttl_seconds=50)  # expires at 1050
             # 4th entry triggers eviction of "a" (smallest expiry = 1010)
             layer.set("d", "v_d", ttl_seconds=200)
 
             # Assertions inside mock scope so _now_ts() still returns 1000.0
-            assert layer.get("a") is None   # evicted
+            assert layer.get("a") is None  # evicted
             assert layer.get("b") == "v_b"
             assert layer.get("d") == "v_d"
 
@@ -120,6 +124,7 @@ class TestMemoryLayerLruEviction:
 # ---------------------------------------------------------------------------
 # CacheTier tests
 # ---------------------------------------------------------------------------
+
 
 class TestCacheTierGetMiss:
     """test_cache_tier_get_miss - Returns None on cache miss."""
@@ -179,6 +184,7 @@ class TestCacheTierClearExpired:
     def test_clear_expired_removes_stale_files(self, tmp_path):
         tier = CacheTier("llm", ttl_seconds=10, cache_base_dir=str(tmp_path))
         from datetime import datetime, timedelta
+
         stale = {
             "key": "stale",
             "saved_at": (datetime.utcnow() - timedelta(hours=1)).isoformat(),
@@ -204,10 +210,10 @@ class TestCacheTierHitRate:
     def test_hit_rate_calculation(self, tmp_path):
         tier = CacheTier("llm", ttl_seconds=3600, cache_base_dir=str(tmp_path))
         tier.set("key", "value")
-        tier.get("key")     # hit
-        tier.get("miss1")   # miss
-        tier.get("miss2")   # miss
-        tier.get("key")     # hit
+        tier.get("key")  # hit
+        tier.get("miss1")  # miss
+        tier.get("miss2")  # miss
+        tier.get("key")  # hit
         assert tier.hit_rate() == 0.5
 
     def test_hit_rate_zero_when_no_operations(self, tmp_path):
@@ -233,6 +239,7 @@ class TestCacheTierStats:
 # Key derivation tests
 # ---------------------------------------------------------------------------
 
+
 class TestMakeLlmKeyDeterministic:
     """test_make_llm_key_deterministic - Same input = same key."""
 
@@ -244,8 +251,7 @@ class TestMakeLlmKeyDeterministic:
 
     def test_different_model_different_key(self):
         messages = [{"role": "user", "content": "hello"}]
-        assert (CacheTier.make_llm_key("gpt-4", messages) !=
-                CacheTier.make_llm_key("claude-3", messages))
+        assert CacheTier.make_llm_key("gpt-4", messages) != CacheTier.make_llm_key("claude-3", messages)
 
 
 class TestMakeFileKeyIncludesMtime:
@@ -268,6 +274,7 @@ class TestMakeFileKeyIncludesMtime:
 # ---------------------------------------------------------------------------
 # PipelineCache tests
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineCacheThreeTiers:
     """test_pipeline_cache_three_tiers - Has llm, file_analysis, skill_defs tiers."""
@@ -300,6 +307,7 @@ class TestGetPipelineCacheSingleton:
 # Integration helper tests
 # ---------------------------------------------------------------------------
 
+
 class TestCachedLlmCallUsesCache:
     """test_cached_llm_call_uses_cache - Cached call skips LLM on second call."""
 
@@ -330,8 +338,7 @@ class TestCachedLlmCallUsesCache:
             call_count += 1
             return {"message": {"content": "fresh"}}
 
-        cached_llm_call("model-x", [{"role": "user", "content": "new"}],
-                        _fake_llm, cache=cache)
+        cached_llm_call("model-x", [{"role": "user", "content": "new"}], _fake_llm, cache=cache)
         assert call_count == 1
         _reset_singleton()
 

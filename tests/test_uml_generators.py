@@ -11,6 +11,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Add scripts to path for imports
+project_root = str(Path(__file__).resolve().parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
 if scripts_dir not in sys.path:
     sys.path.insert(0, scripts_dir)
@@ -430,7 +433,7 @@ class TestIntegration:
         analyzer = UMLAstAnalyzer(str(project_root))
 
         # Should find classes in the project
-        classes = analyzer.extract_all_classes(project_root / "scripts" / "langgraph_engine")
+        classes = analyzer.extract_all_classes(project_root / "langgraph_engine")
         assert len(classes) > 0, "Should find classes in langgraph_engine"
 
         # Generate class diagram

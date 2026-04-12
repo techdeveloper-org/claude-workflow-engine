@@ -22,8 +22,8 @@
 
 | ID | File | Lines | Why It Matters |
 |----|------|-------|----------------|
-| A1 | scripts/langgraph_engine/subgraphs/level3_execution.py | 2,608 | 15 monolithic step functions (step0-step14) + 2 routers + merge node |
-| A2 | scripts/langgraph_engine/level3_execution/subgraph.py | 2,261 | 323-line _run_step() + 16 thin wrappers + orchestration_pre_analysis_node + infra getters |
+| A1 | langgraph_engine/subgraphs/level3_execution.py | 2,608 | 15 monolithic step functions (step0-step14) + 2 routers + merge node |
+| A2 | langgraph_engine/level3_execution/subgraph.py | 2,261 | 323-line _run_step() + 16 thin wrappers + orchestration_pre_analysis_node + infra getters |
 | A3 | scripts/pre-tool-enforcer.py | 2,059 | 13 policy-check functions + 4 loader functions + main() |
 | A4 | scripts/post-tool-tracker.py | 1,709 | 6 policy branches + progress tracking + github integration + main() |
 | A5 | scripts/github_issue_manager.py | 1,703 | GitHub CRUD + branch management + session integration + utility functions |
@@ -78,7 +78,7 @@ QA Gate C (Final): pytest tests/ must pass; plan is complete
 **Target structure:**
 
 ```
-scripts/langgraph_engine/subgraphs/level3_execution/
+langgraph_engine/subgraphs/level3_execution/
   __init__.py                  <- backward-compat re-export shim (ALL symbols)
   helpers.py                   <- call_execution_script() + shared constants
   steps/
@@ -103,7 +103,7 @@ scripts/langgraph_engine/subgraphs/level3_execution/
                                   level3_merge_node()
 ```
 
-**IMPORTANT:** The directory scripts/langgraph_engine/level3_execution/ already exists (separate package). The new sub-package must be placed at scripts/langgraph_engine/subgraphs/level3_execution/ (under subgraphs/, not at engine root). The original file becomes a shim.
+**IMPORTANT:** The directory langgraph_engine/level3_execution/ already exists (separate package). The new sub-package must be placed at langgraph_engine/subgraphs/level3_execution/ (under subgraphs/, not at engine root). The original file becomes a shim.
 
 **Exact functions to extract per file:**
 
@@ -135,7 +135,7 @@ scripts/langgraph_engine/subgraphs/level3_execution/
 - `from .helpers import call_execution_script`
 - Cross-step imports (step5 imports step6 helper, etc.) -> resolved by importing from .helpers or sibling steps
 
-**Shim content for original scripts/langgraph_engine/subgraphs/level3_execution.py:**
+**Shim content for original langgraph_engine/subgraphs/level3_execution.py:**
 
 ```python
 # BACKWARD-COMPAT SHIM - DO NOT EDIT DIRECTLY
@@ -196,7 +196,7 @@ pytest tests/test_level3_execution.py tests/test_level3_remaining_steps.py -x
 **Target structure:**
 
 ```
-scripts/langgraph_engine/core/infrastructure.py    <- NEW FILE
+langgraph_engine/core/infrastructure.py    <- NEW FILE
   _get_checkpoint_manager()
   _get_metrics_collector()
   _get_error_logger()
@@ -205,7 +205,7 @@ scripts/langgraph_engine/core/infrastructure.py    <- NEW FILE
   _infra_cache dict
   _pipeline_start_times dict
 
-scripts/langgraph_engine/level3_execution/subgraph.py  <- REDUCED (~300 lines)
+langgraph_engine/level3_execution/subgraph.py  <- REDUCED (~300 lines)
   All imports (kept)
   _write_step_log() (kept here - level3-specific)
   _run_step() (reduced by extracting infra calls to use core.infrastructure)
@@ -466,13 +466,13 @@ python -c "import sys; sys.path.insert(0,'scripts'); import github_issue_manager
 
 ### B1: sonarqube_scanner.py (1,639 lines) -> sonarqube/ package (already partially done)
 
-**Current state:** scripts/langgraph_engine/level3_execution/sonarqube_scanner.py. The sonarqube/ sub-package already exists at scripts/langgraph_engine/level3_execution/sonarqube/ with api_client.py, lightweight_scanner.py, result_aggregator.py, auto_fixer.py.
+**Current state:** langgraph_engine/level3_execution/sonarqube_scanner.py. The sonarqube/ sub-package already exists at langgraph_engine/level3_execution/sonarqube/ with api_client.py, lightweight_scanner.py, result_aggregator.py, auto_fixer.py.
 
 **Action:** sonarqube_scanner.py is a legacy entry point. Review what it exports that is NOT already in the sonarqube/ package and move those functions. Convert sonarqube_scanner.py to a shim that imports from the sub-package.
 
 **Target:**
 ```
-scripts/langgraph_engine/level3_execution/sonarqube_scanner.py  <- SHIM
+langgraph_engine/level3_execution/sonarqube_scanner.py  <- SHIM
   from .sonarqube.api_client import SonarQubeClient             # noqa
   from .sonarqube.lightweight_scanner import LightweightScanner  # noqa
   from .sonarqube.result_aggregator import SonarResultAggregator # noqa
@@ -490,7 +490,7 @@ python -c "from scripts.langgraph_engine.level3_execution.sonarqube_scanner impo
 
 ### B2: uml_generators.py (1,585 lines) -> diagrams/ package (already partially done)
 
-**Current state:** scripts/langgraph_engine/uml_generators.py is documented as a compat shim -> diagrams/DiagramFactory. Verify it is truly a shim. If it still contains inline logic, extract to diagrams/.
+**Current state:** langgraph_engine/uml_generators.py is documented as a compat shim -> diagrams/DiagramFactory. Verify it is truly a shim. If it still contains inline logic, extract to diagrams/.
 
 **Action:**
 1. Read uml_generators.py to confirm shim vs inline logic.
@@ -510,7 +510,7 @@ pytest tests/test_uml_generators.py -x
 
 **Action:** Read the file, identify class boundaries, split into:
 ```
-scripts/langgraph_engine/diagrams/drawio/
+langgraph_engine/diagrams/drawio/
   __init__.py           <- re-exports all public classes
   converter_base.py     <- base DrawIOConverter class + XML utilities
   shapes.py             <- shape factory functions
@@ -528,13 +528,13 @@ pytest -x -k "drawio"
 
 ### B4: level1_sync.py (1,478 lines) -> level1_sync/ package (already partially done)
 
-**Current state:** scripts/langgraph_engine/subgraphs/level1_sync.py. The level1_sync/ package already exists at scripts/langgraph_engine/level1_sync/.
+**Current state:** langgraph_engine/subgraphs/level1_sync.py. The level1_sync/ package already exists at langgraph_engine/level1_sync/.
 
 **Action:** The sub-package exists but the subgraph file may still be monolithic. Identify which node functions (node_session_loader, node_complexity_calculation, node_context_loader, node_toon_compression, level1_merge_node, cleanup_level1_memory) are NOT yet in the package and move them.
 
 **Target:**
 ```
-scripts/langgraph_engine/level1_sync/
+langgraph_engine/level1_sync/
   __init__.py                      <- re-exports all node functions
   nodes/
     __init__.py
@@ -546,7 +546,7 @@ scripts/langgraph_engine/level1_sync/
   helpers.py                       <- _load_architecture_script() + _stream_file_head() + _read_file_with_timeout()
 ```
 
-Original scripts/langgraph_engine/subgraphs/level1_sync.py becomes shim:
+Original langgraph_engine/subgraphs/level1_sync.py becomes shim:
 ```python
 # BACKWARD-COMPAT SHIM
 from ..level1_sync.nodes import (  # noqa
@@ -565,7 +565,7 @@ pytest tests/test_level1_sync.py tests/test_level1_sync_nodes.py -x
 
 ### B5: call_graph_builder.py (1,447 lines) -> parsers/ package (already partially done)
 
-**Current state:** scripts/langgraph_engine/call_graph_builder.py. Documented as a compat shim -> parsers/. Verify.
+**Current state:** langgraph_engine/call_graph_builder.py. Documented as a compat shim -> parsers/. Verify.
 
 **Action:**
 1. Read the file to confirm shim vs inline logic.
@@ -613,11 +613,11 @@ pytest tests/test_stop_notifier.py -x
 
 ### B7: github_pr_workflow.py (1,333 lines) -> github_operations/pr/ sub-package
 
-**Current state:** scripts/langgraph_engine/github_pr_workflow.py. PR creation, merge, code review orchestration.
+**Current state:** langgraph_engine/github_pr_workflow.py. PR creation, merge, code review orchestration.
 
 **Action:**
 ```
-scripts/langgraph_engine/github_pr_workflow/
+langgraph_engine/github_pr_workflow/
   __init__.py         <- re-exports
   pr_creator.py       <- PR creation functions
   pr_merger.py        <- merge logic
@@ -625,7 +625,7 @@ scripts/langgraph_engine/github_pr_workflow/
   pr_workflow.py      <- end-to-end workflow orchestration
 ```
 
-Original scripts/langgraph_engine/github_pr_workflow.py becomes shim.
+Original langgraph_engine/github_pr_workflow.py becomes shim.
 
 **QA check for B7:**
 ```bash
@@ -636,11 +636,11 @@ pytest tests/test_step11_code_review.py tests/test_bulletproof_merge_detection.p
 
 ### B8: build_dependency_resolver.py (1,176 lines) -> build/ sub-package
 
-**Current state:** scripts/langgraph_engine/build_dependency_resolver.py.
+**Current state:** langgraph_engine/build_dependency_resolver.py.
 
 **Action:** Read file for class/function structure. Typical split:
 ```
-scripts/langgraph_engine/build/
+langgraph_engine/build/
   __init__.py
   dependency_resolver.py  <- main resolver class
   language_detectors.py   <- per-language build file detection
@@ -726,12 +726,12 @@ scripts/policy_framework/
 
 **Checklist per shim file:**
 ```
-[ ] scripts/langgraph_engine/subgraphs/level3_execution.py
+[ ] langgraph_engine/subgraphs/level3_execution.py
     - All 15 step* functions exported
     - call_execution_script exported
     - 3 routing/merge functions exported
 
-[ ] scripts/langgraph_engine/level3_execution/subgraph.py
+[ ] langgraph_engine/level3_execution/subgraph.py
     - orchestration_pre_analysis_node exported
     - route_pre_analysis exported
     - build_level3_v2_subgraph exported
@@ -749,11 +749,11 @@ scripts/policy_framework/
     - create_issue_branch, get_session_branch, is_on_issue_branch exported
     - _build_issue_labels exported (used internally)
 
-[ ] scripts/langgraph_engine/call_graph_builder.py
+[ ] langgraph_engine/call_graph_builder.py
     - build_call_graph, get_call_graph_metrics, get_impact_analysis
     - CallGraph, CallGraphBuilder classes
 
-[ ] scripts/langgraph_engine/uml_generators.py
+[ ] langgraph_engine/uml_generators.py
     - DiagramFactory + all 13 generator classes
 ```
 
@@ -765,15 +765,15 @@ scripts/policy_framework/
 
 **Files to audit for import updates:**
 ```bash
-grep -rn "from .level3_execution import\|from ..level3_execution import" scripts/langgraph_engine/
+grep -rn "from .level3_execution import\|from ..level3_execution import" langgraph_engine/
 grep -rn "import github_issue_manager" scripts/
-grep -rn "from .level1_sync import" scripts/langgraph_engine/subgraphs/
+grep -rn "from .level1_sync import" langgraph_engine/subgraphs/
 ```
 
 **Key import locations to update:**
-- scripts/langgraph_engine/level3_execution/subgraph.py line 71-90: imports from .level3_execution -> update to from .level3_execution.steps import ...
-- scripts/langgraph_engine/level3_steps8to12_jira.py (if imports from level3_execution)
-- scripts/langgraph_engine/orchestrator.py (imports subgraph builders)
+- langgraph_engine/level3_execution/subgraph.py line 71-90: imports from .level3_execution -> update to from .level3_execution.steps import ...
+- langgraph_engine/level3_steps8to12_jira.py (if imports from level3_execution)
+- langgraph_engine/orchestrator.py (imports subgraph builders)
 - tests/ files: do NOT change test imports - they test the public API which must still work via shims
 
 ---

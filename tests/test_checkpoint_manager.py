@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 # Pre-import stubs
 # ---------------------------------------------------------------------------
 
+
 def _stub(name, **attrs):
     m = types.ModuleType(name)
     for k, v in attrs.items():
@@ -25,11 +26,13 @@ def _stub(name, **attrs):
 
 _stub("loguru", logger=MagicMock())
 
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 _SCRIPTS = str(Path(__file__).resolve().parent.parent / "scripts")
-if _SCRIPTS not in sys.path:
-    sys.path.insert(0, _SCRIPTS)
+for _p in [_REPO_ROOT, _SCRIPTS]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-_LE_ROOT = Path(_SCRIPTS) / "langgraph_engine"
+_LE_ROOT = Path(_REPO_ROOT) / "langgraph_engine"
 
 # Stub langgraph_engine as a bare namespace (skip __init__.py)
 _le = types.ModuleType("langgraph_engine")
@@ -56,13 +59,14 @@ CheckpointManager = _cp_mod.CheckpointManager
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_manager(tmp_path, session_id="test-session"):
     return CheckpointManager(session_id=session_id, base_dir=str(tmp_path))
 
 
-def _write_checkpoint(cp_dir, step, state, success=True, error_msg=None,
-                      session_id="test-session"):
+def _write_checkpoint(cp_dir, step, state, success=True, error_msg=None, session_id="test-session"):
     from datetime import datetime
+
     payload = {
         "checkpoint_id": f"{session_id}:step-{step:02d}",
         "step": step,
@@ -80,6 +84,7 @@ def _write_checkpoint(cp_dir, step, state, success=True, error_msg=None,
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestCheckpointManagerInit:
     """test_init_creates_checkpoint_dir - Creates checkpoints/ subdirectory."""
@@ -118,8 +123,7 @@ class TestSaveCheckpoint:
 
     def test_save_checkpoint_failed_step(self, tmp_path):
         mgr = _make_manager(tmp_path)
-        mgr.save_checkpoint(step=7, state={}, success_status=False,
-                            error_message="LLM timeout")
+        mgr.save_checkpoint(step=7, state={}, success_status=False, error_message="LLM timeout")
         raw = json.loads((mgr.checkpoint_dir / "step-07.json").read_text(encoding="utf-8"))
         assert raw["success_status"] is False
         assert raw["error_message"] == "LLM timeout"
@@ -130,8 +134,7 @@ class TestLoadCheckpoint:
 
     def test_load_checkpoint(self, tmp_path):
         mgr = _make_manager(tmp_path, "sess-load")
-        _write_checkpoint(mgr.checkpoint_dir, step=4,
-                          state={"user_message": "hello"}, session_id="sess-load")
+        _write_checkpoint(mgr.checkpoint_dir, step=4, state={"user_message": "hello"}, session_id="sess-load")
         state = mgr.load_checkpoint(4)
         assert state is not None
         assert state["user_message"] == "hello"
@@ -147,8 +150,7 @@ class TestLoadCheckpoint:
 
     def test_load_checkpoint_metadata_only(self, tmp_path):
         mgr = _make_manager(tmp_path, "sess-meta2")
-        _write_checkpoint(mgr.checkpoint_dir, step=6,
-                          state={"data": "abc"}, session_id="sess-meta2")
+        _write_checkpoint(mgr.checkpoint_dir, step=6, state={"data": "abc"}, session_id="sess-meta2")
         meta = mgr.load_checkpoint_metadata(6)
         assert meta is not None
         assert meta["step"] == 6
@@ -166,16 +168,14 @@ class TestLoadCheckpointById:
 
     def test_load_by_id_standard_format(self, tmp_path):
         mgr = _make_manager(tmp_path, "my-sess")
-        _write_checkpoint(mgr.checkpoint_dir, step=5,
-                          state={"key": "value"}, session_id="my-sess")
+        _write_checkpoint(mgr.checkpoint_dir, step=5, state={"key": "value"}, session_id="my-sess")
         state = mgr.load_checkpoint_by_id("my-sess:step-05")
         assert state is not None
         assert state["key"] == "value"
 
     def test_load_by_id_step_only(self, tmp_path):
         mgr = _make_manager(tmp_path, "my-sess")
-        _write_checkpoint(mgr.checkpoint_dir, step=3,
-                          state={"data": 99}, session_id="my-sess")
+        _write_checkpoint(mgr.checkpoint_dir, step=3, state={"data": 99}, session_id="my-sess")
         assert mgr.load_checkpoint_by_id("step-03") is not None
 
     def test_load_by_id_invalid(self, tmp_path):
@@ -195,8 +195,7 @@ class TestGetLastCheckpoint:
     def test_get_last_checkpoint_returns_highest_step(self, tmp_path):
         mgr = _make_manager(tmp_path, "sess-last")
         for s in [1, 3, 2]:
-            _write_checkpoint(mgr.checkpoint_dir, step=s, state={"s": s},
-                              session_id="sess-last")
+            _write_checkpoint(mgr.checkpoint_dir, step=s, state={"s": s}, session_id="sess-last")
         step, state = mgr.get_last_checkpoint()
         assert step == 3
         assert state["s"] == 3
@@ -207,18 +206,15 @@ class TestGetLastSuccessfulCheckpoint:
 
     def test_skips_failed_steps(self, tmp_path):
         mgr = _make_manager(tmp_path, "sess-succ")
-        _write_checkpoint(mgr.checkpoint_dir, step=2, state={"s": 2},
-                          success=True, session_id="sess-succ")
-        _write_checkpoint(mgr.checkpoint_dir, step=3, state={"s": 3},
-                          success=False, session_id="sess-succ")
+        _write_checkpoint(mgr.checkpoint_dir, step=2, state={"s": 2}, success=True, session_id="sess-succ")
+        _write_checkpoint(mgr.checkpoint_dir, step=3, state={"s": 3}, success=False, session_id="sess-succ")
         step, state = mgr.get_last_successful_checkpoint()
         assert step == 2
         assert state["s"] == 2
 
     def test_returns_none_when_all_failed(self, tmp_path):
         mgr = _make_manager(tmp_path, "sess-fail")
-        _write_checkpoint(mgr.checkpoint_dir, step=1, state={},
-                          success=False, session_id="sess-fail")
+        _write_checkpoint(mgr.checkpoint_dir, step=1, state={}, success=False, session_id="sess-fail")
         step, state = mgr.get_last_successful_checkpoint()
         assert step is None
         assert state is None
@@ -233,10 +229,8 @@ class TestListCheckpoints:
 
     def test_list_checkpoints_returns_metadata(self, tmp_path):
         mgr = _make_manager(tmp_path, "sess-list")
-        _write_checkpoint(mgr.checkpoint_dir, step=1, state={"a": 1},
-                          session_id="sess-list")
-        _write_checkpoint(mgr.checkpoint_dir, step=2, state={"b": 2},
-                          session_id="sess-list")
+        _write_checkpoint(mgr.checkpoint_dir, step=1, state={"a": 1}, session_id="sess-list")
+        _write_checkpoint(mgr.checkpoint_dir, step=2, state={"b": 2}, session_id="sess-list")
         items = mgr.list_checkpoints()
         assert len(items) == 2
         assert {i["step"] for i in items} == {1, 2}
@@ -251,8 +245,7 @@ class TestDeleteCheckpoint:
 
     def test_delete_removes_file(self, tmp_path):
         mgr = _make_manager(tmp_path, "sess-del")
-        _write_checkpoint(mgr.checkpoint_dir, step=4, state={},
-                          session_id="sess-del")
+        _write_checkpoint(mgr.checkpoint_dir, step=4, state={}, session_id="sess-del")
         assert (mgr.checkpoint_dir / "step-04.json").exists()
         assert mgr.delete_checkpoint(4) is True
         assert not (mgr.checkpoint_dir / "step-04.json").exists()
@@ -268,8 +261,7 @@ class TestClearAll:
     def test_clear_all_removes_all_files(self, tmp_path):
         mgr = _make_manager(tmp_path, "sess-clear")
         for step in [1, 2, 3]:
-            _write_checkpoint(mgr.checkpoint_dir, step=step, state={},
-                              session_id="sess-clear")
+            _write_checkpoint(mgr.checkpoint_dir, step=step, state={}, session_id="sess-clear")
         count = mgr.clear_all()
         assert count == 3
         assert list(mgr.checkpoint_dir.glob("*.json")) == []

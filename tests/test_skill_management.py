@@ -11,42 +11,40 @@ Covers:
 - Version set validation
 """
 
-import time
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock, call
-from typing import Dict, Any
-
 # ---------------------------------------------------------------------------
 # Module imports
 # ---------------------------------------------------------------------------
 import sys
-import os
+from pathlib import Path
+from typing import Dict
+from unittest.mock import patch
 
-# Ensure the scripts directory is on the path
+import pytest
+
+# Ensure the project root and scripts directory are on the path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from langgraph_engine.dependency_resolver import (
-    parse_skill_metadata,
-    detect_circular,
-    resolve_dependencies,
     build_dependency_graph,
+    detect_circular,
+    parse_skill_metadata,
+    resolve_dependencies,
 )
+from langgraph_engine.skill_manager import SkillManager, get_skill_manager
 from langgraph_engine.version_selector import (
     Version,
-    parse_version,
-    check_compatibility,
-    select_best_version,
-    handle_deprecated,
-    validate_version_set,
     build_compatibility_matrix,
+    check_compatibility,
+    handle_deprecated,
+    select_best_version,
+    validate_version_set,
 )
-from langgraph_engine.skill_manager import SkillManager, get_skill_manager, MAX_RETRIES
-
 
 # ===========================================================================
 # Fixtures
 # ===========================================================================
+
 
 @pytest.fixture
 def tmp_skills_root(tmp_path):
@@ -133,6 +131,7 @@ Core relational database skill.
 # ===========================================================================
 # dependency_resolver tests
 # ===========================================================================
+
 
 class TestParseSkillMetadata:
     def test_parses_mandatory_deps(self, sample_skill_content):
@@ -261,9 +260,7 @@ class TestBuildDependencyGraph:
             "python-backend-engineer": sample_skill_content,
             "rdbms-core": skill_no_deps,
         }
-        graph = build_dependency_graph(
-            ["python-backend-engineer", "rdbms-core"], contents
-        )
+        graph = build_dependency_graph(["python-backend-engineer", "rdbms-core"], contents)
         assert "python-backend-engineer" in graph
         assert "rdbms-core" in graph["python-backend-engineer"]
         assert graph["rdbms-core"] == []
@@ -276,6 +273,7 @@ class TestBuildDependencyGraph:
 # ===========================================================================
 # version_selector tests
 # ===========================================================================
+
 
 class TestVersion:
     def test_parse_full_semver(self):
@@ -374,16 +372,12 @@ class TestSelectBestVersion:
         assert result["selected"] == "1.9.0"
 
     def test_prefers_stable_over_prerelease(self):
-        result = select_best_version(
-            "my-skill", ["1.5.0-beta", "1.4.0"], ">=1.0.0", prefer_stable=True
-        )
+        result = select_best_version("my-skill", ["1.5.0-beta", "1.4.0"], ">=1.0.0", prefer_stable=True)
         assert result["selected"] == "1.4.0"
         assert result["is_stable"] is True
 
     def test_falls_back_to_prerelease_when_no_stable(self):
-        result = select_best_version(
-            "my-skill", ["1.5.0-beta", "1.4.0-rc.1"], ">=1.0.0", prefer_stable=True
-        )
+        result = select_best_version("my-skill", ["1.5.0-beta", "1.4.0-rc.1"], ">=1.0.0", prefer_stable=True)
         assert result["selected"] is not None
 
     def test_no_compatible_version(self):
@@ -490,6 +484,7 @@ class TestBuildCompatibilityMatrix:
 # skill_manager tests
 # ===========================================================================
 
+
 class TestSkillManagerDownloadRetry:
     """Test download failure handling with exponential backoff."""
 
@@ -514,9 +509,7 @@ class TestSkillManagerDownloadRetry:
 
         with patch.object(skill_manager, "_attempt_download", side_effect=mock_download_side_effect):
             with patch("langgraph_engine.skill_manager.time.sleep"):
-                result = skill_manager.provision_skill(
-                    "python-backend-engineer", force_download=True
-                )
+                result = skill_manager.provision_skill("python-backend-engineer", force_download=True)
         assert result["success"] is True
 
     def test_exponential_backoff_delays(self, skill_manager):
@@ -531,9 +524,7 @@ class TestSkillManagerDownloadRetry:
 
         with patch.object(skill_manager, "_attempt_download", side_effect=always_fail):
             with patch("langgraph_engine.skill_manager.time.sleep", side_effect=mock_sleep):
-                result = skill_manager.provision_skill(
-                    "nonexistent-skill", force_download=True
-                )
+                result = skill_manager.provision_skill("nonexistent-skill", force_download=True)
 
         # First attempt is immediate (no sleep), subsequent ones have delays
         assert result["success"] is False
@@ -575,9 +566,7 @@ class TestSkillManagerDownloadRetry:
 
         with patch.object(skill_manager, "_attempt_download", side_effect=mock_404_then_success):
             with patch("langgraph_engine.skill_manager.time.sleep"):
-                result = skill_manager.provision_skill(
-                    "python-backend-engineer", force_download=True
-                )
+                _result = skill_manager.provision_skill("python-backend-engineer", force_download=True)
 
         # 404 URLs should only be attempted once (no retry)
         for url, count in url_attempts.items():
@@ -590,7 +579,7 @@ class TestSkillManagerCache:
         """After first provisioning, memory cache should be used."""
         with patch.object(skill_manager, "_attempt_download") as mock_dl:
             mock_dl.return_value = {"success": True, "content": sample_skill_content}
-            result1 = skill_manager.provision_skill("python-backend-engineer", force_download=True)
+            _result1 = skill_manager.provision_skill("python-backend-engineer", force_download=True)
 
         # Second call should hit memory cache, not download
         with patch.object(skill_manager, "_attempt_download") as mock_dl2:
@@ -613,9 +602,7 @@ class TestSkillManagerCache:
 
         with patch.object(skill_manager, "_attempt_download", side_effect=always_fail):
             with patch("langgraph_engine.skill_manager.time.sleep"):
-                result = skill_manager.provision_skill(
-                    "python-backend-engineer", force_download=True
-                )
+                result = skill_manager.provision_skill("python-backend-engineer", force_download=True)
 
         assert result["success"] is True
         assert result["source"] == "disk_cache"
@@ -637,11 +624,11 @@ class TestSkillManagerCache:
         """force_download=True should always call download."""
         with patch.object(skill_manager, "_attempt_download") as mock_dl:
             mock_dl.return_value = {"success": True, "content": sample_skill_content}
-            result1 = skill_manager.provision_skill("python-backend-engineer", force_download=True)
+            _result1 = skill_manager.provision_skill("python-backend-engineer", force_download=True)
 
         with patch.object(skill_manager, "_attempt_download") as mock_dl2:
             mock_dl2.return_value = {"success": True, "content": sample_skill_content}
-            result2 = skill_manager.provision_skill("python-backend-engineer", force_download=True)
+            _result2 = skill_manager.provision_skill("python-backend-engineer", force_download=True)
             mock_dl2.assert_called()
 
     def test_save_to_disk_after_download(self, skill_manager, tmp_skills_root, sample_skill_content):
@@ -684,9 +671,7 @@ class TestSkillManagerProvisionBatch:
             }
 
         with patch.object(skill_manager, "provision_skill", side_effect=mock_provision):
-            result = skill_manager.provision_skills_batch(
-                ["python-backend-engineer", "rdbms-core"], resolve_deps=False
-            )
+            result = skill_manager.provision_skills_batch(["python-backend-engineer", "rdbms-core"], resolve_deps=False)
 
         assert result["all_success"] is True
         assert len(result["failed"]) == 0
@@ -707,9 +692,7 @@ class TestSkillManagerProvisionBatch:
             }
 
         with patch.object(skill_manager, "provision_skill", side_effect=fail_provision):
-            result = skill_manager.provision_skills_batch(
-                ["skill-a", "skill-b"], resolve_deps=False
-            )
+            result = skill_manager.provision_skills_batch(["skill-a", "skill-b"], resolve_deps=False)
 
         assert result["all_success"] is False
         assert "skill-a" in result["failed"]
@@ -728,9 +711,7 @@ class TestSkillManagerValidateSet:
             d.mkdir(parents=True)
             (d / "skill.md").write_text(content, encoding="utf-8")
 
-        result = skill_manager.validate_skill_set(
-            ["python-backend-engineer", "rdbms-core", "context-management-core"]
-        )
+        result = skill_manager.validate_skill_set(["python-backend-engineer", "rdbms-core", "context-management-core"])
         # Should succeed - rdbms-core has no deps and is present
         assert isinstance(result["valid"], bool)
         assert "report" in result
@@ -759,6 +740,7 @@ class TestGetSkillManager:
 # ===========================================================================
 # Integration tests
 # ===========================================================================
+
 
 class TestSkillManagementIntegration:
     """End-to-end integration tests for the complete skill management flow."""

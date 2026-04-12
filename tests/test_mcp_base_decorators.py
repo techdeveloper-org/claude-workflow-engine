@@ -15,19 +15,20 @@ Covers:
 ASCII-only: cp1252 safe for Windows.
 """
 
-import sys
 import json
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src" / "mcp"))
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse(json_str):
     """Parse JSON string returned by decorated functions."""
@@ -37,6 +38,7 @@ def _parse(json_str):
 # ---------------------------------------------------------------------------
 # mcp_tool_handler - Dict return
 # ---------------------------------------------------------------------------
+
 
 class TestMcpToolHandlerDictReturn:
 
@@ -79,6 +81,7 @@ class TestMcpToolHandlerDictReturn:
 # ---------------------------------------------------------------------------
 # mcp_tool_handler - Exception handling
 # ---------------------------------------------------------------------------
+
 
 class TestMcpToolHandlerExceptions:
 
@@ -134,6 +137,7 @@ class TestMcpToolHandlerExceptions:
 # mcp_tool_handler - String passthrough
 # ---------------------------------------------------------------------------
 
+
 class TestMcpToolHandlerStringPassthrough:
 
     def test_mcp_tool_handler_string_passthrough(self):
@@ -152,6 +156,7 @@ class TestMcpToolHandlerStringPassthrough:
 # ---------------------------------------------------------------------------
 # mcp_tool_handler - include_traceback flag
 # ---------------------------------------------------------------------------
+
 
 class TestMcpToolHandlerIncludeTraceback:
 
@@ -194,6 +199,7 @@ class TestMcpToolHandlerIncludeTraceback:
 # ---------------------------------------------------------------------------
 # mcp_tool_handler - log_duration flag
 # ---------------------------------------------------------------------------
+
 
 class TestMcpToolHandlerLogDuration:
 
@@ -238,6 +244,7 @@ class TestMcpToolHandlerLogDuration:
 # mcp_tool_handler - Both syntaxes
 # ---------------------------------------------------------------------------
 
+
 class TestMcpToolHandlerBothSyntaxes:
 
     def test_mcp_tool_handler_bare_decorator_syntax(self):
@@ -279,6 +286,7 @@ class TestMcpToolHandlerBothSyntaxes:
 # ---------------------------------------------------------------------------
 # validate_params
 # ---------------------------------------------------------------------------
+
 
 class TestValidateParams:
 

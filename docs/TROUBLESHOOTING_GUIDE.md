@@ -44,7 +44,7 @@ KeyError: 'step2_impact_analysis'
   impact = state.get("step2_impact_analysis", {})
   ```
 - If a node unconditionally requires a key, add it to the FlowState defaults in
-  `scripts/langgraph_engine/state/flow_state.py`.
+  `langgraph_engine/state/flow_state.py`.
 
 ---
 
@@ -59,7 +59,7 @@ InvalidUpdateError: Cannot apply update -- reducer for key 'messages' expected l
 reducer (e.g., returning a string for a key whose reducer expects `list + list`).
 
 **Fix:**
-- Locate the reducer registration in `scripts/langgraph_engine/state/reducers.py`.
+- Locate the reducer registration in `langgraph_engine/state/reducers.py`.
 - Ensure the returning node wraps scalar values in a list when the reducer is
   `operator.add` (list concatenation):
   ```python
@@ -161,7 +161,7 @@ usually due to a slow provider or a very large context window.
 - Switch to a faster provider: `LLM_PROVIDER=claude_cli`
 - Reduce context size by trimming the task description or disabling Figma token
   injection for this run: `ENABLE_FIGMA=0`
-- Increase the timeout in `scripts/langgraph_engine/orchestrator.py`:
+- Increase the timeout in `langgraph_engine/orchestrator.py`:
   ```python
   step_timeout = 600  # seconds
   ```

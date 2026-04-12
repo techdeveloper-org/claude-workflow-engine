@@ -27,8 +27,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 # Prevent module-level side effects: CLAUDE_WORKFLOW_RUNNING guard must stay off
 os.environ.pop("CLAUDE_WORKFLOW_RUNNING", None)
 
@@ -36,29 +34,37 @@ os.environ.pop("CLAUDE_WORKFLOW_RUNNING", None)
 # Module import with all problematic top-level side effects mocked.
 # The script filename uses hyphens so we must use importlib.util to load it.
 # ---------------------------------------------------------------------------
-import importlib.util as _ilu
+import importlib.util as _ilu  # noqa: E402
 
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+
+# Ensure project root is on sys.path for langgraph_engine imports
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # We patch the hard external deps at import time so the module loads cleanly.
-with patch.dict("sys.modules", {
-    "ide_paths": MagicMock(FLAG_DIR=Path("/tmp/.claude"), CURRENT_SESSION_FILE=Path("/tmp/.current-session.json")),
-    "project_session": MagicMock(get_project_session_file=lambda: Path("/tmp/.current-session.json")),
-    "metrics_emitter": MagicMock(),
-    "policy_tracking_helper": MagicMock(
-        record_policy_execution=lambda *a, **kw: None,
-        record_sub_operation=lambda *a, **kw: None,
-        get_session_id=lambda *a, **kw: "SESSION-TEST-001",
-    ),
-    "tool_usage_optimization_policy": MagicMock(),
-    "common_failures_prevention": MagicMock(),
-    "mcp_hook_integration": MagicMock(
-        should_suggest_mcp=lambda: False,
-        enhance_read_blocking_message=lambda m, *a: m,
-        enhance_grep_blocking_message=lambda m: m,
-        log_mcp_routing_decision=lambda *a, **kw: None,
-    ),
-}):
+with patch.dict(
+    "sys.modules",
+    {
+        "ide_paths": MagicMock(FLAG_DIR=Path("/tmp/.claude"), CURRENT_SESSION_FILE=Path("/tmp/.current-session.json")),
+        "project_session": MagicMock(get_project_session_file=lambda: Path("/tmp/.current-session.json")),
+        "metrics_emitter": MagicMock(),
+        "policy_tracking_helper": MagicMock(
+            record_policy_execution=lambda *a, **kw: None,
+            record_sub_operation=lambda *a, **kw: None,
+            get_session_id=lambda *a, **kw: "SESSION-TEST-001",
+        ),
+        "tool_usage_optimization_policy": MagicMock(),
+        "common_failures_prevention": MagicMock(),
+        "mcp_hook_integration": MagicMock(
+            should_suggest_mcp=lambda: False,
+            enhance_read_blocking_message=lambda m, *a: m,
+            enhance_grep_blocking_message=lambda m: m,
+            log_mcp_routing_decision=lambda *a, **kw: None,
+        ),
+    },
+):
     _spec = _ilu.spec_from_file_location("pre_tool_enforcer", _SCRIPTS_DIR / "pre-tool-enforcer.py")
     pte = _ilu.module_from_spec(_spec)
     sys.modules["pre_tool_enforcer"] = pte
@@ -68,6 +74,7 @@ with patch.dict("sys.modules", {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_flag(tmp_path, flag_name, session_id, created_at=None, extra=None):
     """Write a minimal flag JSON file into tmp_path."""
@@ -88,6 +95,7 @@ def _make_flag(tmp_path, flag_name, session_id, created_at=None, extra=None):
 # ===========================================================================
 # check_bash
 # ===========================================================================
+
 
 class TestCheckBash:
     def test_blocks_windows_del_command(self):
@@ -124,6 +132,7 @@ class TestCheckBash:
 # check_python_unicode
 # ===========================================================================
 
+
 class TestCheckPythonUnicode:
     def test_blocks_non_ascii_emoji(self):
         # Use a known Unicode danger char (checkmark emoji)
@@ -159,6 +168,7 @@ class TestCheckPythonUnicode:
 # check_grep
 # ===========================================================================
 
+
 class TestCheckGrep:
     def test_warns_when_head_limit_missing_content_mode(self):
         tool_input = {"output_mode": "content", "pattern": "foo"}
@@ -189,6 +199,7 @@ class TestCheckGrep:
 # ===========================================================================
 # check_read
 # ===========================================================================
+
 
 class TestCheckRead:
     def test_warns_when_no_offset_or_limit_on_large_file(self, tmp_path):
@@ -227,6 +238,7 @@ class TestCheckRead:
 # check_checkpoint_pending
 # ===========================================================================
 
+
 class TestCheckCheckpointPending:
     def test_blocks_write_when_flag_exists(self, tmp_path):
         session_id = "SESSION-TEST-CKP-001"
@@ -234,11 +246,18 @@ class TestCheckCheckpointPending:
 
         with (
             patch.object(pte, "get_current_session_id", return_value=session_id),
-            patch.object(pte, "find_session_flag", return_value=(flag_file, {
-                "session_id": session_id,
-                "prompt_preview": "test task",
-                "created_at": datetime.now().isoformat(),
-            })),
+            patch.object(
+                pte,
+                "find_session_flag",
+                return_value=(
+                    flag_file,
+                    {
+                        "session_id": session_id,
+                        "prompt_preview": "test task",
+                        "created_at": datetime.now().isoformat(),
+                    },
+                ),
+            ),
         ):
             hints, blocks = pte.check_checkpoint_pending("Write")
         assert blocks, "Write should be blocked when checkpoint flag exists"
@@ -260,6 +279,7 @@ class TestCheckCheckpointPending:
 # ===========================================================================
 # check_task_breakdown_pending
 # ===========================================================================
+
 
 class TestCheckTaskBreakdownPending:
     def test_blocks_edit_when_flag_exists(self, tmp_path):
@@ -297,6 +317,7 @@ class TestCheckTaskBreakdownPending:
 # check_skill_selection_pending
 # ===========================================================================
 
+
 class TestCheckSkillSelectionPending:
     def test_blocks_write_when_flag_exists(self, tmp_path):
         session_id = "SESSION-TEST-SSP-001"
@@ -327,6 +348,7 @@ class TestCheckSkillSelectionPending:
 # ===========================================================================
 # check_level1_sync_complete
 # ===========================================================================
+
 
 class TestCheckLevel1SyncComplete:
     def test_blocks_write_when_level1_missing(self):
@@ -379,6 +401,7 @@ class TestCheckLevel1SyncComplete:
 # check_level2_standards_complete
 # ===========================================================================
 
+
 class TestCheckLevel2StandardsComplete:
     def test_blocks_edit_when_level2_missing(self):
         session_id = "SESSION-TEST-L2-001"
@@ -415,6 +438,7 @@ class TestCheckLevel2StandardsComplete:
 # check_write_edit (calls check_python_unicode for .py files)
 # ===========================================================================
 
+
 class TestCheckWriteEdit:
     def test_calls_unicode_check_for_py_file(self):
         tool_input = {
@@ -448,6 +472,7 @@ class TestCheckWriteEdit:
 # Dynamic skill context detection
 # ===========================================================================
 
+
 class TestCheckDynamicSkillContext:
     """
     check_dynamic_skill_context is called from main() and returns hints
@@ -471,6 +496,7 @@ class TestCheckDynamicSkillContext:
 # _load_flow_trace_context: missing file returns empty dict
 # ===========================================================================
 
+
 class TestLoadFlowTraceContext:
     def test_returns_empty_dict_when_session_missing(self):
         with patch.object(pte, "get_current_session_id", return_value=""):
@@ -493,6 +519,7 @@ class TestLoadFlowTraceContext:
 # ===========================================================================
 # find_session_flag: expired flags
 # ===========================================================================
+
 
 class TestFindSessionFlag:
     def test_expired_flag_returns_none(self, tmp_path):

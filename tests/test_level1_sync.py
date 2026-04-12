@@ -24,9 +24,11 @@ from unittest.mock import MagicMock, patch
 # Add scripts/ to sys.path
 # ---------------------------------------------------------------------------
 
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 _SCRIPTS = str(Path(__file__).resolve().parent.parent / "scripts")
-if _SCRIPTS not in sys.path:
-    sys.path.insert(0, _SCRIPTS)
+for _p in [_REPO_ROOT, _SCRIPTS]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +76,7 @@ _toons.dumps = json.dumps
 
 # langgraph_engine package stub WITH __path__ so sub-package imports resolve
 _le_pkg = _stub("langgraph_engine")
-_le_pkg.__path__ = [str(Path(_SCRIPTS) / "langgraph_engine")]
+_le_pkg.__path__ = [str(Path(_REPO_ROOT) / "langgraph_engine")]
 _le_pkg.__package__ = "langgraph_engine"
 
 # flow_state stub

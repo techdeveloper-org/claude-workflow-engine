@@ -36,8 +36,9 @@ from unittest.mock import MagicMock, patch
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
+for _p in [str(_REPO_ROOT), str(_SCRIPTS_DIR)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 
 def _stub_module(name, **attrs):
@@ -66,7 +67,7 @@ _stub_module("toons", dumps=json.dumps)
 
 # langgraph_engine package WITH __path__ so sub-package imports resolve
 _le_pkg = _stub_module("langgraph_engine")
-_le_pkg.__path__ = [str(_SCRIPTS_DIR / "langgraph_engine")]
+_le_pkg.__path__ = [str(_REPO_ROOT / "langgraph_engine")]
 _le_pkg.__package__ = "langgraph_engine"
 
 # flow_state: FlowState is just dict in tests

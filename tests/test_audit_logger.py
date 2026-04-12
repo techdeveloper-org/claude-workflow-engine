@@ -23,7 +23,10 @@ import pytest
 # Path setup
 # ---------------------------------------------------------------------------
 
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_SCRIPTS_DIR = _PROJECT_ROOT / "scripts"
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 

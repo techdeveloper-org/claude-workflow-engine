@@ -11,7 +11,7 @@
 
 ## Scripts Directory Overview
 
-This directory contains the pipeline entry point, hook scripts, and the core `langgraph_engine/` package.
+This directory contains the pipeline entry point, hook scripts, and operational tools. The core `langgraph_engine/` package lives at the project root.
 
 ### Key Files
 

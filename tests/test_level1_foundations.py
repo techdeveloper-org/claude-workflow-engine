@@ -14,25 +14,24 @@ AC Summary:
 """
 
 import json
-import os
 import sys
-import tempfile
 import time
-import threading
-from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Any
-from unittest.mock import patch, MagicMock
+from pathlib import Path
+from typing import Any, Dict
+from unittest.mock import patch
 
 import pytest
 
-# Add project scripts to path
+# Add project root and scripts to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 
 # ============================================================================
 # FIXTURE HELPERS
 # ============================================================================
+
 
 @pytest.fixture
 def tmp_project(tmp_path):
@@ -68,12 +67,13 @@ def tmp_context_files(tmp_path):
 # 1. TOONValidator - Validates structure and fields
 # ============================================================================
 
+
 class TestTOONValidator:
     """AC 1: TOONValidator class validates structure and fields."""
 
     def test_valid_toon_passes(self):
         """A fully valid TOON dict should pass validation."""
-        from langgraph_engine.toon_schema import validate_toon, create_toon
+        from langgraph_engine.toon_schema import create_toon, validate_toon
 
         toon = create_toon(
             session_id="session-001",
@@ -98,7 +98,7 @@ class TestTOONValidator:
 
     def test_empty_session_id_fails(self):
         """session_id must be non-empty."""
-        from langgraph_engine.toon_schema import validate_toon, create_toon
+        from langgraph_engine.toon_schema import create_toon, validate_toon
 
         toon = create_toon("session-test", 5, [])
         toon["session_id"] = "   "  # Whitespace only
@@ -108,7 +108,7 @@ class TestTOONValidator:
 
     def test_complexity_score_out_of_range_fails(self):
         """complexity_score must be 1-10."""
-        from langgraph_engine.toon_schema import validate_toon, create_toon
+        from langgraph_engine.toon_schema import create_toon, validate_toon
 
         toon = create_toon("session-x", 5, [])
         # Test too high
@@ -124,7 +124,7 @@ class TestTOONValidator:
 
     def test_invalid_timestamp_fails(self):
         """timestamp must be a valid ISO-8601 string."""
-        from langgraph_engine.toon_schema import validate_toon, create_toon
+        from langgraph_engine.toon_schema import create_toon, validate_toon
 
         toon = create_toon("session-x", 5, [])
         toon["timestamp"] = "not-a-date"
@@ -134,7 +134,7 @@ class TestTOONValidator:
 
     def test_wrong_version_fails(self):
         """version must equal TOON_VERSION."""
-        from langgraph_engine.toon_schema import validate_toon, create_toon, TOON_VERSION
+        from langgraph_engine.toon_schema import create_toon, validate_toon
 
         toon = create_toon("session-x", 5, [])
         toon["version"] = "2.0.0"
@@ -144,7 +144,7 @@ class TestTOONValidator:
 
     def test_context_must_be_dict(self):
         """context field must be a dict."""
-        from langgraph_engine.toon_schema import validate_toon, create_toon
+        from langgraph_engine.toon_schema import create_toon, validate_toon
 
         toon = create_toon("session-x", 5, [])
         toon["context"] = "not a dict"
@@ -163,7 +163,7 @@ class TestTOONValidator:
 
     def test_create_toon_produces_valid_toon(self):
         """create_toon() factory must always produce a valid TOON."""
-        from langgraph_engine.toon_schema import validate_toon, create_toon
+        from langgraph_engine.toon_schema import create_toon, validate_toon
 
         for score in [1, 5, 10]:
             toon = create_toon("s-{}".format(score), score, ["SRS"])
@@ -172,7 +172,7 @@ class TestTOONValidator:
 
     def test_optional_fields_validated_when_present(self):
         """Optional dict fields must be dicts if present."""
-        from langgraph_engine.toon_schema import validate_toon, create_toon
+        from langgraph_engine.toon_schema import create_toon, validate_toon
 
         toon = create_toon("session-x", 5, [])
         toon["model_preferences"] = "not a dict"
@@ -184,6 +184,7 @@ class TestTOONValidator:
 # ============================================================================
 # 2. Complexity Score Calculation (40% files, 45% LOC, 15% deps)
 # ============================================================================
+
 
 class TestComplexityCalculator:
     """AC 2: Complexity scores 1-10 correctly calculated with weighted formula."""
@@ -222,7 +223,7 @@ class TestComplexityCalculator:
 
     def test_weighted_formula_correct(self):
         """Verify weighted formula: 40% file_score + 45% loc_score + 15% dep_score."""
-        from langgraph_engine.complexity_calculator import _file_score, _loc_score, _dep_score
+        from langgraph_engine.complexity_calculator import _dep_score, _file_score, _loc_score
 
         # Test some known values
         # < 5 files -> file_score = 2
@@ -309,9 +310,7 @@ class TestComplexityCalculator:
             "dependencies": {"react": "^18", "axios": "^1"},
             "devDependencies": {"jest": "^29"},
         }
-        (tmp_path / "package.json").write_text(
-            json.dumps(pkg_data), encoding="utf-8"
-        )
+        (tmp_path / "package.json").write_text(json.dumps(pkg_data), encoding="utf-8")
         count = _count_dependencies(tmp_path)
         assert count == 3
 
@@ -320,15 +319,14 @@ class TestComplexityCalculator:
 # 3. Timeouts Prevent File Hangs
 # ============================================================================
 
+
 class TestContextTimeout:
     """AC 3: Timeouts prevent file hangs (30s per file, 120s total)."""
 
     def test_timeout_constants_correct(self):
         """Per-file timeout must be 30s and total must be 120s."""
-        from langgraph_engine.subgraphs.level1_sync import (
-            CONTEXT_TIMEOUT_PER_FILE,
-            CONTEXT_TIMEOUT_TOTAL,
-        )
+        from langgraph_engine.subgraphs.level1_sync import CONTEXT_TIMEOUT_PER_FILE, CONTEXT_TIMEOUT_TOTAL
+
         assert CONTEXT_TIMEOUT_PER_FILE == 30
         assert CONTEXT_TIMEOUT_TOTAL == 120
 
@@ -374,10 +372,9 @@ class TestContextTimeout:
 
     def test_total_timeout_stops_loading(self, tmp_context_files):
         """Total timeout of 120s should stop context loading."""
-        from langgraph_engine.subgraphs.level1_sync import node_context_loader
-
         # Set a very short total timeout via monkeypatching
         import langgraph_engine.subgraphs.level1_sync as lvl1
+        from langgraph_engine.subgraphs.level1_sync import node_context_loader
 
         original = lvl1.CONTEXT_TIMEOUT_TOTAL
         try:
@@ -396,6 +393,7 @@ class TestContextTimeout:
     def test_threading_used_for_timeout(self):
         """Windows-compatible threading timeout must be used (no signal module)."""
         import inspect
+
         from langgraph_engine.subgraphs import level1_sync
 
         source = inspect.getsource(level1_sync._read_file_with_timeout)
@@ -407,6 +405,7 @@ class TestContextTimeout:
 # ============================================================================
 # 4. TOON Compression Validated Before Use
 # ============================================================================
+
 
 class TestTOONCompression:
     """AC 4: TOON compression validated before use."""
@@ -436,10 +435,7 @@ class TestTOONCompression:
 
     def test_integrity_check_verifies_file_count(self, tmp_path):
         """Integrity check must verify files_loaded_count matches original."""
-        from langgraph_engine.subgraphs.level1_sync import (
-            _verify_toon_integrity,
-            node_toon_compression,
-        )
+        from langgraph_engine.subgraphs.level1_sync import _verify_toon_integrity
 
         original_context = {
             "srs": "srs content",
@@ -537,6 +533,7 @@ class TestTOONCompression:
 # 5. Memory Limits Enforced (1MB file, 10MB total)
 # ============================================================================
 
+
 class TestMemoryLimits:
     """AC 5: Memory limits enforced (1MB file, 10MB total)."""
 
@@ -569,8 +566,8 @@ class TestMemoryLimits:
 
     def test_total_limit_stops_loading(self, tmp_path):
         """When total bytes exceed 10MB limit, loading should stop."""
-        from langgraph_engine.subgraphs.level1_sync import node_context_loader
         import langgraph_engine.subgraphs.level1_sync as lvl1
+        from langgraph_engine.subgraphs.level1_sync import node_context_loader
 
         # Mock total size to already be at limit
         original_max = lvl1.MAX_TOTAL_SIZE
@@ -615,6 +612,7 @@ class TestMemoryLimits:
 # 6. Context Deduplication (>20% savings threshold)
 # ============================================================================
 
+
 class TestContextDeduplication:
     """AC 6: Context deduplication removes >20% duplicates across SRS/README/CLAUDE.md."""
 
@@ -637,14 +635,16 @@ class TestContextDeduplication:
         from langgraph_engine.context_deduplicator import deduplicate_context
 
         # Generate truly unique lines per file - no line in SRS appears in README
-        srs_lines = "\n".join(
-            "SRS requirement number {} with unique token alpha{}beta".format(i, i * 7)
-            for i in range(50)
-        ) + "\n"
-        readme_lines = "\n".join(
-            "README instruction section {} with unique token gamma{}delta".format(j, j * 11)
-            for j in range(50)
-        ) + "\n"
+        srs_lines = (
+            "\n".join("SRS requirement number {} with unique token alpha{}beta".format(i, i * 7) for i in range(50))
+            + "\n"
+        )
+        readme_lines = (
+            "\n".join(
+                "README instruction section {} with unique token gamma{}delta".format(j, j * 11) for j in range(50)
+            )
+            + "\n"
+        )
 
         context = {
             "srs": srs_lines,
@@ -732,6 +732,7 @@ class TestContextDeduplication:
 # ============================================================================
 # 7. Partial Context Works When Individual Files Fail
 # ============================================================================
+
 
 class TestPartialContextFallback:
     """AC 7: Partial context works when individual files fail."""
@@ -839,6 +840,7 @@ class TestPartialContextFallback:
 # 8. Cache Invalidation (24h or file changes)
 # ============================================================================
 
+
 class TestCacheInvalidation:
     """AC 8: Cache invalidates after 24h or file changes."""
 
@@ -864,7 +866,7 @@ class TestCacheInvalidation:
 
     def test_expired_cache_returns_none(self, tmp_path):
         """Cache older than 24h must be invalidated."""
-        from langgraph_engine.context_cache import ContextCache, CACHE_MAX_AGE_HOURS
+        from langgraph_engine.context_cache import ContextCache
 
         cache = ContextCache(cache_base_dir=str(tmp_path / "cache"))
         project = str(tmp_path)
@@ -875,6 +877,7 @@ class TestCacheInvalidation:
 
         # Manually backdating the saved_at timestamp
         from langgraph_engine.context_cache import ContextCache as CC
+
         key = CC._cache_key(project)
         cache_file = tmp_path / "cache" / (key + ".json")
         entry = json.loads(cache_file.read_text(encoding="utf-8"))
@@ -912,7 +915,6 @@ class TestCacheInvalidation:
 
     def test_cache_key_is_md5_of_path(self):
         """Cache key must be derived from project path hash."""
-        import hashlib
         from langgraph_engine.context_cache import ContextCache
 
         project_path = "/some/test/project"
@@ -999,17 +1001,18 @@ class TestCacheInvalidation:
 # INTEGRATION: Full Level 1 Pipeline
 # ============================================================================
 
+
 class TestLevel1Integration:
     """Integration test: Full Level 1 pipeline runs end-to-end."""
 
     def test_full_pipeline_success(self, tmp_context_files):
         """All 5 nodes must execute and produce valid TOON."""
         from langgraph_engine.subgraphs.level1_sync import (
-            node_session_loader,
+            level1_merge_node,
             node_complexity_calculation,
             node_context_loader,
+            node_session_loader,
             node_toon_compression,
-            level1_merge_node,
         )
         from langgraph_engine.toon_schema import validate_toon
 
@@ -1050,10 +1053,7 @@ class TestLevel1Integration:
 
     def test_pipeline_handles_missing_project_root(self):
         """Pipeline must not crash with a nonexistent project root."""
-        from langgraph_engine.subgraphs.level1_sync import (
-            node_complexity_calculation,
-            node_context_loader,
-        )
+        from langgraph_engine.subgraphs.level1_sync import node_complexity_calculation, node_context_loader
 
         state: Dict[str, Any] = {
             "project_root": "/nonexistent/path/xyz123",

@@ -69,7 +69,7 @@ The following fields from Steps 8-14 consumption were confirmed still needed:
 
 ### Pre-Template Injection A: combined_complexity_score
 
-**Location**: `step0_task_analysis_node()` in `scripts/langgraph_engine/level3_execution/nodes/step_wrappers_0to4.py`
+**Location**: `step0_task_analysis_node()` in `langgraph_engine/level3_execution/nodes/step_wrappers_0to4.py`
 
 ```python
 # Read from state — do NOT re-compute. Scale is 1-25, not 1-10.
@@ -202,9 +202,9 @@ The following backward-compat shims were confirmed NOT in the deletion list:
 
 | File | Shim Status | Notes |
 |------|-------------|-------|
-| `scripts/langgraph_engine/flow_state.py` | PRESERVED — re-exports from `state/` | Not touched |
-| `scripts/langgraph_engine/uml_generators.py` | PRESERVED — re-exports from `diagrams/` | Not touched |
-| `scripts/langgraph_engine/call_graph_builder.py` | PRESERVED — re-exports from `parsers/` | Not touched |
+| `langgraph_engine/flow_state.py` | PRESERVED — re-exports from `state/` | Not touched |
+| `langgraph_engine/uml_generators.py` | PRESERVED — re-exports from `diagrams/` | Not touched |
+| `langgraph_engine/call_graph_builder.py` | PRESERVED — re-exports from `parsers/` | Not touched |
 | `route_to_plan_or_breakdown` | PRESERVED as stub — returns `level3_step8` | Backward compat for test imports |
 | `route_after_step1_decision` | PRESERVED as stub — returns `level3_step2` | Backward compat for test imports |
 

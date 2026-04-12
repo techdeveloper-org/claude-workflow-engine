@@ -6,16 +6,20 @@ without errors. This catches broken imports, missing dependencies, and syntax
 errors across all three architecture levels.
 """
 
-import pytest
-import sys
 import importlib.util
+import sys
 from pathlib import Path
 
-# Add scripts/ to sys.path so internal relative imports resolve
-SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+import pytest
+
+# Add project root + scripts/ to sys.path so imports resolve
+_REPO_ROOT = Path(__file__).parent.parent
+SCRIPTS_DIR = _REPO_ROOT / "scripts"
+sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 ARCH_DIR = SCRIPTS_DIR / "architecture"
+
 
 # Collect modules per level at import time so parametrize can use them
 def _collect_py_files(level_dir_name):
@@ -23,10 +27,7 @@ def _collect_py_files(level_dir_name):
     level_path = ARCH_DIR / level_dir_name
     if not level_path.exists():
         return []
-    return sorted(
-        p for p in level_path.rglob("*.py")
-        if not p.name.startswith("__")
-    )
+    return sorted(p for p in level_path.rglob("*.py") if not p.name.startswith("__"))
 
 
 _LEVEL1_FILES = _collect_py_files("01-sync-system")
@@ -57,14 +58,13 @@ def _try_import(py_file):
 # Basic sanity: the architecture directory itself exists
 # ---------------------------------------------------------------------------
 
+
 class TestArchitectureSmokeImports:
     """Smoke tests for all Python modules under scripts/architecture/."""
 
     def test_architecture_dir_exists(self):
         """Verify that scripts/architecture/ directory exists."""
-        assert ARCH_DIR.exists(), (
-            "scripts/architecture/ directory not found at " + str(ARCH_DIR)
-        )
+        assert ARCH_DIR.exists(), "scripts/architecture/ directory not found at " + str(ARCH_DIR)
 
     def test_architecture_dir_is_directory(self):
         """Verify that scripts/architecture/ is a real directory."""
@@ -90,10 +90,7 @@ class TestArchitectureSmokeImports:
         """Verify that a 01-sync-system Python file can be imported."""
         success, error = _try_import(py_file)
         if not success:
-            pytest.skip(
-                "Import failed (likely optional dependency): "
-                + py_file.name + " -> " + (error or "")[:200]
-            )
+            pytest.skip("Import failed (likely optional dependency): " + py_file.name + " -> " + (error or "")[:200])
 
     def test_level1_has_python_files(self):
         """Verify that 01-sync-system contains at least one Python file."""
@@ -123,10 +120,7 @@ class TestArchitectureSmokeImports:
         """Verify that a 02-standards-system Python file can be imported."""
         success, error = _try_import(py_file)
         if not success:
-            pytest.skip(
-                "Import failed (likely optional dependency): "
-                + py_file.name + " -> " + (error or "")[:200]
-            )
+            pytest.skip("Import failed (likely optional dependency): " + py_file.name + " -> " + (error or "")[:200])
 
     def test_level2_has_python_files(self):
         """Verify that 02-standards-system contains at least one Python file."""
@@ -156,10 +150,7 @@ class TestArchitectureSmokeImports:
         """Verify that a 03-execution-system Python file can be imported."""
         success, error = _try_import(py_file)
         if not success:
-            pytest.skip(
-                "Import failed (likely optional dependency): "
-                + py_file.name + " -> " + (error or "")[:200]
-            )
+            pytest.skip("Import failed (likely optional dependency): " + py_file.name + " -> " + (error or "")[:200])
 
     def test_level3_has_python_files(self):
         """Verify that 03-execution-system contains at least one Python file."""
@@ -179,6 +170,5 @@ class TestArchitectureSmokeImports:
         assert total > 0, "No Python files found anywhere under scripts/architecture/"
         # Current repo has ~83 modules; allow for growth or minor shrinkage
         assert total >= 10, (
-            "Suspiciously few Python files in architecture (%d); "
-            "check if directory is intact" % total
+            "Suspiciously few Python files in architecture (%d); " "check if directory is intact" % total
         )

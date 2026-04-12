@@ -2,7 +2,7 @@
 
 **Project:** Claude Workflow Engine
 **Audit Date:** 2026-04-04
-**Scope:** 310+ Python files across scripts/langgraph_engine/, scripts/pre_tool_enforcer/,
+**Scope:** 310+ Python files across langgraph_engine/, scripts/pre_tool_enforcer/,
   scripts/post_tool_tracker/, scripts/stop_notifier/, scripts/github_pr_workflow/,
   scripts/github_operations/, scripts/helpers/, src/mcp/
 **Standard:** PEP 8 naming conventions
@@ -130,7 +130,7 @@ The following names must NOT be renamed under any circumstances:
 
 ### File Renames
 
-| Old Path (relative to scripts/langgraph_engine/) | New Path | Type |
+| Old Path (relative to langgraph_engine/) | New Path | Type |
 |---|---|---|
 | `level3_execution/architecture/prompt-gen-expert-caller.py` | `level3_execution/architecture/prompt_gen_expert_caller.py` | File rename |
 | `level3_execution/architecture/orchestrator-agent-caller.py` | `level3_execution/architecture/orchestrator_agent_caller.py` | File rename |
