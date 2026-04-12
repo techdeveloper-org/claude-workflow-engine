@@ -387,6 +387,21 @@ kubectl apply -f k8s/secret.yaml -f k8s/configmap.yaml \
   -f k8s/deployment.yaml -f k8s/service.yaml -f k8s/hpa.yaml
 ```
 
+### Adding a New Pipeline Level
+
+```python
+# 1. Create level package in langgraph_engine/my_level/
+# 2. Add routing in routing/my_level_routes.py
+# 3. Register in pipeline_builder.py:
+class PipelineBuilder:
+    def add_my_level(self):
+        # add nodes + edges
+        return self
+
+# 4. Use it:
+PipelineBuilder().add_level_minus1().add_level1().add_my_level().build()
+```
+
 ---
 
 ## Naming Conventions

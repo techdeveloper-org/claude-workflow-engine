@@ -126,6 +126,20 @@ Full Mode (CLAUDE_HOOK_MODE=0):
 
 ---
 
+## Policy System
+
+All pipeline policies are organized by level in `policies/`:
+
+| Level | Directory | Purpose |
+|-------|-----------|---------|
+| Level -1 | `00-auto-fix-system/` | Unicode, encoding, Windows path checks (blocking pre-flight, max 3 retries) |
+| Level 1 | `01-sync-system/` | Session management, context optimization (70/85/90% thresholds), user preferences, pattern detection |
+| Level 2 | `02-standards-system/` | Common coding standards (12 categories, ~65 rules) + Spring Boot microservices standards (15 categories, ~139 rules, conditional) |
+| Level 3 | `03-execution-system/` | Step-by-step execution policies (prompt generation, progress tracking, git commit, implementation, PR, issue closure, docs, summary) |
+| Testing | `testing/` | Test scripts and testing policies (phase testing, skill testing, infrastructure health) |
+
+---
+
 ## CallGraph Intelligence
 
 The call graph is the brain of the engine — a complete AST-based call stack across the entire codebase.
