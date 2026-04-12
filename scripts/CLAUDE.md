@@ -46,10 +46,9 @@ langgraph_engine/
 +-- flow_state.py        # Compat shim -> state/
 +-- uml_generators.py    # Compat shim -> diagrams/
 +-- call_graph_builder.py # Compat shim -> parsers/
-+-- level_minus1/        # Level -1 package (policies/)
-+-- level1_sync/         # Level 1 package (3 modules + policies/ + architecture/)
-+-- level2_standards/    # Level 2 package -- policies/ only (Python scripts removed v1.16.0)
-+-- level3_execution/    # Level 3 package (subgraph.py + nodes/ + sonarqube/ + policies/ + architecture/)
++-- level_minus1/        # Level -1 package (architecture/)
++-- level1_sync/         # Level 1 package (3 modules + architecture/)
++-- level3_execution/    # Level 3 package (subgraph.py + nodes/ + sonarqube/ + architecture/)
 |   +-- subgraph.py      # v2 subgraph builder (canonical entry point)
 |   +-- nodes/           # v2 step wrapper nodes (orchestration, pre_nodes, step_wrappers_*)
 +-- [60+ shared modules] # Cross-level utilities (LLM, caching, metrics, git, etc.)
@@ -77,7 +76,7 @@ langgraph_engine/
 - `tests/test_level2_standards.py` deleted.
 - Level 2 helper nodes removed from `helper_nodes/` (emergency_archive, optimize_context_after_level2, level2_select_standards_node).
 - Pipeline re-wired: `level1_cleanup` → `level3_init` directly (no Level 2 graph nodes).
-- `level2_standards/policies/` retained — .md policy files read directly at runtime.
+- `level2_standards/` directory removed entirely; policies already in `policies/02-standards-system/`.
 
 ### Running the Pipeline
 

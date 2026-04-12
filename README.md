@@ -68,7 +68,7 @@ python scripts/3-level-flow.py \
 | v1.15.0 | 8 | 2 (subprocess) | ~15s | TOON compression removed from Level 1 |
 | v1.15.2 | 8 | 2 (subprocess) | ~15s | Exhaustive artifact purge: TOON/plan-mode/skill-selection |
 | v1.15.3 | 8 | 2 (subprocess) | ~15s | Dead LLM provider purge: Ollama/NPU/GPU/OpenAI/DeepSeek removed |
-| v1.16.0 | 8 | 2 (subprocess) | ~15s | Level 2 script purge: all level2_standards/ Python removed; policies/ .md files read directly |
+| v1.16.0 | 8 | 2 (subprocess) | ~15s | Level 2 script purge: level2_standards/ removed; policies in policies/02-standards-system/ |
 | **v1.16.1** | **8** | **2 (subprocess)** | **~15s** | **uml/ + drawio/ moved to project root; UML_OUTPUT_DIR + DRAWIO_OUTPUT_DIR env vars added** |
 
 ---
@@ -84,7 +84,7 @@ Level 1:  CONTEXT SYNC  Session + parallel [complexity, context] -> merge
     |                   Output: combined_complexity_score [1-25 scale]
     |
 Level 2:  (NO-OP)       Coding standards .md files read directly from policies/ at runtime
-    |                   No pipeline nodes. level2_standards/policies/ retained.
+    |                   No pipeline nodes. Policies in policies/02-standards-system/.
     |
 Level 3:  EXECUTION     8 active steps (Pre-0, Step 0, Steps 8-14)
 ```
@@ -258,7 +258,6 @@ claude-workflow-engine/
 |   |   +-- orchestrator.py           # Main StateGraph pipeline
 |   |   +-- level_minus1/             # Level -1: Auto-fix (Unicode, encoding, paths)
 |   |   +-- level1_sync/              # Level 1: Session + complexity sync
-|   |   +-- level2_standards/         # policies/ only (.md files read at runtime; no Python scripts)
 |   |   +-- level3_execution/         # Level 3: 8-step SDLC (subgraph.py + nodes/ + sonarqube/)
 |   |   +-- call_graph_analyzer.py    # Impact analysis, snapshots, diff (Steps Pre-0/10/11)
 |   |   +-- [60+ shared modules]      # LLM, caching, metrics, git, standards, etc.
@@ -297,7 +296,7 @@ claude-workflow-engine/
 | Execution Steps | 8 (Pre-0, Step 0, Steps 8-14) |
 | MCP Servers | 13 (295 tools) in separate repos |
 | LangGraph Modules | 60+ shared + 9 canonical packages |
-| Policy Files | retained in level2_standards/policies/ (.md) |
+| Policy Files | policies/ directory (4 level subdirs + testing) |
 | Standards Files | 34 |
 | Test Files | 74 |
 | Total Python Files | 304+ |

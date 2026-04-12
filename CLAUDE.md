@@ -104,7 +104,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | **v1.15.1** | **8** | **2 (subprocess)** | **~15s** | Source cleanup: deprecated files removed |
 | **v1.15.2** | **8** | **2 (subprocess)** | **~15s** | Exhaustive artifact purge: TOON/plan-mode/skill-selection removed; prompt_gen bug fixes |
 | **v1.15.3** | **8** | **2 (subprocess)** | **~15s** | Dead LLM provider purge: Ollama, NPU, GPU, OpenAI, DeepSeek, inference_router removed; 2-provider chain only (claude_cli + anthropic) |
-| **v1.16.0** | **8** | **2 (subprocess)** | **~15s** | Level 2 script purge: all level2_standards/ Python removed; level1_cleanup routes directly to level3_init; policies/ .md files retained |
+| **v1.16.0** | **8** | **2 (subprocess)** | **~15s** | Level 2 script purge: all level2_standards/ removed; policies in policies/02-standards-system/; level1_cleanup routes directly to level3_init |
 | **v1.16.1** | **8** | **2 (subprocess)** | **~15s** | uml/ + drawio/ moved to project root (out of docs/); UML_OUTPUT_DIR + DRAWIO_OUTPUT_DIR env vars |
 
 ### Directory Layout
@@ -121,11 +121,9 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 |   |   +-- parsers/                  # Abstract Factory: 4 language parsers (Py/Java/TS/Kotlin)
 |   |   +-- integrations/             # Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins
 |   |   +-- pipeline_builder.py       # Builder Pattern: PipelineBuilder chainable API
-|   |   +-- level_minus1/            # [v1.9] Level -1 Auto-Fix package (nodes, merge, recovery, policies/)
-|   |   +-- level1_sync/             # [v1.11] Level 1 Sync package (10 modules + policies/ + architecture/)
-|   |   +-- level2_standards/        # Level 2 Standards package -- policies/ only (all Python scripts removed v1.16.0)
-|   |   +-- level2_standards/policies/    # Coding standards policy files (.md) -- read directly at runtime
-|   |   +-- level3_execution/        # [v1.11] Level 3 Execution package (20+ modules + nodes/ + subgraph.py + sonarqube/ + policies/ + architecture/)
+|   |   +-- level_minus1/            # [v1.9] Level -1 Auto-Fix package (nodes, merge, recovery, architecture/)
+|   |   +-- level1_sync/             # [v1.11] Level 1 Sync package (10 modules + architecture/)
+|   |   +-- level3_execution/        # [v1.11] Level 3 Execution package (20+ modules + nodes/ + subgraph.py + sonarqube/ + architecture/)
 |   |   +-- [60+ shared modules]     # Cross-level: LLM, caching, metrics, git, state, etc.
 |   +-- architecture/                 # generate_system_diagram.py (shared utility)
 |   +-- setup/                        # One-time environment setup (install-auto-hooks.sh, setup-global-claude.sh/.ps1, setup_wizard.py, etc.)
@@ -144,7 +142,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 |   +-- ide_paths.py                  # Path constants (imported by hook packages)
 |   +-- project_session.py            # Session utilities (imported by hook packages)
 |   +-- policy_tracking_helper.py     # Policy tracking (imported by hook packages)
-+-- policies/                         # README pointing to level packages (policies moved into level_*/policies/)
++-- policies/                         # All pipeline policies organized by level (00-auto-fix, 01-sync, 02-standards, 03-execution, testing)
 |   +-- testing/                      # Testing policies (unchanged)
 +-- src/mcp/                          # In-engine copy of session-mgr (repo is source of truth) + bridge (session_hooks, base/)
 +-- tests/                            # 75 test files
@@ -171,7 +169,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | Integrations Package | langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
 | Level -1 | langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical) |
 | Level 1 | langgraph_engine/level1_sync/ | Session/context sync (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
-| Level 2 | langgraph_engine/level2_standards/ | Standards loading (canonical) |
+| Level 2 | policies/02-standards-system/ | Standards policies (.md files, no pipeline nodes) |
 | Level 3 | langgraph_engine/level3_execution/subgraph.py | 8-step active execution (Pre-0, Step 0, Steps 8-14) -- ACTIVE (nodes in level3_execution/nodes/) |
 | Pre-Analysis Node | langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan before Step 0; template fast-path detection |
 | Hooks | scripts/pre-tool-enforcer.py, post-tool-tracker.py | Tool enforcement |

@@ -1,11 +1,11 @@
 # Policies Directory
 
-Policies have been moved into their respective level packages for better co-location:
+All pipeline policies are organized by level in this directory:
 
-| Level | New Location |
-|-------|-------------|
-| Level -1 (Auto-Fix) | `langgraph_engine/level_minus1/policies/` |
-| Level 1 (Sync) | `langgraph_engine/level1_sync/policies/` |
-| Level 2 (Standards) | `langgraph_engine/level2_standards/policies/` |
-| Level 3 (Execution) | `langgraph_engine/level3_execution/policies/` |
-| Testing | `policies/testing/` (unchanged) |
+| Level | Location |
+|-------|----------|
+| Level -1 (Auto-Fix) | `policies/00-auto-fix-system/` |
+| Level 1 (Sync) | `policies/01-sync-system/` |
+| Level 2 (Standards) | `policies/02-standards-system/` |
+| Level 3 (Execution) | `policies/03-execution-system/` |
+| Testing | `policies/testing/` |
