@@ -1,4 +1,3 @@
-# ruff: noqa: F821
 """diagrams/legacy_generator.py - Legacy UMLDiagramGenerator class.
 
 Extracted from uml_generators.py. This is the monolithic generator
@@ -7,9 +6,12 @@ that was the original implementation before the Strategy pattern refactoring.
 Kept for backward compatibility with documentation_manager.py.
 Windows-safe: ASCII only.
 """
+
 import logging
 from datetime import datetime
 from pathlib import Path
+
+from .ast_analyzer import UMLAstAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +77,14 @@ class UMLDiagramGenerator:
         if self._call_graph is not None:
             return self._call_graph
         try:
+            # call_graph_builder lives at langgraph_engine.call_graph_builder,
+            # which is the PARENT of this diagrams/ subpackage — use '..'.
+            # The fallback path handles the case where this module is loaded
+            # outside the langgraph_engine package (e.g., via direct file exec).
             try:
-                from .call_graph_builder import build_call_graph
+                from ..call_graph_builder import build_call_graph
             except ImportError:
-                from call_graph_builder import build_call_graph
+                from langgraph_engine.call_graph_builder import build_call_graph
             cg = build_call_graph(str(self.project_root))
             self._call_graph = cg
             return cg

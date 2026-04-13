@@ -1,0 +1,14 @@
+................................................F.F................      [100%]
+================================== FAILURES ===================================
+____________ TestCallGraphDiagram.test_generate_call_graph_diagram ____________
+tests\test_uml_generators.py:665: in test_generate_call_graph_diagram
+    assert "subgraph" in syntax
+E   AssertionError: assert 'subgraph' in 'flowchart LR\n    note[Call graph not available]'
+__________ TestCallGraphDiagram.test_call_graph_diagram_entry_points __________
+tests\test_uml_generators.py:684: in test_call_graph_diagram_entry_points
+    assert "stroke-width:3px" in syntax
+E   AssertionError: assert 'stroke-width:3px' in 'flowchart LR\n    note[Call graph not available]'
+=========================== short test summary info ===========================
+FAILED tests/test_uml_generators.py::TestCallGraphDiagram::test_generate_call_graph_diagram
+FAILED tests/test_uml_generators.py::TestCallGraphDiagram::test_call_graph_diagram_entry_points
+2 failed, 65 passed in 1239.71s (0:20:39)
