@@ -16,16 +16,20 @@ Windows-safe: ASCII only (cp1252 compatible).
 
 import json
 import os
-import re
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-# Add project root and scripts/ to sys.path so source modules are importable
+# Add project root, scripts/, scripts/tools/, and hooks/ to sys.path so source
+# modules are importable. Commit 69dab0f (v1.16.x) moved hook helpers from
+# scripts/ to hooks/ at project root, and commit 4a835a6 moved dev tools from
+# scripts/ to scripts/tools/.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
 
 
 # ===========================================================================
@@ -39,79 +43,12 @@ def _write_json(path, data):
 
 
 # ===========================================================================
-# SessionIDGenerator tests
+# SessionIDGenerator tests — REMOVED
 # ===========================================================================
-
-
-class TestSessionIDGenerator:
-    """Tests for SessionIDGenerator.generate_session_id()."""
-
-    @pytest.fixture(autouse=True)
-    def _import_module(self, tmp_path):
-        """Import SessionIDGenerator with filesystem redirected to tmp_path."""
-        # Patch policy_tracking_helper before importing session-id-generator
-        with patch.dict(
-            "sys.modules",
-            {
-                "policy_tracking_helper": MagicMock(
-                    record_policy_execution=MagicMock(return_value=True),
-                    record_sub_operation=MagicMock(return_value={}),
-                    get_session_id=MagicMock(return_value="unknown"),
-                )
-            },
-        ):
-            # Re-import after patching to avoid import-time side effects
-            import importlib
-            import importlib.util
-
-            spec = importlib.util.spec_from_file_location(
-                "session_id_generator",
-                Path(__file__).resolve().parent.parent / "scripts" / "session-id-generator.py",
-            )
-            mod = importlib.util.module_from_spec(spec)
-            # Patch home() so all file I/O goes to tmp_path
-            with patch("pathlib.Path.home", return_value=tmp_path):
-                spec.loader.exec_module(mod)
-                self.mod = mod
-                self.tmp_path = tmp_path
-                yield
-
-    def _make_generator(self):
-        with patch("pathlib.Path.home", return_value=self.tmp_path):
-            return self.mod.SessionIDGenerator()
-
-    def test_session_id_format(self):
-        """Generated ID starts with 'SESSION-' and matches TYPE-DATE-TIME-HASH."""
-        gen = self._make_generator()
-        sid = gen.generate_session_id("SESSION")
-        assert sid.startswith("SESSION-"), "ID must start with 'SESSION-'"
-        pattern = r"^SESSION-\d{8}-\d{6}-[A-Z0-9]{4}$"
-        assert re.match(pattern, sid), "ID must match SESSION-YYYYMMDD-HHMMSS-XXXX but got: %s" % sid
-
-    def test_session_id_unique(self):
-        """Two generated IDs are different (collision is extremely unlikely)."""
-        gen = self._make_generator()
-        id1 = gen.generate_session_id("SESSION")
-        id2 = gen.generate_session_id("SESSION")
-        # They may be the same if generated in the same second AND same
-        # random chars. The 4-char random suffix makes this astronomically
-        # unlikely, so we just check the type and length separately.
-        assert isinstance(id1, str)
-        assert isinstance(id2, str)
-        assert len(id1) > 10
-        assert len(id2) > 10
-
-    def test_custom_type_prefix(self):
-        """generate_session_id respects a custom type prefix."""
-        gen = self._make_generator()
-        tid = gen.generate_session_id("TASK")
-        assert tid.startswith("TASK-"), "Custom prefix 'TASK' must appear first"
-
-    def test_work_type_prefix(self):
-        """generate_session_id works with WORK prefix."""
-        gen = self._make_generator()
-        wid = gen.generate_session_id("WORK")
-        assert re.match(r"^WORK-\d{8}-\d{6}-[A-Z0-9]{4}$", wid)
+# The Python-based session-id-generator.py was removed. Session ID generation
+# is now handled by the shell script scripts/tools/session-id-generator.sh
+# which has no unit-test surface (it is a one-liner invoked by hooks). See
+# GitHub issue #203 for the purge history.
 
 
 # ===========================================================================
@@ -132,7 +69,7 @@ class TestMetricsEmitter:
 
         spec = importlib.util.spec_from_file_location(
             "metrics_emitter",
-            Path(__file__).resolve().parent.parent / "scripts" / "metrics-emitter.py",
+            Path(__file__).resolve().parent.parent / "scripts" / "tools" / "metrics-emitter.py",
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -459,7 +396,7 @@ class TestRelease:
 
         spec = importlib.util.spec_from_file_location(
             "release",
-            Path(__file__).resolve().parent.parent / "scripts" / "release.py",
+            Path(__file__).resolve().parent.parent / "scripts" / "tools" / "release.py",
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
