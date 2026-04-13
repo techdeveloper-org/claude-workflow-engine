@@ -363,18 +363,10 @@ class TestLevel1CheckReturnsTuple:
         assert isinstance(blocks, list), "blocks must be a list"
 
 
-class TestLevel2CheckReturnsTuple:
-    """check_level2_standards_complete returns a (hints, blocks) tuple."""
-
-    def test_level2_check_returns_tuple(self):
-        """test_level2_check_returns_tuple: returns (hints, blocks) tuple for any tool."""
-        mod = _load_pre_tool_enforcer()
-        result = mod.check_level2_standards_complete("Read")
-        assert isinstance(result, tuple), "Expected tuple, got {}".format(type(result))
-        assert len(result) == 2, "Expected 2-element tuple, got length {}".format(len(result))
-        hints, blocks = result
-        assert isinstance(hints, list), "hints must be a list"
-        assert isinstance(blocks, list), "blocks must be a list"
+# NOTE: TestLevel2CheckReturnsTuple removed in v1.16.0 — Level 2 standards
+# enforcement was purged (commit 937c9ee). Level 2 policies are now data-only
+# files under policies/02-standards-system/ and no longer have a pipeline
+# enforcer. See GitHub issue #206 for the purge history.
 
 
 class TestLevel1CheckNoTrace:
@@ -406,26 +398,5 @@ class TestLevel1CheckNoTrace:
         assert blocks == [], "Expected no blocks when flow-trace is None, got: {}".format(blocks)
 
 
-class TestLevel2CheckNoTrace:
-    """check_level2_standards_complete fails open when no flow-trace exists."""
-
-    def test_level2_check_no_trace(self, monkeypatch):
-        """test_level2_check_no_trace: returns empty (hints, blocks) when session ID missing."""
-        mod = _load_pre_tool_enforcer()
-
-        monkeypatch.setattr(mod, "get_current_session_id", lambda: "")
-
-        hints, blocks = mod.check_level2_standards_complete("Write")
-
-        assert blocks == [], "Expected no blocks when session ID is empty, got: {}".format(blocks)
-
-    def test_level2_check_no_trace_via_none_trace(self, monkeypatch):
-        """check_level2_standards_complete with valid session but None trace still fails open."""
-        mod = _load_pre_tool_enforcer()
-
-        monkeypatch.setattr(mod, "get_current_session_id", lambda: "test-session-002")
-        monkeypatch.setattr(mod, "_load_raw_flow_trace", lambda: None)
-
-        hints, blocks = mod.check_level2_standards_complete("Write")
-
-        assert blocks == [], "Expected no blocks when flow-trace is None, got: {}".format(blocks)
+# NOTE: TestLevel2CheckNoTrace removed in v1.16.0 — Level 2 standards
+# enforcement was purged (commit 937c9ee). See GitHub issue #206.
