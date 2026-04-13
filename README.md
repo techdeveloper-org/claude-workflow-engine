@@ -352,6 +352,55 @@ kubectl apply -f k8s/secret.yaml -f k8s/configmap.yaml \
 
 ---
 
+## Known Issues & Production Readiness
+
+**Current production readiness: ~60%.** Infrastructure is solid (health server, metrics, tracing, audit log, secrets manager all implemented), but the test suite currently reports **701 passed / 113 failed / 38 errors** (80.5% pass rate) — below the 95%+ bar required for production.
+
+**Root cause:** Recent refactor commits (v1.15.0 → v1.16.1) deleted or moved several modules (TOON schema, UML refactor, MCP servers → separate repos, Level 2 purge, timeout wrapper API changes) but the corresponding test files were not updated. Almost all failures are tests referencing deleted code, not production regressions.
+
+### Open Issues (Ship-Blockers)
+
+| # | Issue | Tests Affected | Severity | Category |
+|---|-------|---------------:|----------|----------|
+| [#200](../../issues/200) | 33 tests reference deleted `langgraph_engine.toon_schema` + `subgraphs` (v1.15.2 purge) | 33 | CRITICAL | test |
+| [#201](../../issues/201) | 40 tests reference deleted `UMLAstAnalyzer` class (diagrams/ Strategy refactor) | 40 | CRITICAL | test |
+| [#202](../../issues/202) | 37 MCP tests reference deleted `src/mcp/*_mcp_server.py` (servers moved to techdeveloper-org) | 37 | HIGH | test |
+| [#203](../../issues/203) | 16 tests reference deleted `scripts/session-id-generator.py` + `metrics-emitter.py` | 16 | HIGH | test |
+| [#204](../../issues/204) | 10 `call_graph_analyzer` tests use stale stats key `methods_in_phase` (renamed to `methods_in_scope`) | 10 | MEDIUM | test |
+| [#205](../../issues/205) | 7 `level3_robustness` tests import removed `timeout_wrapper.fallback_step2` | 7 | MEDIUM | test |
+| [#206](../../issues/206) | 3 `test_new_components` tests reference removed `check_level2_standards_complete` (v1.16.0 Level 2 purge) | 3 | MEDIUM | test |
+| [#207](../../issues/207) | `graph_model.compute_call_paths` hard `max_depth=15` cap — truncates call-graph analysis | pipeline | HIGH | backend |
+| [#208](../../issues/208) | Python 3.13 `DeprecationWarning: __package__ != __spec__.parent` in `hooks/pre_tool_enforcer/policies/*.py` | pipeline | MEDIUM | scripts |
+| [#209](../../issues/209) | Deferred build_dependency_resolver defects D9–D16 (parser edge cases) | — | MEDIUM | enhancement |
+| [#210](../../issues/210) | Miscellaneous test failures (e2e stale guard, retry history, BDR self-test, pre_tool_enforcer) | 6 | MEDIUM | test |
+
+**Total:** 11 open issues tracking 152 failing tests + 2 non-test correctness issues.
+
+### Recently Fixed
+
+- **[commit `f27cae0`]** build_dependency_resolver — 11 defects fixed (D1 critical no-op at caller site, D2 wrong edge dedup schema, D3 missing FQN namespacing, D4 unbounded filesystem scan, D5 unbounded rglob, D6 circular import, D7 setattr cache invalidation, D8 discarded delta tracking, D12 O(N²) classification, D14 sys.path-polluting import chain, D15 detect_build_system single-match). New `registries.py` leaf module. 82 new tests, 75.4% coverage on the module. **This was the first half of the original "call graph depth not what I expect" complaint** — see [#207](../../issues/207) for the second half.
+
+### Production Readiness Checklist
+
+| Check | Status | Note |
+|-------|--------|------|
+| Test suite ≥ 95% pass | 🔴 80.5% | Blocked by issues #200–#206 |
+| No test collection errors | 🔴 38 errors | Mostly deleted-module imports |
+| Call graph pipeline verified | 🟡 Partial | `build_dependency_resolver` fixed; `call_graph_analyzer` tests blocked on #204 |
+| UML pipeline verified | 🔴 Broken | Blocked by #201 |
+| MCP integration verified | 🔴 Broken | Blocked by #202 |
+| Depth issue fully resolved | 🟡 Half done | First half fixed in `f27cae0`; second half tracked in #207 |
+| Python 3.13 compat | 🟡 Warnings | Tracked in #208 |
+| Python 3.14 ready | 🔴 Not yet | #208 will become hard ImportError |
+| Health + metrics + tracing | 🟢 Implemented | Code exists; runtime verification pending |
+| Secrets manager + audit log | 🟢 Implemented | Code exists; runtime verification pending |
+| Kubernetes manifests | 🟢 Present | `k8s/` directory with deployment, service, HPA |
+| CI pipeline | 🟡 Manual-only | `workflow_dispatch` only per `.github/workflows/` |
+
+**To reach production-ready:** fix the 11 open issues in priority order (CRITICAL → HIGH → MEDIUM), re-run full test suite, target ≥ 95% pass rate.
+
+---
+
 ## Comparison: Claude Workflow Engine vs Other AI Tools
 
 | Capability | **This Engine** | Copilot | Cursor | Devin |
