@@ -1,9 +1,9 @@
-# ruff: noqa: F821
 """Level 3 step node wrappers for Steps 10-11.
 
 Extracted from level3_execution/subgraph.py for modularity.
 Windows-safe: ASCII only.
 """
+
 import os
 from typing import Any, Dict
 
@@ -25,6 +25,37 @@ except ImportError:
 
     def _build_retry_history_context(state) -> str:  # type: ignore[misc]
         return ""
+
+
+# _run_step is defined in the parent subgraph module. Imported lazily because
+# subgraph.py imports this module, creating a circular chain; pulling it via
+# a late binding avoids the cycle at module load time.
+try:
+    from ..subgraph import _run_step
+except ImportError:  # pragma: no cover — defensive fallback for isolated imports
+
+    def _run_step(step_number, label, fn, state, fallback_result):  # type: ignore[misc]
+        try:
+            return fn(state)
+        except Exception as exc:
+            logger.error(f"_run_step fallback caught exception in Step {step_number}: {exc}")
+            return fallback_result
+
+
+try:
+    from ...core.infrastructure import get_infra
+except ImportError:  # pragma: no cover
+
+    def get_infra(state):  # type: ignore[misc]
+        return {"metrics": None, "error_logger": None}
+
+
+# NOTE: step10_implementation_execution and step11_pull_request_review are
+# referenced by the wrappers below but their definitions were removed in a
+# prior refactor and never restored. The pipeline silently falls back to
+# ERROR status on Steps 10/11 at runtime. See GitHub issue #211 for the
+# restoration plan. The line-level noqa suppressors are the minimum visible
+# marker while the missing functions are tracked as technical debt.
 
 
 def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
@@ -135,7 +166,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
         step10_implementation_execution.
         """
         try:
-            result = step10_implementation_execution(st)
+            result = step10_implementation_execution(st)  # noqa: F821 — see issue #211
             # Track files modified by implementation step
             if result and result.get("step10_modified_files"):
                 infra = get_infra(st)
@@ -295,7 +326,7 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
         last_exc = None
         for attempt in range(3):
             try:
-                return step11_pull_request_review(st)
+                return step11_pull_request_review(st)  # noqa: F821 — see issue #211
             except Exception as exc:
                 exc_str = str(exc).lower()
                 if any(kw in exc_str for kw in ["timeout", "connection", "network", "rate", "api"]):

@@ -52,6 +52,17 @@ from .parsers import (
     _parse_raw_deps,
 )
 
+# Backward-compat re-exports: callers that still do
+# `from langgraph_engine.build_dependency_resolver.resolver import PYTHON_WELL_KNOWN`
+# continue to work even though the registries have moved to registries.py.
+from .registries import (  # noqa: F401
+    GO_WELL_KNOWN,
+    JAVA_WELL_KNOWN,
+    NODE_WELL_KNOWN,
+    PYTHON_WELL_KNOWN,
+    RUST_WELL_KNOWN,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------

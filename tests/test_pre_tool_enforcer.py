@@ -398,40 +398,12 @@ class TestCheckLevel1SyncComplete:
 
 
 # ===========================================================================
-# check_level2_standards_complete
+# check_level2_standards_complete — REMOVED
 # ===========================================================================
-
-
-class TestCheckLevel2StandardsComplete:
-    def test_blocks_edit_when_level2_missing(self):
-        session_id = "SESSION-TEST-L2-001"
-        raw_trace = {"pipeline": [{"step": "LEVEL_1_CONTEXT"}, {"step": "LEVEL_1_SESSION"}]}
-
-        with (
-            patch.object(pte, "get_current_session_id", return_value=session_id),
-            patch.object(pte, "_load_raw_flow_trace", return_value=raw_trace),
-            patch("os.path.getmtime", return_value=time.time()),
-        ):
-            hints, blocks = pte.check_level2_standards_complete("Edit")
-        assert blocks, "Edit should be blocked when Level 2 step is missing"
-        assert "Level 2" in blocks[0]
-
-    def test_allows_edit_when_level2_present(self):
-        session_id = "SESSION-TEST-L2-002"
-        raw_trace = {
-            "pipeline": [
-                {"step": "LEVEL_1_CONTEXT"},
-                {"step": "LEVEL_1_SESSION"},
-                {"step": "LEVEL_2_STANDARDS"},
-            ]
-        }
-
-        with (
-            patch.object(pte, "get_current_session_id", return_value=session_id),
-            patch.object(pte, "_load_raw_flow_trace", return_value=raw_trace),
-        ):
-            hints, blocks = pte.check_level2_standards_complete("Edit")
-        assert not blocks
+# Level 2 standards enforcement was purged in v1.16.0 (commit 937c9ee).
+# Level 2 policies are now data-only files under policies/02-standards-system/
+# with no runtime enforcer. See GitHub issue #206 for the purge history; the
+# TestCheckLevel2StandardsComplete class and its 2 tests were removed.
 
 
 # ===========================================================================
