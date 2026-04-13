@@ -145,17 +145,25 @@ sys.modules[_policies_pkg_name] = _policies_mod
 
 
 def _load_submodule(filename, subpkg=None):
-    """Load a pre_tool_enforcer submodule with proper package context."""
+    """Load a pre_tool_enforcer submodule with proper package context.
+
+    Python 3.13 emits 'DeprecationWarning: __package__ != __spec__.parent'
+    and Python 3.14 makes it a hard ImportError. Fix (issue #208):
+    - Do NOT set __package__ manually — the spec machinery derives it
+      correctly from the dotted module name passed to spec_from_file_location.
+    - Do NOT pass submodule_search_locations=[] — that empty-list hint
+      confuses relative-import resolution inside child modules (it tells
+      Python the module is a leaf even when the spec.name implies it has
+      a parent), which in turn yields the __package__/__spec__.parent
+      mismatch for any file using 'from ..x import y'.
+    """
     _sub_path = _PKG_DIR / filename
     if subpkg:
         mod_name = _PKG_NAME + "." + subpkg + "." + Path(filename).stem
-        pkg_name = _PKG_NAME + "." + subpkg
     else:
         mod_name = _PKG_NAME + "." + Path(filename).stem
-        pkg_name = _PKG_NAME
-    _sub_spec = _pkg_ilu.spec_from_file_location(mod_name, str(_sub_path), submodule_search_locations=[])
+    _sub_spec = _pkg_ilu.spec_from_file_location(mod_name, str(_sub_path))
     _sub_mod = _pkg_ilu.module_from_spec(_sub_spec)
-    _sub_mod.__package__ = pkg_name
     sys.modules[mod_name] = _sub_mod
     _sub_spec.loader.exec_module(_sub_mod)
     return _sub_mod
