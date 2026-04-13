@@ -58,35 +58,64 @@ if _SCRIPTS_DIR not in sys.path:
 
 
 class TestStepTimeout(unittest.TestCase):
-    """Tests for StepTimeout and run_with_timeout."""
+    """Tests for StepTimeout and run_with_timeout.
+
+    v1.13.0 removed Steps 1-7 from the pipeline; v1.15.2 removed the
+    corresponding fallback_step1/2/5/7 helpers. The active step set is
+    now: Pre-0 (0), Step 0, Steps 8-14. Tests have been rewritten to
+    exercise only the active step set and the surviving public API
+    (StepTimeout, run_with_timeout, STEP_TIMEOUTS).
+    """
+
+    # Canonical active Level 3 step numbers per CLAUDE.md v1.16.1
+    # (Pre-0 is represented as step 0; Step 0 shares the same slot)
+    ACTIVE_STEPS = [0, 8, 9, 10, 11, 12, 13, 14]
 
     def setUp(self):
-        from langgraph_engine.timeout_wrapper import (
-            STEP_TIMEOUTS,
-            StepTimeout,
-            fallback_step2,
-            fallback_step7,
-            run_with_timeout,
-        )
+        from langgraph_engine.timeout_wrapper import STEP_TIMEOUTS, StepTimeout, run_with_timeout
 
         self.StepTimeout = StepTimeout
         self.run_with_timeout = run_with_timeout
         self.STEP_TIMEOUTS = STEP_TIMEOUTS
-        self.fallback_step2 = fallback_step2
-        self.fallback_step7 = fallback_step7
 
     def test_step_timeouts_coverage(self):
-        """Active Level 3 steps (Pre-0, Step 0, Steps 8-14) should have configured timeouts."""
-        for step_num in range(1, 15):
-            self.assertIn(step_num, self.STEP_TIMEOUTS, f"Missing timeout for Step {step_num}")
+        """All active Level 3 steps must have a configured timeout."""
+        for step_num in self.ACTIVE_STEPS:
+            self.assertIn(
+                step_num,
+                self.STEP_TIMEOUTS,
+                f"Missing timeout for Step {step_num}",
+            )
             self.assertGreater(self.STEP_TIMEOUTS[step_num], 0)
 
+    def test_no_dead_step_timeouts(self):
+        """Purged steps (1-7) must NOT appear in STEP_TIMEOUTS."""
+        for step_num in range(1, 8):
+            self.assertNotIn(
+                step_num,
+                self.STEP_TIMEOUTS,
+                f"Dead step {step_num} should not have a timeout entry",
+            )
+
     def test_canonical_step_timeouts(self):
-        """Specific steps must meet spec requirements."""
-        # LLM-heavy steps use 900s to allow LLM calls to complete without timeout.
-        # Steps without LLM calls use shorter durations (120s).
-        self.assertEqual(self.STEP_TIMEOUTS[2], 900, "Step 2 should be 900s (Plan Execution - LLM loop)")
-        self.assertEqual(self.STEP_TIMEOUTS[7], 120, "Step 7 should be 120s (local formatting, no LLM)")
+        """Specific active steps must meet spec requirements."""
+        # LLM-heavy steps use 900s to allow LLM calls to complete.
+        # Network/file-I/O steps use shorter durations (120s).
+        self.assertEqual(
+            self.STEP_TIMEOUTS[0],
+            900,
+            "Step 0 (Task Analysis - LLM) should be 900s",
+        )
+        self.assertEqual(
+            self.STEP_TIMEOUTS[10],
+            900,
+            "Step 10 (Implementation - LLM) should be 900s",
+        )
+        self.assertEqual(
+            self.STEP_TIMEOUTS[14],
+            120,
+            "Step 14 (Final Summary - local) should be 120s",
+        )
 
     def test_fast_function_returns_result(self):
         """Function completing within timeout should return its result."""
@@ -94,7 +123,7 @@ class TestStepTimeout(unittest.TestCase):
         def fast():
             return {"status": "ok", "value": 99}
 
-        result = self.run_with_timeout(fn=fast, step_number=1, fallback={"status": "fallback"})
+        result = self.run_with_timeout(fn=fast, step_number=9, fallback={"status": "fallback"})
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["value"], 99)
 
@@ -125,19 +154,13 @@ class TestStepTimeout(unittest.TestCase):
 
         result = self.run_with_timeout(
             fn=failing,
-            step_number=3,
+            step_number=9,
             fallback={"status": "error_fallback"},
         )
         # Should not raise - should return error result
         self.assertIsNotNone(result)
         self.assertFalse(result.get("timed_out", True))  # Not a timeout, but an error
         self.assertIn("error", result)
-
-    def test_fallback_step2_has_phases(self):
-        """fallback_step2() must have a phases list."""
-        fb = self.fallback_step2()
-        self.assertIn("phases", fb)
-        self.assertIsInstance(fb["phases"], list)
 
     def test_run_with_timeout_custom_timeout(self):
         """custom_timeout parameter overrides STEP_TIMEOUTS lookup."""
@@ -149,10 +172,20 @@ class TestStepTimeout(unittest.TestCase):
 
         result = self.run_with_timeout(
             fn=counted,
-            step_number=1,
+            step_number=9,
             custom_timeout=10,
         )
         self.assertEqual(result["counted"], 1)
+
+    def test_run_with_timeout_unknown_step_uses_default(self):
+        """Unknown step_number must fall back to default timeout without KeyError."""
+
+        def quick():
+            return {"ok": True}
+
+        # Step 99 is not in STEP_TIMEOUTS; the wrapper uses 60s default.
+        result = self.run_with_timeout(fn=quick, step_number=99, fallback={"ok": False})
+        self.assertEqual(result["ok"], True)
 
 
 # ---------------------------------------------------------------------------
