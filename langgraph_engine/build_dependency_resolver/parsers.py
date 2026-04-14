@@ -7,8 +7,10 @@ Windows-safe: ASCII only.
 
 # ruff: noqa: F821
 
+import functools
 import json
 import logging
+import os
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -157,14 +159,53 @@ def _read_pyproject_deps(root: Path, build_files: List[str]) -> List[Dict]:
                             }
                         )
             else:
-                # Regex fallback for Python 3.8/3.9/3.10 without tomli
+                # Regex fallback for Python 3.8/3.9/3.10 without tomli.
+                # Scope-limited (D9): only extract deps from the [project]
+                # dependencies array; stop at the next bare [section] header.
                 content = path.read_text(encoding="utf-8", errors="replace")
-                # Match quoted dependency strings under [project] dependencies
-                for m in re.finditer(r'"([a-zA-Z0-9_.-]+[^"]*)"', content):
-                    parsed = _parse_req_line(m.group(1))
-                    if parsed and parsed["name"] not in seen:
-                        seen.add(parsed["name"])
-                        deps.append(parsed)
+                in_project_section = False
+                in_deps_array = False
+                for line in content.splitlines():
+                    stripped = line.strip()
+                    # Detect [project] section header
+                    if re.match(r"^\[project\]\s*$", stripped):
+                        in_project_section = True
+                        continue
+                    # Any new bare [section] ends [project] scope
+                    if stripped.startswith("[") and not stripped.startswith("[["):
+                        in_project_section = False
+                        in_deps_array = False
+                        continue
+                    if not in_project_section:
+                        continue
+                    # Detect dependencies = [ array start inside [project]
+                    if re.match(r"^dependencies\s*=\s*\[", stripped):
+                        in_deps_array = True
+                        # May have first dep on same line after [
+                        rest = re.split(r"\[", stripped, maxsplit=1)[1]
+                        for m in re.finditer(r'"([^"]+)"', rest):
+                            val = m.group(1)
+                            # D9 guards: skip :: (extras), :// (URLs), bare whitespace
+                            if "::" in val or "://" in val or not val.strip():
+                                continue
+                            parsed = _parse_req_line(val)
+                            if parsed and parsed["name"] not in seen:
+                                seen.add(parsed["name"])
+                                deps.append(parsed)
+                        if "]" in rest:
+                            in_deps_array = False
+                        continue
+                    if in_deps_array:
+                        if "]" in stripped:
+                            in_deps_array = False
+                        for m in re.finditer(r'"([^"]+)"', stripped):
+                            val = m.group(1)
+                            if "::" in val or "://" in val or not val.strip():
+                                continue
+                            parsed = _parse_req_line(val)
+                            if parsed and parsed["name"] not in seen:
+                                seen.add(parsed["name"])
+                                deps.append(parsed)
 
         except Exception as exc:
             logger.debug("[BuildDepResolver] pyproject.toml parse error: %s", exc)
@@ -181,7 +222,7 @@ def _parse_req_line(line: str) -> Optional[Dict]:
     line = line.strip()
     # Strip inline comments
     if "#" in line:
-        line = line[: line.index("#")].strip()
+        line = re.split(r"\s+#", line, maxsplit=1)[0].strip()
     if not line:
         return None
     # Skip options (-r, -c, --index-url, etc.)
@@ -239,13 +280,46 @@ def _parse_maven_deps(root: Path, build_files: List[str]) -> List[Dict]:
     return deps
 
 
+_GRADLE_SCOPES = (
+    "implementation",
+    "api",
+    "compile",
+    "testImplementation",
+    "runtimeOnly",
+    "compileOnly",
+    "annotationProcessor",
+    "kapt",
+    "testRuntimeOnly",
+)
+
+
 def _parse_gradle_deps(root: Path, build_files: List[str]) -> List[Dict]:
-    """Parse build.gradle for Gradle dependencies (best-effort line parsing)."""
+    """Parse build.gradle / build.gradle.kts for Gradle dependencies.
+
+    Supports three declaration styles (D11):
+      1. String literal:  implementation 'group:artifact:1.0'
+      2. Map-style:       implementation group: 'g', name: 'a', version: '1.0'
+      3. Version catalog: implementation libs.some.alias
+    """
     deps: List[Dict] = []
     seen: set = set()
 
+    scope_alts = "|".join(re.escape(s) for s in _GRADLE_SCOPES)
+
+    # Style 1: quoted coordinate string
     dep_pattern = re.compile(
-        r"""(?:implementation|api|compile|testImplementation|runtimeOnly|compileOnly)\s*['"(]([^'")\s]+)['")]""",
+        r"""(?:%s)\s*['"(]([^'")\s]+)['")]""" % scope_alts,
+        re.IGNORECASE,
+    )
+    # Style 2: map-style  group: 'x', name: 'y', version: 'z'
+    map_pattern = re.compile(
+        r"""(?:%s)\s+group\s*:\s*['"]([^'"]+)['"]\s*,\s*name\s*:\s*['"]([^'"]+)['"]\s*(?:,\s*version\s*:\s*['"]([^'"]+)['"])?"""
+        % scope_alts,
+        re.IGNORECASE,
+    )
+    # Style 3: version catalog alias  libs.<alias>
+    libs_pattern = re.compile(
+        r"""(?:%s)\s+libs\.([A-Za-z0-9_.]+)""" % scope_alts,
         re.IGNORECASE,
     )
 
@@ -255,15 +329,34 @@ def _parse_gradle_deps(root: Path, build_files: List[str]) -> List[Dict]:
             continue
         try:
             content = path.read_text(encoding="utf-8", errors="replace")
+
+            # Style 1
             for m in dep_pattern.finditer(content):
                 coord = m.group(1).strip()
-                # Maven-style: group:artifact:version
                 parts = coord.split(":")
                 name = ":".join(parts[:2]) if len(parts) >= 2 else parts[0]
                 version = parts[2] if len(parts) >= 3 else "*"
                 if name not in seen:
                     seen.add(name)
                     deps.append({"name": name, "version": version, "source": "build.gradle"})
+
+            # Style 2
+            for m in map_pattern.finditer(content):
+                group, artifact = m.group(1).strip(), m.group(2).strip()
+                version = (m.group(3) or "*").strip()
+                name = "%s:%s" % (group, artifact)
+                if name not in seen:
+                    seen.add(name)
+                    deps.append({"name": name, "version": version, "source": "build.gradle"})
+
+            # Style 3 (catalog alias — no version available at parse time)
+            for m in libs_pattern.finditer(content):
+                alias = m.group(1).strip()
+                name = "libs.%s" % alias
+                if name not in seen:
+                    seen.add(name)
+                    deps.append({"name": name, "version": "*", "source": "build.gradle(catalog)"})
+
         except Exception as exc:
             logger.debug("[BuildDepResolver] build.gradle parse error: %s", exc)
 
@@ -342,33 +435,70 @@ def _parse_go_deps(root: Path, build_files: List[str]) -> List[Dict]:
 
 
 def _parse_cargo_deps(root: Path, build_files: List[str]) -> List[Dict]:
-    """Parse Cargo.toml for Rust crate dependencies."""
+    """Parse Cargo.toml for Rust crate dependencies.
+
+    Prefers tomllib/tomli structured parse (D10) for correctness;
+    falls back to line-by-line text parse when neither is available.
+    """
     deps: List[Dict] = []
     seen: set = set()
+
+    # Try to import a TOML parser once
+    import importlib as _importlib
+
+    _toml = None
+    for _mod in ("tomllib", "tomli"):
+        try:
+            _toml = _importlib.import_module(_mod)
+            break
+        except ImportError:
+            pass
+
+    _dep_sections = ("dependencies", "dev-dependencies", "build-dependencies")
 
     for bf in build_files:
         path = Path(bf)
         if not path.is_file() or path.name != "Cargo.toml":
             continue
         try:
-            content = path.read_text(encoding="utf-8", errors="replace")
-            in_deps = False
-            for line in content.splitlines():
-                stripped = line.strip()
-                if stripped in ("[dependencies]", "[dev-dependencies]", "[build-dependencies]"):
-                    in_deps = True
-                    continue
-                if stripped.startswith("[") and "dependencies" not in stripped:
-                    in_deps = False
-                if in_deps and "=" in stripped and not stripped.startswith("#"):
-                    name = stripped.split("=")[0].strip().strip('"').strip("'")
-                    ver_part = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-                    # Handle table format: { version = "1.0" }
-                    ver_match = re.search(r'version\s*=\s*["\']([^"\']+)', ver_part)
-                    version = ver_match.group(1) if ver_match else ver_part.strip("{} ")
-                    if name and name not in seen:
+            if _toml is not None:
+                # Structured parse (D10)
+                with open(path, "rb") as f:
+                    data = _toml.load(f)
+                for section in _dep_sections:
+                    section_data = data.get(section, {})
+                    if not isinstance(section_data, dict):
+                        continue
+                    for name, spec in section_data.items():
+                        if not name or name in seen:
+                            continue
                         seen.add(name)
+                        if isinstance(spec, str):
+                            version = spec
+                        elif isinstance(spec, dict):
+                            version = spec.get("version", "*") or "*"
+                        else:
+                            version = "*"
                         deps.append({"name": name, "version": version, "source": "Cargo.toml"})
+            else:
+                # Line-by-line fallback
+                content = path.read_text(encoding="utf-8", errors="replace")
+                in_deps = False
+                for line in content.splitlines():
+                    stripped = line.strip()
+                    if stripped in ("[dependencies]", "[dev-dependencies]", "[build-dependencies]"):
+                        in_deps = True
+                        continue
+                    if stripped.startswith("[") and "dependencies" not in stripped:
+                        in_deps = False
+                    if in_deps and "=" in stripped and not stripped.startswith("#"):
+                        name = stripped.split("=")[0].strip().strip('"').strip("'")
+                        ver_part = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                        ver_match = re.search(r'version\s*=\s*["\']([^"\']+)', ver_part)
+                        version = ver_match.group(1) if ver_match else ver_part.strip("{} ")
+                        if name and name not in seen:
+                            seen.add(name)
+                            deps.append({"name": name, "version": version, "source": "Cargo.toml"})
         except Exception as exc:
             logger.debug("[BuildDepResolver] Cargo.toml parse error: %s", exc)
 
@@ -378,6 +508,45 @@ def _parse_cargo_deps(root: Path, build_files: List[str]) -> List[Dict]:
 # ---------------------------------------------------------------------------
 # Private helpers - classification and source lookup
 # ---------------------------------------------------------------------------
+
+
+@functools.lru_cache(maxsize=512)
+def _network_classify(name: str, build_system: str) -> Optional[str]:
+    """Optional PyPI / crates.io / npmjs network lookup for unknown deps (D16).
+
+    Returns "external_known" if the package exists on the public registry,
+    None otherwise (network unavailable, package not found, or lookup disabled).
+
+    Controlled by env var BDR_NETWORK_CLASSIFY=1 (default: disabled).
+    Results are cached via lru_cache to avoid redundant HTTP calls.
+    """
+    if not name or len(name) > 200:
+        return None
+    if not (
+        build_system in ("python-pip", "python-pyproject", "python-setup", "python-pipenv")
+        or build_system == "cargo"
+        or build_system == "npm"
+    ):
+        return None
+    try:
+        import urllib.request
+
+        if build_system in ("python-pip", "python-pyproject", "python-setup", "python-pipenv"):
+            url = "https://pypi.org/pypi/%s/json" % name
+        elif build_system == "cargo":
+            url = "https://crates.io/api/v1/crates/%s" % name
+        elif build_system == "npm":
+            url = "https://registry.npmjs.org/%s/latest" % name
+        else:
+            return None
+
+        req = urllib.request.Request(url, headers={"User-Agent": "claude-workflow-engine/bdr"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            if resp.status == 200:
+                return "external_known"
+    except Exception:
+        pass
+    return None
 
 
 def _classify_dep(root: Path, dep: Dict, build_system: str) -> str:
@@ -435,9 +604,19 @@ def _classify_dep(root: Path, dep: Dict, build_system: str) -> str:
 
     # Short names without path separators are likely external but ambiguous
     if len(name) <= 3 or ("/" not in name and "." not in name and ":" not in name):
+        # D16: optional network lookup to confirm before returning unknown
+        if os.environ.get("BDR_NETWORK_CLASSIFY") == "1":
+            net = _network_classify(name, build_system)
+            if net is not None:
+                return net
         return "external_unknown"
 
     # Longer unknown names with path-like structure may be internal
+    # D16: try network lookup before giving up
+    if os.environ.get("BDR_NETWORK_CLASSIFY") == "1":
+        net = _network_classify(name, build_system)
+        if net is not None:
+            return net
     return "needs_user_input"
 
 
@@ -448,8 +627,6 @@ def _find_local_source(root: Path, dep_name: str) -> Optional[Path]:
     Set env var BDR_ALLOW_PARENT_SEARCH=1 to also search root.parent
     (not recommended -- can cause false positives and slow scans).
     """
-    import os
-
     # Normalize: replace hyphens/dots with underscores for directory lookup
     candidates = [
         dep_name,
@@ -527,9 +704,6 @@ def _dir_has_code_uncached(path_str: str) -> bool:
     except Exception:
         pass
     return False
-
-
-import functools  # noqa: E402
 
 
 @functools.lru_cache(maxsize=1024)
