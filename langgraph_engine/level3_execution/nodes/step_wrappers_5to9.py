@@ -1,4 +1,3 @@
-# ruff: noqa: F821
 """Level 3 v2 step node wrapper.
 
 Extracted from level3_execution/subgraph.py for modularity.
@@ -9,6 +8,7 @@ CHANGE LOG (v1.13.0):
   Steps 8 and 9 are unchanged.
   _build_retry_history_context is kept (consumed by step10_implementation_note).
 """
+
 import os
 from typing import Any, Dict
 
@@ -23,6 +23,51 @@ try:
     from ...flow_state import FlowState
 except ImportError:
     FlowState = dict  # type: ignore[misc,assignment]
+
+# _run_step is defined in the parent subgraph module.  Imported via try/except
+# because subgraph.py imports this module (circular chain); the fallback keeps
+# the module importable in isolation (unit tests, static analysis).
+try:
+    from ..subgraph import _run_step
+except ImportError:  # pragma: no cover
+
+    def _run_step(step_number, label, fn, state, fallback_result=None):  # type: ignore[misc]
+        try:
+            return fn(state)
+        except Exception as exc:
+            logger.error("_run_step fallback caught exception in Step %s: %s", step_number, exc)
+            return fallback_result or {}
+
+
+try:
+    from ...core.infrastructure import get_infra
+except ImportError:  # pragma: no cover
+
+    def get_infra(state):  # type: ignore[misc]
+        return {"metrics": None, "error_logger": None}
+
+
+try:
+    from .step_implementations_5to9 import step8_github_issue_creation, step9_branch_creation
+except ImportError as _imp_err:  # pragma: no cover
+    logger.error("step_implementations_5to9 import failed: %s", _imp_err)
+
+    def step8_github_issue_creation(state):  # type: ignore[misc]
+        return {
+            "step8_issue_id": "0",
+            "step8_issue_url": "",
+            "step8_issue_created": False,
+            "step8_status": "ERROR",
+            "step8_error": "step_implementations_5to9 unavailable",
+        }
+
+    def step9_branch_creation(state):  # type: ignore[misc]
+        return {
+            "step9_branch_name": "",
+            "step9_branch_created": False,
+            "step9_status": "ERROR",
+            "step9_error": "step_implementations_5to9 unavailable",
+        }
 
 
 # REMOVED: step5_skill_selection_node -- collapsed into Step 0 template (v1.13.0)

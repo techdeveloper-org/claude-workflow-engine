@@ -1,9 +1,9 @@
-# ruff: noqa: F821
 """Level 3 v2 step node wrapper.
 
 Extracted from level3_execution/subgraph.py for modularity.
 Windows-safe: ASCII only.
 """
+
 import os
 from pathlib import Path
 from typing import Any, Dict
@@ -29,6 +29,20 @@ try:
     _LEVEL3V2_SESSION_LOGS_DIR = get_session_logs_dir()
 except ImportError:
     _LEVEL3V2_SESSION_LOGS_DIR = Path.home() / ".claude" / "logs" / "sessions"
+
+# _run_step is defined in the parent subgraph module.  Imported via try/except
+# because subgraph.py imports this module (circular chain); the fallback keeps
+# the module importable in isolation (unit tests, static analysis).
+try:
+    from ..subgraph import _run_step
+except ImportError:  # pragma: no cover
+
+    def _run_step(step_number, label, fn, state, fallback_result=None):  # type: ignore[misc]
+        try:
+            return fn(state)
+        except Exception as exc:
+            logger.error("_run_step fallback caught exception in Step %s: %s", step_number, exc)
+            return fallback_result or {}
 
 
 def step0_0_project_context_node(state: FlowState) -> Dict[str, Any]:

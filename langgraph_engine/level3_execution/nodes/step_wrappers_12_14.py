@@ -1,9 +1,9 @@
-# ruff: noqa: F821
 """Level 3 v2 step node wrapper.
 
 Extracted from level3_execution/subgraph.py for modularity.
 Windows-safe: ASCII only.
 """
+
 from typing import Any, Dict
 
 try:
@@ -17,6 +17,58 @@ try:
     from ...flow_state import FlowState
 except ImportError:
     FlowState = dict  # type: ignore[misc,assignment]
+
+# _run_step is defined in the parent subgraph module.  Imported via try/except
+# because subgraph.py imports this module (circular chain); the fallback keeps
+# the module importable in isolation (unit tests, static analysis).
+try:
+    from ..subgraph import _run_step
+except ImportError:  # pragma: no cover
+
+    def _run_step(step_number, label, fn, state, fallback_result=None):  # type: ignore[misc]
+        try:
+            return fn(state)
+        except Exception as exc:
+            logger.error("_run_step fallback caught exception in Step %s: %s", step_number, exc)
+            return fallback_result or {}
+
+
+try:
+    from ...core.infrastructure import get_infra
+except ImportError:  # pragma: no cover
+
+    def get_infra(state):  # type: ignore[misc]
+        return {"metrics": None, "error_logger": None}
+
+
+try:
+    from .step_implementations_12_14 import (
+        step12_issue_closure,
+        step13_project_documentation_update,
+        step14_final_summary_generation,
+    )
+except ImportError as _imp_err:  # pragma: no cover
+    logger.error("step_implementations_12_14 import failed: %s", _imp_err)
+
+    def step12_issue_closure(state):  # type: ignore[misc]
+        return {
+            "step12_issue_closed": False,
+            "step12_status": "ERROR",
+            "step12_error": "step_implementations_12_14 unavailable",
+        }
+
+    def step13_project_documentation_update(state):  # type: ignore[misc]
+        return {
+            "step13_updates_prepared": False,
+            "step13_documentation_status": "ERROR",
+            "step13_error": "step_implementations_12_14 unavailable",
+        }
+
+    def step14_final_summary_generation(state):  # type: ignore[misc]
+        return {
+            "step14_status": "ERROR",
+            "step14_error": "step_implementations_12_14 unavailable",
+        }
 
 
 def step12_issue_closure_node(state: FlowState) -> Dict[str, Any]:
