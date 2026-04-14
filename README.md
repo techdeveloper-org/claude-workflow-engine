@@ -2,7 +2,7 @@
 
 **The first AI tool that follows full SDLC** — from task analysis to merged PR, automatically.
 
-**Version:** 1.16.1 | **Status:** Alpha | **Last Updated:** 2026-04-07
+**Version:** 1.16.1 | **Status:** Alpha | **Last Updated:** 2026-04-14
 
 ---
 
@@ -388,12 +388,12 @@ Four separate production bugs were uncovered during this cleanup, all hidden by 
 
 ### Still Open
 
-| # | Issue | Severity | Category |
-|---|-------|----------|----------|
-| [#209](../../issues/209) | Deferred build_dependency_resolver defects D9, D10, D11, D13, D16 (parser edge cases for Cargo, Gradle, pyproject, PEP 508 requirements, network classification) | MEDIUM | enhancement — tracking |
-| [#211](../../issues/211) | `step_wrappers_10_11.py` references undefined `step10_implementation_execution` + `step11_pull_request_review` — Steps 10/11 silently fall back to ERROR status in production | HIGH | backend |
+All tracked issues from the cleanup sprint are now closed. See [CHANGELOG.md](CHANGELOG.md) for full history.
 
-#211 is the most significant remaining gap: Steps 10 (Implementation Execution) and 11 (PR + Code Review) are no-ops in production because the inner execution functions were removed in a prior refactor and never restored. The outer wrappers catch the `NameError` via `_run_step` and return the fallback_result. Fixing #211 requires locating or reimplementing the deleted execution logic.
+| # | Issue | Severity | Status |
+|---|-------|----------|--------|
+| [#211](../../issues/211) | Step 10/11 impl functions missing | HIGH | **Closed** — `05683fd` |
+| [#209](../../issues/209) | BDR parser edge cases D9-D16 | MEDIUM | **Closed** — `05683fd` |
 
 ### Production Readiness Checklist
 
@@ -403,7 +403,8 @@ Four separate production bugs were uncovered during this cleanup, all hidden by 
 | No test collection errors | 🟢 0 errors | — |
 | Call graph pipeline verified | 🟢 Verified | `build_dependency_resolver` + `call_graph_analyzer` + `graph_model.compute_call_paths` all green |
 | UML pipeline verified | 🟢 Verified | 67/67 UML tests pass |
-| MCP integration verified | 🟡 Skipped | Tests should live in each separate repo under techdeveloper-org |
+| Step 10/11 production path | 🟢 Restored | `05683fd` — impl functions back, Steps 10/11 execute correctly |
+| MCP integration verified | 🟡 Skipped | Tests live in each separate repo under techdeveloper-org |
 | Depth issue fully resolved | 🟢 Fully fixed | Both halves resolved (`f27cae0` + `bbef042`) |
 | Python 3.13 compat | 🟢 Clean | No DeprecationWarnings from hooks |
 | Python 3.14 ready | 🟢 Ready | Forward-compatible with 3.14 |
@@ -411,9 +412,7 @@ Four separate production bugs were uncovered during this cleanup, all hidden by 
 | Secrets manager + audit log | 🟢 Implemented | Code exists; runtime verification pending |
 | Kubernetes manifests | 🟢 Present | `k8s/` directory with deployment, service, HPA |
 | CI pipeline | 🟡 Manual-only | `workflow_dispatch` only per `.github/workflows/` |
-| Step 10/11 production path | 🔴 Broken | [#211](../../issues/211) — silent fallback to ERROR status |
-
-**To reach production-ready:** fix [#211](../../issues/211) (restore Step 10/11 execution functions). The other open issue ([#209](../../issues/209)) is parser edge-case cleanup that does not block shipping.
+| `# ruff: noqa: F821` audit | 🟡 In progress | Remaining file-level suppressors being converted to targeted inline suppressors |
 
 ---
 
@@ -460,4 +459,32 @@ Key environment variables (see `.env.example` for full list):
 
 ---
 
-**Last Updated:** 2026-04-07
+## Roadmap
+
+### v1.17.0 — Code Quality & Open Source Readiness
+- [ ] Remove all remaining `# ruff: noqa: F821` file-level suppressors; convert to targeted inline suppressors or fix missing imports
+- [ ] Make all 13 MCP server repos public under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories)
+- [ ] Add GitHub Discussions for community Q&A
+
+### v1.18.0 — Runtime Verification
+- [ ] End-to-end test: hook mode run on a real task (Steps Pre-0 → Step 0 → Steps 8-9)
+- [ ] End-to-end test: full mode run (all 8 active steps with `CLAUDE_HOOK_MODE=0`)
+- [ ] Runtime verification of health server, Prometheus metrics, and OpenTelemetry tracing
+- [ ] Verify Jira + Figma lifecycle integration with live credentials
+
+### v1.19.0 — CI & Stability
+- [ ] Enable automatic CI trigger on push to `main` (currently `workflow_dispatch` only)
+- [ ] Add integration test suite that tests the live pipeline with a mock GitHub repo
+- [ ] Publish to PyPI as `claude-workflow-engine`
+
+### Future / Under Consideration
+- GitHub App install flow (so users don't need to set `GITHUB_TOKEN` manually)
+- Web dashboard for pipeline run history (leveraging `langgraph_engine/metrics_aggregator.py`)
+- Additional parser language support (Ruby, Go, C++) in the call graph builder
+- YAML-based pipeline configuration (replace env var flags with a single `config.yaml`)
+
+> Have an idea? [Open a feature request](../../issues/new?template=feature_request.md).
+
+---
+
+**Last Updated:** 2026-04-14
