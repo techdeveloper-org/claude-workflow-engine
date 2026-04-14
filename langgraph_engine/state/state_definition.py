@@ -610,3 +610,9 @@ class FlowState(TypedDict, total=False):
     # ===========================================================================
     synthesized_prompt: str  # Comprehensive prompt created from 3-level flow data
     synthesis_metadata: Dict[str, Any]  # Metadata about synthesis (context_level, data_used, etc.)
+
+    # ===========================================================================
+    # RUNTIME VERIFICATION (v1.18.0 -- B-8)
+    # ===========================================================================
+    verification_report: Optional[Dict[str, Any]]  # Full VerificationReport as JSON-serialisable dict
+    verification_violations: Annotated[List[str], _merge_lists]  # Violation messages (appended by parallel checkers)

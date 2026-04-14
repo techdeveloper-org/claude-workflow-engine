@@ -6,6 +6,8 @@ and the user choice / retry loop.
 
 from typing import Literal
 
+from langgraph_engine.runtime_verification.verifier import RuntimeVerifier
+
 from ..flow_state import FlowState, StepKeys
 
 # Must match MAX_LEVEL_MINUS1_ATTEMPTS in subgraphs/level_minus1.py
@@ -18,6 +20,16 @@ def route_after_level_minus1(state: FlowState) -> Literal["ask_level_minus1_fix"
     - If OK: go to Level 1 session loader (level1_session)
     - If FAILED: ask user for recovery (ask_level_minus1_fix)
     """
+    _rv = RuntimeVerifier.get_instance()
+    _rv_violations = _rv.check_level_transition("level_minus1", "level1", state)
+    if _rv_violations:
+        import logging as _logging
+
+        _logging.getLogger(__name__).warning(
+            "[RuntimeVerifier] transition guard violations on level_minus1->level1: %s",
+            _rv_violations,
+        )
+
     status = state.get(StepKeys.LEVEL_MINUS1_STATUS, "FAILED")
     if status == "OK":
         return "level1_session"
@@ -32,6 +44,16 @@ def route_after_level_minus1_user_choice(state: FlowState) -> Literal["fix_level
     - 'skip': Continue to Level 1 (session_loader) anyway
     - default: Skip (user will fix manually)
     """
+    _rv = RuntimeVerifier.get_instance()
+    _rv_violations = _rv.check_level_transition("level_minus1", "level1", state)
+    if _rv_violations:
+        import logging as _logging
+
+        _logging.getLogger(__name__).warning(
+            "[RuntimeVerifier] transition guard violations on level_minus1->level1: %s",
+            _rv_violations,
+        )
+
     choice = state.get(StepKeys.LEVEL_MINUS1_USER_CHOICE, "skip")
 
     if choice == "auto-fix":

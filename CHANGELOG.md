@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.18.0] - 2026-04-14
+
+### Added
+- Runtime Verification package (`langgraph_engine/runtime_verification/`)
+- `NodeContract` DSL: `PreconditionSpec`, `PostconditionSpec`, `InvariantSpec`, `Violation`, `NodeContract` dataclasses
+- `RuntimeVerifier` + `NullVerifier` -- Registry + Null Object + Singleton patterns; <5ms per-node overhead
+- `@verify_node(contract)` decorator -- non-invasive wrapping, zero overhead when `ENABLE_RUNTIME_VERIFICATION=0`
+- Level transition guards for 4 pipeline boundaries (`level_minus1->level1`, `level1->level3`, `pre_analysis->step0`, `step0->step8`)
+- `schema_verifier`: `verify_orchestration_prompt()`, `verify_orchestrator_result()` for LLM output validation
+- `VerificationReport` dataclass with `to_dict()` for JSON-serialisable FlowState storage
+- `QualityGate` Gate 5: `verification_gate` -- non-strict by default, halts on `STRICT_RUNTIME_VERIFICATION=1`
+- `FlowState` keys: `verification_report: Optional[Dict]`, `verification_violations: List[str]`
+- Env vars: `ENABLE_RUNTIME_VERIFICATION=0`, `STRICT_RUNTIME_VERIFICATION=0`, `VERIFICATION_LOG_LEVEL=WARNING`
+
+### Architecture
+- ADR-003: Decorator pattern over node subclassing
+- ADR-004: Opt-in default (`ENABLE_RUNTIME_VERIFICATION=0`)
+- ADR-005: No LLM/network/I/O calls in verifier (enforces <5ms latency contract)
+
+---
+
 ## [1.16.1] - 2026-04-07
 
 ### Changed — Diagram Output Restructure + Configurable Paths

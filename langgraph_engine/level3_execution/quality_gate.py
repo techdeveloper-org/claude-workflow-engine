@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -508,6 +509,59 @@ def _evaluate_tests_exist_gate(
     return gate
 
 
+def _evaluate_verification_gate(
+    state: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Gate 5: Runtime Verification. Skipped entirely when ENABLE_RUNTIME_VERIFICATION != '1'.
+
+    Reads the verification_report stored in state by the runtime verifier node.
+    In non-strict mode (default) violations produce a warning but do not block.
+    In strict mode (STRICT_RUNTIME_VERIFICATION=1) violations block the merge.
+
+    Returns a gate result dict.
+    """
+    gate: Dict[str, Any] = {
+        "passed": True,
+        "reason": "",
+        "violation_count": 0,
+        "violations": [],
+    }
+
+    if os.getenv("ENABLE_RUNTIME_VERIFICATION", "0") != "1":
+        gate["reason"] = "verification gate disabled"
+        return gate
+
+    try:
+        report = state.get("verification_report")
+        if report is None:
+            gate["reason"] = "no verification report -- skipping"
+            return gate
+
+        violations = report.get("violations", [])
+        gate["violation_count"] = len(violations)
+        gate["violations"] = violations
+
+        if violations:
+            if os.getenv("STRICT_RUNTIME_VERIFICATION", "0") == "1":
+                gate["passed"] = False
+                gate["reason"] = "Runtime verification: %d violation(s) detected" % len(violations)
+            else:
+                logger.warning(
+                    "[QualityGate] verification_gate: %d violation(s) present (non-strict mode)",
+                    len(violations),
+                )
+                gate["reason"] = "verification: %d violation(s) (non-strict mode -- not blocking)" % len(violations)
+        else:
+            gate["reason"] = "verification: 0 violations"
+
+    except Exception as exc:
+        logger.warning("quality_gate: verification gate evaluation failed: %s", exc)
+        gate["passed"] = True
+        gate["reason"] = "Gate evaluation error (fail-safe pass): %s" % exc
+
+    return gate
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -538,6 +592,8 @@ def evaluate_quality_gate(
                                      "details": [], ...},
                 "tests_exist": {"passed": bool, "reason": str,
                                 "modified_without_tests": [], ...},
+                "verification": {"passed": bool, "reason": str,
+                                 "violation_count": int, "violations": [], ...},
             },
             "summary": str,
             "recommendation": str,   # "MERGE" | "FIX_AND_RETRY" | "MANUAL_REVIEW"
@@ -560,17 +616,19 @@ def evaluate_quality_gate(
         effective_config,
     )
 
-    # Run all four gates independently
+    # Run all five gates independently
     sonar_gate = _evaluate_sonar_gate(project_root, state, effective_config, modified_files)
     coverage_gate = _evaluate_coverage_gate(project_root, state, effective_config, modified_files)
     breaking_gate = _evaluate_breaking_changes_gate(state, effective_config)
     tests_gate = _evaluate_tests_exist_gate(project_root, state, effective_config, modified_files)
+    verification_gate = _evaluate_verification_gate(state)
 
     gates = {
         "sonar": sonar_gate,
         "coverage": coverage_gate,
         "breaking_changes": breaking_gate,
         "tests_exist": tests_gate,
+        "verification": verification_gate,
     }
 
     # Determine which gates are blocking
@@ -633,6 +691,7 @@ def generate_gate_report(gate_result: Dict[str, Any]) -> str:
             "coverage": "Coverage",
             "breaking_changes": "Breaking Changes",
             "tests_exist": "Tests Exist",
+            "verification": "Runtime Verification",
         }
         for key, label in gate_display.items():
             result = gates.get(key, {})
@@ -667,6 +726,14 @@ def generate_gate_report(gate_result: Dict[str, Any]) -> str:
                     detail = f"{len(missing)} file(s) missing tests: " + ", ".join(names) + more
                 else:
                     detail = reason
+            elif key == "verification":
+                count = result.get("violation_count", 0)
+                if result.get("reason") == "verification gate disabled":
+                    detail = "Gate disabled (ENABLE_RUNTIME_VERIFICATION != 1)"
+                elif count == 0:
+                    detail = "0 violations"
+                else:
+                    detail = f"{count} violation(s) detected"
             else:
                 detail = reason
 
@@ -823,6 +890,23 @@ def get_fix_suggestions(gate_result: Dict[str, Any]) -> List[Dict[str, str]]:
                         "estimated_effort": "30 min - 2 hours per file",
                     }
                 )
+
+        # --- Verification suggestions ---
+        verification = gates.get("verification", {})
+        if not verification.get("passed", True):
+            count = verification.get("violation_count", 0)
+            suggestions.append(
+                {
+                    "gate": "verification",
+                    "action": (
+                        "Resolve %d runtime verification violation(s) detected in "
+                        "verification_report. Review the violations list and fix "
+                        "the underlying runtime invariant failures before merging." % count
+                    ),
+                    "priority": "HIGH",
+                    "estimated_effort": "1-4 hours",
+                }
+            )
 
     except Exception as exc:
         logger.warning("quality_gate: get_fix_suggestions failed: %s", exc)

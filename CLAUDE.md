@@ -1,7 +1,7 @@
 # Claude Workflow Engine - Project Context
 
 **Project:** Claude Workflow Engine
-**Version:** 1.16.1
+**Version:** 1.18.0
 **Type:** LangGraph Orchestration Pipeline with Call Graph Intelligence + Template Fast-Path
 **Last Updated:** 2026-04-07
 
@@ -297,6 +297,8 @@ All integrations are configurable via environment variables (default: disabled):
 | `ENABLE_RATE_LIMITING` | `0` | Token bucket rate limiting on MCP tool endpoints |
 | `LOG_FORMAT` | `""` | Set to `json` for structured JSON logging (container log aggregation) |
 | `FORCE_GRAPH_REBUILD` | `0` | Force call graph rebuild even if stale flag is False |
+| `ENABLE_RUNTIME_VERIFICATION` | `0` | Enable runtime contract/invariant verification on pipeline nodes |
+| `STRICT_RUNTIME_VERIFICATION` | `0` | If 1, pipeline halts on first CRITICAL verification violation |
 
 ### Integration Lifecycle (Create -> Update -> Close)
 
@@ -429,10 +431,10 @@ See environment variables in `.env.example`:
 <!-- execution-insight- -->
 ## Latest Execution Insight
 
-- **Task**: v1.16.1 -- uml/ + drawio/ moved to project root; UML_OUTPUT_DIR + DRAWIO_OUTPUT_DIR env vars added
+- **Task**: v1.18.0 -- Runtime Verification package implementation
 - **Skill**: python-core
 - **Agent**: python-backend-engineer
-- **Date**: 2026-04-07
+- **Date**: 2026-04-14
 
 ## Dependency Notes
 
