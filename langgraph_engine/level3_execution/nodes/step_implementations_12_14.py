@@ -374,12 +374,32 @@ def step14_final_summary_generation(state: FlowState) -> Dict[str, Any]:
         except Exception as voice_err:
             logger.debug("Voice notification skipped: %s", voice_err)
 
-        return {
+        # Runtime verification report (non-blocking, best-effort)
+        verification_report = None
+        verification_violations = []
+        if os.getenv("ENABLE_RUNTIME_VERIFICATION", "0") == "1":
+            try:
+                from ....runtime_verification.verifier import RuntimeVerifier
+
+                verifier = RuntimeVerifier.get_instance()
+                report = verifier.build_report()
+                if report is not None:
+                    verification_report = report.to_dict()
+                    verification_violations = [v["message"] for v in report.violations]
+                    logger.info("[RuntimeVerifier] Report built: %d violations", len(verification_violations))
+            except Exception as rv_err:
+                logger.warning("[RuntimeVerifier] build_report skipped: %s", rv_err)
+
+        result = {
             "step14_summary": summary,
             "step14_summary_saved": summary_saved,
             "step14_voice_sent": voice_sent,
             "step14_status": "OK",
         }
+        if verification_report is not None:
+            result["verification_report"] = verification_report
+            result["verification_violations"] = verification_violations
+        return result
 
     except Exception as e:
         return {"step14_status": "ERROR", "step14_error": str(e)}

@@ -88,6 +88,21 @@ from .level_minus1 import (
 # Routing functions
 from .routing import route_after_level_minus1, route_after_level_minus1_user_choice, route_after_step11_review
 
+# --- D-2: Runtime Verification wrapping ---
+# verify_node reads ENABLE_RUNTIME_VERIFICATION at decoration time.
+# When the env var is "0" (default), decorator() returns the original function
+# unchanged -- literal zero overhead, no wrapper closure created.
+from .runtime_verification.decorators import verify_node
+from .runtime_verification.node_contracts import ORCHESTRATOR_CONTRACT, PRE_ANALYSIS_CONTRACT, PROMPT_GEN_CONTRACT
+
+# orchestration_pre_analysis_node: callgraph scan before Step 0
+_rv_pre_analysis_node = verify_node(PRE_ANALYSIS_CONTRACT)(orchestration_pre_analysis_node)
+
+# step0_task_analysis_node: runs prompt_gen phase then orchestrator phase internally.
+# Inner wrap: ORCHESTRATOR_CONTRACT (postcondition: orchestrator_result produced).
+# Outer wrap: PROMPT_GEN_CONTRACT (precondition: user_message; postcondition: orchestration_prompt).
+_rv_step0_node = verify_node(PROMPT_GEN_CONTRACT)(verify_node(ORCHESTRATOR_CONTRACT)(step0_task_analysis_node))
+
 
 class PipelineBuilder:
     """Builder for the 3-level LangGraph StateGraph pipeline.
@@ -235,7 +250,7 @@ class PipelineBuilder:
         # Pre-analysis gate: call graph scan
         # Template fast-path (--orchestration-template): jumps directly to level3_step8
         # Normal path: falls through to level3_step0_0 (pre-flight flow)
-        g.add_node("level3_pre_analysis", orchestration_pre_analysis_node)
+        g.add_node("level3_pre_analysis", _rv_pre_analysis_node)
         g.add_edge("level3_init", "level3_pre_analysis")
         g.add_conditional_edges(
             "level3_pre_analysis",
@@ -255,7 +270,7 @@ class PipelineBuilder:
 
         # Step 0: Task Analysis (prompt_gen_expert + orchestrator_agent chain)
         # Produces all step5/6/7 migration fields so Steps 8-14 work correctly.
-        g.add_node("level3_step0", step0_task_analysis_node)
+        g.add_node("level3_step0", _rv_step0_node)
         g.add_edge("level3_step0_1", "level3_step0")
 
         # Step 8: GitHub Issue Creation (runs in both modes)

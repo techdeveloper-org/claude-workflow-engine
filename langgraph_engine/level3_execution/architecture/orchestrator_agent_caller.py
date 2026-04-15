@@ -21,6 +21,26 @@ import tempfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# Schema verifier (best-effort; non-blocking when import fails)
+# ---------------------------------------------------------------------------
+_SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+
+def _verify_result_schema(result):
+    """Return list of error strings from schema_verifier (empty = valid)."""
+    if os.getenv("ENABLE_RUNTIME_VERIFICATION", "0") != "1":
+        return []
+    try:
+        from langgraph_engine.runtime_verification.schema_verifier import verify_orchestrator_result
+
+        return verify_orchestrator_result(result or "")
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
@@ -216,6 +236,15 @@ def main():
         flush=True,
     )
 
+    # Schema verification (non-blocking)
+    schema_errors = _verify_result_schema(llm_response)
+    if schema_errors:
+        print(
+            "[orchestrator_agent_caller] schema warnings: " + "; ".join(schema_errors),
+            file=sys.stderr,
+            flush=True,
+        )
+
     # Parse structured output
     agent_output = _parse_agent_output(llm_response)
     if agent_output:
@@ -229,6 +258,7 @@ def main():
         "llm_response": llm_response,
         "complexity_score": args["complexity_score"],
         "prompt_chars": prompt_len,
+        "schema_warnings": schema_errors,
     }
 
     print(json.dumps(result, ensure_ascii=True))

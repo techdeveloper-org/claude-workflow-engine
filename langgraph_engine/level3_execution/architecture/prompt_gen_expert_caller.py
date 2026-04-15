@@ -21,6 +21,26 @@ import tempfile
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
+# Schema verifier (best-effort; non-blocking when import fails)
+# ---------------------------------------------------------------------------
+_SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+
+def _verify_prompt_schema(prompt):
+    """Return list of error strings from schema_verifier (empty = valid)."""
+    if os.getenv("ENABLE_RUNTIME_VERIFICATION", "0") != "1":
+        return []
+    try:
+        from langgraph_engine.runtime_verification.schema_verifier import verify_orchestration_prompt
+
+        return verify_orchestration_prompt(prompt or "")
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -243,6 +263,15 @@ def main():
     if DEBUG:
         print("[prompt_gen_expert_caller] claude CLI responded", file=sys.stderr, flush=True)
 
+    # Schema verification (non-blocking)
+    schema_errors = _verify_prompt_schema(llm_response)
+    if schema_errors:
+        print(
+            "[prompt_gen_expert_caller] schema warnings: " + "; ".join(schema_errors),
+            file=sys.stderr,
+            flush=True,
+        )
+
     # Try to parse response as JSON (it should be per template instructions)
     parsed_plan = None
     try:
@@ -259,6 +288,7 @@ def main():
         "llm_response": llm_response,
         "parsed_plan": parsed_plan,
         "complexity_score": args["complexity_score"],
+        "schema_warnings": schema_errors,
     }
 
     print(json.dumps(result, ensure_ascii=True))
