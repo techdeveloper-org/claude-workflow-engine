@@ -16,15 +16,6 @@ All existing policy scripts continue to work unchanged via PolicyNodeAdapter.
 
 __version__ = "1.19.1"
 
-# Eager submodule imports to bind attributes on the `langgraph_engine` package.
-# Required for unittest.mock.patch("langgraph_engine.<submodule>...") target
-# resolution on Python 3.10, which does not always auto-import intermediate
-# packages during attribute walks. Do NOT convert to `from ... import ...` -- tests
-# patch attributes OF these submodules, not names re-exported from them.
-from . import github_mcp  # noqa: F401  - required for mock.patch target binding
-from . import github_operation_router  # noqa: F401  - required for mock.patch target binding
-from . import level3_execution  # noqa: F401  - required for mock.patch target binding
-from . import runtime_verification  # noqa: F401  - required for mock.patch target binding
 from .backup_manager import BackupManager, create_backup_manager
 from .checkpoint_manager import CheckpointManager, create_checkpoint_manager
 from .error_logger import ErrorLogger, create_logger
@@ -51,3 +42,23 @@ __all__ = [
     "BackupManager",
     "create_backup_manager",
 ]
+
+# PEP 562 lazy submodule binding for unittest.mock.patch compatibility.
+# These 4 submodules are NOT imported at module-load time to avoid circular
+# imports on Python 3.10 (their transitive deps -- tracing, core.logger_factory,
+# github_integration -- are not yet bound when __init__.py is still executing).
+# __getattr__ is invoked by Python when getattr(langgraph_engine, name) fails,
+# which is exactly what mock._dot_lookup does for patch targets like
+# 'langgraph_engine.level3_execution.nodes.X'. By the time any test accesses
+# these attributes, the package is fully initialized, so no circular risk.
+_LAZY_SUBMODULES = frozenset({"github_mcp", "github_operation_router", "runtime_verification", "level3_execution"})
+
+
+def __getattr__(name: str):  # noqa: ANN201
+    if name in _LAZY_SUBMODULES:
+        import importlib
+
+        module = importlib.import_module(f"langgraph_engine.{name}")
+        globals()[name] = module  # cache so next getattr is a normal dict lookup
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
