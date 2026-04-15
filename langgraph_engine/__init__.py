@@ -16,6 +16,15 @@ All existing policy scripts continue to work unchanged via PolicyNodeAdapter.
 
 __version__ = "1.19.1"
 
+# Eager submodule imports to bind attributes on the `langgraph_engine` package.
+# Required for unittest.mock.patch("langgraph_engine.<submodule>...") target
+# resolution on Python 3.10, which does not always auto-import intermediate
+# packages during attribute walks. Do NOT convert to `from ... import ...` -- tests
+# patch attributes OF these submodules, not names re-exported from them.
+from . import github_mcp  # noqa: F401  - required for mock.patch target binding
+from . import github_operation_router  # noqa: F401  - required for mock.patch target binding
+from . import level3_execution  # noqa: F401  - required for mock.patch target binding
+from . import runtime_verification  # noqa: F401  - required for mock.patch target binding
 from .backup_manager import BackupManager, create_backup_manager
 from .checkpoint_manager import CheckpointManager, create_checkpoint_manager
 from .error_logger import ErrorLogger, create_logger

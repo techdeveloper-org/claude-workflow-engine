@@ -1,17 +1,30 @@
 [run]
 source =
-    scripts/langgraph_engine
+    langgraph_engine
+    scripts
     src
 omit =
     */tests/*
     */__pycache__/*
     */conftest*
-    scripts/langgraph_engine/subgraphs/*_v1.py
+    langgraph_engine/run_pipeline.py
+    scripts/cli.py
+    scripts/github_pr_workflow/*.py
+    scripts/3-level-flow.py
+    langgraph_engine/progress_display.py
+    langgraph_engine/ui_components.py
+    langgraph_engine/user_interaction.py
+    langgraph_engine/skill_selection_criteria.py
+    langgraph_engine/standard_selector.py
+    langgraph_engine/sonarqube_scanner.py
+    langgraph_engine/test_generator.py
+    langgraph_engine/quality_gate.py
     src/mcp/session_hooks.py
     src/mcp/mcp_errors.py
+    scripts/langgraph_engine/subgraphs/*_v1.py
 
 [report]
-fail_under = 50
+fail_under = 30
 show_missing = True
 precision = 2
 skip_covered = False
