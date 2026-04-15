@@ -7,9 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.19.0] - 2026-04-15
+
+### Added — CI & Distribution
+
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) — auto-triggers on push/PR to `main`; paths-ignore for docs/uml/drawio/md; Python 3.9 + 3.11 matrix; `concurrency: cancel-in-progress`
+- **Hard CI gates** — `secrets_check.py` exit-1 gate runs first; unit tests and integration tests are mandatory (no `continue-on-error`)
+- **32 offline integration tests** (`tests/integration/`) — uses `responses` mock library; covers full GitHub PR lifecycle (issue → branch → PR → merge → close); runs in ~0.3s, no GitHub token required
+- **PyPI packaging** — `pyproject.toml` (hatchling, PEP 621), `MANIFEST.in` (includes policies/, rules/, templates/), `requirements-dev.txt` (responses, pytest-cov, ruff)
+- **PyPI publish workflow** (`.github/workflows/publish.yml`) — fires automatically on GitHub Release; `pip install claude-workflow-engine`
+- **`langgraph_engine/__init__.py`** — `__version__ = "1.19.0"` added; importable package version
+- **`sync-version.py` extended** — now keeps `__version__` in `langgraph_engine/__init__.py` in sync on version bumps
+
+### Files Added
+
+| File | Purpose |
+|------|---------|
+| `.github/workflows/ci.yml` | Auto-CI on push/PR to main |
+| `.github/workflows/publish.yml` | PyPI publish on GitHub Release |
+| `pyproject.toml` | Package metadata (hatchling, PEP 621) |
+| `MANIFEST.in` | sdist asset inclusion (policies/, rules/, templates/) |
+| `requirements-dev.txt` | Dev deps: responses, pytest-cov, ruff |
+| `tests/integration/conftest.py` | Mock GitHub API fixtures (responses library) |
+| `tests/integration/test_github_integration.py` | 27 offline endpoint tests |
+| `tests/integration/test_github_pr_workflow.py` | 5 lifecycle tests (issue→PR→close) |
+| `langgraph_engine/__init__.py` | `__version__ = "1.19.0"` |
+| `scripts/tools/sync-version.py` | Extended to sync `__version__` on bumps |
+
+---
+
 ## [1.18.0] - 2026-04-14
 
-### Added
+### Added — Runtime Verification
 - Runtime Verification package (`langgraph_engine/runtime_verification/`)
 - `NodeContract` DSL: `PreconditionSpec`, `PostconditionSpec`, `InvariantSpec`, `Violation`, `NodeContract` dataclasses
 - `RuntimeVerifier` + `NullVerifier` -- Registry + Null Object + Singleton patterns; <5ms per-node overhead
@@ -20,11 +49,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `QualityGate` Gate 5: `verification_gate` -- non-strict by default, halts on `STRICT_RUNTIME_VERIFICATION=1`
 - `FlowState` keys: `verification_report: Optional[Dict]`, `verification_violations: List[str]`
 - Env vars: `ENABLE_RUNTIME_VERIFICATION=0`, `STRICT_RUNTIME_VERIFICATION=0`, `VERIFICATION_LOG_LEVEL=WARNING`
+- **34 unit tests** — `test_runtime_verifier` (15), `test_level_transition_guards` (8), `test_schema_verifier` (7), `test_quality_gate_verification` (4)
+- **E2E tests** — `tests/e2e/test_hook_mode_runtime_verification.py` (11 tests, Hook Mode), `tests/e2e/test_full_mode_runtime_verification.py` (9 tests, Full Mode)
+- **7 integration tests** — `tests/integration/test_runtime_verification_integration.py`
+
+### Added — Observability Exposure
+- **`/health` endpoint** — `verification` snapshot block added: `enabled`, `total_violations`, `critical_violations`, `last_run_ms`
+- **Prometheus counter** — `verification_violations_total` (9th metric); labels: `level`, `node`; incremented on every violation
+- **OpenTelemetry spans** — `runtime_verification.verify_node` span wraps every `@verify_node` call; 4 attributes: `node.name`, `contract.name`, `violations.count`, `violations.critical`
 
 ### Architecture
 - ADR-003: Decorator pattern over node subclassing
 - ADR-004: Opt-in default (`ENABLE_RUNTIME_VERIFICATION=0`)
 - ADR-005: No LLM/network/I/O calls in verifier (enforces <5ms latency contract)
+
+---
+
+## [1.17.0] - 2026-04-10
+
+### Added — Open Source Readiness
+
+- **Community files** — `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md`, issue templates, PR template
+- **GitHub Discussions enabled** — feature requests, integration questions, workflow sharing, Q&A
+- **All 13 MCP server repos made public** under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories)
+- **README rewrite** — full open-source-grade documentation (architecture, benchmarks, MCP table, community section)
+
+### Fixed — F821 Undefined-Name Audit (issues #212–#216)
+
+- `hooks/stop_notifier/` — 30 F821 errors fixed; missing imports restored (#212)
+- `langgraph_engine/level3_execution/nodes/` — 17 F821 errors fixed (#213)
+- `langgraph_engine/diagrams/drawio/converter.py` — ~80 F821 errors fixed; `S_*` constants + logger imported (#214)
+- `scripts/github_pr_workflow/` — 12 F821 errors fixed; missing `git_ops` imports restored (#215)
+- 4 files — stale `# ruff: noqa: F821` suppressors removed after fixes (#216)
+
+### Changed
+
+- `ruff check .` — passes clean with zero suppressors across all fixed files
 
 ---
 
@@ -186,6 +246,11 @@ Template fast-path is fail-open: any error (file not found, invalid JSON, missin
 
 ---
 
+[1.19.0]: https://github.com/techdeveloper-org/claude-workflow-engine/compare/v1.18.0...v1.19.0
+[1.18.0]: https://github.com/techdeveloper-org/claude-workflow-engine/compare/v1.17.0...v1.18.0
+[1.17.0]: https://github.com/techdeveloper-org/claude-workflow-engine/compare/v1.16.1...v1.17.0
+[1.16.1]: https://github.com/techdeveloper-org/claude-workflow-engine/compare/v1.8.0...v1.16.1
+[1.8.0]: https://github.com/techdeveloper-org/claude-workflow-engine/compare/v1.5.0...v1.8.0
 [1.5.0]: https://github.com/techdeveloper-org/claude-workflow-engine/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/techdeveloper-org/claude-workflow-engine/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/techdeveloper-org/claude-workflow-engine/compare/v1.3.0...v1.4.0
