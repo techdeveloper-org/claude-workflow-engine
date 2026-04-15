@@ -2,11 +2,12 @@
 
 > Automate your entire software development lifecycle — from task to merged PR — using Claude AI.
 
-[![Version](https://img.shields.io/badge/Version-1.16.1-blue)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/Python-3.8%2B-green)](https://python.org)
+[![Version](https://img.shields.io/badge/Version-1.19.0-blue)](CHANGELOG.md)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-green)](https://python.org)
+[![PyPI](https://img.shields.io/badge/PyPI-claude--workflow--engine-orange)](https://pypi.org/project/claude-workflow-engine/)
+[![CI](https://github.com/techdeveloper-org/claude-workflow-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/techdeveloper-org/claude-workflow-engine/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Alpha-orange)]()
-[![Tests](https://img.shields.io/badge/Tests-36%20files-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-74%20files%2032%20integration-brightgreen)](tests/)
 [![Discussions](https://img.shields.io/badge/Discussions-GitHub-blueviolet)](../../discussions)
 
 ---
@@ -50,6 +51,10 @@ Most AI coding tools generate code and stop there. This engine does what a full 
 ### Install
 
 ```bash
+# From PyPI (recommended)
+pip install claude-workflow-engine
+
+# From source
 git clone https://github.com/techdeveloper-org/claude-workflow-engine
 cd claude-workflow-engine
 pip install -r requirements.txt
@@ -441,10 +446,12 @@ python scripts/secrets_check.py
 - [ ] End-to-end test: Full Mode (all 8 active steps) with `ENABLE_RUNTIME_VERIFICATION=1`
 - [x] Runtime verification exposure: `/health` endpoint (`verification` snapshot block), Prometheus `verification_violations_total` counter (9th metric, labels: `level`/`node`), OpenTelemetry spans around `verify_node` (`runtime_verification.verify_node`, 4 attributes)
 
-### v1.19.0 — CI & Distribution
-- [ ] Enable automatic CI on push to `main` (currently `workflow_dispatch` only)
-- [ ] Integration test suite with a mock GitHub repo
-- [ ] Publish to PyPI as `claude-workflow-engine`
+### v1.19.0 — CI & Distribution ✓ Complete
+- [x] Automatic CI on push to `main` and PRs — push/PR/workflow_dispatch triggers, paths-ignore for docs/uml/drawio/md, Python 3.9+3.11 matrix, concurrency cancel-in-progress
+- [x] Hard CI gates — `secrets_check.py` exit-1 gate, unit tests and integration tests are mandatory (no continue-on-error)
+- [x] Integration test suite — 32 offline tests in `tests/integration/` using `responses` mock library; covers full GitHub PR lifecycle (issue → branch → PR → merge → close)
+- [x] PyPI publish — `pyproject.toml` (hatchling, PEP 621), `MANIFEST.in`, `.github/workflows/publish.yml` fires on GitHub Release; `pip install claude-workflow-engine`
+- [x] `langgraph_engine/__init__.py` — `__version__ = "1.19.0"` added; `sync-version.py` extended to keep it in sync
 
 ### Future
 - GitHub App install flow (no manual `GITHUB_TOKEN` setup)

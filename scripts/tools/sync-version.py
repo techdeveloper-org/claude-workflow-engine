@@ -107,6 +107,23 @@ def main():
         if sync_file(target["file"], target["patterns"], version):
             updated += 1
 
+    # Patch langgraph_engine/__init__.py __version__ string
+    init_file = PROJECT_ROOT / "langgraph_engine" / "__init__.py"
+    if init_file.exists():
+        init_content = init_file.read_text(encoding="utf-8")
+        init_original = init_content
+        init_pattern = r'__version__\s*=\s*["\'][\d.]+["\']'
+        init_replacement = f'__version__ = "{version}"'
+        init_content = re.sub(init_pattern, init_replacement, init_content)
+        if init_content != init_original:
+            init_file.write_text(init_content, encoding="utf-8")
+            print(f'[UPDATED] langgraph_engine/__init__.py (__version__ = "{version}")')
+            updated += 1
+        else:
+            print(f"[OK] langgraph_engine/__init__.py already at version {version}")
+    else:
+        print("[SKIP] langgraph_engine/__init__.py not found")
+
     # setup.py reads VERSION dynamically - no update needed
     print("[OK] setup.py reads VERSION dynamically")
 

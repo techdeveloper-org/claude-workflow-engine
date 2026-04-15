@@ -1,6 +1,8 @@
 # CI Pipeline - Claude Workflow Engine
-# Triggers on push to main and pull requests targeting main.
-# Runs two parallel jobs: test (matrix: Python 3.8/3.10/3.12) and lint (ruff).
+# Triggers on push to main, pull_request targeting main, and manual workflow_dispatch.
+# Step ordering DAG:
+#   check-enabled -> [secrets_check || lint] -> install -> unit_tests
+#                    -> integration_tests -> coverage -> upload-artifact
 #
 # CONFIGURABLE: Control via GitHub repo variables (Settings > Variables > Actions):
 #   ENABLE_CI       = true/false  (master switch, default: true)
@@ -15,12 +17,24 @@
 name: CI
 
 on:
-  # Auto-trigger disabled — run manually via GitHub Actions UI > "Run workflow".
-  # To re-enable: uncomment the push/pull_request blocks below.
-  # push:
-  #   branches: [main]
-  # pull_request:
-  #   branches: [main]
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "uml/**"
+      - "drawio/**"
+      - "**/*.md"
+      - "LICENSE"
+      - "VERSION"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "uml/**"
+      - "drawio/**"
+      - "**/*.md"
+      - "LICENSE"
+      - "VERSION"
   workflow_dispatch:
     inputs:
       run_tests:
@@ -35,6 +49,11 @@ on:
         description: "Generate coverage report"
         type: boolean
         default: true
+
+# Cancel superseded runs for the same ref to avoid wasted compute.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 # Minimal permissions - read-only access to repository contents.
 permissions:
@@ -75,8 +94,8 @@ jobs:
 
   # --- Job 1: Test -----------------------------------------------------------
   # Runs pytest across two Python versions using a matrix strategy.
-  # Full test run uses continue-on-error because some tests require external
-  # services (GitHub API, Anthropic API) that are not available in CI.
+  # Stages: secrets_check (hard gate) -> install -> unit_tests
+  #         -> integration_tests -> coverage -> upload-artifact
   test:
     name: Test (Python ${{ matrix.python-version }})
     needs: check-enabled
@@ -86,8 +105,8 @@ jobs:
     strategy:
       fail-fast: false   # Keep running other versions even if one fails
       matrix:
-        # langgraph>=0.2.0 requires Python 3.9+; 3.8 is not supported.
-        python-version: ["3.10", "3.12"]
+        # ADR-003: Python 3.9 and 3.11 matrix (langgraph>=0.2.0 requires Python 3.9+)
+        python-version: ["3.9", "3.11"]
 
     steps:
       - name: Checkout repository
@@ -101,27 +120,55 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Install dependencies
+      # --- Secrets scan (hard gate — NO continue-on-error) -------------------
+      # Blocks the entire job if secrets are found. Must pass before any test runs.
+      - name: Secrets scan (gate)
+        run: python scripts/secrets_check.py
+
+      - name: Install production dependencies
         run: uv pip install -r requirements.txt --system
+
+      - name: Install dev dependencies
+        run: uv pip install -r requirements-dev.txt --system
 
       # Validate test discovery without running tests.
       # Fails fast on import errors or broken test file syntax.
       - name: Collect tests (validate discovery)
         run: pytest tests/ --tb=short -q --collect-only
 
-      # Run the full test suite. continue-on-error=true because many tests
-      # require external services (GitHub token, Anthropic API)
-      # that are not available in CI.
-      - name: Run tests
-        continue-on-error: true
-        run: pytest tests/ -x --tb=short -q
+      # --- Unit tests (exclude integration-marked tests) ---------------------
+      - name: Run unit tests
+        run: pytest tests/ -m "not integration" --tb=short -q
 
-      # Generate coverage report and enforce 50% minimum threshold.
-      # Threshold is configured in .coveragerc (fail_under = 50).
-      # Controlled by ENABLE_COVERAGE flag (default: true).
+      # --- Integration tests -------------------------------------------------
+      # Hard gate: CI fails if integration tests fail. Tests use offline mocks
+      # (responses library) and do not require live GitHub credentials.
+      - name: Run integration tests
+        env:
+          GITHUB_TOKEN: fake-token-for-testing
+          ANTHROPIC_API_KEY: fake-key-for-testing
+        run: pytest tests/integration/ -m integration --tb=short -q
+
+      # --- Coverage report ---------------------------------------------------
+      # Enforces 50% minimum threshold configured in .coveragerc (fail_under=50).
+      # Generates coverage.xml for artifact upload.
       - name: Coverage report + threshold enforcement
         if: needs.check-enabled.outputs.coverage_enabled == 'true'
-        run: pytest tests/ --tb=short -q --cov=langgraph_engine --cov=scripts --cov=src --cov-report=term-missing --cov-fail-under=50
+        run: |
+          pytest tests/ -m "not integration" --tb=short -q \
+            --cov=langgraph_engine --cov=scripts --cov=src \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=50
+
+      # --- Upload coverage artifact ------------------------------------------
+      - name: Upload coverage report
+        if: needs.check-enabled.outputs.coverage_enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}-${{ github.sha }}
+          path: coverage.xml
+          retention-days: 30
 
   # --- Job 2: Lint -----------------------------------------------------------
   # Runs ruff on scripts/ and src/ to catch syntax errors, undefined names,
@@ -136,10 +183,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install ruff
         run: pip install ruff

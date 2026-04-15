@@ -1,0 +1,15 @@
+# Claude Workflow Engine — Dev / Test Dependencies
+# ============================================================================
+# Install with: uv pip install -r requirements-dev.txt --system
+# These packages are NOT included in production installs.
+# ============================================================================
+
+# --- Test runner and coverage ------------------------------------------------
+pytest>=7.4.0,<9.0.0           # Test discovery and execution
+pytest-cov>=4.0.0,<6.0.0       # Coverage measurement and reporting (--cov flags)
+
+# --- HTTP mocking for integration tests (ADR-002) ----------------------------
+responses>=0.24.0,<1.0.0       # Mock library for requests-based HTTP calls
+
+# --- Linting -----------------------------------------------------------------
+ruff>=0.4.0,<1.0.0             # Fast Python linter (used in CI lint job)

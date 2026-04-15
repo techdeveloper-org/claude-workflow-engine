@@ -1,0 +1,48 @@
+# Publish to PyPI — Claude Workflow Engine
+# Triggered automatically when a GitHub Release is published.
+# Uses PYPI_TOKEN secret (Settings > Secrets and variables > Actions).
+#
+# Prerequisites (configure in GitHub repo before first use):
+#   - PYPI_TOKEN: PyPI API token with upload scope for this package.
+#     Generate at https://pypi.org/manage/account/token/
+#     Store as a repository secret named PYPI_TOKEN.
+
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+# Minimal permissions — only read repository contents during build.
+permissions:
+  contents: read
+
+jobs:
+
+  publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build distribution packages
+        run: python -m build
+
+      - name: Check distribution packages
+        run: twine check dist/*
+
+      - name: Upload to PyPI
+        run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
