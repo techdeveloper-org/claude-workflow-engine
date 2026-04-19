@@ -527,13 +527,13 @@ class Level3JiraWorkflow:
             comment_parts.append("Resolved by PR #" + str(pr_number) + ".")
 
         if approach_taken:
-            comment_parts.append("\nApproach:/n" + approach_taken)
+            comment_parts.append("\nApproach:\n" + approach_taken)
 
         if files_modified:
             file_list = "\n".join("- " + f for f in files_modified[:20])
             if len(files_modified) > 20:
                 file_list += "\n- ... and " + str(len(files_modified) - 20) + " more"
-            comment_parts.append("\nFiles modified:/n" + file_list)
+            comment_parts.append("\nFiles modified:\n" + file_list)
 
         closing_comment = " ".join(comment_parts)
 

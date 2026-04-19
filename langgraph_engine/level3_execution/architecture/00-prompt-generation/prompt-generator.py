@@ -95,7 +95,7 @@ class TaskAnalyzer:
                 context_info.append(f"- Previous sessions: {prev_sessions}")
 
             if context_info:
-                context_section = "Context Information:/n" + "\n".join(context_info) + "\n\n"
+                context_section = "Context Information:\n" + "\n".join(context_info) + "\n\n"
 
         # Prompt for LLM to analyze task WITH CONTEXT
         analysis_prompt = f"""Analyze this task and respond with ONLY a JSON object (no markdown, no extra text):

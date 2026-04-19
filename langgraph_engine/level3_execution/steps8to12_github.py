@@ -110,7 +110,7 @@ class Level3GitHubWorkflow:
             logger.warning(
                 "=" * 70
                 + "\nWARNING: Not a git repository. GitHub workflow (Steps 8-12) cannot proceed.\n"
-                + "To enable GitHub integration:/n"
+                + "To enable GitHub integration:\n"
                 + "1. Initialize git: git init\n"
                 + "2. Add remote: git remote add origin <your-github-repo-url>\n"
                 + "3. Create initial commit: git add . && git commit -m 'Initial commit'\n"

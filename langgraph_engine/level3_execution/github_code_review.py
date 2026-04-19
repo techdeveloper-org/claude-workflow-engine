@@ -189,14 +189,14 @@ def run_simplify_review(diff_text: str) -> List[str]:
     truncated = "\n".join(diff_lines[:200]) if len(diff_lines) > 200 else diff_text
 
     prompt = (
-        "You are a code reviewer. Analyze this git diff for 3 categories:/n"
+        "You are a code reviewer. Analyze this git diff for 3 categories:\n"
         "1. CODE REUSE: duplicated logic, existing utilities that could replace new code\n"
         "2. CODE QUALITY: redundant state, copy-paste, leaky abstractions, bare except\n"
         "3. EFFICIENCY: unnecessary work, missed concurrency, N+1 patterns, memory leaks\n\n"
         "Return ONLY a JSON array of issue strings. Each issue should be a single line.\n"
         "If the code is clean, return an empty array: []\n"
         "Do NOT include explanations outside the JSON array.\n\n"
-        f"DIFF:/n```\n{truncated}\n```\n\n"
+        f"DIFF:\n```\n{truncated}\n```\n\n"
         "Response (JSON array only):"
     )
 
