@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.19.2] - 2026-04-19
+
+### Fixed
+
+- **Level -1 Windows path regex corrupts escape sequences** — `nodes.py` detection and `recovery.py` fix regex both used `([A-Za-z]):\\([\w\\. \-]+)` which matched any `<letter>:\<word>` sequence. This caused false positives on Python escape sequences: `"Either:\n"` became `"Either:/n"`, `r"\s+"` patterns became `r"/s+"`. Fixed by adding `(?<![A-Za-z0-9_])` negative lookbehind so only real Windows drive paths (`C:\Users\...`) are matched. (Issue #222, PR #223)
+- **stop-notifier shim simplified** — replaced `importlib.util` spec-loading with `sys.path` insert + direct import, consistent with other hook shims. (Issue #220, PR #221)
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `langgraph_engine/level_minus1/nodes.py` | Detection regex: added negative lookbehind, switched from `"\\" in content` to compiled regex |
+| `langgraph_engine/level_minus1/recovery.py` | Fix regex: added `(?<![A-Za-z0-9_])` negative lookbehind |
+| `hooks/stop-notifier.py` | Simplified from 27-line `importlib.util` loader to 15-line `sys.path` shim |
+
+---
+
 ## [1.19.1] - 2026-04-15
 
 ### Fixed — CI Failures
