@@ -127,33 +127,48 @@ Total: ~15s planning, ~120s full pipeline
 
 ## Architecture
 
+> Full architecture with all diagrams: [`docs/PIPELINE_ARCHITECTURE.md`](docs/PIPELINE_ARCHITECTURE.md)
+
 ### 3-Level LangGraph Pipeline
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Level -1  AUTO-FIX                                         │
-│  3 checks: Unicode · encoding · cross-platform paths        │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────┐
-│  Level 1   CONTEXT SYNC                                     │
-│  Session load + parallel [complexity calc, context load]    │
-│  Output: combined_complexity_score  [1-25 scale]            │
-│          = simple_score × 0.3  +  graph_score × 0.7         │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────┐
-│  Level 2   (NO-OP)                                          │
-│  Coding standards read directly from policies/ at runtime   │
-│  No pipeline nodes — zero overhead                          │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────────┐
-│  Level 3   EXECUTION  (8 active steps)                      │
-│                                                             │
-│  Pre-0 → Step 0 → Step 8 → Step 9 → Step 10                │
-│                → Step 11 → Step 12 → Step 13 → Step 14     │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    START([":rocket: Task Input\npython scripts/3-level-flow.py --task ..."])
+
+    subgraph LM1["Level -1 · Auto-Fix"]
+        direction LR
+        U["Unicode\nNormalize"] --> E["Encoding\nValidate\nUTF-8 / cp1252"] --> P["Path\nResolve\npath_resolver.py"]
+    end
+
+    subgraph L1["Level 1 · Sync"]
+        direction TB
+        SS["Session Sync"]
+        subgraph PAR["Parallel"]
+            direction LR
+            CX["Simple Complexity\n[1–10]"]
+            CTX["Context\nExtraction"]
+        end
+        MG["Merge → combined_complexity_score [1–25]\nsimple × 0.3 + graph × 0.7"]
+        SS --> PAR --> MG
+    end
+
+    subgraph L2["Level 2 · Standards (NO-OP)"]
+        POL["policies/02-standards-system/ — .md files\nread directly from disk · zero pipeline overhead"]
+    end
+
+    subgraph L3["Level 3 · Execution (8 active steps)"]
+        direction LR
+        P0["Pre-0\nCallGraph\nScan"] --> S0["Step 0\nPromptGen +\nOrchestrator\n~15s"] --> S8["Step 8\nIssue\nCreate"] --> S9["Step 9\nBranch"] --> S10["Step 10\nImplement"] --> S11["Step 11\nPR + Review"] --> S12["Step 12\nClose"] --> S13["Step 13\nDocs + UML"] --> S14["Step 14\nSummary"]
+    end
+
+    END([":white_check_mark: Workflow Complete"])
+
+    START --> LM1 --> L1 --> L2 --> L3 --> END
+
+    style LM1 fill:#f3e8ff,stroke:#a855f7,color:#1f0536
+    style L1  fill:#e0f2fe,stroke:#0284c7,color:#0c1f35
+    style L2  fill:#fef9c3,stroke:#ca8a04,color:#422006
+    style L3  fill:#dcfce7,stroke:#16a34a,color:#052e16
 ```
 
 ### Execution Modes
@@ -167,10 +182,26 @@ Total: ~15s planning, ~120s full pipeline
 
 The pipeline builds a full AST call graph of your project (578 classes, 3,985 methods across Python, Java, TypeScript, Kotlin) and uses it at 3 critical points:
 
-```
-Pre-0   analyze_impact_before_change()  → risk_level, danger_zones, affected_methods
-Step 10 snapshot_call_graph()           → captures pre-change state for Step 11
-Step 11 review_change_impact()          → compares before/after graphs, flags breaking changes
+```mermaid
+flowchart LR
+    subgraph CGB["AST Parser (4 languages)"]
+        direction TB
+        PY["Python\nFull AST"] & JV["Java\nRegex"] & TS["TypeScript\nRegex"] & KT["Kotlin\nRegex"]
+    end
+
+    CGA["call_graph_analyzer.py\n578 classes · 3985 methods"]
+
+    P0G["Pre-0\nanalyze_impact_before_change()\n→ risk_level\n→ danger_zones\n→ affected_methods"]
+    S10G["Step 10\nsnapshot_call_graph()\npre-change state captured\ncall_graph_stale = True after writes"]
+    S11G["Step 11\nreview_change_impact()\nbefore vs after graph diff\nbreaking changes flagged"]
+
+    CGB --> CGA --> P0G --> S10G --> S11G
+
+    style CGB  fill:#f5f3ff,stroke:#7c3aed
+    style CGA  fill:#ede9fe,stroke:#7c3aed
+    style P0G  fill:#dcfce7,stroke:#16a34a
+    style S10G fill:#fef3c7,stroke:#d97706
+    style S11G fill:#eff6ff,stroke:#2563eb
 ```
 
 This means the planner knows what could break **before** suggesting changes, and the reviewer detects regressions based on actual method-level diffs — not just file diffs.
@@ -188,18 +219,34 @@ This means the planner knows what could break **before** suggesting changes, and
 
 ### Planning Phase (Step 0)
 
-Step 0 runs two sequential subprocess calls against the Claude CLI:
+Step 0 runs two sequential subprocess calls against the Claude CLI (~15s total):
 
-```
-Call 1  prompt_gen_expert_caller  (~5s)
-        Reads:    level3_execution/templates/orchestration_system_prompt.txt
-        Injects:  task description + call graph metrics + complexity score
-        Outputs:  complete orchestration prompt → state["orchestration_prompt"]
+```mermaid
+flowchart LR
+    IN(["combined_complexity_score\n+ call graph metrics\nfrom Pre-0"])
 
-Call 2  orchestrator_agent_caller  (~10s, streamed live to terminal)
-        Reads:    state["orchestration_prompt"] via temp file
-        Executes: solution-architect → consensus → agents → QA
-        Outputs:  implementation plan → state["orchestrator_result"]
+    subgraph C1["Call 1 · PromptGen Expert (~10s)"]
+        direction TB
+        T["Reads: orchestration_system_prompt.txt"]
+        I["Injects:\n{user_requirements}\n{runtime_context_json_block}\n{complexity_score_display}\n{codebase_risk_level}\n{codebase_hot_nodes}"]
+        O1["Outputs: state[orchestration_prompt]"]
+        T --> I --> O1
+    end
+
+    subgraph C2["Call 2 · Orchestrator Agent (~30-90s, streamed live)"]
+        direction TB
+        R["Reads: orchestration_prompt via temp file"]
+        E["Executes: solution-architect\n→ consensus → squad agents → QA"]
+        O2["Outputs: state[orchestrator_result]"]
+        R --> E --> O2
+    end
+
+    NEXT(["→ Step 8"])
+
+    IN --> C1 --> C2 --> NEXT
+
+    style C1 fill:#e0f2fe,stroke:#0284c7
+    style C2 fill:#dcfce7,stroke:#16a34a
 ```
 
 ### Template Fast-Path
