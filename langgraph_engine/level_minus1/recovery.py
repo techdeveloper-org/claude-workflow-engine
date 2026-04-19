@@ -310,7 +310,7 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
         try:
             import re as _re_fix
 
-            # Only replace backslashes that are part of a Windows drive path (X:\something).
+            # Only replace backslashes that are part of a Windows drive path (X:/something).
             # Negative lookbehind (?<![A-Za-z0-9_]) ensures the drive letter is not preceded
             # by another word character, preventing false matches on escape sequences like
             # "Either:\n" (where 'r' would be mistaken for a drive letter).
