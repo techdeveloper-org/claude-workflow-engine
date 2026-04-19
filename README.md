@@ -7,7 +7,7 @@
 [![PyPI](https://img.shields.io/badge/PyPI-claude--workflow--engine-orange)](https://pypi.org/project/claude-workflow-engine/)
 [![CI](https://github.com/techdeveloper-org/claude-workflow-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/techdeveloper-org/claude-workflow-engine/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-77%20files%2039%20integration-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-44%20files%20·%204%20integration-brightgreen)](tests/)
 [![Discussions](https://img.shields.io/badge/Discussions-GitHub-blueviolet)](../../discussions)
 
 ---
@@ -20,22 +20,43 @@ Most AI coding tools generate code and stop there. This engine does what a full 
 
 | Capability | This Engine | Copilot | Cursor | Devin |
 |---|:---:|:---:|:---:|:---:|
+| **Core Generation** | | | | |
 | Code generation | Yes | Yes | Yes | Yes |
-| Task analysis + complexity scoring | Yes | — | — | Partial |
-| Call graph impact analysis (before change) | Yes | — | — | — |
+| Unit test generation (Python/Java/TS/Kotlin) | Yes | — | Partial | — |
+| Documentation update (Step 13) | Yes | — | — | — |
+| **Planning & Analysis** | | | | |
+| Task analysis + complexity scoring [1-25] | Yes | — | — | Partial |
+| Call graph impact analysis (pre-change) | Yes | — | — | — |
 | Breaking change detection (graph diff) | Yes | — | — | — |
+| Multi-language call graph (Python/Java/TS/Kotlin) | Yes | — | — | — |
+| Template fast-path (bypass Step 0, ~0s planning) | Yes | — | — | — |
+| **GitHub / Jira SDLC** | | | | |
 | GitHub issue creation | Yes | — | — | — |
 | Dual issue tracking (GitHub + Jira) | Yes | — | — | — |
-| Auto branch creation | Yes | — | — | — |
-| Auto PR + code review | Yes | — | — | — |
-| Quality gate enforcement | Yes | — | — | — |
-| Unit test generation (Python/Java/TS/Kotlin) | Yes | — | — | — |
-| Documentation update | Yes | — | — | — |
-| UML diagram generation (13 types) | Yes | — | — | — |
-| SonarQube scan + auto-fix loop | Yes | — | — | — |
-| Figma design-to-code | Yes | — | — | — |
-| Jenkins CI integration | Yes | — | — | — |
 | Full issue lifecycle (create → close) | Yes | — | — | — |
+| Auto branch creation (from Jira key or issue#) | Yes | — | — | — |
+| Auto PR + code review | Yes | — | — | — |
+| Quality gate enforcement (4 gates) | Yes | — | — | — |
+| **Integrations** | | | | |
+| UML diagram generation (13 types) | Yes | — | — | — |
+| Draw.io editable diagram export | Yes | — | — | — |
+| SonarQube scan + auto-fix loop | Yes | — | — | — |
+| Figma design-to-code (tokens + component extraction) | Yes | — | — | — |
+| Jenkins CI integration | Yes | — | — | — |
+| Voice notification on pipeline stop | Yes | — | — | — |
+| **Security & Observability** | | | | |
+| Append-only JSON audit log (daily rotation) | Yes | — | — | — |
+| Prometheus metrics (9 metrics, /metrics endpoint) | Yes | — | — | — |
+| OpenTelemetry tracing (OTLP/console) | Yes | — | — | — |
+| Health server (GET /health + /readiness) | Yes | — | — | — |
+| Secret scanning CI gate (6 regex patterns) | Yes | — | — | — |
+| Token bucket rate limiting per client | Yes | — | — | — |
+| Prompt injection detection on inputs | Yes | — | — | — |
+| **Infrastructure** | | | | |
+| Kubernetes manifests (HPA + configmap) | Yes | — | — | — |
+| Docker + docker-compose | Yes | — | — | — |
+| 13 independent MCP servers (295 tools) | Yes | — | — | — |
+| Token optimizer (60-85% context savings) | Yes | — | — | — |
 
 ---
 
@@ -154,6 +175,17 @@ Step 11 review_change_impact()          → compares before/after graphs, flags 
 
 This means the planner knows what could break **before** suggesting changes, and the reviewer detects regressions based on actual method-level diffs — not just file diffs.
 
+**Stale Graph Guard:** After Step 10 writes files, `call_graph_stale = True` is set. The analyzer silently rebuilds the graph when stale instead of returning a Phase-0 cached snapshot — preventing multi-phase implementations from making decisions on out-of-date graph data.
+
+**Language support:**
+
+| Language | Parser Type | Scope |
+|----------|------------|-------|
+| Python | Full AST (`ast` module) | Classes, methods, imports, calls |
+| Java | Regex-based | Classes, methods, inheritance |
+| TypeScript | Regex-based | Classes, functions, exports |
+| Kotlin | Regex-based | Classes, functions, companion objects |
+
 ### Planning Phase (Step 0)
 
 Step 0 runs two sequential subprocess calls against the Claude CLI:
@@ -188,82 +220,97 @@ See `orchestration_template.example.json` for the full field reference.
 ## Directory Structure
 
 ```
-claude-workflow-engine/
-├── langgraph_engine/              # Core engine — 202 Python files
-│   ├── orchestrator.py            # Main StateGraph pipeline definition
-│   ├── pipeline_builder.py        # Builder Pattern: chainable add_level*().build()
-│   ├── flow_state.py              # Backward-compat shim → state/ package
-│   ├── core/                      # Cross-cutting: LazyLoader, ErrorHandler, infrastructure, structured_logger
-│   ├── state/                     # FlowState, StepKeys, reducers, WorkflowContextOptimizer
-│   ├── routing/                   # Routing functions split by level
-│   ├── helper_nodes/              # Helper node functions split by concern
-│   ├── diagrams/                  # Strategy Pattern: 13 UML generators + draw.io converter
-│   │   └── drawio/                # DrawioConverter — .drawio XML for all 13 diagram types
-│   ├── parsers/                   # Abstract Factory: Python (AST), Java, TypeScript, Kotlin parsers
-│   ├── integrations/              # GitHub, Jira, Figma, Jenkins integrations
-│   ├── level_minus1/              # Level -1: Auto-Fix (nodes, merge, recovery)
-│   ├── level1_sync/               # Level 1: Session + context sync (8 modules)
-│   ├── level3_execution/          # Level 3: 8-step SDLC execution
-│   │   ├── subgraph.py            # Level 3 StateGraph + _run_step helper
-│   │   ├── nodes/                 # Step node wrappers + step implementation facades
-│   │   ├── architecture/          # prompt_gen_expert_caller, orchestrator_agent_caller
-│   │   ├── templates/             # orchestration_system_prompt.txt
-│   │   ├── sonarqube/             # SonarQube Facade: api_client, lightweight, aggregator, auto_fixer
+claude-workflow-engine/           # 369 Python files total
+├── langgraph_engine/             # Core engine — 211 Python files
+│   ├── orchestrator.py           # Main StateGraph pipeline definition
+│   ├── pipeline_builder.py       # Builder Pattern: chainable add_level*().build()
+│   ├── flow_state.py             # Backward-compat shim → state/ package
+│   ├── core/                     # Cross-cutting: LazyLoader, ErrorHandler, infrastructure, structured_logger
+│   ├── state/                    # FlowState, StepKeys, reducers, WorkflowContextOptimizer
+│   ├── routing/                  # Routing functions split by level
+│   ├── helper_nodes/             # Helper node functions split by concern
+│   ├── diagrams/                 # Strategy Pattern: 13 UML generators + draw.io converter
+│   │   └── drawio/               # DrawioConverter — .drawio XML for all 13 diagram types
+│   ├── parsers/                  # Abstract Factory: Python (AST), Java, TypeScript, Kotlin parsers
+│   ├── integrations/             # GitHub, Jira, Figma, Jenkins integrations
+│   ├── level_minus1/             # Level -1: Auto-Fix (nodes, merge, recovery)
+│   ├── level1_sync/              # Level 1: Session + context sync (10 modules)
+│   ├── level3_execution/         # Level 3: 8-step SDLC execution
+│   │   ├── subgraph.py           # Level 3 StateGraph + _run_step helper
+│   │   ├── nodes/                # Step node wrappers + step implementation facades
+│   │   ├── architecture/         # prompt_gen_expert_caller, orchestrator_agent_caller
+│   │   ├── templates/            # orchestration_system_prompt.txt
+│   │   ├── sonarqube/            # SonarQube Facade: api_client, lightweight, aggregator, auto_fixer
 │   │   ├── documentation_manager.py
 │   │   ├── figma_workflow.py
 │   │   ├── steps8to12_github.py
 │   │   └── steps8to12_jira.py
 │   ├── build_dependency_resolver/ # Multi-language build dependency parser
-│   ├── call_graph_builder.py      # Compat shim → parsers/
-│   ├── call_graph_analyzer.py     # Impact analysis: risk_level, danger_zones, affected_methods
-│   ├── secrets_manager.py         # Startup secrets validation + AWS SM + rotation hints
-│   ├── audit_logger.py            # Append-only JSON audit log, daily rotation
-│   ├── metrics_exporter.py        # Prometheus: 9 metrics, start_metrics_server(port)
-│   └── tracing.py                 # OpenTelemetry OTLP/console, create_span()
+│   ├── call_graph_builder.py     # Compat shim → parsers/
+│   ├── call_graph_analyzer.py    # Impact analysis: risk_level, danger_zones, affected_methods
+│   ├── backup_manager.py         # State snapshot + restore on pipeline failure
+│   ├── checkpoint_manager.py     # Step-level checkpoint persistence for resume
+│   ├── conflict_resolver.py      # Merge conflict detection and resolution hints
+│   ├── decision_explainer.py     # Human-readable explanation of pipeline decisions
+│   ├── context_deduplicator.py   # Remove repeated schema/state content from context
+│   ├── coverage_analyzer.py      # Test coverage gap detection for generated code
+│   ├── secrets_manager.py        # Startup secrets validation + AWS SM + rotation hints
+│   ├── audit_logger.py           # Append-only JSON audit log, daily rotation
+│   ├── metrics_exporter.py       # Prometheus: 9 metrics, start_metrics_server(port)
+│   └── tracing.py                # OpenTelemetry OTLP/console, create_span()
 │
-├── hooks/                         # Claude Code hook scripts — 41 Python files
-│   ├── pre-tool-enforcer.py       # PreToolUse hook entry point
-│   ├── post-tool-tracker.py       # PostToolUse hook entry point
-│   ├── stop-notifier.py           # Stop hook entry point
-│   ├── pre_tool_enforcer/         # PreToolUse package (8 policy checks, skill hints)
-│   ├── post_tool_tracker/         # PostToolUse package (progress, commit readiness, stats)
-│   └── stop_notifier/             # Stop package (voice, PR workflow, session save)
+├── hooks/                        # Claude Code hook scripts — 41 Python files
+│   ├── pre-tool-enforcer.py      # PreToolUse hook entry point
+│   ├── post-tool-tracker.py      # PostToolUse hook entry point
+│   ├── stop-notifier.py          # Stop hook entry point
+│   ├── pre_tool_enforcer/        # PreToolUse package (8 policy checks, skill hints)
+│   ├── post_tool_tracker/        # PostToolUse package (progress, commit readiness, stats)
+│   └── stop_notifier/            # Stop package (voice TTS, PR workflow, session save)
 │
-├── scripts/                       # Pipeline entry point + tooling — 44 Python files
-│   ├── 3-level-flow.py            # Main entry point: --message, --orchestration-template
-│   ├── github_pr_workflow/        # PR workflow package: commit, push, review, versioning
-│   ├── github_operations/         # GitHub helper operations
-│   ├── tools/                     # Developer utilities: release.py, voice-notifier.py, etc.
-│   ├── setup/                     # One-time setup: setup_wizard.py, install hooks scripts
-│   ├── health_server.py           # GET /health + GET /readiness (stdlib HTTP, daemon thread)
-│   ├── secrets_check.py           # CI gate: 6 regex patterns, exit 1 on finding secrets
-│   └── pin_requirements.py        # Generates requirements.pinned.txt + requirements.bounds.txt
+├── scripts/                      # Pipeline entry point + tooling — 44 Python files
+│   ├── 3-level-flow.py           # Main entry point: --message, --orchestration-template
+│   ├── github_pr_workflow/       # PR workflow package: commit, push, review, versioning
+│   ├── github_operations/        # GitHub helper operations
+│   ├── tools/                    # Developer utilities: release.py, voice-notifier.py, metrics-emitter.py
+│   ├── setup/                    # One-time setup: setup_wizard.py, install hooks scripts
+│   ├── health_server.py          # GET /health + GET /readiness (stdlib HTTP, daemon thread)
+│   ├── secrets_check.py          # CI gate: 6 regex patterns, exit 1 on finding secrets
+│   └── pin_requirements.py       # Generates requirements.pinned.txt + requirements.bounds.txt
 │
-├── src/mcp/                       # In-engine copy of session-mgr MCP server
-│   ├── session_mcp_server.py      # MCP server (also in separate repo — source of truth)
-│   ├── session_hooks.py           # Direct import bridge
-│   ├── rate_limiter.py            # TokenBucket per client: 100/min tools, 10/min LLM
-│   └── input_validator.py         # Null-byte strip, length limit, prompt injection detection
+├── src/mcp/                      # In-engine copy of session-mgr MCP server
+│   ├── session_mcp_server.py     # MCP server (separate repo is source of truth)
+│   ├── session_hooks.py          # Direct import bridge
+│   ├── rate_limiter.py           # TokenBucket per client: 100/min tools, 10/min LLM
+│   └── input_validator.py        # Null-byte strip, length limit, prompt injection detection
 │
-├── policies/                      # 46 policy .md files (read directly at runtime, no pipeline nodes)
-│   ├── 00-auto-fix/               # Level -1 enforcement rules
-│   ├── 01-sync/                   # Level 1 context sync policies
-│   ├── 02-standards-system/       # Coding standards (Python, Java, TS, Kotlin, etc.)
-│   └── 03-execution/              # Level 3 execution policies
+├── policies/                     # 46 policy .md files (read directly at runtime, no nodes)
+│   ├── 00-auto-fix/              # Level -1 enforcement rules
+│   ├── 01-sync/                  # Level 1 context sync policies
+│   ├── 02-standards-system/      # Coding standards (Python, Java, TS, Kotlin, etc.)
+│   └── 03-execution/             # Level 3 execution policies
 │
-├── rules/                         # 43 coding standard definitions
-├── docs/                          # 47 architecture + implementation documentation files
-├── tests/                         # 36 test files (unit, integration, e2e, load)
-├── uml/                           # Auto-generated UML diagrams (13 types, Mermaid/PlantUML)
-├── drawio/                        # Auto-generated draw.io diagrams (.drawio files)
-├── k8s/                           # Kubernetes manifests: deployment, service, HPA, configmap
-├── scripts/3-level-flow.py        # ← Main entry point
+├── tests/                        # 44 test_*.py files (56 total Python files)
+│   ├── test_*.py                 # 36 unit tests
+│   ├── integration/              # 4 integration tests (GitHub, MCP, runtime verification)
+│   ├── e2e/                      # 3 end-to-end scenario tests
+│   └── load/                     # 1 concurrency / load test
+│
+├── rules/                        # 43 coding standard definitions
+├── docs/                         # 55 architecture + implementation documentation files
+├── uml/                          # Auto-generated UML diagrams (13 types, Mermaid/PlantUML)
+├── drawio/                       # Auto-generated draw.io diagrams (.drawio files)
+├── k8s/                          # Kubernetes manifests: deployment, service, HPA, configmap
+├── Makefile                      # Common developer tasks: test, lint, docker, k8s targets
 ├── Dockerfile
 ├── docker-compose.yml
 ├── setup.py
-├── requirements.txt               # 29 runtime dependencies
-├── requirements-optional.txt      # TTS / voice (install separately — conflicts with networkx)
-└── .env.example                   # All environment variables with descriptions
+├── pyproject.toml                # Build system config + tool config (ruff, pytest)
+├── MANIFEST.in                   # Package manifest for PyPI distribution
+├── requirements.txt              # Runtime dependencies
+├── requirements-dev.txt          # Development dependencies (pytest, ruff, etc.)
+├── requirements-optional.txt     # TTS / voice (conflicts with networkx — install separately)
+├── orchestration_template.example.json  # Template fast-path reference file
+└── .env.example                  # All environment variables with descriptions
 ```
 
 ---
@@ -400,8 +447,17 @@ ENABLE_HEALTH_SERVER=1 ENABLE_METRICS=1 LOG_FORMAT=json \
 
 ## Testing
 
+44 test_*.py files (56 total Python files in `tests/` including conftest and `__init__` files):
+
+| Category | Files | Notes |
+|---|:---:|---|
+| Unit tests | 36 | In `tests/test_*.py` — no external dependencies required |
+| Integration tests | 4 | `tests/integration/` — require live GitHub token or MCP servers |
+| E2E tests | 3 | `tests/e2e/` — require full pipeline environment |
+| Load tests | 1 | `tests/load/` — enabled with `RUN_LOAD_TESTS=1` |
+
 ```bash
-# Full suite
+# Full unit suite
 pytest tests/
 
 # Specific areas
@@ -410,11 +466,23 @@ pytest tests/test_uml_generators.py
 pytest tests/test_level1_sync.py
 pytest tests/test_secrets_manager.py
 
+# Integration tests (require live providers)
+pytest tests/integration/ -m integration
+
+# E2E tests (require full pipeline env)
+pytest tests/e2e/
+
+# Load / concurrency tests
+RUN_LOAD_TESTS=1 pytest tests/load/
+
 # With coverage
 pytest tests/ --cov=langgraph_engine --cov-report=html:docs/coverage
 
-# Security
+# Secret scanning CI gate
 python scripts/secrets_check.py
+
+# Dependency pinning
+python scripts/pin_requirements.py
 ```
 
 > MCP server tests live in their respective separate repos — they are not included here.
@@ -461,15 +529,18 @@ The AST-based call graph (578 classes, 3,985 methods across Python, Java, TypeSc
 
 ### Pipeline Size vs. Capability Ratio
 
-| Metric | v1.12 | Current | Delta |
-|--------|:-----:|:-------:|:-----:|
+| Metric | v1.12 | Current (v1.19.1) | Delta |
+|--------|:-----:|:-----------------:|:-----:|
 | Active pipeline steps | 15 | 8 | -47% |
 | Planning LLM calls | ~6 | 2 | -67% |
 | Planning time | ~75s | ~15s | -80% |
 | Token optimizer savings | N/A | 60-85% | — |
 | Supported languages (call graph) | 1 | 4 | +300% |
 | MCP servers | 0 | 13 (295 tools) | — |
-| Unit + integration tests | 0 | 77 files | — |
+| Total Python files | ~50 | 369 | — |
+| Test files (test_*.py) | 0 | 44 | — |
+| Integration tests | 0 | 4 | — |
+| E2E tests | 0 | 3 | — |
 
 ---
 
@@ -530,6 +601,50 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 - Web dashboard for pipeline run history
 - Additional parser languages: Ruby, Go, C++
 - YAML-based pipeline configuration (`config.yaml` replacing env var flags)
+
+---
+
+## Limitations & Trade-offs
+
+### Hard Requirements
+
+| Requirement | Why |
+|---|---|
+| Claude Code CLI must be installed and authenticated | Step 0 runs two subprocess calls against the `claude` CLI — no fallback path exists |
+| Python 3.10+ | `mcp>=1.0.0` requires 3.10+; `match` statements used in routing |
+| `ANTHROPIC_API_KEY` is always required | The `anthropic` provider is the fallback when `claude_cli` is unavailable |
+| `GITHUB_TOKEN` required for any SDLC step | Steps 8-12 all write to GitHub — no local-only mode |
+
+### Known Limitations
+
+**Call graph (Java / TypeScript / Kotlin):** The Java, TypeScript, and Kotlin parsers are regex-based, not full AST parsers. They handle common patterns well but may miss edge cases: anonymous classes, deeply chained lambdas, decorator-wrapped functions, and dynamic imports. The Python parser is the only full AST-based one.
+
+**Full Mode is sequential:** Steps 10-14 execute one after another in a single process. If a network call (GitHub, Jira, Figma) hangs, the entire pipeline stalls. There is no step-level async execution or per-step timeout by default.
+
+**No persistent pipeline state across crashes:** If the Python process is killed mid-run, LangGraph's in-memory state is lost. The `checkpoint_manager.py` writes step-level checkpoints, but resume logic is partial — not all steps support clean resume from a checkpoint.
+
+**SonarQube auto-fix is limited:** The auto-fixer targets common rule violations (unused imports, simple null-safety issues). Complex code smells that require architectural changes are flagged in the PR but not auto-fixed.
+
+**Voice notifications require optional deps:** The `stop-notifier.py` TTS voice feature requires `requirements-optional.txt` (Coqui TTS). Installing it conflicts with `networkx>=3.1` used by the main pipeline via the `gruut==2.2.3` transitive dependency. You cannot have both in the same virtual environment.
+
+**MCP servers are external processes:** All 13 MCP servers run as separate processes registered in `~/.claude/settings.json`. They are not in-process libraries. If a server is down, the MCP tool calls fail silently unless the server has a health-check tool available.
+
+**Regex-based secret scanning:** `secrets_check.py` uses 6 regex patterns covering common formats (AWS keys, GitHub tokens, Anthropic keys, etc.). It will miss custom secret formats and secrets stored in environment-variable lookups inside code.
+
+**Complexity score is not ground truth:** `combined_complexity_score` is a heuristic: `simple_score × 0.3 + graph_score × 0.7`. It is on a 1-25 scale and correlates with effort, but it does not map to story points and should not be treated as precise.
+
+### Trade-offs by Design
+
+| Decision | What You Gain | What You Give Up |
+|---|---|---|
+| 2-provider LLM chain (`claude_cli` + `anthropic`) | Simplicity, no inference infra | Cannot use Ollama, OpenAI, or local GPU models — all were removed in v1.15.3 |
+| Level 2 is NO-OP (policies as .md files) | Zero pipeline overhead for standards | Cannot run per-file standards checks dynamically inside the pipeline |
+| Step 0 uses subprocess (not in-process API) | Leverages full Claude Code context + hooks | Adds ~15s overhead; subprocess exit codes are the only error signal |
+| Template fast-path bypasses Step 0 | ~0s planning on repeat tasks | Template must be kept manually in sync with task requirements |
+| 13 external MCP servers | Independent versioning, reusability | Each server is a separate process; cold-start latency on first tool call |
+| Hooks are synchronous (`async: false`) | Predictable execution, no race conditions | Long hook operations (e.g., vector DB indexing) block the Claude Code terminal |
+| ASCII-only Python files | Windows cp1252 safe, no encoding bugs | Cannot use Unicode identifiers, emoji, or non-ASCII comments in source |
+| In-process `session-mgr` copy in `src/mcp/` | Zero-latency session access | Two copies of the code must be kept in sync when the upstream repo changes |
 
 ---
 
