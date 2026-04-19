@@ -230,7 +230,7 @@ def node_windows_path_check(state: FlowState) -> dict:
         # like \n, \s, \t that happen to follow a colon (e.g. "Either:\n").
         import re as _re_detect
 
-        _DRIVE_DETECT_RE = _re_detect.compile(r"(?<![A-Za-z0-9_])([A-Za-z]):\\(?:[A-Za-z0-9_\-\. \\]+)")
+        _DRIVE_DETECT_RE = _re_detect.compile(r"(?<![A-Za-z0-9_])([A-Za-z]):\\(?:[A-Za-z0-9_][A-Za-z0-9_\-\. \\]+)")
         _path_files = list(project_root.glob("**/*.py"))
         if len(_path_files) > 500:
             _logger.warning("project_root has %d Python files (>500), capping scan at 500", len(_path_files))

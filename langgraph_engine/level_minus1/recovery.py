@@ -183,7 +183,7 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
     message += "\n".join(failed_checks)
 
     if kb_suggestions:
-        message += "\n\n  KB SUGGESTIONS:/n"
+        message += "\n\n  KB SUGGESTIONS:\n"
         seen = set()
         for kb in kb_suggestions:
             sig = kb.get("signature", "")
@@ -191,7 +191,7 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
                 seen.add(sig)
                 message += "    -> %s: %s\n" % (sig, kb.get("prevention", ""))
 
-    message += "\n\nOPTIONS:/n"
+    message += "\n\nOPTIONS:\n"
     message += "  1. auto-fix   -> Attempt repair + retry\n"
     message += "  2. skip       -> Continue anyway (NOT RECOMMENDED)\n"
 
@@ -314,7 +314,7 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
             # Negative lookbehind (?<![A-Za-z0-9_]) ensures the drive letter is not preceded
             # by another word character, preventing false matches on escape sequences like
             # "Either:\n" (where 'r' would be mistaken for a drive letter).
-            _DRIVE_PATH_RE = _re_fix.compile(r"(?<![A-Za-z0-9_])([A-Za-z]):\\([\w\\. \-]+)")
+            _DRIVE_PATH_RE = _re_fix.compile(r"(?<![A-Za-z0-9_])([A-Za-z]):\\([A-Za-z0-9_][A-Za-z0-9_\-\. \\]+)")
 
             def _fix_drive_path(m):
                 drive = m.group(1)
