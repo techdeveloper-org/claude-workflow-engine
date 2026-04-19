@@ -20,11 +20,11 @@ Sessions simulate:
 """
 
 import json
-from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict
 import random
 import string
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict
 
 
 class DummyProjectSeeder:
@@ -54,39 +54,41 @@ class DummyProjectSeeder:
         pipeline = []
 
         # Level -1: Auto-Fix Enforcement
-        pipeline.append({
-            "step": "LEVEL_MINUS_1",
-            "name": "Auto-Fix Enforcement",
-            "level": -1,
-            "order": 0,
-            "is_blocking": True,
-            "status": "PASSED",
-            "timestamp": base_time.isoformat(),
-            "duration_ms": 124,
-            "policy": {
-                "script": "auto-fix-enforcer.py",
-                "version": "2.0.0",
-                "rules_applied": [
-                    "check_python_available",
-                    "check_critical_files_present",
-                    "check_blocking_enforcer_initialized",
-                    "check_session_state_valid",
-                ]
-            },
-            "policy_output": {
-                "exit_code": 0,
-                "status": "SUCCESS",
-                "checks": {
-                    "python": "OK",
-                    "critical_files": "OK",
-                    "blocking_enforcer": "OK",
-                    "session_state": "OK",
-                }
-            },
-            "decision": "PROCEED - All systems operational",
-            "errors": [],
-            "warnings": []
-        })
+        pipeline.append(
+            {
+                "step": "LEVEL_MINUS_1",
+                "name": "Auto-Fix Enforcement",
+                "level": -1,
+                "order": 0,
+                "is_blocking": True,
+                "status": "PASSED",
+                "timestamp": base_time.isoformat(),
+                "duration_ms": 124,
+                "policy": {
+                    "script": "auto-fix-enforcer.py",
+                    "version": "2.0.0",
+                    "rules_applied": [
+                        "check_python_available",
+                        "check_critical_files_present",
+                        "check_blocking_enforcer_initialized",
+                        "check_session_state_valid",
+                    ],
+                },
+                "policy_output": {
+                    "exit_code": 0,
+                    "status": "SUCCESS",
+                    "checks": {
+                        "python": "OK",
+                        "critical_files": "OK",
+                        "blocking_enforcer": "OK",
+                        "session_state": "OK",
+                    },
+                },
+                "decision": "PROCEED - All systems operational",
+                "errors": [],
+                "warnings": [],
+            }
+        )
 
         # Level 1: Sync System (Context Management + Session Management)
         level_1_steps = [
@@ -94,44 +96,40 @@ class DummyProjectSeeder:
                 "step": "LEVEL_1_CONTEXT",
                 "name": "Context Management",
                 "policy": "context-monitor.py",
-                "duration_ms": 89
+                "duration_ms": 89,
             },
             {
                 "step": "LEVEL_1_SESSION",
                 "name": "Session Management",
                 "policy": "session-manager-v2.py",
-                "duration_ms": 76
+                "duration_ms": 76,
             },
             {
                 "step": "LEVEL_1_PATTERN",
                 "name": "Pattern Detection",
                 "policy": "pattern-detector.py",
-                "duration_ms": 45
+                "duration_ms": 45,
             },
         ]
 
         for i, step_info in enumerate(level_1_steps):
             timestamp = base_time + timedelta(milliseconds=sum(s["duration_ms"] for s in pipeline))
-            pipeline.append({
-                "step": step_info["step"],
-                "name": step_info["name"],
-                "level": 1,
-                "order": len(pipeline),
-                "is_blocking": False,
-                "status": "PASSED",
-                "timestamp": timestamp.isoformat(),
-                "duration_ms": step_info["duration_ms"],
-                "policy": {
-                    "script": step_info["policy"],
-                    "version": "1.0.0"
-                },
-                "policy_output": {
-                    "exit_code": 0,
-                    "status": "SUCCESS"
-                },
-                "errors": [],
-                "warnings": []
-            })
+            pipeline.append(
+                {
+                    "step": step_info["step"],
+                    "name": step_info["name"],
+                    "level": 1,
+                    "order": len(pipeline),
+                    "is_blocking": False,
+                    "status": "PASSED",
+                    "timestamp": timestamp.isoformat(),
+                    "duration_ms": step_info["duration_ms"],
+                    "policy": {"script": step_info["policy"], "version": "1.0.0"},
+                    "policy_output": {"exit_code": 0, "status": "SUCCESS"},
+                    "errors": [],
+                    "warnings": [],
+                }
+            )
 
         # Level 2: Standards System (3 policies)
         level_2_steps = [
@@ -139,44 +137,40 @@ class DummyProjectSeeder:
                 "step": "LEVEL_2_CODE_STYLE",
                 "name": "Code Style Standards",
                 "policy": "code-style-enforcer.py",
-                "duration_ms": 134
+                "duration_ms": 134,
             },
             {
                 "step": "LEVEL_2_SECURITY",
                 "name": "Security Standards",
                 "policy": "security-enforcer.py",
-                "duration_ms": 98
+                "duration_ms": 98,
             },
             {
                 "step": "LEVEL_2_DOCUMENTATION",
                 "name": "Documentation Standards",
                 "policy": "documentation-enforcer.py",
-                "duration_ms": 67
+                "duration_ms": 67,
             },
         ]
 
         for step_info in level_2_steps:
             timestamp = base_time + timedelta(milliseconds=sum(s["duration_ms"] for s in pipeline))
-            pipeline.append({
-                "step": step_info["step"],
-                "name": step_info["name"],
-                "level": 2,
-                "order": len(pipeline),
-                "is_blocking": False,
-                "status": "PASSED",
-                "timestamp": timestamp.isoformat(),
-                "duration_ms": step_info["duration_ms"],
-                "policy": {
-                    "script": step_info["policy"],
-                    "version": "2.0.0"
-                },
-                "policy_output": {
-                    "exit_code": 0,
-                    "status": "SUCCESS"
-                },
-                "errors": [],
-                "warnings": []
-            })
+            pipeline.append(
+                {
+                    "step": step_info["step"],
+                    "name": step_info["name"],
+                    "level": 2,
+                    "order": len(pipeline),
+                    "is_blocking": False,
+                    "status": "PASSED",
+                    "timestamp": timestamp.isoformat(),
+                    "duration_ms": step_info["duration_ms"],
+                    "policy": {"script": step_info["policy"], "version": "2.0.0"},
+                    "policy_output": {"exit_code": 0, "status": "SUCCESS"},
+                    "errors": [],
+                    "warnings": [],
+                }
+            )
 
         # Level 3: Execution System (12 steps per spec)
         level_3_steps = [
@@ -191,32 +185,31 @@ class DummyProjectSeeder:
             "Response Generation",
             "Progress Tracking",
             "Git Commit Handling",
-            "Session Finalization"
+            "Session Finalization",
         ]
 
         for i, step_name in enumerate(level_3_steps):
             timestamp = base_time + timedelta(milliseconds=sum(s["duration_ms"] for s in pipeline))
             step_num = i + 1
-            pipeline.append({
-                "step": f"LEVEL_3_STEP_{step_num}",
-                "name": step_name,
-                "level": 3,
-                "order": len(pipeline),
-                "is_blocking": False,
-                "status": "PASSED",
-                "timestamp": timestamp.isoformat(),
-                "duration_ms": random.randint(50, 200),
-                "policy": {
-                    "script": f"step-{step_num}-{step_name.lower().replace(' ', '-')}.py",
-                    "version": "3.0.0"
-                },
-                "policy_output": {
-                    "exit_code": 0,
-                    "status": "SUCCESS"
-                },
-                "errors": [],
-                "warnings": []
-            })
+            pipeline.append(
+                {
+                    "step": f"LEVEL_3_STEP_{step_num}",
+                    "name": step_name,
+                    "level": 3,
+                    "order": len(pipeline),
+                    "is_blocking": False,
+                    "status": "PASSED",
+                    "timestamp": timestamp.isoformat(),
+                    "duration_ms": random.randint(50, 200),
+                    "policy": {
+                        "script": f"step-{step_num}-{step_name.lower().replace(' ', '-')}.py",
+                        "version": "3.0.0",
+                    },
+                    "policy_output": {"exit_code": 0, "status": "SUCCESS"},
+                    "errors": [],
+                    "warnings": [],
+                }
+            )
 
         # Additional Level 3 steps (13-19: policies for execution)
         # Total: 1 + 3 + 3 + 12 + 6 = 25 steps
@@ -226,32 +219,31 @@ class DummyProjectSeeder:
             "Task State Updates",
             "Error Handling",
             "Session Chaining",
-            "Final Checkpoint"
+            "Final Checkpoint",
         ]
 
         for i, policy_name in enumerate(execution_policies):
             timestamp = base_time + timedelta(milliseconds=sum(s["duration_ms"] for s in pipeline))
             step_num = 13 + i
-            pipeline.append({
-                "step": f"LEVEL_3_POLICY_{step_num}",
-                "name": policy_name,
-                "level": 3,
-                "order": len(pipeline),
-                "is_blocking": False,
-                "status": "PASSED",
-                "timestamp": timestamp.isoformat(),
-                "duration_ms": random.randint(40, 150),
-                "policy": {
-                    "script": f"policy-{step_num}-{policy_name.lower().replace(' ', '-')}.py",
-                    "version": "3.0.0"
-                },
-                "policy_output": {
-                    "exit_code": 0,
-                    "status": "SUCCESS"
-                },
-                "errors": [],
-                "warnings": []
-            })
+            pipeline.append(
+                {
+                    "step": f"LEVEL_3_POLICY_{step_num}",
+                    "name": policy_name,
+                    "level": 3,
+                    "order": len(pipeline),
+                    "is_blocking": False,
+                    "status": "PASSED",
+                    "timestamp": timestamp.isoformat(),
+                    "duration_ms": random.randint(40, 150),
+                    "policy": {
+                        "script": f"policy-{step_num}-{policy_name.lower().replace(' ', '-')}.py",
+                        "version": "3.0.0",
+                    },
+                    "policy_output": {"exit_code": 0, "status": "SUCCESS"},
+                    "errors": [],
+                    "warnings": [],
+                }
+            )
 
         return {
             "_schema_version": "2.0",
@@ -271,15 +263,15 @@ class DummyProjectSeeder:
                 "task_type": task_type,
                 "model": model,
                 "agent": agent,
-                "complexity_score": random.randint(3, 9)
+                "complexity_score": random.randint(3, 9),
             },
             "user_input": {
                 "prompt": f"{task_type}: Implement changes for {agent}",
                 "prompt_length": 80,
                 "received_at": base_time.isoformat(),
-                "source": "Computer Use Test Seeder"
+                "source": "Computer Use Test Seeder",
             },
-            "pipeline": pipeline
+            "pipeline": pipeline,
         }
 
     def create_session_summary(self, session_id: str, task_type: str, model: str, agent: str) -> Dict:
@@ -294,7 +286,7 @@ class DummyProjectSeeder:
             "policies_executed": 25,
             "policies_passed": 25,
             "policies_failed": 0,
-            "success_rate": 100.0
+            "success_rate": 100.0,
         }
 
     def seed_dummy_sessions(self) -> None:
@@ -336,14 +328,12 @@ class DummyProjectSeeder:
             flags_dir.mkdir(exist_ok=True)
             flag_file = flags_dir / "task-breakdown-pending.json"
             with open(flag_file, "w") as f:
-                json.dump({
-                    "session_id": session_id,
-                    "created_at": datetime.now().isoformat(),
-                    "pending": True
-                }, f, indent=2)
+                json.dump(
+                    {"session_id": session_id, "created_at": datetime.now().isoformat(), "pending": True}, f, indent=2
+                )
 
             self.sessions_created += 1
-            print(f"✅ Created session {self.sessions_created}/10: {session_id}")
+            print(f"[OK] Created session {self.sessions_created}/10: {session_id}")
             print(f"   Task: {task_type} | Model: {model} | Agent: {agent}")
 
         # Update or create session-progress.json
@@ -354,7 +344,7 @@ class DummyProjectSeeder:
             "tasks_completed": self.sessions_created,
             "success_rate": 100.0,
             "last_updated": datetime.now().isoformat(),
-            "sessions": [s for s, _, _ in sessions_data]
+            "sessions": [s for s, _, _ in sessions_data],
         }
         with open(progress_file, "w") as f:
             json.dump(progress_data, f, indent=2)
@@ -376,7 +366,7 @@ class DummyProjectSeeder:
 
         print()
         print("=" * 80)
-        print(f"✅ SEEDING COMPLETE: {self.sessions_created} sessions created")
+        print(f"[OK] SEEDING COMPLETE: {self.sessions_created} sessions created")
         print("=" * 80)
         print()
         print("Next steps:")

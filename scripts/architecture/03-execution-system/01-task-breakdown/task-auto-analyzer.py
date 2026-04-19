@@ -362,7 +362,7 @@ class TaskAutoAnalyzer:
         print(f"   Total Tasks: {result['total_tasks']}")
 
         if result["needs_phases"]:
-            print(f"\n📑 Phases: {len(result['phases'])}")
+            print(f"\n[doc] Phases: {len(result['phases'])}")
             for i, phase in enumerate(result["phases"], 1):
                 print(f"   {i}. {phase['name']}: {phase['description']}")
 

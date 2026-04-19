@@ -12,17 +12,19 @@ Classes:
     LoginHelper: Provides Anthropic login URL and setup instructions.
 """
 
-import os
 import json
-import requests
-from pathlib import Path
-from datetime import datetime
-from cryptography.fernet import Fernet
+import os
 import sys
+from datetime import datetime
+from pathlib import Path
+
+import requests
+from cryptography.fernet import Fernet
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.path_resolver import get_config_dir, get_sessions_dir
+
 
 class ClaudeCredentialsManager:
     """Manage Anthropic API credentials securely with Fernet encryption.
@@ -48,8 +50,8 @@ class ClaudeCredentialsManager:
         self.config_dir = get_config_dir()
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-        self.credentials_file = self.config_dir / 'claude_credentials.enc'
-        self.key_file = self.config_dir / '.encryption_key'
+        self.credentials_file = self.config_dir / "claude_credentials.enc"
+        self.key_file = self.config_dir / ".encryption_key"
 
         # Initialize encryption
         self._init_encryption()
@@ -67,12 +69,12 @@ class ClaudeCredentialsManager:
         if not self.key_file.exists():
             # Generate new key
             key = Fernet.generate_key()
-            with open(self.key_file, 'wb') as f:
+            with open(self.key_file, "wb") as f:
                 f.write(key)
             # Set file permissions (owner only)
             os.chmod(self.key_file, 0o600)
 
-        with open(self.key_file, 'rb') as f:
+        with open(self.key_file, "rb") as f:
             self.cipher = Fernet(f.read())
 
     def save_api_key(self, api_key, user_email=None):
@@ -90,16 +92,16 @@ class ClaudeCredentialsManager:
             bool: True on success.
         """
         credentials = {
-            'api_key': api_key,
-            'user_email': user_email,
-            'saved_at': datetime.now().isoformat(),
-            'status': 'active'
+            "api_key": api_key,
+            "user_email": user_email,
+            "saved_at": datetime.now().isoformat(),
+            "status": "active",
         }
 
         # Encrypt credentials
         encrypted_data = self.cipher.encrypt(json.dumps(credentials).encode())
 
-        with open(self.credentials_file, 'wb') as f:
+        with open(self.credentials_file, "wb") as f:
             f.write(encrypted_data)
 
         # Set file permissions
@@ -118,13 +120,13 @@ class ClaudeCredentialsManager:
             return None
 
         try:
-            with open(self.credentials_file, 'rb') as f:
+            with open(self.credentials_file, "rb") as f:
                 encrypted_data = f.read()
 
             decrypted_data = self.cipher.decrypt(encrypted_data)
             credentials = json.loads(decrypted_data.decode())
 
-            return credentials.get('api_key')
+            return credentials.get("api_key")
         except (IOError, json.JSONDecodeError, KeyError, ValueError):
             return None
 
@@ -139,7 +141,7 @@ class ClaudeCredentialsManager:
             return None
 
         try:
-            with open(self.credentials_file, 'rb') as f:
+            with open(self.credentials_file, "rb") as f:
                 encrypted_data = f.read()
 
             decrypted_data = self.cipher.decrypt(encrypted_data)
@@ -187,11 +189,11 @@ class ClaudeAPIClient:
                 loaded from ClaudeCredentialsManager.
         """
         self.api_key = api_key or self._get_stored_api_key()
-        self.base_url = 'https://api.anthropic.com/v1'
+        self.base_url = "https://api.anthropic.com/v1"
         self.headers = {
-            'x-api-key': self.api_key,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json'
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
         }
 
     def _get_stored_api_key(self):
@@ -219,36 +221,22 @@ class ClaudeAPIClient:
         try:
             # Test with a simple message
             response = requests.post(
-                f'{self.base_url}/messages',
+                f"{self.base_url}/messages",
                 headers=self.headers,
                 json={
-                    'model': 'claude-3-haiku-20240307',
-                    'max_tokens': 10,
-                    'messages': [
-                        {'role': 'user', 'content': 'Hi'}
-                    ]
+                    "model": "claude-3-haiku-20240307",
+                    "max_tokens": 10,
+                    "messages": [{"role": "user", "content": "Hi"}],
                 },
-                timeout=10
+                timeout=10,
             )
 
             if response.status_code == 200:
-                return {
-                    'success': True,
-                    'message': 'API connection successful!',
-                    'model': 'claude-3-haiku-20240307'
-                }
+                return {"success": True, "message": "API connection successful!", "model": "claude-3-haiku-20240307"}
             else:
-                return {
-                    'success': False,
-                    'message': f'API error: {response.status_code}',
-                    'error': response.text
-                }
+                return {"success": False, "message": f"API error: {response.status_code}", "error": response.text}
         except Exception as e:
-            return {
-                'success': False,
-                'message': f'Connection failed: {str(e)}',
-                'error': str(e)
-            }
+            return {"success": False, "message": f"Connection failed: {str(e)}", "error": str(e)}
 
     def get_account_info(self):
         """Return account information including API key validity and masked key.
@@ -265,8 +253,8 @@ class ClaudeAPIClient:
         # Note: Anthropic API doesn't have account info endpoint yet
         # This is a placeholder for future implementation
         return {
-            'api_key_valid': self.test_connection()['success'],
-            'api_key_masked': self._mask_api_key(self.api_key) if self.api_key else None
+            "api_key_valid": self.test_connection()["success"],
+            "api_key_masked": self._mask_api_key(self.api_key) if self.api_key else None,
         }
 
     def _mask_api_key(self, api_key):
@@ -282,7 +270,7 @@ class ClaudeAPIClient:
                 is too short or None.
         """
         if not api_key or len(api_key) < 10:
-            return '***'
+            return "***"
         return f"{api_key[:8]}...{api_key[-4:]}"
 
 
@@ -303,7 +291,7 @@ class AutoSessionTracker:
         self.sessions_dir = get_sessions_dir()
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
-        self.auto_tracking_config = get_config_dir() / 'auto_tracking.json'
+        self.auto_tracking_config = get_config_dir() / "auto_tracking.json"
 
     def enable_auto_tracking(self, interval_minutes=5):
         """Enable automatic session tracking and persist the configuration.
@@ -319,13 +307,13 @@ class AutoSessionTracker:
                 enabled_at (str): ISO timestamp when enabled.
         """
         config = {
-            'enabled': True,
-            'interval_minutes': interval_minutes,
-            'last_sync': None,
-            'enabled_at': datetime.now().isoformat()
+            "enabled": True,
+            "interval_minutes": interval_minutes,
+            "last_sync": None,
+            "enabled_at": datetime.now().isoformat(),
         }
 
-        with open(self.auto_tracking_config, 'w') as f:
+        with open(self.auto_tracking_config, "w") as f:
             json.dump(config, f, indent=2)
 
         return config
@@ -338,12 +326,9 @@ class AutoSessionTracker:
                 enabled (bool): False.
                 disabled_at (str): ISO timestamp when disabled.
         """
-        config = {
-            'enabled': False,
-            'disabled_at': datetime.now().isoformat()
-        }
+        config = {"enabled": False, "disabled_at": datetime.now().isoformat()}
 
-        with open(self.auto_tracking_config, 'w') as f:
+        with open(self.auto_tracking_config, "w") as f:
             json.dump(config, f, indent=2)
 
         return config
@@ -357,13 +342,13 @@ class AutoSessionTracker:
                 exist or cannot be parsed.
         """
         if not self.auto_tracking_config.exists():
-            return {'enabled': False}
+            return {"enabled": False}
 
         try:
-            with open(self.auto_tracking_config, 'r') as f:
+            with open(self.auto_tracking_config, "r") as f:
                 return json.load(f)
         except (IOError, json.JSONDecodeError):
-            return {'enabled': False}
+            return {"enabled": False}
 
     def sync_sessions(self):
         """Trigger a manual session sync from the Anthropic API.
@@ -383,23 +368,16 @@ class AutoSessionTracker:
         api_key = manager.get_api_key()
 
         if not api_key:
-            return {
-                'success': False,
-                'message': 'No API key configured'
-            }
+            return {"success": False, "message": "No API key configured"}
 
         # Update last sync time
         config = self.get_tracking_status()
-        config['last_sync'] = datetime.now().isoformat()
+        config["last_sync"] = datetime.now().isoformat()
 
-        with open(self.auto_tracking_config, 'w') as f:
+        with open(self.auto_tracking_config, "w") as f:
             json.dump(config, f, indent=2)
 
-        return {
-            'success': True,
-            'message': 'Sessions synced successfully',
-            'synced_at': config['last_sync']
-        }
+        return {"success": True, "message": "Sessions synced successfully", "synced_at": config["last_sync"]}
 
 
 class AnthropicLoginHelper:
@@ -415,8 +393,8 @@ class AnthropicLoginHelper:
 
     def __init__(self):
         """Initialize AnthropicLoginHelper with Anthropic console URLs."""
-        self.anthropic_console_url = 'https://console.anthropic.com'
-        self.api_keys_url = f'{self.anthropic_console_url}/settings/keys'
+        self.anthropic_console_url = "https://console.anthropic.com"
+        self.api_keys_url = f"{self.anthropic_console_url}/settings/keys"
 
     def get_login_url(self):
         """Return the Anthropic console login URL.
@@ -448,44 +426,44 @@ class AnthropicLoginHelper:
                 notes (list[str]): Additional guidance notes.
         """
         return {
-            'steps': [
+            "steps": [
                 {
-                    'step': 1,
-                    'title': 'Login to Anthropic Console',
-                    'description': 'Go to console.anthropic.com and login with your account',
-                    'url': self.anthropic_console_url
+                    "step": 1,
+                    "title": "Login to Anthropic Console",
+                    "description": "Go to console.anthropic.com and login with your account",
+                    "url": self.anthropic_console_url,
                 },
                 {
-                    'step': 2,
-                    'title': 'Navigate to API Keys',
-                    'description': 'Click on "Settings" → "API Keys"',
-                    'url': self.api_keys_url
+                    "step": 2,
+                    "title": "Navigate to API Keys",
+                    "description": 'Click on "Settings" -> "API Keys"',
+                    "url": self.api_keys_url,
                 },
                 {
-                    'step': 3,
-                    'title': 'Create New API Key',
-                    'description': 'Click "Create Key" button and give it a name (e.g., "Claude Insight")',
-                    'url': self.api_keys_url
+                    "step": 3,
+                    "title": "Create New API Key",
+                    "description": 'Click "Create Key" button and give it a name (e.g., "Claude Insight")',
+                    "url": self.api_keys_url,
                 },
                 {
-                    'step': 4,
-                    'title': 'Copy API Key',
-                    'description': 'Copy the generated API key (starts with "sk-ant-")',
-                    'important': True
+                    "step": 4,
+                    "title": "Copy API Key",
+                    "description": 'Copy the generated API key (starts with "sk-ant-")',
+                    "important": True,
                 },
                 {
-                    'step': 5,
-                    'title': 'Add to Claude Insight',
-                    'description': 'Paste the API key in Claude Insight settings and click "Save"',
-                    'important': True
-                }
+                    "step": 5,
+                    "title": "Add to Claude Insight",
+                    "description": 'Paste the API key in Claude Insight settings and click "Save"',
+                    "important": True,
+                },
             ],
-            'notes': [
-                '⚠️ Never share your API key with anyone',
-                '🔒 API key is stored encrypted on your machine',
-                '✅ You can revoke the key anytime from Anthropic Console',
-                '💡 One API key is enough for all Claude Insight features'
-            ]
+            "notes": [
+                "[WARN] Never share your API key with anyone",
+                "[lock] API key is stored encrypted on your machine",
+                "[OK] You can revoke the key anytime from Anthropic Console",
+                "[hint] One API key is enough for all Claude Insight features",
+            ],
         }
 
 

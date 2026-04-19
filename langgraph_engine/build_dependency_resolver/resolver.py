@@ -40,7 +40,7 @@ from typing import Any, Dict, List
 
 # D6: Well-known external dependency sets moved to registries.py leaf module.
 # Helper functions live in parsers.py; imported here at top level so static
-# analysis (ruff) can see the call graph — previously hidden by a noqa: F821
+# analysis (ruff) can see the call graph -- previously hidden by a noqa: F821
 # suppressor which masked 4 NameError bugs at runtime.
 from .parsers import (
     _build_question,

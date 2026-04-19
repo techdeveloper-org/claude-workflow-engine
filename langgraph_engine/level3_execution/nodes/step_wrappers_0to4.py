@@ -124,11 +124,11 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
         "with a MULTI-AGENT PROMPT BUNDLE containing per-agent execution prompts.\n\n"
         "YOUR EXECUTION PROTOCOL:\n"
         "1. Break down the task into multiple TODOs from the orchestration plan below.\n"
-        "2. Each TODO must carry its full context from this prompt — do not lose detail.\n"
+        "2. Each TODO must carry its full context from this prompt -- do not lose detail.\n"
         "3. Execute TODOs in parallel where the plan allows (respect Parallel Groups "
         "and Sequential Chain from the EXECUTION SUMMARY).\n"
         "4. For each TODO, use the corresponding agent's prompt from the "
-        "MULTI-AGENT PROMPT BUNDLE verbatim — do not rewrite or summarize it.\n"
+        "MULTI-AGENT PROMPT BUNDLE verbatim -- do not rewrite or summarize it.\n"
         "5. Apply MODEL FALLBACK PROTOCOL: sonnet -> opus -> escalate to user on rate limits.\n\n"
         "--- BEGIN ORCHESTRATION PROMPT ---\n\n"
     )

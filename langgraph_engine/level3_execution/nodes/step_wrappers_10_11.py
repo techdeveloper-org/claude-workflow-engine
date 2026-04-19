@@ -32,7 +32,7 @@ except ImportError:
 # a late binding avoids the cycle at module load time.
 try:
     from ..subgraph import _run_step
-except ImportError:  # pragma: no cover — defensive fallback for isolated imports
+except ImportError:  # pragma: no cover -- defensive fallback for isolated imports
 
     def _run_step(step_number, label, fn, state, fallback_result):  # type: ignore[misc]
         try:

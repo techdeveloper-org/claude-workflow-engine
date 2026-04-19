@@ -65,12 +65,12 @@ def test_error_logger():
     error_summary = logger.get_error_summary()
     decision_summary = logger.get_decision_summary()
 
-    print(f"\n✅ Error Summary: {error_summary}")
-    print(f"✅ Decision Summary: {decision_summary}")
+    print(f"\n[OK] Error Summary: {error_summary}")
+    print(f"[OK] Decision Summary: {decision_summary}")
 
     # Test 7: Save audit trail
     audit_path = logger.save_audit_trail()
-    print(f"✅ Audit trail saved: {audit_path}")
+    print(f"[OK] Audit trail saved: {audit_path}")
     print(f"   File exists: {audit_path.exists()}")
 
     return True
@@ -92,38 +92,38 @@ def test_backup_manager():
     try:
         # Test 1: Backup file
         success = manager.backup_file(str(test_file), "Level -1", "Before modification")
-        print(f"✅ Backup created: {success}")
+        print(f"[OK] Backup created: {success}")
 
         # Test 2: Modify file
         test_file.write_text("print('original content')\nprint('modified')\n")
-        print("✅ File modified")
+        print("[OK] File modified")
 
         # Test 3: Generate diff
         diff_path = manager.generate_diff(str(test_file), "Level -1")
-        print(f"✅ Diff generated: {diff_path}")
+        print(f"[OK] Diff generated: {diff_path}")
         if diff_path:
             print(f"   Content:\n{Path(diff_path).read_text()[:200]}...")
 
         # Test 4: Compare files
         comparison = manager.compare_files(str(test_file), "Level -1")
-        print(f"✅ Comparison: {comparison}")
+        print(f"[OK] Comparison: {comparison}")
 
         # Test 5: Validate file integrity
         is_valid = manager.validate_file_integrity(str(test_file), "Level -1")
-        print(f"✅ File validation: {is_valid}")
+        print(f"[OK] File validation: {is_valid}")
 
         # Test 6: Get backup history
         history = manager.get_backup_history(str(test_file))
-        print(f"✅ Backup history: {len(history)} entries")
+        print(f"[OK] Backup history: {len(history)} entries")
 
         # Test 7: Restore file
         success = manager.restore_file(str(test_file), "Level -1")
-        print(f"✅ File restored: {success}")
+        print(f"[OK] File restored: {success}")
 
         # Verify restoration
         restored_content = test_file.read_text()
         is_restored = "original content" in restored_content and "modified" not in restored_content
-        print(f"✅ Restoration verified: {is_restored}")
+        print(f"[OK] Restoration verified: {is_restored}")
 
         return True
 
@@ -171,7 +171,7 @@ def test_integration():
 
         # Save audit trail
         logger.save_audit_trail()
-        print("✅ Integration test completed successfully")
+        print("[OK] Integration test completed successfully")
 
         return True
 
@@ -192,12 +192,12 @@ def main():
         test_integration()
 
         print("\n" + "=" * 60)
-        print("✅ ALL TESTS PASSED!")
+        print("[OK] ALL TESTS PASSED!")
         print("=" * 60)
         return True
 
     except Exception as e:
-        print(f"\n❌ TEST FAILED: {e}")
+        print(f"\n[FAIL] TEST FAILED: {e}")
         import traceback
 
         traceback.print_exc()

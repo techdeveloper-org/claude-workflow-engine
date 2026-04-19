@@ -85,7 +85,7 @@ class LoggingSetup:
         # Configure Python logging to use Rich
         logging.basicConfig(level="INFO", format="%(message)s", handlers=[handler])
 
-        logger.info("[green]✓[/green] Rich logging configured")
+        logger.info("[green][x][/green] Rich logging configured")
 
     def get_progress(self, total_tasks: int, description: str = "Executing") -> Progress:
         """

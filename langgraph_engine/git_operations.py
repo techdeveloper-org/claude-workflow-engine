@@ -278,7 +278,7 @@ class GitOperations:
         result = self._run_git(["checkout", branch_name], check=False)
 
         if result.get("success"):
-            logger.info(f"✓ Switched to {branch_name}")
+            logger.info(f"[x] Switched to {branch_name}")
             return {"success": True, "branch": branch_name}
         else:
             logger.error(f"Cannot switch to {branch_name}: {result.get('stderr')}")
@@ -315,7 +315,7 @@ class GitOperations:
                 result = self._run_git(["add"] + files, check=False)
 
             if result.get("success"):
-                logger.info("✓ Files staged")
+                logger.info("[x] Files staged")
                 return {"success": True, "staged_count": len(files or ["all"])}
             else:
                 logger.error(f"Staging failed: {result.get('stderr')}")
@@ -362,7 +362,7 @@ class GitOperations:
                 hash_result = self._run_git(["rev-parse", "HEAD"], check=False)
                 commit_hash = hash_result.get("stdout", "unknown")[:7] if hash_result.get("success") else "unknown"
 
-                logger.info(f"✓ Commit created: {commit_hash}")
+                logger.info(f"[x] Commit created: {commit_hash}")
                 return {"success": True, "commit_hash": commit_hash, "message": message}
             else:
                 logger.error(f"Commit failed: {result.get('stderr')}")
@@ -402,7 +402,7 @@ class GitOperations:
             result = self._run_git(cmd, check=False)
 
             if result.get("success"):
-                logger.info(f"✓ Pushed to origin/{branch}")
+                logger.info(f"[x] Pushed to origin/{branch}")
                 return {"success": True, "branch": branch}
             else:
                 logger.error(f"Push failed: {result.get('stderr')}")

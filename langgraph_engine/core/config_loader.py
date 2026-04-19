@@ -1,10 +1,10 @@
 """
-Workflow Config Loader — reads ~/.claude/workflow-config.json.
+Workflow Config Loader -- reads ~/.claude/workflow-config.json.
 
 Two modes:
-  1. load_workflow_config() — injects values into os.environ (covers any
+  1. load_workflow_config() -- injects values into os.environ (covers any
      remaining os.environ.get() call sites as a safety net).
-  2. get_section(name)     — returns raw JSON section dict so integration
+  2. get_section(name)     -- returns raw JSON section dict so integration
      classes can read values directly without going through os.environ.
 
 Priority for os.environ injection:
@@ -22,7 +22,7 @@ from pathlib import Path
 
 _DEFAULT_CONFIG_PATH = Path.home() / ".claude" / "workflow-config.json"
 
-# Nested JSON key  →  env var name  (kept for os.environ injection fallback)
+# Nested JSON key  ->  env var name  (kept for os.environ injection fallback)
 _MAPPING: dict[str, str] = {
     "pipeline.hook_mode": "CLAUDE_HOOK_MODE",
     "pipeline.debug": "CLAUDE_DEBUG",

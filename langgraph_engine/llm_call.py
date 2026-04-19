@@ -185,7 +185,7 @@ class AnthropicProvider(LLMProvider):
         self._model_balanced = os.getenv("ANTHROPIC_MODEL_BALANCED", self.MODEL_MAP["balanced"])
         self._model_deep = os.getenv("ANTHROPIC_MODEL_DEEP", self.MODEL_MAP["deep"])
         self._available = bool(self._api_key)
-        self._client = None  # Lazy init — avoid import overhead at startup
+        self._client = None  # Lazy init -- avoid import overhead at startup
 
     def _get_client(self):
         """Lazy-init the Anthropic SDK client (once per provider instance)."""
@@ -243,7 +243,7 @@ class AnthropicProvider(LLMProvider):
             return text if text else None
 
         except _anthropic_sdk.AuthenticationError:
-            _log.warning("AnthropicProvider: invalid API key — disabling provider")
+            _log.warning("AnthropicProvider: invalid API key -- disabling provider")
             self._available = False
         except _anthropic_sdk.RateLimitError as exc:
             _log.debug("AnthropicProvider rate limited: %s", exc)
@@ -307,7 +307,7 @@ def _build_provider_chain() -> List[LLMProvider]:
     else:
         order = [primary]
         if fallback_str:
-            # User explicitly defined fallbacks — respect their choice
+            # User explicitly defined fallbacks -- respect their choice
             order.extend(f.strip() for f in fallback_str.split(",") if f.strip())
 
     chain = []

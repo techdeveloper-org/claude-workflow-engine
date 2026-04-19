@@ -51,7 +51,7 @@ class BackupManager:
         file_path = Path(file_path)
 
         if not file_path.exists():
-            print(f"⚠️  File not found for backup: {file_path}")
+            print(f"[WARN]  File not found for backup: {file_path}")
             return False
 
         try:
@@ -76,11 +76,11 @@ class BackupManager:
             self.metadata["backups"].append(entry)
             self._save_metadata()
 
-            print(f"✅ Backup created: {file_path} → {backup_file}")
+            print(f"[OK] Backup created: {file_path} -> {backup_file}")
             return True
 
         except Exception as e:
-            print(f"❌ Backup failed for {file_path}: {e}")
+            print(f"[FAIL] Backup failed for {file_path}: {e}")
             return False
 
     def restore_file(self, file_path: str, step: str) -> bool:
@@ -103,7 +103,7 @@ class BackupManager:
             ]
 
             if not backup_entries:
-                print(f"⚠️  No backup found for {file_path} in step {step}")
+                print(f"[WARN]  No backup found for {file_path} in step {step}")
                 return False
 
             # Use most recent backup
@@ -111,7 +111,7 @@ class BackupManager:
             backup_file = Path(latest_backup["backup_path"])
 
             if not backup_file.exists():
-                print(f"❌ Backup file not found: {backup_file}")
+                print(f"[FAIL] Backup file not found: {backup_file}")
                 return False
 
             # Restore file
@@ -122,11 +122,11 @@ class BackupManager:
             latest_backup["restore_timestamp"] = datetime.now().isoformat()
             self._save_metadata()
 
-            print(f"✅ Restored: {file_path} from {backup_file}")
+            print(f"[OK] Restored: {file_path} from {backup_file}")
             return True
 
         except Exception as e:
-            print(f"❌ Restore failed for {file_path}: {e}")
+            print(f"[FAIL] Restore failed for {file_path}: {e}")
             return False
 
     def generate_diff(self, file_path: str, step: str, label: str = "") -> Optional[str]:
@@ -150,7 +150,7 @@ class BackupManager:
             ]
 
             if not backup_entries:
-                print(f"⚠️  No backup found for diff: {file_path}")
+                print(f"[WARN]  No backup found for diff: {file_path}")
                 return None
 
             latest_backup = max(backup_entries, key=lambda x: x["timestamp"])
@@ -185,11 +185,11 @@ class BackupManager:
 
             diff_file.write_text(diff_content, encoding="utf-8")
 
-            print(f"✅ Diff generated: {diff_file}")
+            print(f"[OK] Diff generated: {diff_file}")
             return str(diff_file)
 
         except Exception as e:
-            print(f"❌ Diff generation failed for {file_path}: {e}")
+            print(f"[FAIL] Diff generation failed for {file_path}: {e}")
             return None
 
     def validate_file_integrity(self, file_path: str, step: str) -> bool:
@@ -206,7 +206,7 @@ class BackupManager:
         file_path = Path(file_path)
 
         if not file_path.exists():
-            print(f"❌ File not found for validation: {file_path}")
+            print(f"[FAIL] File not found for validation: {file_path}")
             return False
 
         try:
@@ -215,7 +215,7 @@ class BackupManager:
 
             # Basic validation: non-empty file
             if not content.strip():
-                print(f"⚠️  File is empty after modification: {file_path}")
+                print(f"[WARN]  File is empty after modification: {file_path}")
                 return False
 
             # Specific validation for Python files
@@ -223,14 +223,14 @@ class BackupManager:
                 try:
                     compile(content, str(file_path), "exec")
                 except SyntaxError as e:
-                    print(f"❌ Syntax error in {file_path}: {e}")
+                    print(f"[FAIL] Syntax error in {file_path}: {e}")
                     return False
 
-            print(f"✅ File validation passed: {file_path}")
+            print(f"[OK] File validation passed: {file_path}")
             return True
 
         except Exception as e:
-            print(f"❌ File validation failed for {file_path}: {e}")
+            print(f"[FAIL] File validation failed for {file_path}: {e}")
             return False
 
     def compare_files(self, file_path: str, step: str) -> Dict:
@@ -307,7 +307,7 @@ class BackupManager:
         try:
             self.metadata_file.write_text(json.dumps(self.metadata, indent=2))
         except Exception as e:
-            print(f"❌ Failed to save backup metadata: {e}")
+            print(f"[FAIL] Failed to save backup metadata: {e}")
 
 
 # ============================================================================
@@ -361,4 +361,4 @@ if __name__ == "__main__":
 
     # Cleanup
     test_file.unlink()
-    print("\n✅ Example completed")
+    print("\n[OK] Example completed")

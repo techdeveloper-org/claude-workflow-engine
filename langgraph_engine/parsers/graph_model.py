@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # which silently truncated analysis of any call chain longer than 15 hops.
 # Issue #207 raised the defaults and made both configurable via env vars so
 # operators can tune per project without editing source.
-#   CLAUDE_CG_MAX_DEPTH  (default 30) — deeper covers most real codebases
-#   CLAUDE_CG_MAX_PATHS  (default 500) — permits wider fanout capture
+#   CLAUDE_CG_MAX_DEPTH  (default 30) -- deeper covers most real codebases
+#   CLAUDE_CG_MAX_PATHS  (default 500) -- permits wider fanout capture
 # Callers may also pass explicit max_depth / max_paths kwargs which override
 # the env defaults for a single call.
 
@@ -306,7 +306,7 @@ class CallGraph:
         [{"id": "path_N", "path": [fqn1, fqn2, ...], "depth": N,
           "total_complexity": N}]
 
-        Previously hard-coded at max_depth=15, max_paths=200 — issue #207
+        Previously hard-coded at max_depth=15, max_paths=200 -- issue #207
         raised the defaults and made them configurable so deep call chains
         in larger codebases are no longer silently truncated.
         """

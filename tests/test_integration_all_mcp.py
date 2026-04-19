@@ -31,11 +31,11 @@ import pytest
 
 _MCP_DIR = Path(__file__).parent.parent / "src" / "mcp"
 
-# Module-level skip — 12 of 13 MCP server files no longer live in-engine.
+# Module-level skip -- 12 of 13 MCP server files no longer live in-engine.
 # See issue #202 and CLAUDE.md for the repo extraction history.
 pytestmark = pytest.mark.skip(
     reason="MCP servers moved to separate repos under techdeveloper-org; "
-    "integration tests should follow — see issue #202"
+    "integration tests should follow -- see issue #202"
 )
 
 

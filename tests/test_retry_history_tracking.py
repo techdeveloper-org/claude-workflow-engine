@@ -26,7 +26,7 @@ class TestRetryHistoryTracking:
     def test_no_retry_history_initial(self):
         """Test first attempt - no retry history."""
         print("\n" + "=" * 70)
-        print("✅ TEST 1: Initial Attempt (No Retry History)")
+        print("[OK] TEST 1: Initial Attempt (No Retry History)")
         print("=" * 70)
 
         state = FlowState(
@@ -40,12 +40,12 @@ class TestRetryHistoryTracking:
         history = _build_retry_history_context(state)
         print(f"History: '{history}'")
         assert history == "", "First attempt should have empty history"
-        print("✅ No history on first attempt (correct)")
+        print("[OK] No history on first attempt (correct)")
 
     def test_retry_attempt_1_history(self):
         """Test Retry Attempt 1 - shows what was fixed."""
         print("\n" + "=" * 70)
-        print("✅ TEST 2: Retry Attempt 1 (Shows Previous Fixes)")
+        print("[OK] TEST 2: Retry Attempt 1 (Shows Previous Fixes)")
         print("=" * 70)
 
         state = FlowState(
@@ -65,20 +65,20 @@ class TestRetryHistoryTracking:
         assert "Fixed print() statement" in history
         assert "Missing logger import" in history
         assert "Current Attempt: #1 of 3" in history
-        print("✅ Previous fixes shown (correct)")
-        print("✅ Current issues shown (correct)")
+        print("[OK] Previous fixes shown (correct)")
+        print("[OK] Current issues shown (correct)")
 
     def test_retry_attempt_2_complete_history(self):
         """Test Retry Attempt 2 - shows complete history + new issues."""
         print("\n" + "=" * 70)
-        print("✅ TEST 3: Retry Attempt 2 (Complete History)")
+        print("[OK] TEST 3: Retry Attempt 2 (Complete History)")
         print("=" * 70)
 
         state = FlowState(
             step11_retry_count=2,
             step11_retry_messages=[
-                "Attempt 1: Fixed print() → added logging",
-                "Attempt 2: Added logger import → fixed import error",
+                "Attempt 1: Fixed print() -> added logging",
+                "Attempt 2: Added logger import -> fixed import error",
             ],
             step11_review_issues=[
                 "Missing @Autowired annotation",
@@ -100,12 +100,12 @@ class TestRetryHistoryTracking:
         assert "Missing @Autowired" in history, "Should show current issue 1"
         assert "No error handling" in history, "Should show current issue 2"
         assert "Current Attempt: #2 of 3" in history
-        print("✅ Complete history tracked (correct)")
+        print("[OK] Complete history tracked (correct)")
 
     def test_final_retry_warning(self):
         """Test Retry Attempt 3 - final warning."""
         print("\n" + "=" * 70)
-        print("✅ TEST 4: Final Retry (Attempt 3) - Warning Message")
+        print("[OK] TEST 4: Final Retry (Attempt 3) - Warning Message")
         print("=" * 70)
 
         state = FlowState(
@@ -126,13 +126,13 @@ class TestRetryHistoryTracking:
         assert "FINAL ATTEMPT" in history
         assert "PR will be blocked for manual review" in history
         assert "Remaining Attempts: 0" in history
-        print("✅ Final attempt warning shown (correct)")
-        print("⚠️  User alerted about manual review fallback")
+        print("[OK] Final attempt warning shown (correct)")
+        print("[WARN]  User alerted about manual review fallback")
 
     def test_step10_implementation_note_with_history(self):
         """Test step10 generates prompt with complete history."""
         print("\n" + "=" * 70)
-        print("✅ TEST 5: Step 10 Full Prompt with History")
+        print("[OK] TEST 5: Step 10 Full Prompt with History")
         print("=" * 70)
 
         state = FlowState(
@@ -158,12 +158,12 @@ class TestRetryHistoryTracking:
         assert "Missing imports" in prompt
         assert "CURRENT ISSUES TO FIX" in prompt
         assert "Do NOT undo previous fixes" in prompt
-        print("✅ Prompt includes complete history (correct)")
+        print("[OK] Prompt includes complete history (correct)")
 
     def test_many_issues_truncated(self):
         """Test many issues are truncated nicely."""
         print("\n" + "=" * 70)
-        print("✅ TEST 6: Many Issues Truncation")
+        print("[OK] TEST 6: Many Issues Truncation")
         print("=" * 70)
 
         # Create 20 issues
@@ -184,7 +184,7 @@ class TestRetryHistoryTracking:
         assert "Issue #1" in history
         assert "Issue #10" in history
         assert "and 10 more issues" in history
-        print("✅ Issues truncated nicely (shows first 10 + count)")
+        print("[OK] Issues truncated nicely (shows first 10 + count)")
 
 
 class TestRetryHistorySummary:
@@ -197,34 +197,34 @@ class TestRetryHistorySummary:
         print("=" * 70)
         print(
             """
-✅ FEATURES IMPLEMENTED:
+[OK] FEATURES IMPLEMENTED:
 
 1. Build Retry History Context
-   ✓ Shows what was fixed in each attempt
-   ✓ Lists current issues to fix
-   ✓ Shows remaining retry attempts
-   ✓ Warns on final attempt
+   [x] Shows what was fixed in each attempt
+   [x] Lists current issues to fix
+   [x] Shows remaining retry attempts
+   [x] Warns on final attempt
 
 2. Prompt Generation
-   ✓ Includes complete history in retry prompt
-   ✓ Reminds Claude not to undo previous fixes
-   ✓ Clear separation of previous fixes vs current issues
-   ✓ Truncates many issues nicely (first 10 + count)
+   [x] Includes complete history in retry prompt
+   [x] Reminds Claude not to undo previous fixes
+   [x] Clear separation of previous fixes vs current issues
+   [x] Truncates many issues nicely (first 10 + count)
 
 3. Smart Formatting
-   ✓ Easy to read sections
-   ✓ Clear emphasis on current issues
-   ✓ Tracks attempt numbers
-   ✓ Final attempt warning
+   [x] Easy to read sections
+   [x] Clear emphasis on current issues
+   [x] Tracks attempt numbers
+   [x] Final attempt warning
 
 EXAMPLE OUTPUT:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---------------------------------------------------------------------
 
 ======================================================================
-📋 COMPLETE RETRY HISTORY
+[list] COMPLETE RETRY HISTORY
 ======================================================================
 
-✓ PREVIOUS ATTEMPTS (What was fixed):
+[x] PREVIOUS ATTEMPTS (What was fixed):
 ----------------------------------------------------------------------
 
   Attempt 1:
@@ -233,13 +233,13 @@ EXAMPLE OUTPUT:
   Attempt 2:
   Added logger import to utils.py
 
-🔴 CURRENT ATTEMPT (Issues to fix now):
+[RED] CURRENT ATTEMPT (Issues to fix now):
 ----------------------------------------------------------------------
   1. Missing @Autowired annotation on dependency
   2. No error handling in catch block
   3. Unused variable 'result' in function
 
-📊 RETRY STATUS:
+[chart] RETRY STATUS:
 ----------------------------------------------------------------------
   Current Attempt: #2 of 3
   Remaining Attempts: 1
@@ -255,10 +255,10 @@ CURRENT ISSUES TO FIX:
 - Unused variable 'result' in function
 
 IMPORTANT:
-• Do NOT undo previous fixes (shown in history above)
-• Fix ONLY the current issues listed above
-• Keep all working code from previous attempts
-• Run tests to verify fixes if possible
+- Do NOT undo previous fixes (shown in history above)
+- Fix ONLY the current issues listed above
+- Keep all working code from previous attempts
+- Run tests to verify fixes if possible
 
 Original implementation prompt:
 ---
@@ -267,19 +267,19 @@ Original implementation prompt:
 
 Please fix the issues above and re-implement.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---------------------------------------------------------------------
 
 BENEFITS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---------------------------------------------------------------------
 
-✅ Claude sees what was already fixed
-✅ Prevents repeating same fixes
-✅ Clear understanding of progress
-✅ Motivated by seeing improvements
-✅ Fewer infinite loops
-✅ Better retry success rate
+[OK] Claude sees what was already fixed
+[OK] Prevents repeating same fixes
+[OK] Clear understanding of progress
+[OK] Motivated by seeing improvements
+[OK] Fewer infinite loops
+[OK] Better retry success rate
 
-Status: PRODUCTION READY ✅
+Status: PRODUCTION READY [OK]
         """
         )
 

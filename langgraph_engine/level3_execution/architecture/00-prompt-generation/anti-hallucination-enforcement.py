@@ -81,7 +81,7 @@ def report():
         report_data = {
             "status": "success",
             "policy": "anti-hallucination-enforcement",
-            "description": "Enforces 3-phase process to prevent hallucinations (Think → Search → Verify)",
+            "description": "Enforces 3-phase process to prevent hallucinations (Think -> Search -> Verify)",
             "phases": [
                 "PHASE 1: THINKING - Understand requirements, identify info needed",
                 "PHASE 2: INFORMATION GATHERING - Search/read code, extract patterns",

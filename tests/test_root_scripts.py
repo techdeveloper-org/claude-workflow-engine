@@ -43,7 +43,7 @@ def _write_json(path, data):
 
 
 # ===========================================================================
-# SessionIDGenerator tests — REMOVED
+# SessionIDGenerator tests -- REMOVED
 # ===========================================================================
 # The Python-based session-id-generator.py was removed. Session ID generation
 # is now handled by the shell script scripts/tools/session-id-generator.sh

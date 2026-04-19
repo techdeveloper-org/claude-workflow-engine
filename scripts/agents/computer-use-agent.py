@@ -17,20 +17,21 @@ Requires:
 - anthropic, pillow in requirements.txt
 """
 
-import os
-import json
 import base64
+import json
+import os
 import subprocess
 import time
-from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Optional
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
 
 
 @dataclass
 class TestResult:
     """Single test result"""
+
     test_name: str
     status: str  # PASSED, FAILED, SKIPPED
     duration_ms: float
@@ -55,6 +56,7 @@ class ComputerUseAgent:
         # Import here to allow graceful fallback for testing
         try:
             import anthropic
+
             self.anthropic = anthropic
             self.client = anthropic.Anthropic(api_key=self.api_key)
         except ImportError:
@@ -109,6 +111,7 @@ class ComputerUseAgent:
         """Click at coordinates"""
         try:
             import pyautogui
+
             pyautogui.click(x, y)
             time.sleep(0.5)  # Wait for action
             return True
@@ -120,6 +123,7 @@ class ComputerUseAgent:
         """Type text"""
         try:
             import pyautogui
+
             pyautogui.write(text, interval=0.05)
             return True
         except Exception as e:
@@ -130,6 +134,7 @@ class ComputerUseAgent:
         """Press a key"""
         try:
             import pyautogui
+
             pyautogui.press(key)
             time.sleep(0.3)
             return True
@@ -177,17 +182,13 @@ class ComputerUseAgent:
                 status="PASSED",
                 duration_ms=duration,
                 screenshots=screenshots,
-                details="Successfully logged in and dashboard loaded"
+                details="Successfully logged in and dashboard loaded",
             )
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds() * 1000
             return TestResult(
-                test_name=test_name,
-                status="FAILED",
-                duration_ms=duration,
-                screenshots=screenshots,
-                error=str(e)
+                test_name=test_name, status="FAILED", duration_ms=duration, screenshots=screenshots, error=str(e)
             )
 
     def test_3level_flow_history(self) -> TestResult:
@@ -214,6 +215,7 @@ class ComputerUseAgent:
             # Step 2: Scroll to see more data
             print("  [3/3] Scrolling session list")
             import pyautogui
+
             pyautogui.scroll(-3)  # Scroll down
             time.sleep(1)
 
@@ -228,17 +230,13 @@ class ComputerUseAgent:
                 status="PASSED",
                 duration_ms=duration,
                 screenshots=screenshots,
-                details="3-level flow history page loaded and session timeline visible"
+                details="3-level flow history page loaded and session timeline visible",
             )
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds() * 1000
             return TestResult(
-                test_name=test_name,
-                status="FAILED",
-                duration_ms=duration,
-                screenshots=screenshots,
-                error=str(e)
+                test_name=test_name, status="FAILED", duration_ms=duration, screenshots=screenshots, error=str(e)
             )
 
     def test_sessions_page(self) -> TestResult:
@@ -251,6 +249,7 @@ class ComputerUseAgent:
             print("  [1/3] Navigating to sessions page")
             # Navigate to /sessions
             import pyautogui
+
             pyautogui.hotkey("ctrl", "l")  # Address bar
             time.sleep(0.5)
             self.type_text("localhost:5000/sessions")
@@ -279,17 +278,13 @@ class ComputerUseAgent:
                 status="PASSED",
                 duration_ms=duration,
                 screenshots=screenshots,
-                details="Sessions page loaded with session list and metadata"
+                details="Sessions page loaded with session list and metadata",
             )
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds() * 1000
             return TestResult(
-                test_name=test_name,
-                status="FAILED",
-                duration_ms=duration,
-                screenshots=screenshots,
-                error=str(e)
+                test_name=test_name, status="FAILED", duration_ms=duration, screenshots=screenshots, error=str(e)
             )
 
     def test_policies_page(self) -> TestResult:
@@ -302,6 +297,7 @@ class ComputerUseAgent:
             print("  [1/3] Navigating to policies page")
             # Navigate to /policies
             import pyautogui
+
             pyautogui.hotkey("ctrl", "l")  # Address bar
             time.sleep(0.5)
             self.type_text("localhost:5000/policies")
@@ -317,6 +313,7 @@ class ComputerUseAgent:
             # Step 2: Check execution counts
             print("  [3/3] Scrolling to see policy execution counts")
             import pyautogui
+
             pyautogui.scroll(-3)
             time.sleep(1)
 
@@ -331,17 +328,13 @@ class ComputerUseAgent:
                 status="PASSED",
                 duration_ms=duration,
                 screenshots=screenshots,
-                details="Policies page loaded with all 32 policies and execution metrics"
+                details="Policies page loaded with all 32 policies and execution metrics",
             )
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds() * 1000
             return TestResult(
-                test_name=test_name,
-                status="FAILED",
-                duration_ms=duration,
-                screenshots=screenshots,
-                error=str(e)
+                test_name=test_name, status="FAILED", duration_ms=duration, screenshots=screenshots, error=str(e)
             )
 
     def run_test_suite(self) -> Dict:
@@ -410,7 +403,7 @@ class ComputerUseAgent:
             json.dump(report, f, indent=2)
 
         print("=" * 80)
-        print(f"✅ REPORT SAVED: {report_file}")
+        print(f"[OK] REPORT SAVED: {report_file}")
         print(f"Tests Passed: {passed}/{len(self.test_results)}")
         print(f"Screenshots: {self.screenshots_dir}")
         print(f"Total Screenshots: {self.screenshot_counter}")
@@ -423,19 +416,9 @@ def main():
     """CLI entry point"""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Computer Use Agent for Claude Insight E2E Testing"
-    )
-    parser.add_argument(
-        "--run-tests",
-        action="store_true",
-        help="Run complete test suite"
-    )
-    parser.add_argument(
-        "--dashboard-url",
-        default="http://localhost:5000",
-        help="Claude Insight dashboard URL"
-    )
+    parser = argparse.ArgumentParser(description="Computer Use Agent for Claude Insight E2E Testing")
+    parser.add_argument("--run-tests", action="store_true", help="Run complete test suite")
+    parser.add_argument("--dashboard-url", default="http://localhost:5000", help="Claude Insight dashboard URL")
 
     args = parser.parse_args()
 
@@ -449,12 +432,12 @@ def main():
             parser.print_help()
 
     except ImportError as e:
-        print(f"❌ Missing dependencies: {e}")
+        print(f"[FAIL] Missing dependencies: {e}")
         print("\nInstall required packages:")
         print("  pip install anthropic mss pyautogui pillow")
         exit(1)
     except ValueError as e:
-        print(f"❌ Configuration error: {e}")
+        print(f"[FAIL] Configuration error: {e}")
         exit(1)
 
 

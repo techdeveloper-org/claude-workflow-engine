@@ -220,7 +220,7 @@ def test_postcondition_pass(monkeypatch):
 
 
 def test_postcondition_fail_null(monkeypatch):
-    """Postcondition with non_null=True fails when value is None — returns ERROR violation."""
+    """Postcondition with non_null=True fails when value is None -- returns ERROR violation."""
     verifier = _get_enabled_verifier(monkeypatch)
     contract = NodeContract(
         node_name="n1",
@@ -347,7 +347,7 @@ def test_build_report_with_violations(monkeypatch):
 
 
 def test_null_verifier_all_methods_no_op(monkeypatch):
-    """NullVerifier: every method is a no-op — returns neutral values, nothing accumulated."""
+    """NullVerifier: every method is a no-op -- returns neutral values, nothing accumulated."""
     monkeypatch.delenv("ENABLE_RUNTIME_VERIFICATION", raising=False)
 
     null_verifier = NullVerifier()

@@ -398,7 +398,7 @@ class TestCheckLevel1SyncComplete:
 
 
 # ===========================================================================
-# check_level2_standards_complete — REMOVED
+# check_level2_standards_complete -- REMOVED
 # ===========================================================================
 # Level 2 standards enforcement was purged in v1.16.0 (commit 937c9ee).
 # Level 2 policies are now data-only files under policies/02-standards-system/

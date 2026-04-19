@@ -349,7 +349,7 @@ def _parse_gradle_deps(root: Path, build_files: List[str]) -> List[Dict]:
                     seen.add(name)
                     deps.append({"name": name, "version": version, "source": "build.gradle"})
 
-            # Style 3 (catalog alias — no version available at parse time)
+            # Style 3 (catalog alias -- no version available at parse time)
             for m in libs_pattern.finditer(content):
                 alias = m.group(1).strip()
                 name = "libs.%s" % alias

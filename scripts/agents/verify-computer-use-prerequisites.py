@@ -11,10 +11,10 @@ Checks that ALL prerequisites are met before running Computer Use tests:
 """
 
 import json
-import sys
 import subprocess
-from pathlib import Path
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import List, Tuple
 
 
@@ -28,7 +28,7 @@ class PreFlightChecker:
 
     def check(self, name: str, condition: bool, details: str = ""):
         """Record a check result"""
-        status = "✅" if condition else "❌"
+        status = "[OK]" if condition else "[FAIL]"
         self.results.append((name, condition, details))
         print(f"{status} {name}")
         if details:
@@ -78,22 +78,12 @@ class PreFlightChecker:
             passed_steps = sum(1 for step in pipeline if step.get("status") == "PASSED")
             failed_steps = sum(1 for step in pipeline if step.get("status") == "FAILED")
 
-            self.check(
-                "Flow trace structure",
-                total_steps > 0,
-                f"Pipeline has {total_steps} steps"
-            )
+            self.check("Flow trace structure", total_steps > 0, f"Pipeline has {total_steps} steps")
+
+            self.check("All 25 policies present", total_steps == 25, f"Found {total_steps}/25 steps")
 
             self.check(
-                "All 25 policies present",
-                total_steps == 25,
-                f"Found {total_steps}/25 steps"
-            )
-
-            self.check(
-                "All policies PASSED",
-                passed_steps == total_steps,
-                f"{passed_steps} passed, {failed_steps} failed"
+                "All policies PASSED", passed_steps == total_steps, f"{passed_steps} passed, {failed_steps} failed"
             )
 
             return passed_steps == total_steps
@@ -112,11 +102,7 @@ class PreFlightChecker:
         policy_log = self.logs_dir / "policy-hits.log"
         if policy_log.exists():
             size = policy_log.stat().st_size
-            self.check(
-                "policy-hits.log",
-                size > 0,
-                f"Size: {size} bytes"
-            )
+            self.check("policy-hits.log", size > 0, f"Size: {size} bytes")
         else:
             self.check("policy-hits.log", False, "File not found")
             checks_passed = False
@@ -127,11 +113,7 @@ class PreFlightChecker:
             try:
                 with open(progress_file) as f:
                     data = json.load(f)
-                self.check(
-                    "session-progress.json",
-                    True,
-                    f"Tasks created: {data.get('tasks_created', 0)}"
-                )
+                self.check("session-progress.json", True, f"Tasks created: {data.get('tasks_created', 0)}")
             except Exception as e:
                 self.check("session-progress.json", False, str(e))
                 checks_passed = False
@@ -148,11 +130,7 @@ class PreFlightChecker:
                 if flag_file.exists():
                     flags_found += 1
 
-        self.check(
-            "Task breakdown flags",
-            flags_found > 0,
-            f"Found {flags_found} active enforcement flags"
-        )
+        self.check("Task breakdown flags", flags_found > 0, f"Found {flags_found} active enforcement flags")
 
         return checks_passed
 
@@ -169,16 +147,12 @@ class PreFlightChecker:
                 ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", dashboard_url],
                 capture_output=True,
                 timeout=5,
-                text=True
+                text=True,
             )
             status_code = result.stdout.strip()
             dashboard_up = status_code.startswith("2") or status_code.startswith("3")
 
-            self.check(
-                "Dashboard running",
-                dashboard_up,
-                f"HTTP {status_code}"
-            )
+            self.check("Dashboard running", dashboard_up, f"HTTP {status_code}")
 
             if not dashboard_up:
                 checks_passed = False
@@ -190,19 +164,12 @@ class PreFlightChecker:
         # Check sessions API
         try:
             result = subprocess.run(
-                ["curl", "-s", f"{dashboard_url}/api/3level-flow/sessions"],
-                capture_output=True,
-                timeout=5,
-                text=True
+                ["curl", "-s", f"{dashboard_url}/api/3level-flow/sessions"], capture_output=True, timeout=5, text=True
             )
             if result.returncode == 0:
                 data = json.loads(result.stdout)
                 session_count = len(data.get("sessions", []))
-                self.check(
-                    "Dashboard /api/3level-flow/sessions",
-                    session_count > 0,
-                    f"Sessions found: {session_count}"
-                )
+                self.check("Dashboard /api/3level-flow/sessions", session_count > 0, f"Sessions found: {session_count}")
             else:
                 self.check("Dashboard /api/3level-flow/sessions", False, "API call failed")
                 checks_passed = False
@@ -230,19 +197,11 @@ class PreFlightChecker:
                     mtime = datetime.fromtimestamp(flow_trace.stat().st_mtime)
                     if mtime > one_hour_ago:
                         flow_trace_recent = True
-                        self.check(
-                            "Recent flow-trace.json",
-                            True,
-                            f"Modified: {mtime.strftime('%H:%M:%S')}"
-                        )
+                        self.check("Recent flow-trace.json", True, f"Modified: {mtime.strftime('%H:%M:%S')}")
                         break
 
         if not flow_trace_recent:
-            self.check(
-                "Recent flow-trace.json",
-                False,
-                "No recent session traces found"
-            )
+            self.check("Recent flow-trace.json", False, "No recent session traces found")
 
         return flow_trace_recent
 
@@ -271,12 +230,12 @@ class PreFlightChecker:
         print(f"\nChecks Passed: {passed}/{total}")
 
         if all_passed:
-            print("\n✅ ALL PRE-FLIGHT CHECKS PASSED!")
-            print("\n🚀 Ready to run Computer Use tests:")
+            print("\n[OK] ALL PRE-FLIGHT CHECKS PASSED!")
+            print("\n[launch] Ready to run Computer Use tests:")
             print("   python scripts/agents/computer-use-agent.py --run-tests")
         else:
-            print("\n❌ SOME CHECKS FAILED")
-            print("\n⚠️  Computer Use testing is NOT READY")
+            print("\n[FAIL] SOME CHECKS FAILED")
+            print("\n[WARN]  Computer Use testing is NOT READY")
             print("\nFailed checks:")
             for name, result, details in self.results:
                 if not result:

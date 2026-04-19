@@ -333,7 +333,7 @@ class DocumentationGenerator:
         # Analyze codebase once
         try:
             context = self.analyzer.analyze()
-            self.logger.info(f"✓ Codebase analysis complete: {context.name}")
+            self.logger.info(f"[x] Codebase analysis complete: {context.name}")
         except Exception as e:
             self.logger.error(f"Failed to analyze codebase: {e}")
             errors.append(str(e))
@@ -355,12 +355,12 @@ class DocumentationGenerator:
                     self.logger.info(f"Updating {filename}...")
                     update_func(file_path, context, files_modified)
                     updated_files.append(filename)
-                    self.logger.info(f"✓ Updated {filename}")
+                    self.logger.info(f"[x] Updated {filename}")
                 else:
                     self.logger.info(f"Creating {filename}...")
                     update_func(file_path, context, files_modified)
                     updated_files.append(f"{filename} (created)")
-                    self.logger.info(f"✓ Created {filename}")
+                    self.logger.info(f"[x] Created {filename}")
             except Exception as e:
                 self.logger.error(f"Error with {filename}: {e}")
                 errors.append(f"{filename}: {e}")
@@ -695,21 +695,21 @@ The system aims to:
 
 **Description:** System should maintain clear, organized code structure
 **Priority:** Critical
-**Status:** ✅ Implemented
+**Status:** [OK] Implemented
 **Related Components:** All
 
 ### FR-2: Testing Framework
 
 **Description:** Comprehensive testing setup with automated test execution
 **Priority:** High
-**Status:** {'✅ Implemented' if context.has_tests else '⏳ Planned'}
+**Status:** {'[OK] Implemented' if context.has_tests else '[wait] Planned'}
 **Related Components:** tests/
 
 ### FR-3: Documentation
 
 **Description:** Complete project documentation
 **Priority:** High
-**Status:** ✅ In Progress
+**Status:** [OK] In Progress
 **Related Components:** docs/
 
 ---
@@ -720,25 +720,25 @@ The system aims to:
 
 - **Target:** Sub-second response times
 - **Measurement:** Response time monitoring
-- **Status:** ✅ Implemented
+- **Status:** [OK] Implemented
 
 ### NFR-2: Scalability
 
 - **Target:** Support 100+ concurrent operations
 - **Current Capacity:** 10+ concurrent operations
-- **Status:** ✅ Verified
+- **Status:** [OK] Verified
 
 ### NFR-3: Availability
 
 - **Target Uptime:** 99.5%
 - **Monitoring:** Real-time dashboards
-- **Status:** ✅ Implemented
+- **Status:** [OK] Implemented
 
 ### NFR-4: Security
 
 - **Target:** Enterprise security standards
 - **Implementation:** Input validation, secure defaults
-- **Status:** ✅ Implemented
+- **Status:** [OK] Implemented
 
 ---
 
@@ -747,15 +747,15 @@ The system aims to:
 ### System Architecture
 
 ```
-┌─────────────────────────────────┐
-│   API Layer (Controllers)       │
-├─────────────────────────────────┤
-│   Service Layer (Business Logic)│
-├─────────────────────────────────┤
-│   Data Layer (Models & DB)      │
-├─────────────────────────────────┤
-│   Infrastructure (Logging, etc) │
-└─────────────────────────────────┘
++---------------------------------+
+|   API Layer (Controllers)       |
++---------------------------------+
+|   Service Layer (Business Logic)|
++---------------------------------+
+|   Data Layer (Models & DB)      |
++---------------------------------+
+|   Infrastructure (Logging, etc) |
++---------------------------------+
 ```
 
 ### Technology Stack
@@ -795,19 +795,19 @@ The system aims to:
 
 - Framework: {context.test_command.split()[0] if context.test_command else 'pytest'}
 - Coverage Target: 80%+
-- Status: ✅ Implemented
+- Status: [OK] Implemented
 
 ### Integration Testing
 
 - Approach: Component interaction testing
 - Critical Paths: Core workflows
-- Status: ✅ In Progress
+- Status: [OK] In Progress
 
 ### System Testing
 
 - Test Scenarios: 50+
 - Regression Testing: Automated
-- Status: ✅ Ongoing
+- Status: [OK] Ongoing
 
 ---
 
@@ -857,10 +857,10 @@ The system aims to:
 
 ## Compliance & Standards
 
-- ✅ IEEE 830: Software Requirements Specification
-- ✅ ISO/IEC/IEEE 29148:2011: Lifecycle processes
-- ✅ OWASP Top 10: Security best practices
-- ✅ Code quality standards: Maintained
+- [OK] IEEE 830: Software Requirements Specification
+- [OK] ISO/IEC/IEEE 29148:2011: Lifecycle processes
+- [OK] OWASP Top 10: Security best practices
+- [OK] Code quality standards: Maintained
 
 ---
 
@@ -868,10 +868,10 @@ The system aims to:
 
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| Test Coverage | 80%+ | 75%+ | ✅ On Track |
-| Build Success | 100% | 100% | ✅ Met |
-| Deployment Time | < 5 min | 2 min | ✅ Exceeded |
-| Uptime | 99.5% | 99.9% | ✅ Exceeded |
+| Test Coverage | 80%+ | 75%+ | [OK] On Track |
+| Build Success | 100% | 100% | [OK] Met |
+| Deployment Time | < 5 min | 2 min | [OK] Exceeded |
+| Uptime | 99.5% | 99.9% | [OK] Exceeded |
 
 ---
 
@@ -1010,17 +1010,17 @@ Using Semantic Versioning (MAJOR.MINOR.PATCH):
     def _format_directory_tree(self, structure: Dict[str, str]) -> str:
         """Format directory structure as tree"""
         if not structure:
-            return "├── src/ → Source code\n├── tests/ → Tests\n└── docs/ → Documentation"
+            return "+-- src/ -> Source code\n+-- tests/ -> Tests\n+-- docs/ -> Documentation"
         lines = []
         items = list(structure.items())
         for i, (folder, purpose) in enumerate(items):
-            prefix = "└──" if i == len(items) - 1 else "├──"
-            lines.append(f"{prefix} {folder}/ → {purpose}")
+            prefix = "+--" if i == len(items) - 1 else "+--"
+            lines.append(f"{prefix} {folder}/ -> {purpose}")
         return "\n".join(lines)
 
     def _format_checklist(self, items: List[str], checked: bool = False) -> str:
         """Format items as checkboxes"""
-        mark = "✅" if checked else "☐"
+        mark = "[OK]" if checked else "[ ]"
         return "\n".join([f"- [{mark}] {item}" for item in items])
 
     def _format_changes(self, files_modified: List[str], category: str) -> str:

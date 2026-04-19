@@ -461,9 +461,9 @@ class Level3GitHubWorkflow:
                     # Comment on PR with issues
                     self._comment_on_pr_with_review(pr_number, review_issues)
                 else:
-                    logger.info("✓ Code review passed")
+                    logger.info("[x] Code review passed")
                     # Comment on PR that review passed
-                    self.github.add_pr_comment(pr_number, "✓ Code review passed. Ready to merge.")
+                    self.github.add_pr_comment(pr_number, "[x] Code review passed. Ready to merge.")
             else:
                 logger.info("No skills/agents selected, skipping code review")
 
@@ -472,7 +472,7 @@ class Level3GitHubWorkflow:
             if auto_merge and review_passed:
                 logger.info(f"Auto-merging PR #{pr_number}...")
 
-                # ✅ BULLETPROOF: Check merge conflicts (4 layers)
+                # [OK] BULLETPROOF: Check merge conflicts (4 layers)
                 logger.info("Running bulletproof merge conflict detection...")
                 conflict_check = self.check_merge_conflicts_bulletproof(pr_number=pr_number, branch_name=branch_name)
 
@@ -481,7 +481,7 @@ class Level3GitHubWorkflow:
                     logger.error(f"Failed at Layer {conflict_check.get('layer')}")
                     # Comment on PR with conflict details
                     conflict_comment = (
-                        f"## ⚠️ Merge Blocked - Conflict Detection\n\n"
+                        f"## [WARN] Merge Blocked - Conflict Detection\n\n"
                         f"**Layer {conflict_check.get('layer')} Failed:** {conflict_check.get('reason')}\n\n"
                         f"**Details:**\n"
                         f"```\n{conflict_check.get('details')}\n```\n\n"
@@ -607,7 +607,7 @@ class Level3GitHubWorkflow:
         verification_steps: Optional[List[str]] = None,
     ) -> str:
         """Build detailed closing comment with resolution info."""
-        parts = [f"## ✅ Resolved by PR #{pr_number}", ""]
+        parts = [f"## [OK] Resolved by PR #{pr_number}", ""]
 
         if approach_taken:
             parts.extend(["## Approach Taken", approach_taken, ""])
@@ -677,7 +677,7 @@ class Level3GitHubWorkflow:
             logger.warning(f"Step 12 failed: {step12.get('error')} (PR still open)")
 
         logger.info("\n" + "=" * 60)
-        logger.info("✓ GITHUB WORKFLOW COMPLETE")
+        logger.info("[x] GITHUB WORKFLOW COMPLETE")
         logger.info(f"  Issue: #{issue_number}")
         logger.info(f"  PR: #{pr_number}")
         logger.info(f"  Branch: {branch_name}")

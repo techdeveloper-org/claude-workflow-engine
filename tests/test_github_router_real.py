@@ -35,10 +35,10 @@ def test_credentials():
     # Check GITHUB_TOKEN
     token = os.getenv("GITHUB_TOKEN")
     if token:
-        print("✅ GITHUB_TOKEN is set")
+        print("[OK] GITHUB_TOKEN is set")
         print(f"   Token: {token[:10]}...{token[-10:]}")
     else:
-        print("❌ GITHUB_TOKEN not set")
+        print("[FAIL] GITHUB_TOKEN not set")
         print("   Set with: export GITHUB_TOKEN=ghp_your_token")
         return False
 
@@ -48,16 +48,16 @@ def test_credentials():
     try:
         result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
-            print("✅ gh CLI is authenticated")
+            print("[OK] gh CLI is authenticated")
             # Extract username from gh auth output
             for line in result.stdout.split("\n"):
                 if "Logged in to" in line or "account" in line:
                     print(f"   {line.strip()}")
         else:
-            print("❌ gh CLI authentication failed")
+            print("[FAIL] gh CLI authentication failed")
             return False
     except Exception as e:
-        print(f"❌ gh CLI not available: {e}")
+        print(f"[FAIL] gh CLI not available: {e}")
         return False
 
     return True
@@ -75,7 +75,7 @@ def test_router_gh_cli_only():
         print("Initializing router (use_mcp=False, fallback_to_gh=True)...")
         router = GitHubOperationRouter(use_mcp=False, fallback_to_gh=True)
 
-        print("✅ Router initialized successfully")
+        print("[OK] Router initialized successfully")
         print(f"   MCP enabled: {router.use_mcp}")
         print(f"   Fallback enabled: {router.fallback_to_gh}")
         print(f"   MCP instance: {router.mcp}")
@@ -83,7 +83,7 @@ def test_router_gh_cli_only():
 
         return True
     except Exception as e:
-        print(f"❌ Router initialization failed: {e}")
+        print(f"[FAIL] Router initialization failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -103,7 +103,7 @@ def test_router_mcp_enabled():
         token = os.getenv("GITHUB_TOKEN")
         router = GitHubOperationRouter(use_mcp=True, fallback_to_gh=True, token=token)
 
-        print("✅ Router initialized successfully")
+        print("[OK] Router initialized successfully")
         print(f"   MCP enabled: {router.use_mcp}")
         print(f"   Fallback enabled: {router.fallback_to_gh}")
         print(f"   MCP instance: {router.mcp is not None}")
@@ -114,7 +114,7 @@ def test_router_mcp_enabled():
 
         return True
     except Exception as e:
-        print(f"⚠️  Router with MCP failed (expected if PyGithub issue): {e}")
+        print(f"[WARN]  Router with MCP failed (expected if PyGithub issue): {e}")
         # This is OK - MCP might fail but fallback should work
         return True
 
@@ -142,26 +142,26 @@ def test_router_api_compatibility():
         all_present = True
         for method in required_methods:
             if hasattr(router, method) and callable(getattr(router, method)):
-                print(f"✅ {method}")
+                print(f"[OK] {method}")
             else:
-                print(f"❌ {method}")
+                print(f"[FAIL] {method}")
                 all_present = False
 
         if all_present:
-            print("\n✅ All 6 required methods present")
+            print("\n[OK] All 6 required methods present")
         else:
-            print("\n❌ Some methods missing")
+            print("\n[FAIL] Some methods missing")
             return False
 
         return True
     except Exception as e:
-        print(f"❌ API compatibility test failed: {e}")
+        print(f"[FAIL] API compatibility test failed: {e}")
         return False
 
 
 def main():
     """Run all tests."""
-    print("\n" + "🧪 GITHUB ROUTER REAL-WORLD TEST ".center(70, "="))
+    print("\n" + "[test] GITHUB ROUTER REAL-WORLD TEST ".center(70, "="))
 
     tests = [
         ("Credentials", test_credentials),
@@ -176,7 +176,7 @@ def main():
             result = test_func()
             results.append((name, result))
         except Exception as e:
-            print(f"\n❌ Test '{name}' crashed: {e}")
+            print(f"\n[FAIL] Test '{name}' crashed: {e}")
             import traceback
 
             traceback.print_exc()
@@ -191,16 +191,16 @@ def main():
     total = len(results)
 
     for name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
+        status = "[OK] PASS" if result else "[FAIL] FAIL"
         print(f"{status}: {name}")
 
     print(f"\nTotal: {passed}/{total} tests passed")
 
     if passed == total:
-        print("\n🎉 ALL TESTS PASSED! Router is ready for real usage!")
+        print("\n ALL TESTS PASSED! Router is ready for real usage!")
         return 0
     else:
-        print("\n⚠️  Some tests failed. Check output above.")
+        print("\n[WARN]  Some tests failed. Check output above.")
         return 1
 
 

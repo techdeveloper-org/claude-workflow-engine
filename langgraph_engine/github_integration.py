@@ -37,7 +37,7 @@ class GitHubIntegration:
             result = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, timeout=5)
             if result.returncode != 0:
                 raise RuntimeError("gh CLI not authenticated. Run: gh auth login")
-            logger.info("✓ gh CLI authenticated and ready")
+            logger.info("[x] gh CLI authenticated and ready")
         except FileNotFoundError:
             raise RuntimeError("gh CLI not installed. Install from: https://cli.github.com")
         except Exception as e:
@@ -74,7 +74,7 @@ class GitHubIntegration:
                 parts = remote_url.rstrip("/").replace(".git", "").split("/")[-2:]
 
             owner, repo_name = parts[0], parts[1]
-            logger.info(f"✓ Repository detected: {owner}/{repo_name}")
+            logger.info(f"[x] Repository detected: {owner}/{repo_name}")
             return owner, repo_name
 
         except Exception as e:
@@ -197,7 +197,7 @@ class GitHubIntegration:
                 logger.error(f"Comment failed: {error_msg}")
                 return {"success": False, "error": error_msg}
 
-            logger.info(f"✓ Comment added to issue #{issue_number}")
+            logger.info(f"[x] Comment added to issue #{issue_number}")
 
             return {
                 "success": True,
@@ -241,7 +241,7 @@ class GitHubIntegration:
                 logger.error(f"Issue closure failed: {error_msg}")
                 return {"success": False, "error": error_msg}
 
-            logger.info(f"✓ Issue #{issue_number} closed")
+            logger.info(f"[x] Issue #{issue_number} closed")
 
             return {"success": True, "issue_number": issue_number, "closed_at": datetime.now().isoformat()}
 
@@ -376,7 +376,7 @@ class GitHubIntegration:
                 logger.error(f"PR merge failed: {error_msg}")
                 return {"success": False, "error": error_msg}
 
-            logger.info(f"✓ PR #{pr_number} merged")
+            logger.info(f"[x] PR #{pr_number} merged")
 
             return {"success": True, "merged": True}
 

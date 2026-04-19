@@ -116,7 +116,7 @@ class ErrorLogger:
         self._append_to_file(self.decision_file, self._format_decision_entry(entry))
 
         # Console output
-        print(f"🔵 [{step}] DECISION: {decision}")
+        print(f"[BLUE] [{step}] DECISION: {decision}")
         print(f"   Reasoning: {reasoning}")
         if chosen_option:
             print(f"   Chosen: {chosen_option}")
@@ -137,7 +137,7 @@ class ErrorLogger:
             passed: Whether check passed
             details: Additional details
         """
-        symbol = "✅" if passed else "❌"
+        symbol = "[OK]" if passed else "[FAIL]"
         status = "PASS" if passed else "FAIL"
 
         entry = {
@@ -191,7 +191,7 @@ class ErrorLogger:
         self._append_to_file(self.error_file, log_line)
 
         # Console
-        print(f"🔄 [{step}] Retry {attempt}/{max_attempts}: {status}")
+        print(f"[refresh] [{step}] Retry {attempt}/{max_attempts}: {status}")
         if reason:
             print(f"   Reason: {reason}")
 
@@ -219,10 +219,10 @@ class ErrorLogger:
             "success": success,
         }
 
-        symbol = "✅" if success else "❌"
+        symbol = "[OK]" if success else "[FAIL]"
         log_line = f"[{entry['timestamp']}] {symbol} {operation.upper()} {file_path}"
         if backup_path:
-            log_line += f" → {backup_path}"
+            log_line += f" -> {backup_path}"
 
         self._append_to_file(self.error_file, log_line)
         print(f"{symbol} {operation.upper()}: {file_path}")
@@ -293,10 +293,10 @@ class ErrorLogger:
         line = f"[{timestamp}] [{step}] [{severity}] ({error_type}) {message}"
 
         if entry.get("recovery_action"):
-            line += f"\n  → Recovery: {entry['recovery_action']}"
+            line += f"\n  -> Recovery: {entry['recovery_action']}"
 
         if entry.get("context"):
-            line += f"\n  → Context: {json.dumps(entry['context'])}"
+            line += f"\n  -> Context: {json.dumps(entry['context'])}"
 
         return line
 
@@ -341,7 +341,7 @@ class ErrorLogger:
                 f.write(content)
                 f.write("\n")
         except Exception as e:
-            print(f"❌ Failed to write to log file {file_path}: {e}", file=sys.stderr)
+            print(f"[FAIL] Failed to write to log file {file_path}: {e}", file=sys.stderr)
 
     @staticmethod
     def _print_error(entry: Dict) -> None:
@@ -352,14 +352,14 @@ class ErrorLogger:
 
         # Color codes for severity
         severity_symbols = {
-            "DEBUG": "🔍",
-            "INFO": "ℹ️",
-            "WARNING": "⚠️",
-            "ERROR": "❌",
-            "CRITICAL": "🔴",
+            "DEBUG": "[search]",
+            "INFO": "[i]",
+            "WARNING": "[WARN]",
+            "ERROR": "[FAIL]",
+            "CRITICAL": "[RED]",
         }
 
-        symbol = severity_symbols.get(severity, "❓")
+        symbol = severity_symbols.get(severity, "[?]")
 
         print(f"{symbol} [{step}] {severity}: {message}")
 
@@ -432,7 +432,7 @@ if __name__ == "__main__":
 
     # Save audit trail
     audit_path = logger.save_audit_trail()
-    print(f"\n✅ Audit trail saved to: {audit_path}")
+    print(f"\n[OK] Audit trail saved to: {audit_path}")
 
     # Print summaries
     print("\nError Summary:")

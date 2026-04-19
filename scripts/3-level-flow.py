@@ -55,7 +55,7 @@ try:
 
     load_workflow_config()
 except Exception:
-    pass  # config file missing or malformed — env vars still work as fallback
+    pass  # config file missing or malformed -- env vars still work as fallback
 
 # ============================================================================
 # IMPORTS & SETUP

@@ -363,7 +363,7 @@ class TestLevel1CheckReturnsTuple:
         assert isinstance(blocks, list), "blocks must be a list"
 
 
-# NOTE: TestLevel2CheckReturnsTuple removed in v1.16.0 — Level 2 standards
+# NOTE: TestLevel2CheckReturnsTuple removed in v1.16.0 -- Level 2 standards
 # enforcement was purged (commit 937c9ee). Level 2 policies are now data-only
 # files under policies/02-standards-system/ and no longer have a pipeline
 # enforcer. See GitHub issue #206 for the purge history.
@@ -398,5 +398,5 @@ class TestLevel1CheckNoTrace:
         assert blocks == [], "Expected no blocks when flow-trace is None, got: {}".format(blocks)
 
 
-# NOTE: TestLevel2CheckNoTrace removed in v1.16.0 — Level 2 standards
+# NOTE: TestLevel2CheckNoTrace removed in v1.16.0 -- Level 2 standards
 # enforcement was purged (commit 937c9ee). See GitHub issue #206.

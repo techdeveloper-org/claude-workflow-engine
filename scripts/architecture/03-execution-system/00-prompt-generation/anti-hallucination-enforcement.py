@@ -16,15 +16,15 @@ Usage:
   python anti-hallucination-enforcement-policy.py --report               # Generate report
 """
 
-import sys
 import json
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
-if sys.platform == 'win32':
+if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
 
@@ -39,10 +39,10 @@ def log_policy_hit(action, context=""):
         action (str): The action identifier (e.g., 'ENFORCE_START', 'VALIDATE').
         context (str): Optional human-readable context or detail string.
     """
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] anti-hallucination-enforcement-policy | {action} | {context}\n")
     except Exception:
         pass
@@ -81,20 +81,20 @@ def report():
         report_data = {
             "status": "success",
             "policy": "anti-hallucination-enforcement",
-            "description": "Enforces 3-phase process to prevent hallucinations (Think → Search → Verify)",
+            "description": "Enforces 3-phase process to prevent hallucinations (Think -> Search -> Verify)",
             "phases": [
                 "PHASE 1: THINKING - Understand requirements, identify info needed",
                 "PHASE 2: INFORMATION GATHERING - Search/read code, extract patterns",
-                "PHASE 3: VERIFICATION - Verify examples, validate patterns, flag uncertainties"
+                "PHASE 3: VERIFICATION - Verify examples, validate patterns, flag uncertainties",
             ],
             "features": [
                 "Mandatory thinking phase before answering",
                 "Required information gathering from codebase",
                 "Pattern verification and validation",
                 "Uncertainty flagging and transparency",
-                "Hallucination prevention checklist"
+                "Hallucination prevention checklist",
             ],
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
         log_policy_hit("REPORT", "anti-hallucination-enforcement-report-generated")
         return report_data

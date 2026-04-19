@@ -4,7 +4,7 @@ Integration feature-flag configuration.
 Reads integration settings from workflow-config.json (via config_loader)
 with os.environ as fallback for any value not present in the JSON file.
 
-All defaults live in ~/.claude/workflow-config.json — nothing is hardcoded here.
+All defaults live in ~/.claude/workflow-config.json -- nothing is hardcoded here.
 Missing config falls back to disabled so the pipeline runs safely without
 any integrations configured.
 

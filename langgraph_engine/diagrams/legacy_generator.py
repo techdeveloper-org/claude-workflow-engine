@@ -78,7 +78,7 @@ class UMLDiagramGenerator:
             return self._call_graph
         try:
             # call_graph_builder lives at langgraph_engine.call_graph_builder,
-            # which is the PARENT of this diagrams/ subpackage — use '..'.
+            # which is the PARENT of this diagrams/ subpackage -- use '..'.
             # The fallback path handles the case where this module is loaded
             # outside the langgraph_engine package (e.g., via direct file exec).
             try:

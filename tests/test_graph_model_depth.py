@@ -81,7 +81,7 @@ class TestComputeCallPathsDefaults:
 
 
 class TestComputeCallPathsDepth:
-    """A chain of 16 hops must be reachable — above the old max_depth=15 cap."""
+    """A chain of 16 hops must be reachable -- above the old max_depth=15 cap."""
 
     def test_chain_of_16_hops_is_reached(self):
         # Before #207 a 16-hop chain was silently truncated at depth 15.
@@ -95,7 +95,7 @@ class TestComputeCallPathsDepth:
 
     def test_explicit_max_depth_kwarg_overrides_default(self):
         g = _build_chain_graph(20)
-        # Clamp to 5 — path should be at most 5 nodes deep.
+        # Clamp to 5 -- path should be at most 5 nodes deep.
         paths = g.compute_call_paths(max_depth=5)
         assert all(len(p["path"]) <= 5 for p in paths)
 

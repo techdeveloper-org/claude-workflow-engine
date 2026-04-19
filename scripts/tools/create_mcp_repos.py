@@ -20,14 +20,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# -- Paths ---------------------------------------------------------------------
 WORKSPACE = Path("C:/Users/techd/Documents/workspace-spring-tool-suite-4-4.27.0-new")
 ENGINE_ROOT = WORKSPACE / "claude-workflow-engine"
 MCP_SRC = ENGINE_ROOT / "src" / "mcp"
 BASE_SRC = MCP_SRC / "base"
 ORG = "techdeveloper-org"
 
-# ── MCP Server Definitions ────────────────────────────────────────────────────
+# -- MCP Server Definitions ----------------------------------------------------
 # Each entry: (repo_name, source_file, description, tools, extra_deps, engine_dep)
 SERVERS = [
     {
@@ -100,7 +100,7 @@ SERVERS = [
             ("CLAUDE_PROJECT_ROOT", "Root of the project to scan (default: CWD)"),
         ],
         "benefits": [
-            "Zero-config standard detection — no manual flags needed",
+            "Zero-config standard detection -- no manual flags needed",
             "Priority ordering prevents team standards from being overridden by defaults",
             "File-modification-based cache invalidation (no stale standards)",
             "Conflict resolution surfaces rule clashes before they cause confusion",
@@ -111,7 +111,7 @@ SERVERS = [
     {
         "repo": "mcp-figma",
         "file": "figma_mcp_server.py",
-        "description": "Figma design file operations via REST API for design-to-code workflows. Fetches file metadata, nodes, styles, components, design tokens (colors/typography/spacing), frame layouts, and exports. Adds implementation comments. Uses stdlib urllib only — no heavy SDK dependency.",
+        "description": "Figma design file operations via REST API for design-to-code workflows. Fetches file metadata, nodes, styles, components, design tokens (colors/typography/spacing), frame layouts, and exports. Adds implementation comments. Uses stdlib urllib only -- no heavy SDK dependency.",
         "tools": [
             ("figma_get_file_info", "Fetch Figma file metadata (name, version, last modified)"),
             ("figma_get_node", "Retrieve a specific node by ID with full properties"),
@@ -132,7 +132,7 @@ SERVERS = [
             "Design tokens injection into prompts ensures pixel-accurate implementation",
             "Component extraction for UI task breakdown (Step 3 of pipeline)",
             "Implementation lifecycle comments keep Figma in sync with code progress",
-            "No heavy Figma SDK — pure stdlib urllib keeps dependencies minimal",
+            "No heavy Figma SDK -- pure stdlib urllib keeps dependencies minimal",
         ],
         "pip_deps": ["mcp", "fastmcp"],
         "engine_dep": False,
@@ -193,7 +193,7 @@ SERVERS = [
             ("GIT_DEFAULT_BRANCH", "Default branch name (default: main)"),
         ],
         "benefits": [
-            "GitPython library calls instead of subprocess — no shell injection risk",
+            "GitPython library calls instead of subprocess -- no shell injection risk",
             "Structured exceptions instead of raw stderr parsing",
             "Post-merge cleanup automates branch housekeeping in CI workflows",
             "Safe branch deletion checks for unmerged commits before deleting",
@@ -235,7 +235,7 @@ SERVERS = [
     {
         "repo": "mcp-jenkins-ci",
         "file": "jenkins_mcp_server.py",
-        "description": "Jenkins CI/CD integration via REST API. Supports Basic auth with API tokens (CSRF-exempt endpoints), parameterized builds, build status polling, console log streaming, and queue management. Pure stdlib urllib — no jenkinsapi dependency.",
+        "description": "Jenkins CI/CD integration via REST API. Supports Basic auth with API tokens (CSRF-exempt endpoints), parameterized builds, build status polling, console log streaming, and queue management. Pure stdlib urllib -- no jenkinsapi dependency.",
         "tools": [
             ("jenkins_trigger_build", "Trigger a build (with optional parameters dict)"),
             ("jenkins_get_build_status", "Get build result: SUCCESS/FAILURE/ABORTED/IN_PROGRESS"),
@@ -258,7 +258,7 @@ SERVERS = [
             "Pipeline-native CI integration: trigger build after PR, wait, validate before merge",
             "Console log streaming helps debug pipeline failures without opening Jenkins UI",
             "Queue visibility explains why builds are blocked (agent availability, etc.)",
-            "Pure stdlib — no heavy jenkinsapi package, works in restricted environments",
+            "Pure stdlib -- no heavy jenkinsapi package, works in restricted environments",
         ],
         "pip_deps": ["mcp", "fastmcp"],
         "engine_dep": False,
@@ -378,7 +378,7 @@ SERVERS = [
             ("KROKI_SERVER", "Kroki rendering server URL (default: https://kroki.io)"),
         ],
         "benefits": [
-            "13 diagram types from a single codebase scan — no manual diagram maintenance",
+            "13 diagram types from a single codebase scan -- no manual diagram maintenance",
             "3-tier approach: fast AST for structural diagrams, LLM only when needed",
             "Call graph diagram reflects actual method call chains, not guessed architecture",
             "Kroki.io rendering produces shareable PNG/SVG without local Graphviz install",
@@ -403,8 +403,8 @@ SERVERS = [
             ("GITHUB_RAW_BASE_URL", "GitHub raw URL base for shareable URL generation"),
         ],
         "benefits": [
-            "Fully editable diagrams — stakeholders can open in draw.io and customize",
-            "No API key needed — mxGraph XML is generated locally",
+            "Fully editable diagrams -- stakeholders can open in draw.io and customize",
+            "No API key needed -- mxGraph XML is generated locally",
             "Shareable URLs work without exporting images (open directly in browser)",
             "Mermaid conversion bridges LLM-generated diagrams to editable format",
         ],
@@ -414,10 +414,10 @@ SERVERS = [
     },
 ]
 
-# ── Shared utility files to copy into each server repo ───────────────────────
+# -- Shared utility files to copy into each server repo -----------------------
 SHARED_UTILS = ["mcp_errors.py", "input_validator.py", "rate_limiter.py"]
 
-# ── .gitignore template ───────────────────────────────────────────────────────
+# -- .gitignore template -------------------------------------------------------
 GITIGNORE = """__pycache__/
 *.py[cod]
 *$py.class
@@ -439,14 +439,14 @@ sessions/
 """
 
 
-# ── requirements.txt template ─────────────────────────────────────────────────
+# -- requirements.txt template -------------------------------------------------
 def make_requirements(pip_deps):
     base = ["mcp>=1.0.0", "fastmcp>=0.1.0"]
     extras = [d for d in pip_deps if d not in ("mcp", "fastmcp")]
     return "\n".join(base + extras) + "\n"
 
 
-# ── README.md template ────────────────────────────────────────────────────────
+# -- README.md template --------------------------------------------------------
 def make_readme(server):
     tools_table = "\n".join(f"| `{name}` | {desc} |" for name, desc in server["tools"])
     env_table = "\n".join(f"| `{var}` | {desc} |" for var, desc in server["env_vars"])
@@ -561,25 +561,25 @@ Add to your `~/.claude/settings.json`:
 
 ## Project Context
 
-This MCP server is part of the **Claude Workflow Engine** ecosystem — a LangGraph-based
+This MCP server is part of the **Claude Workflow Engine** ecosystem -- a LangGraph-based
 orchestration pipeline for automating Claude Code development workflows.
 
 Related repos:
-- [`claude-workflow-engine`](https://github.com/techdeveloper-org/claude-workflow-engine) — Main pipeline
-- [`mcp-base`](https://github.com/techdeveloper-org/mcp-base) — Shared base utilities used by all MCP servers
+- [`claude-workflow-engine`](https://github.com/techdeveloper-org/claude-workflow-engine) -- Main pipeline
+- [`mcp-base`](https://github.com/techdeveloper-org/mcp-base) -- Shared base utilities used by all MCP servers
 
 ---
 
 ## License
 
-Private — techdeveloper-org
+Private -- techdeveloper-org
 """
 
 
-# ── CLAUDE.md template ────────────────────────────────────────────────────────
+# -- CLAUDE.md template --------------------------------------------------------
 def make_claude_md(server):
-    tools_list = "\n".join(f"- `{name}` — {desc}" for name, desc in server["tools"])
-    env_list = "\n".join(f"- `{var}` — {desc}" for var, desc in server["env_vars"])
+    tools_list = "\n".join(f"- `{name}` -- {desc}" for name, desc in server["tools"])
+    env_list = "\n".join(f"- `{var}` -- {desc}" for var, desc in server["env_vars"])
 
     engine_section = ""
     if server.get("engine_dep"):
@@ -595,7 +595,7 @@ export PYTHONPATH=/path/to/claude-workflow-engine/scripts:$PYTHONPATH
 ```
 """
 
-    return f"""# {server['repo']} — Claude Project Context
+    return f"""# {server['repo']} -- Claude Project Context
 
 **Type:** FastMCP Server
 **Transport:** stdio
@@ -615,7 +615,7 @@ export PYTHONPATH=/path/to/claude-workflow-engine/scripts:$PYTHONPATH
 server.py
 ```
 
-Run via `python server.py` — communicates over stdio using the MCP protocol.
+Run via `python server.py` -- communicates over stdio using the MCP protocol.
 
 ---
 
@@ -627,10 +627,10 @@ Run via `python server.py` — communicates over stdio using the MCP protocol.
 
 ## Shared Utilities (in this repo)
 
-- `base/` — Shared MCP infrastructure package (response builder, decorators, persistence, clients)
-- `mcp_errors.py` — Structured error response helpers
-- `input_validator.py` — Null-byte strip, length limits, prompt injection detection
-- `rate_limiter.py` — Token bucket rate limiter (enable via ENABLE_RATE_LIMITING=1)
+- `base/` -- Shared MCP infrastructure package (response builder, decorators, persistence, clients)
+- `mcp_errors.py` -- Structured error response helpers
+- `input_validator.py` -- Null-byte strip, length limits, prompt injection detection
+- `rate_limiter.py` -- Token bucket rate limiter (enable via ENABLE_RATE_LIMITING=1)
 {engine_section}
 ---
 
@@ -684,7 +684,7 @@ proc = subprocess.Popen(
 
 ## Key Rules
 
-1. Do NOT edit `base/` directly — it is a copy from `mcp-base` repo
+1. Do NOT edit `base/` directly -- it is a copy from `mcp-base` repo
 2. To update shared utilities, edit in `mcp-base` and re-copy
 3. Keep `server.py` as the single entry point
 4. All tool handlers must use `@mcp_tool_handler` decorator for consistent error handling
@@ -696,13 +696,13 @@ proc = subprocess.Popen(
 """
 
 
-# ── .env.example template ────────────────────────────────────────────────────
+# -- .env.example template ----------------------------------------------------
 def make_env_example(server):
-    lines = [f"# {var} — {desc}" + f"\n{var}=your_value_here" for var, desc in server["env_vars"]]
+    lines = [f"# {var} -- {desc}" + f"\n{var}=your_value_here" for var, desc in server["env_vars"]]
     return "\n\n".join(lines) + "\n"
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# -- Helpers -------------------------------------------------------------------
 def run(cmd, cwd=None, check=True):
     print(f"  $ {cmd}")
     result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
@@ -720,7 +720,7 @@ def write_file(path, content):
     path.write_text(content, encoding="utf-8")
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main ----------------------------------------------------------------------
 def create_repo(server):
     repo_name = server["repo"]
     repo_dir = WORKSPACE / repo_name
@@ -772,7 +772,7 @@ def create_repo(server):
         run('git config user.name "Piyush Makhija"', cwd=str(repo_dir))
     run("git add -A", cwd=str(repo_dir))
     run(
-        f'git commit -m "feat: initial commit — {repo_name} FastMCP server"',
+        f'git commit -m "feat: initial commit -- {repo_name} FastMCP server"',
         cwd=str(repo_dir),
     )
     print("  Git commit done")
@@ -847,12 +847,12 @@ package for self-contained deployment.
 
 ## Package Contents
 
-### `mcp_base/` — Core Package
+### `mcp_base/` -- Core Package
 
 | Module | Pattern | Purpose |
 |--------|---------|---------|
 | `response.py` | Builder | `MCPResponse` fluent builder + `success()` / `error()` helpers |
-| `decorators.py` | Decorator | `@mcp_tool_handler` — eliminates 109 identical try/except blocks |
+| `decorators.py` | Decorator | `@mcp_tool_handler` -- eliminates 109 identical try/except blocks |
 | `persistence.py` | Repository | `AtomicJsonStore`, `JsonlAppender`, `SessionIdResolver` |
 | `clients.py` | Singleton/Lazy | `GitRepoClient`, `GitHubApiClient` |
 
@@ -895,10 +895,10 @@ from mcp_base.decorators import mcp_tool_handler
 
 ## Key Design Patterns
 
-- **Builder** — `MCPResponse.ok().data("key", val).message("done").build()`
-- **Decorator** — `@mcp_tool_handler` wraps all tools with consistent error handling
-- **Repository** — `AtomicJsonStore` for safe concurrent JSON file access
-- **Singleton/Lazy** — `LazyClient` for shared resource initialization (GitHub, Git)
+- **Builder** -- `MCPResponse.ok().data("key", val).message("done").build()`
+- **Decorator** -- `@mcp_tool_handler` wraps all tools with consistent error handling
+- **Repository** -- `AtomicJsonStore` for safe concurrent JSON file access
+- **Singleton/Lazy** -- `LazyClient` for shared resource initialization (GitHub, Git)
 
 ---
 
@@ -921,11 +921,11 @@ See [`claude-workflow-engine`](https://github.com/techdeveloper-org/claude-workf
 
 ## License
 
-Private — techdeveloper-org
+Private -- techdeveloper-org
 """
     write_file(repo_dir / "README.md", readme)
 
-    claude_md = """# mcp-base — Claude Project Context
+    claude_md = """# mcp-base -- Claude Project Context
 
 **Type:** Shared base package for all MCP servers
 **Python:** 3.8+
@@ -939,18 +939,18 @@ Eliminates duplicated boilerplate across servers.
 
 ## Package: mcp_base/
 
-- `response.py` — MCPResponse builder + success()/error() convenience functions
-- `decorators.py` — @mcp_tool_handler decorator (replaces 109 try/except blocks)
-- `persistence.py` — AtomicJsonStore, JsonlAppender, SessionIdResolver
-- `clients.py` — LazyClient, GitRepoClient, GitHubApiClient
-- `__init__.py` — Public API re-exports
+- `response.py` -- MCPResponse builder + success()/error() convenience functions
+- `decorators.py` -- @mcp_tool_handler decorator (replaces 109 try/except blocks)
+- `persistence.py` -- AtomicJsonStore, JsonlAppender, SessionIdResolver
+- `clients.py` -- LazyClient, GitRepoClient, GitHubApiClient
+- `__init__.py` -- Public API re-exports
 
 ## Shared Utilities
 
-- `mcp_errors.py` — Error response helpers
-- `input_validator.py` — Input sanitization
-- `rate_limiter.py` — Token bucket rate limiting
-- `session_hooks.py` — Direct session MCP bridge (no subprocess)
+- `mcp_errors.py` -- Error response helpers
+- `input_validator.py` -- Input sanitization
+- `rate_limiter.py` -- Token bucket rate limiting
+- `session_hooks.py` -- Direct session MCP bridge (no subprocess)
 
 ## Key Rule
 
@@ -969,7 +969,7 @@ To update shared code: edit here, then re-copy to affected server repos.
         run('git config user.email "piyush@techdeveloper-org"', cwd=str(repo_dir))
         run('git config user.name "Piyush Makhija"', cwd=str(repo_dir))
     run("git add -A", cwd=str(repo_dir))
-    run('git commit -m "feat: initial commit — mcp-base shared infrastructure package"', cwd=str(repo_dir))
+    run('git commit -m "feat: initial commit -- mcp-base shared infrastructure package"', cwd=str(repo_dir))
 
     result = run(
         f"gh repo create {ORG}/{repo_name} --private --source . --remote origin --push",
@@ -990,7 +990,7 @@ To update shared code: edit here, then re-copy to affected server repos.
 
 
 def main():
-    print("Claude Workflow Engine — MCP Repos Creator")
+    print("Claude Workflow Engine -- MCP Repos Creator")
     print(f"Organization: {ORG}")
     print(f"Workspace: {WORKSPACE}")
     print(f"Total repos to create: {len(SERVERS) + 1} (1 base + {len(SERVERS)} servers)")
