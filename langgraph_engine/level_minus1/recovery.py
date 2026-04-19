@@ -310,10 +310,11 @@ def fix_level_minus1_issues(state: FlowState) -> dict:
         try:
             import re as _re_fix
 
-            # Only replace backslashes that are part of a Windows drive path (X:/something).
-            # This avoids corrupting Python regex metacharacters (\d, \w, \S, \D, \B, \Z, \A, etc.)
-            # that happen to appear in source files containing Windows-style path strings.
-            _DRIVE_PATH_RE = _re_fix.compile(r"([A-Za-z]):\\([\w\\. \-]+)")
+            # Only replace backslashes that are part of a Windows drive path (X:\something).
+            # Negative lookbehind (?<![A-Za-z0-9_]) ensures the drive letter is not preceded
+            # by another word character, preventing false matches on escape sequences like
+            # "Either:\n" (where 'r' would be mistaken for a drive letter).
+            _DRIVE_PATH_RE = _re_fix.compile(r"(?<![A-Za-z0-9_])([A-Za-z]):\\([\w\\. \-]+)")
 
             def _fix_drive_path(m):
                 drive = m.group(1)

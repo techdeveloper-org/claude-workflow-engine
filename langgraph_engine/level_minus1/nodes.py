@@ -225,7 +225,12 @@ def node_windows_path_check(state: FlowState) -> dict:
             write_level_log(state, "level-minus1", "windows-path-check", "SKIP", time.time() - _step_start, updates)
             return updates
 
-        # Check for obvious backslash paths in .py files
+        # Check for hardcoded Windows drive paths (C:\, D:\, etc.)
+        # Uses negative lookbehind to avoid false-positives on escape sequences
+        # like \n, \s, \t that happen to follow a colon (e.g. "Either:\n").
+        import re as _re_detect
+
+        _DRIVE_DETECT_RE = _re_detect.compile(r"(?<![A-Za-z0-9_])([A-Za-z]):\\(?:[A-Za-z0-9_\-\. \\]+)")
         _path_files = list(project_root.glob("**/*.py"))
         if len(_path_files) > 500:
             _logger.warning("project_root has %d Python files (>500), capping scan at 500", len(_path_files))
@@ -234,8 +239,7 @@ def node_windows_path_check(state: FlowState) -> dict:
         for py_file in _path_files:
             try:
                 content = py_file.read_text(encoding="utf-8", errors="ignore")
-                # Look for hardcoded Windows paths (C:\, D:\, etc.)
-                if "\\" in content and ":\\" in content:
+                if _DRIVE_DETECT_RE.search(content):
                     issues.append(str(py_file.relative_to(project_root)))
             except Exception:
                 pass
