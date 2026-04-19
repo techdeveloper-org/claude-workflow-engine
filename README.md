@@ -102,46 +102,29 @@ python scripts/3-level-flow.py \
 
 ```mermaid
 flowchart TD
-    IN(["`**Input:** _Fix the login timeout bug_`"])
+    IN(["Input: Fix the login timeout bug"])
 
-    LM1["**Level -1 · Auto-Fix**
-    Unicode check · encoding fix · path normalization"]
+    LM1["Level -1 : Auto-Fix\nUnicode check · encoding fix · path normalization"]
+    L1["Level 1 : Context Sync\nSession load + parallel complexity and context extraction\nOutput: combined_complexity_score 1-25 scale"]
+    L2["Level 2 : Standards NO-OP\nPolicies read from policies/ at runtime — zero overhead"]
+    P0["Pre-0 : Pre-Analysis\nCallGraph scan → hot_nodes, danger_zones, complexity_boost"]
 
-    L1["**Level 1 · Context Sync**
-    Session load + parallel complexity & context extraction
-    → combined_complexity_score **[1–25 scale]**"]
-
-    L2["**Level 2 · Standards (NO-OP)**
-    Policies read directly from policies/ — zero overhead"]
-
-    P0["**Pre-0 · Pre-Analysis**
-    CallGraph scan → hot_nodes, danger_zones, complexity_boost"]
-
-    subgraph S0["**Step 0 · Task Analysis** (~15s)"]
+    subgraph S0["Step 0 : Task Analysis ~15s"]
         direction LR
-        C1["Call 1: prompt_gen_expert_caller
-        fills orchestration template"]
-        C2["Call 2: orchestrator_agent_caller
-        executes full plan · streamed live"]
+        C1["Call 1: prompt_gen_expert_caller\nfills orchestration template"]
+        C2["Call 2: orchestrator_agent_caller\nexecutes full plan, streamed live"]
         C1 --> C2
     end
 
-    S8["**Step 8** · GitHub Issue created
-    + Jira Issue _(if ENABLE_JIRA=1)_"]
-    S9["**Step 9** · Branch
-    feature/PROJ-123 or issue number"]
-    S10["**Step 10** · Implement
-    code written · call graph snapshot · Jira → In Progress"]
-    S11["**Step 11** · PR + Review
-    PR opened · call graph diff · Jira → In Review"]
-    S12["**Step 12** · Close
-    GitHub + Jira closed · Figma complete comment"]
-    S13["**Step 13** · Docs + UML
-    docs updated · 13 UML diagram types generated"]
-    S14["**Step 14** · Summary
-    final report + optional voice notification"]
+    S8["Step 8 : GitHub Issue created\nJira Issue if ENABLE_JIRA=1"]
+    S9["Step 9 : Branch\nfeature/PROJ-123 or issue number"]
+    S10["Step 10 : Implement\ncode written · call graph snapshot · Jira In Progress"]
+    S11["Step 11 : PR + Review\nPR opened · call graph diff · Jira In Review"]
+    S12["Step 12 : Close\nGitHub + Jira closed · Figma complete comment"]
+    S13["Step 13 : Docs + UML\ndocs updated · 13 UML diagram types generated"]
+    S14["Step 14 : Summary\nfinal report + optional voice notification"]
 
-    OUT(["`**Done** — ~15s planning · ~120s full pipeline`"])
+    OUT(["Done — ~15s planning, ~120s full pipeline"])
 
     IN --> LM1 --> L1 --> L2 --> P0 --> S0 --> S8 --> S9 --> S10 --> S11 --> S12 --> S13 --> S14 --> OUT
 
@@ -169,42 +152,42 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    START([":rocket: Task Input\npython scripts/3-level-flow.py --task ..."])
+    START(["Task Input\npython scripts/3-level-flow.py --task ..."])
 
-    subgraph LM1["Level -1 · Auto-Fix"]
+    subgraph LM1["Level -1 : Auto-Fix"]
         direction LR
         U["Unicode\nNormalize"] --> E["Encoding\nValidate\nUTF-8 / cp1252"] --> P["Path\nResolve\npath_resolver.py"]
     end
 
-    subgraph L1["Level 1 · Sync"]
+    subgraph L1["Level 1 : Sync"]
         direction TB
         SS["Session Sync"]
         subgraph PAR["Parallel"]
             direction LR
-            CX["Simple Complexity\n[1–10]"]
+            CX["Simple Complexity\n1-10"]
             CTX["Context\nExtraction"]
         end
-        MG["Merge → combined_complexity_score [1–25]\nsimple × 0.3 + graph × 0.7"]
+        MG["Merge → combined_complexity_score 1-25\nsimple x 0.3 + graph x 0.7"]
         SS --> PAR --> MG
     end
 
-    subgraph L2["Level 2 · Standards (NO-OP)"]
-        POL["policies/02-standards-system/ — .md files\nread directly from disk · zero pipeline overhead"]
+    subgraph L2["Level 2 : Standards NO-OP"]
+        POL["policies/02-standards-system/ .md files\nread directly from disk, zero pipeline overhead"]
     end
 
-    subgraph L3["Level 3 · Execution (8 active steps)"]
+    subgraph L3["Level 3 : Execution 8 active steps"]
         direction LR
         P0["Pre-0\nCallGraph\nScan"] --> S0["Step 0\nPromptGen +\nOrchestrator\n~15s"] --> S8["Step 8\nIssue\nCreate"] --> S9["Step 9\nBranch"] --> S10["Step 10\nImplement"] --> S11["Step 11\nPR + Review"] --> S12["Step 12\nClose"] --> S13["Step 13\nDocs + UML"] --> S14["Step 14\nSummary"]
     end
 
-    END([":white_check_mark: Workflow Complete"])
+    END(["Workflow Complete"])
 
     START --> LM1 --> L1 --> L2 --> L3 --> END
 
-    style LM1 fill:#f3e8ff,stroke:#a855f7,color:#1f0536
-    style L1  fill:#e0f2fe,stroke:#0284c7,color:#0c1f35
-    style L2  fill:#fef9c3,stroke:#ca8a04,color:#422006
-    style L3  fill:#dcfce7,stroke:#16a34a,color:#052e16
+    style LM1 fill:#f3e8ff,stroke:#a855f7
+    style L1  fill:#e0f2fe,stroke:#0284c7
+    style L2  fill:#fef9c3,stroke:#ca8a04
+    style L3  fill:#dcfce7,stroke:#16a34a
 ```
 
 ### Execution Modes
