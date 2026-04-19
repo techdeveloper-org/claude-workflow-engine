@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.19.3] - 2026-04-19
+
+### Fixed
+
+- **Level -1 regex: single-char escape sequences still matched** -- `%d:\n`, `%s:\t` were matched because `%` is not a word char so negative lookbehind passed. Fixed by requiring 2+ chars after `:\` (first char `[A-Za-z0-9_]` + at least one more). Prevents `test_call_graph_analyzer.py` fixture corruption. (Issue #229, PR #230)
+- **`OPTIONS:\n` and `KB SUGGESTIONS:\n` restored** -- These strings in `recovery.py` were corrupted to `/n` by the old auto-fix bug. Restored in PR #230. (Issue #225)
+- **Full escape sequence corruption audit** -- 6 additional `/n` corruptions fixed across `github_code_review.py`, `steps8to12_github.py`, `steps8to12_jira.py`, `prompt-generator.py`, `test_call_graph_analyzer.py`. (Issue #226, PR #232)
+- **ASCII encoding: 37 non-ASCII Python files fixed** -- Replaced em dashes, arrows, box-drawing chars, emoji, curly quotes with ASCII equivalents. Level -1 ASCII check now passes. (Issue #227, PR #231)
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `langgraph_engine/level_minus1/nodes.py` | Detection regex: 2-char minimum path segment |
+| `langgraph_engine/level_minus1/recovery.py` | Fix regex: 2-char min + restored `OPTIONS:\n` |
+| `langgraph_engine/level3_execution/github_code_review.py` | Restored `\n` escape sequences |
+| `langgraph_engine/level3_execution/steps8to12_github.py` | Restored `\n` escape sequences |
+| `langgraph_engine/level3_execution/steps8to12_jira.py` | Restored `\n` escape sequences |
+| `tests/test_call_graph_analyzer.py` | Restored `\n` in fixture source string |
+| 37 Python files | Replaced non-ASCII chars with ASCII equivalents |
+
+---
+
 ## [1.19.2] - 2026-04-19
 
 ### Fixed
