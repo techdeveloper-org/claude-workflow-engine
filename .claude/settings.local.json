@@ -4,7 +4,10 @@
       "Bash(python -m pytest tests/test_level_minus1.py -v)",
       "Bash(grep -n \"TODO\\\\|FIXME\\\\|XXX\\\\|STUB\\\\|pass$\" /c/Users/techd/Documents/workspace-spring-tool-suite-4-4.27.0-new/claude-insight/scripts/langgraph_engine/subgraphs/level3_execution.py)",
       "Bash(find /c/Users/techd/Documents/workspace-spring-tool-suite-4-4.27.0-new/claude-insight/src/mcp -name session_hooks.py -o -name session*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(rm ~/.claude/*.txt ~/.claude/*.bak ~/.claude/*.orig ~/.claude/EXAMPLE_TEMPLATE.md ~/.claude/ORCHESTRATION_TEMPLATE.md)",
+      "Bash(rm -rf ~/.claude/scripts/)",
+      "Read(//c/Users/techd/.claude/**)"
     ]
   },
   "prefersReducedMotion": true
