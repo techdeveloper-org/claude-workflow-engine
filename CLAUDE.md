@@ -130,7 +130,6 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 |   |   +-- diagrams/                 # Strategy Pattern: 13 swappable UML generators
 |   |   +-- parsers/                  # Abstract Factory: 4 language parsers (Py/Java/TS/Kotlin)
 |   |   +-- integrations/             # Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins
-|   |   +-- pipeline_builder.py       # Builder Pattern: PipelineBuilder chainable API
 |   |   +-- level_minus1/            # [v1.9] Level -1 Auto-Fix package (nodes, merge, recovery, architecture/)
 |   |   +-- level1_sync/             # [v1.11] Level 1 Sync package (10 modules + architecture/)
 |   |   +-- level3_execution/        # [v1.11] Level 3 Execution package (20+ modules + nodes/ + subgraph.py + sonarqube/ + architecture/)
@@ -163,7 +162,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | Core Package | langgraph_engine/core/ | LazyLoader, get_logger, node_error_handler, NodeResult, create_step_node |
 | Routing Package | langgraph_engine/routing/ | All routing functions split by level |
 | Helper Nodes | langgraph_engine/helper_nodes/ | Helper node functions split by concern |
-| Pipeline Builder | langgraph_engine/pipeline_builder.py | Builder Pattern: chainable add_level*().build() |
+| Graph Factory | langgraph_engine/orchestrator.py | create_flow_graph(hook_mode): single canonical StateGraph factory (verify_node runtime-verification wrapping applied here) |
 | Diagrams Package | langgraph_engine/diagrams/ | Strategy Pattern: DiagramFactory + 13 generators |
 | Parsers Package | langgraph_engine/parsers/ | Abstract Factory: ParserRegistry + 4 language parsers |
 | SonarQube Package | langgraph_engine/level3_execution/sonarqube/ | Facade: api_client, lightweight, aggregator, auto_fixer |
@@ -394,14 +393,13 @@ kubectl apply -f k8s/secret.yaml -f k8s/configmap.yaml \
 ```python
 # 1. Create level package in langgraph_engine/my_level/
 # 2. Add routing in routing/my_level_routes.py
-# 3. Register in pipeline_builder.py:
-class PipelineBuilder:
-    def add_my_level(self):
-        # add nodes + edges
-        return self
-
-# 4. Use it:
-PipelineBuilder().add_level_minus1().add_level1().add_my_level().build()
+# 3. Wire the level's nodes + edges into create_flow_graph() in
+#    langgraph_engine/orchestrator.py (the single canonical graph factory):
+def create_flow_graph(hook_mode: bool = False):
+    ...
+    graph.add_node("my_level_node", my_level_node)
+    graph.add_edge("level1_cleanup", "my_level_node")
+    ...
 ```
 
 ---
