@@ -19,8 +19,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from langgraph_engine.core.logger_factory import get_logger
 from langgraph_engine.engine_logging.error_logger import ErrorLogger
 from langgraph_engine.patterns import memoize
+
+logger = get_logger(__name__)
 
 try:
     import sys as _sys
@@ -129,15 +132,15 @@ def _detect_python_framework(root: Path) -> str:
         if req_file.exists():
             try:
                 all_text += req_file.read_text(encoding="utf-8", errors="replace").lower()
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[standards] requirements read skipped: {exc}")
 
     pyproject = root / "pyproject.toml"
     if pyproject.exists():
         try:
             all_text += pyproject.read_text(encoding="utf-8", errors="replace").lower()
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug(f"[standards] pyproject.toml read skipped: {exc}")
 
     if "django" in all_text:
         return "django"
@@ -170,8 +173,8 @@ def _detect_python_framework(root: Path) -> str:
                 return "flask"
             if "from fastapi" in content or "import fastapi" in content:
                 return "fastapi"
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug(f"[standards] app.py read skipped: {exc}")
 
     return "unknown"
 
@@ -190,8 +193,8 @@ def _detect_java_framework(root: Path) -> str:
                 return "quarkus"
             if "micronaut" in content:
                 return "micronaut"
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug(f"[standards] pom.xml read skipped: {exc}")
 
     for gradle_file in ["build.gradle", "build.gradle.kts"]:
         gradle_path = root / gradle_file
@@ -206,8 +209,8 @@ def _detect_java_framework(root: Path) -> str:
                     return "quarkus"
                 if "micronaut" in content:
                     return "micronaut"
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[standards] build.gradle read skipped: {exc}")
 
     return "unknown"
 
@@ -241,8 +244,8 @@ def _detect_js_framework(root: Path) -> str:
             return "fastify"
         if "nestjs" in dep_names or "@nestjs/core" in dep_names:
             return "nestjs"
-    except Exception:
-        pass
+    except (OSError, ValueError) as exc:
+        logger.debug(f"[standards] package.json read skipped: {exc}")
 
     return "unknown"
 
@@ -283,8 +286,8 @@ def load_custom_standards(project_path: str) -> List[Dict[str, Any]]:
                         "priority": PRIORITY_CUSTOM,
                     }
                 )
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[standards] custom standard read skipped: {exc}")
 
     return custom
 
@@ -326,8 +329,8 @@ def load_team_standards(project_path: str) -> List[Dict[str, Any]]:
                         "priority": PRIORITY_TEAM,
                     }
                 )
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[standards] team standard read skipped: {exc}")
 
     return team
 
@@ -373,8 +376,8 @@ def load_framework_standards(project_type: str, framework: str) -> List[Dict[str
                     }
                 )
                 break
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[standards] framework standard read skipped: {exc}")
 
     return built_in
 
@@ -409,8 +412,8 @@ def load_language_standards(project_type: str) -> List[Dict[str, Any]]:
                     "priority": PRIORITY_LANGUAGE,
                 }
             )
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug(f"[standards] language standard read skipped: {exc}")
 
     return lang
 
