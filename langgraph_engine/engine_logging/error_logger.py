@@ -13,6 +13,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from langgraph_engine.core.logger_factory import get_logger
+
+_LEVEL_METHODS = {
+    "DEBUG": "debug",
+    "INFO": "info",
+    "WARNING": "warning",
+    "ERROR": "error",
+    "CRITICAL": "critical",
+}
+
+_LOG = get_logger(__name__)
+
 
 class ErrorLogger:
     """Comprehensive error logging system with file persistence."""
@@ -72,7 +84,7 @@ class ErrorLogger:
 
         self.errors.append(entry)
         self._append_to_file(self.error_file, self._format_error_entry(entry))
-        self._print_error(entry)
+        self._log_error(entry)
 
     def log_decision(
         self,
@@ -103,10 +115,10 @@ class ErrorLogger:
         self.decisions.append(entry)
         self._append_to_file(self.decision_file, self._format_decision_entry(entry))
 
-        print(f"[BLUE] [{step}] DECISION: {decision}")
-        print(f"   Reasoning: {reasoning}")
+        message = f"[{step}] DECISION: {decision} | Reasoning: {reasoning}"
         if chosen_option:
-            print(f"   Chosen: {chosen_option}")
+            message += f" | Chosen: {chosen_option}"
+        _LOG.info(message)
 
     def log_validation_result(
         self,
@@ -123,7 +135,6 @@ class ErrorLogger:
             passed: Whether check passed
             details: Additional details
         """
-        symbol = "[OK]" if passed else "[FAIL]"
         status = "PASS" if passed else "FAIL"
 
         entry = {
@@ -137,9 +148,13 @@ class ErrorLogger:
 
         self._append_to_file(self.error_file, self._format_validation_entry(entry))
 
-        print(f"{symbol} [{step}] {check_name}: {status}")
+        message = f"[{step}] {check_name}: {status}"
         if details:
-            print(f"   Details: {details}")
+            message += f" | Details: {details}"
+        if passed:
+            _LOG.info(message)
+        else:
+            _LOG.warning(message)
 
     def log_retry_attempt(
         self,
@@ -172,9 +187,10 @@ class ErrorLogger:
             log_line += f" ({reason})"
         self._append_to_file(self.error_file, log_line)
 
-        print(f"[refresh] [{step}] Retry {attempt}/{max_attempts}: {status}")
+        message = f"[{step}] Retry {attempt}/{max_attempts}: {status}"
         if reason:
-            print(f"   Reason: {reason}")
+            message += f" | Reason: {reason}"
+        _LOG.info(message)
 
     def log_backup_restore(
         self,
@@ -205,7 +221,10 @@ class ErrorLogger:
             log_line += f" -> {backup_path}"
 
         self._append_to_file(self.error_file, log_line)
-        print(f"{symbol} {operation.upper()}: {file_path}")
+        if success:
+            _LOG.info(f"{operation.upper()}: {file_path}")
+        else:
+            _LOG.warning(f"{operation.upper()} FAILED: {file_path}")
 
     def get_error_summary(self) -> Dict:
         """Get summary of all errors logged.
@@ -315,33 +334,29 @@ class ErrorLogger:
             with open(file_path, "a", encoding="utf-8") as f:
                 f.write(content)
                 f.write("\n")
-        except Exception as e:
+        except OSError as e:
             print(f"[FAIL] Failed to write to log file {file_path}: {e}", file=sys.stderr)
 
     @staticmethod
-    def _print_error(entry: Dict) -> None:
-        """Print error to console with formatting."""
+    def _log_error(entry: Dict) -> None:
+        """Emit a formatted error entry to the shared logger at its severity level.
+
+        Args:
+            entry: Error record produced by log_error, carrying severity, step,
+                message, and optional error_type/recovery_action fields.
+        """
         severity = entry["severity"]
         step = entry["step"]
         message = entry["message"]
 
-        severity_symbols = {
-            "DEBUG": "[search]",
-            "INFO": "[i]",
-            "WARNING": "[WARN]",
-            "ERROR": "[FAIL]",
-            "CRITICAL": "[RED]",
-        }
-
-        symbol = severity_symbols.get(severity, "[?]")
-
-        print(f"{symbol} [{step}] {severity}: {message}")
-
+        line = f"[{step}] {severity}: {message}"
         if entry.get("error_type") and entry["error_type"] != "Unknown":
-            print(f"   Type: {entry['error_type']}")
-
+            line += f" | Type: {entry['error_type']}"
         if entry.get("recovery_action"):
-            print(f"   Recovery: {entry['recovery_action']}")
+            line += f" | Recovery: {entry['recovery_action']}"
+
+        log_method = getattr(_LOG, _LEVEL_METHODS.get(severity, "error"))
+        log_method(line)
 
 
 def create_logger(session_id: str) -> ErrorLogger:

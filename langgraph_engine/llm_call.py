@@ -119,12 +119,27 @@ class ClaudeCLIProvider(LLMProvider):
 
     @property
     def name(self) -> str:
+        """Provider name used in logs and get_active_providers()."""
         return "claude_cli"
 
     def is_available(self) -> bool:
+        """Return True when the 'claude' CLI was found on PATH at init."""
         return self._available
 
     def call(self, prompt, model="fast", temperature=0.3, timeout=120, json_mode=False):
+        """Run the prompt through the 'claude' CLI and return its stdout.
+
+        Args:
+            prompt: Prompt text; truncated to 10k chars to stay within CLI limits.
+            model: Tier key mapped to a CLI model alias via MODEL_MAP.
+            temperature: Accepted for interface parity; the CLI ignores it.
+            timeout: Max seconds to wait for the subprocess.
+            json_mode: Accepted for interface parity; not enforced by the CLI.
+
+        Returns:
+            Stripped stdout on success, or None if unavailable, on non-zero exit,
+            empty output, or any subprocess error.
+        """
         if not self._available:
             return None
 
@@ -204,12 +219,30 @@ class AnthropicProvider(LLMProvider):
 
     @property
     def name(self) -> str:
+        """Provider name used in logs and get_active_providers()."""
         return "anthropic"
 
     def is_available(self) -> bool:
+        """Return True when an ANTHROPIC_API_KEY was present at init."""
         return self._available
 
     def call(self, prompt, model="fast", temperature=0.3, timeout=120, json_mode=False):
+        """Send the prompt to the Anthropic Messages API and return the text.
+
+        Selects the model by tier, optionally appends a JSON-only instruction,
+        and maps typed SDK exceptions to graceful failures (auth errors disable
+        the provider; rate-limit/status/connection errors are logged at debug).
+
+        Args:
+            prompt: Prompt text to send.
+            model: Tier key selecting fast/balanced/deep model ids.
+            temperature: Sampling temperature (0.0-1.0).
+            timeout: Requested timeout in seconds (capped at 60 by the SDK call).
+            json_mode: If True, append an instruction to return only valid JSON.
+
+        Returns:
+            The response text, or None on any failure or empty output.
+        """
         if not self._available:
             return None
 
@@ -423,6 +456,8 @@ def generate_llm_commit_title(commit_type: str = None, cwd: str = None) -> Optio
         return title[:69] + "..." if len(title) > 72 else title
 
     except subprocess.TimeoutExpired:
+        _log.debug("generate_llm_commit_title: git command timed out")
         return None
-    except Exception:
+    except Exception as exc:
+        _log.debug("generate_llm_commit_title failed: %s", exc)
         return None
