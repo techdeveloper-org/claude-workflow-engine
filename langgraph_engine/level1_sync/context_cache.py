@@ -29,11 +29,14 @@ Usage:
 
 import hashlib
 import json
+import logging
 import sys
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 # Cache validity window
 CACHE_MAX_AGE_HOURS = 24
@@ -444,9 +447,9 @@ class ContextCache:
                             "mtime": round(stat.st_mtime, 2),
                             "size": stat.st_size,
                         }
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+                    except OSError as exc:
+                        logger.debug("context_cache: stat failed for %s: %s", match.name, exc)
+            except OSError as exc:
+                logger.debug("context_cache: glob failed for pattern %s: %s", pattern, exc)
 
         return signatures
