@@ -161,8 +161,8 @@ def create_span(
                 for key, value in attributes.items():
                     try:
                         span.set_attribute(key, value)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("tracing: could not set span attribute %r: %s", key, exc)
             yield span
     except Exception as exc:
         logger.debug("Span '%s' raised: %s", name, exc)

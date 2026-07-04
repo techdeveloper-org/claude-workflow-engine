@@ -11,6 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from langgraph_engine.core.logger_factory import get_logger
+
+logger = get_logger(__name__)
+
 
 def write_level_log(
     state: dict,
@@ -60,8 +64,8 @@ def write_level_log(
         with open(log_file, "w", encoding="utf-8") as f:
             json.dump(log_entry, f, indent=2)
 
-    except Exception:
-        pass  # Logging failure is never fatal
+    except Exception as exc:
+        logger.debug(f"write_level_log skipped (logging is never fatal): {exc}")
 
 
 def _summarize_result(result: Dict[str, Any]) -> Dict[str, Any]:

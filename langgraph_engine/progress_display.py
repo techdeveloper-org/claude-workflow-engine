@@ -361,8 +361,8 @@ class ProgressDisplay:
             lines = self._build_display()
             self.stream.write("\n".join(lines) + "\n")
             self.stream.flush()
-        except Exception:
-            pass  # Never crash the pipeline due to display issues
+        except Exception as exc:
+            logger.debug(f"[ProgressDisplay] render skipped (never crash on display issues): {exc}")
 
     def _build_display(self) -> List[str]:
         """Build display lines (no I/O side effects)."""

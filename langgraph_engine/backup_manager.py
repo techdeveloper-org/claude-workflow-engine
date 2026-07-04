@@ -14,6 +14,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from langgraph_engine.core.logger_factory import get_logger
+
+logger = get_logger(__name__)
+
 
 class BackupManager:
     """Manages file backups and rollback operations."""
@@ -297,8 +301,8 @@ class BackupManager:
         if self.metadata_file.exists():
             try:
                 return json.loads(self.metadata_file.read_text())
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.debug(f"Could not load backup metadata, starting fresh: {exc}")
 
         return {"session_id": self.session_id, "created": datetime.now().isoformat(), "backups": []}
 

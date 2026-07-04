@@ -387,8 +387,8 @@ class PipelineUI:
         try:
             self.stream.write(text + "\n")
             self.stream.flush()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"[PipelineUI] stream write skipped: {exc}")
 
     def _print_header(self) -> None:
         """Print the pipeline session start header."""

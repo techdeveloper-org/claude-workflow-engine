@@ -56,8 +56,8 @@ def _get_logs_base() -> Path:
     if _HAS_PATH_RESOLVER:
         try:
             return Path(get_logs_dir())
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("path_resolver get_logs_dir() failed, using default logs dir: %s", exc)
     return Path.home() / ".claude" / "logs"
 
 

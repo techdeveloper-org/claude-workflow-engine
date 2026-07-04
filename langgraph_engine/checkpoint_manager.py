@@ -332,7 +332,8 @@ class CheckpointManager:
                     step_str = f.stem.split("-")[1]
                     step = int(step_str)
                     return step, data.get("state")
-            except Exception:
+            except (OSError, ValueError, IndexError) as exc:
+                logger.debug(f"[Checkpoint] skipping unreadable checkpoint {f.name}: {exc}")
                 continue
 
         return None, None
@@ -358,8 +359,8 @@ class CheckpointManager:
                         "path": str(f),
                     }
                 )
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.debug(f"[Checkpoint] skipping unreadable checkpoint {f.name}: {exc}")
         return result
 
     def delete_checkpoint(self, step: int) -> bool:

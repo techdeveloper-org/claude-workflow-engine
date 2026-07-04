@@ -225,8 +225,8 @@ class CacheTier:
                     if age_s > self.ttl_seconds:
                         f.unlink(missing_ok=True)
                         removed += 1
-                except Exception:
-                    pass
+                except (OSError, ValueError) as exc:
+                    logger.debug("[Cache:{}] skipping unreadable cache file {}: {}".format(self.name, f.name, exc))
         except Exception as exc:
             logger.warning("[Cache:{}] clear_expired error: {}".format(self.name, exc))
         return removed
@@ -328,8 +328,8 @@ class CacheTier:
             try:
                 p.unlink(missing_ok=True)
                 return True
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("[Cache:{}] disk delete failed for {}: {}".format(self.name, p.name, exc))
         return False
 
 

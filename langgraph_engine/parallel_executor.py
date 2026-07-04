@@ -466,8 +466,8 @@ class ConcurrentSkillDownloader:
             for fut in as_completed(futs, timeout=timeout_seconds * len(skill_specs)):
                 try:
                     fut.result(timeout=timeout_seconds)
-                except Exception:
-                    pass  # Already handled inside _load_one
+                except Exception as exc:
+                    logger.debug(f"[ConcurrentSkillDownloader] future raised (already handled in _load_one): {exc}")
 
         elapsed = time.monotonic() - t0
         loaded = sum(1 for v in results.values() if v)

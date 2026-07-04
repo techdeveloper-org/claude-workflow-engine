@@ -147,8 +147,8 @@ class StepExecutionContext:
                     recovery="Fallback result returned",
                     message=str(exc),
                 )
-            except Exception:
-                pass
+            except Exception as metrics_exc:
+                logger.warning("[step_decorator] Metrics record_failure failed: %s" % metrics_exc)
 
     # ------------------------------------------------------------------
     # Checkpoint helpers
@@ -206,8 +206,8 @@ class StepExecutionContext:
                         "Returning fallback result" if fallback is not None else "Step returning empty result"
                     ),
                 )
-            except Exception:
-                pass
+            except Exception as log_exc:
+                logger.warning("[step_decorator] Structured error logging failed: %s" % log_exc)
 
     # ------------------------------------------------------------------
     # Telemetry helper
@@ -221,7 +221,7 @@ class StepExecutionContext:
     ) -> None:
         """Append one JSONL telemetry line for the step.
 
-        Non-blocking: all errors are silently swallowed.
+        Non-blocking: failures are logged at debug and never propagate.
         ASCII-only strings used throughout for cp1252 compatibility.
         """
         try:
@@ -241,8 +241,8 @@ class StepExecutionContext:
             telemetry_file = _TELEMETRY_DIR / ("%s.jsonl" % session_id)
             with open(str(telemetry_file), "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(entry) + "\n")
-        except Exception:
-            pass  # Non-blocking
+        except Exception as exc:
+            logger.debug("[step_decorator] telemetry write skipped: %s" % exc)
 
     # ------------------------------------------------------------------
     # Workflow memory helper
@@ -269,8 +269,8 @@ class StepExecutionContext:
                 json.dumps(mem, indent=2),
                 encoding="utf-8",
             )
-        except Exception:
-            pass  # Workflow memory is best-effort
+        except Exception as exc:
+            logger.debug("[step_decorator] workflow memory write skipped: %s" % exc)
 
 
 # ---------------------------------------------------------------------------
