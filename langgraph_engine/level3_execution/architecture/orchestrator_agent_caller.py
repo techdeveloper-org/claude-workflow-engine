@@ -14,11 +14,14 @@ Environment:
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Schema verifier (best-effort; non-blocking when import fails)
@@ -173,8 +176,8 @@ def _call_claude_cli(prompt):
         if temp_file:
             try:
                 Path(temp_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("orchestrator caller: temp file cleanup skipped: %s", exc)
 
 
 def _parse_agent_output(llm_response):
@@ -186,8 +189,8 @@ def _parse_agent_output(llm_response):
             json_start = llm_response.index("{")
             json_end = llm_response.rindex("}") + 1
             return json.loads(llm_response[json_start:json_end])
-    except Exception:
-        pass
+    except ValueError as exc:
+        logger.debug("orchestrator caller: could not parse JSON from response: %s", exc)
     return None
 
 

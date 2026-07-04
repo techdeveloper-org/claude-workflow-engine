@@ -36,12 +36,15 @@ Dependencies:
 
 import ast
 import json
+import logging
 import os
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Optional dependency detection
@@ -715,8 +718,8 @@ class CodeGraphAnalyzer:
                 json.dumps(result, indent=2, default=str),
                 encoding="utf-8",
             )
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("code_graph_analyzer: session graph-analysis write skipped: %s", exc)
 
         # Write to project local cache for fast future reads
         try:
@@ -727,8 +730,8 @@ class CodeGraphAnalyzer:
                 json.dumps(result, indent=2, default=str),
                 encoding="utf-8",
             )
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("code_graph_analyzer: local cache graph-analysis write skipped: %s", exc)
 
     def summary(self) -> str:
         """Return a one-line human-readable summary of the analysis."""

@@ -14,11 +14,14 @@ Environment:
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Schema verifier (best-effort; non-blocking when import fails)
@@ -220,8 +223,8 @@ def _call_claude_cli(prompt):
         if temp_file:
             try:
                 Path(temp_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("prompt_gen caller: temp file cleanup skipped: %s", exc)
 
 
 # ---------------------------------------------------------------------------

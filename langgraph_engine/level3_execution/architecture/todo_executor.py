@@ -157,8 +157,8 @@ def _execute_single_todo(todo_item):
         if prompt_file:
             try:
                 Path(prompt_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"todo_executor: temp prompt file cleanup skipped: {exc}")
 
 
 # ---------------------------------------------------------------------------
