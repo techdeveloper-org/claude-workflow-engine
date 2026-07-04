@@ -114,8 +114,8 @@ def tool_grep(
                             match_count += 1
                             if match_count >= head_limit:
                                 break
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[code_explorer] file read skipped: {exc}")
 
             if match_count >= head_limit:
                 break
@@ -169,8 +169,8 @@ def tool_search(
                     rel_path = file_path.relative_to(root)
                     results[str(rel_path)] = matches
 
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[code_explorer] file read skipped: {exc}")
 
         # Sort by match count and return top results
         sorted_results = sorted(results.items(), key=lambda x: x[1], reverse=True)
@@ -481,8 +481,8 @@ def extract_code_snippets(
                         if len(snippet) > 200:
                             snippet = snippet[:200] + "..."
                         snippets.append(f"\n### {file_path}:\n{snippet}")
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[code_explorer] file read skipped: {exc}")
 
         return "".join(snippets) if snippets else "(No code snippets available)"
     except Exception as e:

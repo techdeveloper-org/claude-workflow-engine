@@ -411,8 +411,8 @@ def apply_template_fix(
             # Restore from backup
             try:
                 shutil.copy2(str(backup_path), str(p))
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("sonar_auto_fixer: backup restore failed: %s", exc)
             result["error"] = f"syntax error after applying fix (restored from backup): {exc}"
             return result
 
@@ -424,8 +424,8 @@ def apply_template_fix(
         # Attempt to restore from backup
         try:
             shutil.copy2(str(backup_path), str(p))
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("sonar_auto_fixer: backup restore failed: %s", exc)
         result["error"] = f"could not write file: {exc}"
 
     return result
@@ -710,8 +710,8 @@ def _extract_var_name(source_line: str) -> str:
             # Accept simple identifiers only
             if lhs.isidentifier():
                 return lhs
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("sonar_auto_fixer: LHS extraction failed: %s", exc)
     return ""
 
 

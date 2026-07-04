@@ -174,8 +174,8 @@ def _write_step_log(
         with open(log_file, "w", encoding="utf-8") as f:
             _json.dump(log_entry, f, indent=2)
 
-    except Exception:
-        pass  # Logging failure is never fatal
+    except OSError as exc:
+        logger.debug(f"[subgraph] step-log write skipped: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -214,8 +214,8 @@ def _write_telemetry(
         telemetry_file = telemetry_dir / ("%s.jsonl" % session_id)
         with open(telemetry_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(telemetry_entry) + "\n")
-    except Exception:
-        pass  # Non-blocking
+    except OSError as exc:
+        logger.debug(f"[subgraph] telemetry write skipped: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -274,8 +274,8 @@ def _run_step(
 
         if cp and error_logger:
             _register_globals(step_number, dict(state), cp, error_logger)
-    except Exception:
-        pass  # Recovery handler update is best-effort
+    except Exception as exc:
+        logger.debug(f"[subgraph] recovery handler update skipped: {exc}")
 
     # Log step start to stderr for real-time visibility
     print(f"\n[STEP {step_number:02d}] {step_label} - START", file=sys.stderr)
@@ -287,8 +287,8 @@ def _run_step(
         try:
             _session_id_for_pipeline = state.get("session_id", "") or "unknown"
             _pipeline_start_times[_session_id_for_pipeline] = step_start
-        except Exception:
-            pass  # Non-blocking
+        except Exception as exc:
+            logger.debug(f"[subgraph] pipeline start-time tracking skipped: {exc}")
 
     # --- Failure Prevention KB check (informational, non-blocking) ---
     # Only for steps that run external commands/tools (Steps 0, 8, 9, 10)
@@ -310,8 +310,8 @@ def _run_step(
                             ),
                             file=sys.stderr,
                         )
-        except Exception:
-            pass  # Fail-open: KB check never blocks
+        except Exception as exc:
+            logger.debug(f"[subgraph] failure-prevention KB check skipped: {exc}")
 
     # --- Timeout enforcement ---
     # Load timeout table; gracefully degrade if module unavailable
@@ -334,8 +334,8 @@ def _run_step(
                 if metrics:
                     try:
                         metrics.record_step(step=step_number, duration=duration, status="TIMEOUT")
-                    except Exception:
-                        pass
+                    except Exception as metric_exc:
+                        logger.debug(f"[subgraph] timeout metric record skipped: {metric_exc}")
                 if error_logger:
                     try:
                         error_logger.log_error(
@@ -345,8 +345,8 @@ def _run_step(
                             error_type="TimeoutError",
                             recovery_action="Returning fallback result",
                         )
-                    except Exception:
-                        pass
+                    except Exception as log_exc:
+                        logger.debug(f"[subgraph] timeout error-log skipped: {log_exc}")
                 # Build full fallback with timing info
                 base = {
                     f"step{step_number}_error": f"Timeout after {timeout_s}s",
@@ -407,8 +407,8 @@ def _run_step(
                     "session_id": state.get("session_id", ""),
                 }
                 mem_path.write_text(_json.dumps(mem_data, indent=2), encoding="utf-8")
-        except Exception:
-            pass  # Workflow memory is best-effort
+        except OSError as exc:
+            logger.debug(f"[subgraph] workflow memory write skipped: {exc}")
 
         if result is not None:
             result[f"step{step_number}_execution_time_ms"] = duration * 1000
@@ -423,8 +423,8 @@ def _run_step(
                     result["level3_total_execution_time_ms"] = round(total_time, 1)
                     # Clean up to avoid memory growth across sessions
                     _pipeline_start_times.pop(_session_id_for_total, None)
-            except Exception:
-                pass  # Non-blocking
+            except Exception as exc:
+                logger.debug(f"[subgraph] total execution-time calc skipped: {exc}")
 
         return result or {}
 
@@ -443,8 +443,8 @@ def _run_step(
                         "Returning fallback result" if fallback_result is not None else "Step returning empty result"
                     ),
                 )
-            except Exception:
-                pass
+            except Exception as log_exc:
+                logger.debug(f"[subgraph] structured error-log skipped: {log_exc}")
 
         # Record FAILED metric
         if metrics:
@@ -460,8 +460,8 @@ def _run_step(
                     recovery="Fallback result returned",
                     message=str(exc),
                 )
-            except Exception:
-                pass
+            except Exception as metric_exc:
+                logger.debug(f"[subgraph] failure metric record skipped: {metric_exc}")
 
         # Save failed checkpoint (success_status=False, include error message)
         if cp:

@@ -348,8 +348,8 @@ class Level3GitHubWorkflow:
                     # Persist conflict log
                     try:
                         conflict_resolver.save_conflict_log()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"[Step 9] conflict log persist skipped: {exc}")
             else:
                 logger.debug("[Step 9] ConflictResolver unavailable - skipping branch conflict check")
 

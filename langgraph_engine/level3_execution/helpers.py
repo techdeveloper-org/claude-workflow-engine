@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ..core.logger_factory import get_logger
+
+logger = get_logger(__name__)
+
 try:
     import sys as _sys
 
@@ -360,8 +364,8 @@ def _read_project_context_snippets(project_root: str, max_chars: int = 1500) -> 
                 readme_snippet = content[:max_chars]
                 if len(content) > max_chars:
                     readme_snippet += "\n... (truncated)"
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[level3.helpers] README read skipped: {exc}")
             break
 
     # Read SRS
@@ -373,8 +377,8 @@ def _read_project_context_snippets(project_root: str, max_chars: int = 1500) -> 
                 srs_snippet = content[:max_chars]
                 if len(content) > max_chars:
                     srs_snippet += "\n... (truncated)"
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[level3.helpers] SRS read skipped: {exc}")
             break
 
     return readme_snippet, srs_snippet
