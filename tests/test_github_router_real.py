@@ -70,7 +70,7 @@ def test_router_gh_cli_only():
     print("=" * 70)
 
     try:
-        from langgraph_engine.github_operation_router import GitHubOperationRouter
+        from langgraph_engine.github.operation_router import GitHubOperationRouter
 
         print("Initializing router (use_mcp=False, fallback_to_gh=True)...")
         router = GitHubOperationRouter(use_mcp=False, fallback_to_gh=True)
@@ -97,7 +97,7 @@ def test_router_mcp_enabled():
     print("=" * 70)
 
     try:
-        from langgraph_engine.github_operation_router import GitHubOperationRouter
+        from langgraph_engine.github.operation_router import GitHubOperationRouter
 
         print("Initializing router (use_mcp=True, fallback_to_gh=True)...")
         token = os.getenv("GITHUB_TOKEN")
@@ -126,7 +126,7 @@ def test_router_api_compatibility():
     print("=" * 70)
 
     try:
-        from langgraph_engine.github_operation_router import GitHubOperationRouter
+        from langgraph_engine.github.operation_router import GitHubOperationRouter
 
         router = GitHubOperationRouter(use_mcp=False, fallback_to_gh=True)
 

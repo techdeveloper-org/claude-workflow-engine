@@ -31,7 +31,7 @@ from langgraph_engine.dependency_resolver import (
     parse_skill_metadata,
     resolve_dependencies,
 )
-from langgraph_engine.skill_manager import SkillManager, get_skill_manager
+from langgraph_engine.skills.manager import SkillManager, get_skill_manager
 from langgraph_engine.version_selector import (
     Version,
     build_compatibility_matrix,

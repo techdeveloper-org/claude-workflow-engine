@@ -465,7 +465,7 @@ def node_context_loader(state):
         # ---- Best-effort: detect technology patterns in project root ----
         _detected_patterns = None
         try:
-            _pattern_mod = _load_architecture_script("pattern-detector.py")
+            _pattern_mod = _load_architecture_script("pattern_detector.py")
             if _pattern_mod is not None and hasattr(_pattern_mod, "detect_patterns"):
                 if not state.get("patterns_detected"):
                     _detected_patterns = _pattern_mod.detect_patterns(project_root)

@@ -35,7 +35,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 # ---------------------------------------------------------------------------
 
 try:
-    from langgraph_engine.audit_logger import AUDITABLE_OPERATIONS, _redact_metadata, audit_log
+    from langgraph_engine.engine_logging.audit_logger import AUDITABLE_OPERATIONS, _redact_metadata, audit_log
 
     _IMPORT_OK = True
 except ImportError:
@@ -67,7 +67,7 @@ def _attach_capturing_handler():
     The handler is set on the 'claude_workflow_engine.audit' logger which is
     the same logger used by audit_log().
     """
-    import langgraph_engine.audit_logger as _al_mod
+    import langgraph_engine.engine_logging.audit_logger as _al_mod
 
     # Reset the module-level singleton so a fresh logger is created
     _al_mod._audit_logger = None
@@ -87,7 +87,7 @@ class TestAuditLogWritesJsonLine:
 
     def test_pipeline_start_produces_json_line(self, tmp_path):
         """audit_log('pipeline_start', ...) must emit exactly one JSON line."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 
@@ -118,7 +118,7 @@ class TestAuditLogWritesJsonLine:
 
     def test_json_line_has_required_fields(self, tmp_path):
         """Each audit JSON line must contain timestamp, operation, actor, resource, outcome."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 
@@ -145,7 +145,7 @@ class TestAuditLogWritesJsonLine:
 
     def test_json_line_is_valid_json(self, tmp_path):
         """The emitted line must be deserializable by json.loads without errors."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 
@@ -223,7 +223,7 @@ class TestAuditLogRedactsSensitiveMetadataKeys:
 
     def test_audit_log_redacts_in_written_line(self, tmp_path):
         """The JSON line emitted by audit_log must contain [REDACTED] for token keys."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 
@@ -256,7 +256,7 @@ class TestAuditLogSkipsUnknownOperation:
 
     def test_unknown_operation_is_not_written(self, caplog):
         """An unknown operation must result in zero calls to the audit logger info()."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 
@@ -278,7 +278,7 @@ class TestAuditLogSkipsUnknownOperation:
 
     def test_unknown_operation_emits_module_warning(self, caplog):
         """An unknown operation must emit a WARNING from the module logger."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 
@@ -298,7 +298,7 @@ class TestAuditLogSkipsUnknownOperation:
 
     def test_all_auditable_operations_are_accepted(self, tmp_path):
         """All operations listed in AUDITABLE_OPERATIONS must be written without error."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 
@@ -324,7 +324,7 @@ class TestAuditLogThreadSafe:
 
     def test_concurrent_writes_all_produce_valid_json(self, tmp_path):
         """5 concurrent audit_log calls must produce 5 valid JSON lines."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 
@@ -374,7 +374,7 @@ class TestAuditLogThreadSafe:
 
     def test_concurrent_writes_produce_unique_actor_values(self, tmp_path):
         """Each thread's session ID must appear exactly once across all written lines."""
-        import langgraph_engine.audit_logger as _al_mod
+        import langgraph_engine.engine_logging.audit_logger as _al_mod
 
         _al_mod._audit_logger = None
 

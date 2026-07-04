@@ -6,9 +6,9 @@ import time
 from typing import Any, Callable
 
 from langgraph_engine.core.logger_factory import get_logger
+from langgraph_engine.engine_logging.tracing import create_span
 from langgraph_engine.runtime_verification.contracts import NodeContract
 from langgraph_engine.runtime_verification.verifier import RuntimeVerifier
-from langgraph_engine.tracing import create_span
 
 _LOG = get_logger(__name__)
 

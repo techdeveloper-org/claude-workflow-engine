@@ -153,7 +153,7 @@ def cleanup_level1_memory(state):
     # ---- Best-effort: estimate context window usage after cleanup ----
     _context_monitor_result = {}
     try:
-        _monitor_mod = _load_architecture_script("context-monitor.py")
+        _monitor_mod = _load_architecture_script("context_monitor.py")
         if _monitor_mod is not None and hasattr(_monitor_mod, "estimate_context_usage"):
             _session_path_val = state.get("session_path", "")
             _session_dir = Path(_session_path_val) if _session_path_val else None

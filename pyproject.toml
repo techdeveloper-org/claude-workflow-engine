@@ -76,12 +76,6 @@ exclude = [
     ".venv",
 ]
 
-[tool.pytest.ini_options]
-markers = [
-    "integration: marks tests as integration tests (select via: -m integration)",
-]
-testpaths = ["tests"]
-
 [tool.ruff]
 line-length = 120
 

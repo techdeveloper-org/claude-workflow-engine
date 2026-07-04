@@ -117,7 +117,7 @@ def node_session_loader(state):
 
         # ---- Best-effort: prune old sessions (optional enhancement) ----
         try:
-            _pruner = _load_architecture_script("session-pruner.py")
+            _pruner = _load_architecture_script("session_pruner.py")
             if _pruner is not None and hasattr(_pruner, "prune_sessions"):
                 _sessions_dir = _LEVEL1_SESSION_LOGS_DIR
                 _prune_result = _pruner.prune_sessions(_sessions_dir)
@@ -140,7 +140,7 @@ def node_session_loader(state):
 
         # ---- Best-effort: track user preferences from session history ----
         try:
-            _pref_tracker = _load_architecture_script("preference-tracker.py")
+            _pref_tracker = _load_architecture_script("preference_tracker.py")
             if _pref_tracker is not None and hasattr(_pref_tracker, "track_preferences"):
                 _sessions_dir = _LEVEL1_SESSION_LOGS_DIR
                 if not state.get("preferences_data"):

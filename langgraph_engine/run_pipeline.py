@@ -92,7 +92,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
             session_id = checkpoint_id.split(":")[0]
             print(f"[Resume] Extracted session_id from checkpoint: {session_id}", file=sys.stderr)
 
-        from langgraph_engine.recovery_handler import resume_from_checkpoint
+        from langgraph_engine.quality.recovery_handler import resume_from_checkpoint
 
         print(f"[Resume] Session: {session_id}", file=sys.stderr)
         if checkpoint_id:

@@ -4,7 +4,7 @@ test_new_components.py - Tests for new components added to the Claude Workflow E
 
 Covers:
   1. Code Graph Analyzer (scripts/architecture/03-execution-system/00-code-graph-analysis/)
-  2. Level 1 Sync System scripts (scripts/architecture/01-sync-system/)
+  2. Level 1 Sync System scripts (langgraph_engine/level1_sync/architecture/)
   3. Pre-tool Enforcer Level 1 / Level 2 blocking functions (scripts/pre-tool-enforcer.py)
 
 All tests are designed to pass without external dependencies (networkx, etc.).
@@ -22,7 +22,7 @@ from typing import Any, Dict
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).parent.parent
-SYNC_SYSTEM_DIR = REPO_ROOT / "scripts" / "architecture" / "01-sync-system"
+SYNC_SYSTEM_DIR = REPO_ROOT / "langgraph_engine" / "level1_sync" / "architecture"
 CODE_GRAPH_DIR = REPO_ROOT / "scripts" / "architecture" / "03-execution-system" / "00-code-graph-analysis"
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 HOOKS_DIR = REPO_ROOT / "hooks"
@@ -151,7 +151,7 @@ class TestSessionPrunerImport:
 
     def test_session_pruner_import(self):
         """test_session_pruner_import: prune_sessions is importable and callable."""
-        script_path = SYNC_SYSTEM_DIR / "session-pruner.py"
+        script_path = SYNC_SYSTEM_DIR / "session_pruner.py"
         assert script_path.exists(), "session-pruner.py not found at {}".format(script_path)
 
         mod = _load_module(script_path, "session_pruner_test_import")
@@ -164,7 +164,7 @@ class TestSessionPrunerEmptyDir:
 
     def test_session_pruner_empty_dir(self, tmp_path):
         """test_session_pruner_empty_dir: empty dir returns valid result dict without error."""
-        script_path = SYNC_SYSTEM_DIR / "session-pruner.py"
+        script_path = SYNC_SYSTEM_DIR / "session_pruner.py"
         mod = _load_module(script_path, "session_pruner_test_empty")
 
         result = mod.prune_sessions(tmp_path)
@@ -192,7 +192,7 @@ class TestContextMonitorImport:
 
     def test_context_monitor_import(self):
         """test_context_monitor_import: estimate_context_usage is importable and callable."""
-        script_path = SYNC_SYSTEM_DIR / "context-monitor.py"
+        script_path = SYNC_SYSTEM_DIR / "context_monitor.py"
         assert script_path.exists(), "context-monitor.py not found at {}".format(script_path)
 
         mod = _load_module(script_path, "context_monitor_test_import")
@@ -205,7 +205,7 @@ class TestContextMonitorEmptySession:
 
     def test_context_monitor_empty_session(self, tmp_path):
         """test_context_monitor_empty_session: returns valid dict with 0 tokens for empty dir."""
-        script_path = SYNC_SYSTEM_DIR / "context-monitor.py"
+        script_path = SYNC_SYSTEM_DIR / "context_monitor.py"
         mod = _load_module(script_path, "context_monitor_test_empty")
 
         info = mod.estimate_context_usage(session_dir=tmp_path)
@@ -251,7 +251,7 @@ class TestPatternDetectorImport:
 
     def test_pattern_detector_import(self):
         """test_pattern_detector_import: detect_patterns is importable and callable."""
-        script_path = SYNC_SYSTEM_DIR / "pattern-detector.py"
+        script_path = SYNC_SYSTEM_DIR / "pattern_detector.py"
         assert script_path.exists(), "pattern-detector.py not found at {}".format(script_path)
 
         mod = _load_module(script_path, "pattern_detector_test_import")
@@ -264,7 +264,7 @@ class TestPatternDetectorCurrentProject:
 
     def test_pattern_detector_current_project(self):
         """test_pattern_detector_current_project: detects 'python' for this Python project."""
-        script_path = SYNC_SYSTEM_DIR / "pattern-detector.py"
+        script_path = SYNC_SYSTEM_DIR / "pattern_detector.py"
         mod = _load_module(script_path, "pattern_detector_test_project")
 
         # Point the detector at the repo root which has pyproject.toml / requirements files
@@ -287,7 +287,7 @@ class TestPreferenceTrackerImport:
 
     def test_preference_tracker_import(self):
         """test_preference_tracker_import: track_preferences is importable and callable."""
-        script_path = SYNC_SYSTEM_DIR / "preference-tracker.py"
+        script_path = SYNC_SYSTEM_DIR / "preference_tracker.py"
         assert script_path.exists(), "preference-tracker.py not found at {}".format(script_path)
 
         mod = _load_module(script_path, "preference_tracker_test_import")
@@ -300,7 +300,7 @@ class TestPreferenceTrackerEmpty:
 
     def test_preference_tracker_empty(self, tmp_path):
         """test_preference_tracker_empty: returns valid dict for empty sessions dir."""
-        script_path = SYNC_SYSTEM_DIR / "preference-tracker.py"
+        script_path = SYNC_SYSTEM_DIR / "preference_tracker.py"
         mod = _load_module(script_path, "preference_tracker_test_empty")
 
         result = mod.track_preferences(sessions_dir=tmp_path)

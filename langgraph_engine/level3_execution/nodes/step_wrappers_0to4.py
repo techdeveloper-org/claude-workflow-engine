@@ -32,7 +32,13 @@ try:
 except ImportError:
     FlowState = dict  # type: ignore[misc,assignment]
 
-from ..helpers import call_streaming_script
+
+def _env_int(name: str, default: int) -> int:
+    """Return int(os.environ[name]), or `default` when the var is unset or non-numeric."""
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
 
 
 def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
@@ -42,9 +48,10 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     an orchestration prompt enriched with combined_complexity_score and
     CallGraph risk data. Uses claude CLI subprocess internally.
 
-    Phase 2: calls orchestrator_agent_caller (long-running, stderr streamed
-    live) with the orchestration prompt written to a temp file so the user
-    sees real-time agent progress. Uses claude CLI subprocess internally.
+    Phase 2: decomposes the orchestration prompt into a TODO list
+    (todo_decomposer) and executes each TODO via orchestrator_agent_caller
+    (todo_executor), capturing stdout per TODO. Uses claude CLI subprocess
+    internally.
 
     Post-call: populates migration fields so Steps 8-14 receive correct data.
     """
@@ -84,47 +91,61 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     user_message = state.get("user_message", "") or os.environ.get("CURRENT_USER_MESSAGE", "")
 
     # --- PHASE 1: prompt_gen_expert_caller (claude CLI subprocess) ---
-    os.environ.setdefault("STEP0_PROMPT_GEN_TIMEOUT", "60")
+    _pg_inner_timeout = _env_int("STEP0_PROMPT_GEN_TIMEOUT", 60)
+    _call_graph_json = _json.dumps(
+        {
+            "risk_level": call_graph_risk_level,
+            "danger_zones": call_graph_danger_zones,
+            "affected_methods": call_graph_affected_methods,
+        }
+    )
     prompt_gen_args = [
+        "--task-description",
         user_message,
-        "--complexity=%s" % complexity_score,
-        "--call-graph-risk=%s" % call_graph_risk_level,
-        "--danger-zones=%s" % _json.dumps(call_graph_danger_zones),
-        "--affected-methods=%s" % _json.dumps(call_graph_affected_methods),
+        "--complexity-score",
+        str(complexity_score),
+        "--call-graph-json",
+        _call_graph_json,
     ]
 
-    # call_execution_script does not have __func__; use it directly but override timeout via env
-    _orig_timeout_env = os.environ.get("STEP0_PROMPT_GEN_TIMEOUT")
     try:
-        # Re-import to avoid circular; helpers module already imported at top
         import importlib as _il
 
         _helpers_mod = _il.import_module("langgraph_engine.level3_execution.helpers")
         _call_execution_script = _helpers_mod.call_execution_script
-    except Exception:
+    except ImportError:
         from ..helpers import call_execution_script as _call_execution_script  # noqa: PLC0415
 
     prompt_gen_raw = _call_execution_script(
         "prompt_gen_expert_caller",
         prompt_gen_args,
         model_tier="fast",
+        timeout=_pg_inner_timeout + 15,
     )
 
-    orchestration_prompt = prompt_gen_raw.get("orchestration_prompt", "")
-    if not orchestration_prompt:
-        # Fallback: use user_message directly
+    _pg_status = prompt_gen_raw.get("status", "")
+    if _pg_status == "ERROR":
+        # On ERROR the caller's 'prompt' field is only a truncated copy of the INPUT
+        # template, not a usable orchestration prompt, so fall back to the raw task.
+        logger.error(
+            f"[v2] Step 0 prompt_gen_expert_caller ERROR: {prompt_gen_raw.get('error', 'unknown')} -- falling back to raw task"
+        )
         orchestration_prompt = user_message
-        logger.warning("[v2] Step 0 prompt_gen_expert_caller returned no orchestration_prompt; using raw task")
     else:
-        logger.info("[v2] Step 0 prompt_gen_expert_caller: orchestration_prompt length=%d", len(orchestration_prompt))
+        orchestration_prompt = prompt_gen_raw.get("llm_response", "") or prompt_gen_raw.get("prompt", "")
+        if not orchestration_prompt:
+            orchestration_prompt = user_message
+            logger.warning("[v2] Step 0 prompt_gen_expert_caller returned no llm_response/prompt; using raw task")
+        else:
+            logger.info(
+                f"[v2] Step 0 prompt_gen_expert_caller: orchestration_prompt length={len(orchestration_prompt)}"
+            )
 
     # --- PHASE 2: todo_decomposer -> execute_todo_list (per-TODO orchestrator calls) ---
     _full_prompt = (
         "You are orchestrator-agent. Below is a fully generated orchestration prompt "
         "with a MULTI-AGENT PROMPT BUNDLE containing per-agent execution prompts.\n\n"
-        "--- BEGIN ORCHESTRATION PROMPT ---\n\n"
-        + orchestration_prompt
-        + "\n\n--- END ORCHESTRATION PROMPT ---"
+        "--- BEGIN ORCHESTRATION PROMPT ---\n\n" + orchestration_prompt + "\n\n--- END ORCHESTRATION PROMPT ---"
     )
 
     orch_result: Dict[str, Any] = {}
@@ -152,7 +173,12 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
             from ..helpers import call_execution_script as _call_exec  # noqa: PLC0415
 
         try:
-            _decomp_raw = _call_exec("todo_decomposer", _decomp_args, model_tier="fast")
+            _decomp_raw = _call_exec(
+                "todo_decomposer",
+                _decomp_args,
+                model_tier="fast",
+                timeout=_env_int("STEP0_TODO_DECOMPOSER_TIMEOUT", 90) + 15,
+            )
         except Exception as _decomp_exc:
             logger.warning("[v2] Step 0 todo_decomposer failed (fail-open): %s", _decomp_exc)
             _decomp_raw = {"status": "FALLBACK", "todo_list": []}
@@ -173,8 +199,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
 
         # Step 2c: merge todo results into orch_result
         _merged_output = "\n\n".join(
-            str(r.get("result", {}).get("llm_response", "") or r.get("error", ""))
-            for r in _todo_results
+            str(r.get("result", {}).get("llm_response", "") or r.get("error", "")) for r in _todo_results
         )
         orch_result = {
             "success": True,
@@ -183,6 +208,9 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
             "llm_response": _merged_output,
             "agent_output": {"merged_from_todos": len(_todo_results)},
         }
+        _lifted = _lift_todo_agent_output(_todo_results)
+        if _lifted:
+            orch_result.update(_lifted)
 
     except Exception as _orch_exc:
         logger.warning("[v2] Step 0 orchestrator block failed (fail-open): %s", _orch_exc)
@@ -231,6 +259,47 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     return result
 
 
+def _lift_todo_agent_output(todo_results):
+    """Promote structured task-analysis fields from per-TODO orchestrator output.
+
+    The TODO-decomposition path nests each orchestrator result under
+    ``todo_results[i]['result']`` and any structured payload under its
+    ``agent_output`` key. This lifts recognized analysis fields to a flat
+    dict so _map_step0_result_to_state can populate the Step 0 migration
+    fields instead of falling back to constant defaults. Returns an empty
+    dict when no structured fields are present (the common case for pure
+    execution TODOs), leaving the defaults in place.
+    """
+    recognized = (
+        "task_type",
+        "reasoning",
+        "tasks",
+        "task_count",
+        "model_recommendation",
+        "selected_skill",
+        "selected_agent",
+        "skills",
+        "agents",
+        "skill_definition",
+        "agent_definition",
+        "execution_prompt",
+    )
+    lifted = {}
+    for entry in todo_results or []:
+        result = entry.get("result") if isinstance(entry, dict) else None
+        if not isinstance(result, dict):
+            continue
+        sources = [result]
+        nested = result.get("agent_output")
+        if isinstance(nested, dict):
+            sources.append(nested)
+        for source in sources:
+            for key in recognized:
+                if key in source and key not in lifted:
+                    lifted[key] = source[key]
+    return lifted
+
+
 def _map_step0_result_to_state(
     state: FlowState,
     orchestration_prompt: str,
@@ -254,7 +323,12 @@ def _map_step0_result_to_state(
 
     # Core Step 0 fields
     result["step0_task_type"] = orch_result.get("task_type", "General Task")
-    result["step0_complexity"] = orch_result.get("complexity", 5)
+    _combined = state.get("combined_complexity_score", 0)
+    _complexity_1to10 = max(1, min(10, round(_combined / 2.5))) if _combined else 5
+    try:
+        result["step0_complexity"] = max(1, min(10, int(orch_result.get("complexity", _complexity_1to10))))
+    except (TypeError, ValueError):
+        result["step0_complexity"] = _complexity_1to10
     result["step0_reasoning"] = orch_result.get("reasoning", "")
     raw_tasks = orch_result.get("tasks", {})
     result["step0_tasks"] = raw_tasks if isinstance(raw_tasks, dict) else {"count": 1, "tasks": []}

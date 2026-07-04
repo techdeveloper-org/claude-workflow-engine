@@ -117,21 +117,6 @@ def mock_call_execution_script_violation():
 
 
 # ---------------------------------------------------------------------------
-# B.2 -- call_streaming_script mock
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def mock_call_streaming_script():
-    """B.2: stub out the streaming subprocess call used in Step 0 Phase 2."""
-    with patch(
-        "langgraph_engine.level3_execution.nodes.step_wrappers_0to4.call_streaming_script",
-        return_value={"orchestrator_result": {"plan": "mock-orchestrator-plan"}, "status": "ok"},
-    ) as mock:
-        yield mock
-
-
-# ---------------------------------------------------------------------------
 # B.3 / B.4 -- GitHub-related step mocks
 # ---------------------------------------------------------------------------
 

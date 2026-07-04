@@ -73,6 +73,17 @@ except ImportError:
         pass
 
 
+# Structured logger: optional-enhancement load misses are logged, never swallowed.
+try:
+    from ..core.logger_factory import get_logger
+
+    _ARCH_LOADER_LOGGER = get_logger(__name__)
+except ImportError:
+    import logging as _logging
+
+    _ARCH_LOADER_LOGGER = _logging.getLogger(__name__)
+
+
 # ============================================================================
 # ARCHITECTURE SCRIPT LOADER (lazy, importlib-based)
 # Scripts in level1_sync/architecture/ are not a Python package.
@@ -83,35 +94,52 @@ except ImportError:
 def _load_architecture_script(script_name):
     """Dynamically load a script from level1_sync/architecture/.
 
-    Returns the loaded module, or None if the file does not exist or
-    fails to import.  All failures are silently swallowed so that the
-    pipeline is never blocked by an optional enhancement.
+    Resolves the path tolerantly so the hyphen->underscore module rename
+    cannot silently disable an optional enhancement: the name is tried as
+    given, then with hyphens converted to underscores, then via a glob on
+    the stem, across both the canonical architecture/ directory and the
+    legacy scripts/architecture/01-sync-system/ directory. A miss or an
+    import failure is logged at WARNING and returns None so the caller can
+    degrade gracefully -- the failure is never swallowed silently.
 
     Args:
-        script_name: filename without path, e.g. "pattern-detector.py"
+        script_name: filename without path, e.g. "pattern_detector.py".
 
     Returns:
-        Loaded module object, or None on any failure.
+        Loaded module object, or None if it cannot be found or imported.
     """
-    try:
-        import importlib.util
+    import importlib.util
 
-        # Try level-based location first (canonical)
-        script_path = Path(__file__).parent / "architecture" / script_name
-        if not script_path.exists():
-            # Fallback to legacy location
-            script_path = (
-                Path(__file__).parent.parent.parent / "scripts" / "architecture" / "01-sync-system" / script_name
-            )
-        if not script_path.exists():
-            return None
-        # Convert filename to a valid Python module name
-        module_name = script_name.replace("-", "_").replace(".py", "")
-        spec = importlib.util.spec_from_file_location(module_name, str(script_path))
+    stem = script_name.replace("-", "_").replace(".py", "")
+    arch_dir = Path(__file__).parent / "architecture"
+    legacy_dir = Path(__file__).parent.parent.parent / "scripts" / "architecture" / "01-sync-system"
+
+    script_path = None
+    for base in (arch_dir, legacy_dir):
+        for candidate in (base / script_name, base / (stem + ".py")):
+            if candidate.exists():
+                script_path = candidate
+                break
+        if script_path is not None:
+            break
+    if script_path is None:
+        for base in (arch_dir, legacy_dir):
+            matches = sorted(base.glob(stem + "*.py")) if base.exists() else []
+            if matches:
+                script_path = matches[0]
+                break
+    if script_path is None:
+        _ARCH_LOADER_LOGGER.warning(f"level1_sync architecture script not found: {script_name}")
+        return None
+
+    try:
+        spec = importlib.util.spec_from_file_location(stem, str(script_path))
         if spec is None or spec.loader is None:
+            _ARCH_LOADER_LOGGER.warning(f"level1_sync architecture script has no import spec: {script_path}")
             return None
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - plugin boundary: an optional enhancement must never crash the pipeline
+        _ARCH_LOADER_LOGGER.warning(f"level1_sync architecture script failed to import {script_path}: {exc}")
         return None

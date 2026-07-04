@@ -61,9 +61,23 @@ _mock_cp_mod = _stub(
 # Stub error_logger (provides ErrorLogger)
 _mock_el_mod = _stub("langgraph_engine.error_logger", ErrorLogger=MagicMock(), create_logger=MagicMock())
 
+# error_logger relocated to engine_logging/ in the subpackage refactor: RecoveryHandler now
+# imports ErrorLogger from langgraph_engine.engine_logging.error_logger, so stub that path
+# (and its parent package) too -- otherwise a real file logger is built instead of a mock.
+_le_engine_logging = types.ModuleType("langgraph_engine.engine_logging")
+_le_engine_logging.__path__ = [str(_LE_ROOT / "engine_logging")]
+sys.modules["langgraph_engine.engine_logging"] = _le_engine_logging
+_stub("langgraph_engine.engine_logging.error_logger", ErrorLogger=MagicMock(), create_logger=MagicMock())
+
 # Also stub the plain-name fallback used inside recovery_handler
 sys.modules.setdefault("checkpoint_manager", _mock_cp_mod)
 sys.modules.setdefault("error_logger", _mock_el_mod)
+
+# Evict any real copy an earlier test in the same session already imported (it would have bound
+# the real ErrorLogger/CheckpointManager before these stubs existed), so the shim below re-imports
+# quality.recovery_handler with the stubs active. Keeps this suite order-independent.
+for _cached in ("langgraph_engine.recovery_handler", "langgraph_engine.quality.recovery_handler"):
+    sys.modules.pop(_cached, None)
 
 # Now load recovery_handler directly
 _rh_mod = _load_module("langgraph_engine.recovery_handler", "recovery_handler.py")
@@ -108,7 +122,8 @@ class TestInstallSignalHandlers:
         import signal as _signal
 
         handler = _make_handler(tmp_path)
-        with patch.object(_rh_mod, "signal") as mock_signal:
+        # Category C fix: patch signal where install_signal_handlers actually uses it
+        with patch("langgraph_engine.quality.recovery_handler.signal") as mock_signal:
             mock_signal.SIGINT = _signal.SIGINT
             mock_signal.SIGTERM = _signal.SIGTERM
             with patch("threading.current_thread") as mock_ct, patch("threading.main_thread") as mock_mt:
@@ -120,9 +135,11 @@ class TestInstallSignalHandlers:
 
     def test_install_signal_handlers_non_main_thread_skips(self, tmp_path):
         handler = _make_handler(tmp_path)
-        with patch("threading.current_thread", return_value=object()), patch(
-            "threading.main_thread", return_value=object()
-        ), patch.object(_rh_mod, "signal") as mock_signal:
+        with (
+            patch("threading.current_thread", return_value=object()),
+            patch("threading.main_thread", return_value=object()),
+            patch.object(_rh_mod, "signal") as mock_signal,
+        ):
             handler.install_signal_handlers()
             mock_signal.signal.assert_not_called()
 
@@ -133,7 +150,8 @@ class TestUpdateState:
     def test_update_state(self, tmp_path):
         handler = _make_handler(tmp_path)
         state = {"session_id": "s1", "user_message": "do something"}
-        with patch.object(_rh_mod, "_register_globals") as mock_reg:
+        # Category C fix: patch _register_globals where update_state actually calls it
+        with patch("langgraph_engine.quality.recovery_handler._register_globals") as mock_reg:
             handler.update_state(step=3, state=state)
             mock_reg.assert_called_once_with(3, state, handler.checkpoint_manager, handler.error_logger)
 
@@ -234,7 +252,8 @@ class TestResumeFromCheckpointPublicApi:
     """test_resume_from_checkpoint_public_api - Public function creates handler and resumes."""
 
     def test_resume_from_checkpoint_creates_handler_and_resumes(self, tmp_path):
-        with patch.object(_rh_mod, "RecoveryHandler") as MockHandler:
+        # Category C fix: patch the class where resume_from_checkpoint actually imports it
+        with patch("langgraph_engine.quality.recovery_handler.RecoveryHandler") as MockHandler:
             mock_instance = MagicMock()
             mock_instance.resume_session.return_value = True
             MockHandler.return_value = mock_instance
@@ -246,7 +265,8 @@ class TestResumeFromCheckpointPublicApi:
         assert result is True
 
     def test_resume_from_checkpoint_passes_checkpoint_id(self, tmp_path):
-        with patch.object(_rh_mod, "RecoveryHandler") as MockHandler:
+        # Category C fix: patch the class where resume_from_checkpoint actually imports it
+        with patch("langgraph_engine.quality.recovery_handler.RecoveryHandler") as MockHandler:
             mock_instance = MagicMock()
             mock_instance.resume_session.return_value = False
             MockHandler.return_value = mock_instance

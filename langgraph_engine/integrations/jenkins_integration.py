@@ -107,11 +107,24 @@ class JenkinsIntegration(AbstractIntegration):
         return "Basic {}".format(encoded)
 
     def _ssl_context(self) -> Optional[ssl.SSLContext]:
-        """Return an SSL context that skips verification when configured."""
+        """Return an SSL context that skips verification when explicitly configured.
+
+        Verification is on by default. When JENKINS_VERIFY_SSL is set to "false"
+        the returned context disables certificate and hostname verification, which
+        exposes the Basic-auth header to man-in-the-middle interception; a WARNING
+        is logged so this insecure mode is never entered silently.
+        """
         verify = (
             (self._config.get("jenkins_verify_ssl") or os.environ.get("JENKINS_VERIFY_SSL", "true")).strip().lower()
         )
         if verify == "false":
+            if not getattr(type(self), "_tls_verify_warning_emitted", False):
+                logger.warning(
+                    "JENKINS_VERIFY_SSL=false: TLS certificate and hostname verification is DISABLED "
+                    "for Jenkins API calls; the Basic-auth token is exposed to man-in-the-middle "
+                    "interception. Re-enable verification (unset JENKINS_VERIFY_SSL) for production."
+                )
+                type(self)._tls_verify_warning_emitted = True
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
