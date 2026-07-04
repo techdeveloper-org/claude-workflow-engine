@@ -97,8 +97,8 @@ def test_merge_locally(git_ops, branch_name):
         logger.warning("Error in test merge: {}".format(e))
         try:
             git_ops._run_git(["merge", "--abort"], check=False)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"merge validation: merge --abort cleanup failed: {exc}")
         return {
             "success": False,
             "reason": "Test merge error: {}".format(str(e)),

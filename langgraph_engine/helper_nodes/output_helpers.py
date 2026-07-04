@@ -16,6 +16,8 @@ CHANGE LOG (v1.15.2):
 import sys
 from pathlib import Path
 
+from ..core.logger_factory import get_logger
+
 try:
     import sys as _sys
 
@@ -28,6 +30,8 @@ except ImportError:
 
 from ..flow_state import FlowState, StepKeys
 from .context_helpers import save_workflow_memory
+
+logger = get_logger(__name__)
 
 
 def verify_prompt_integrity(state: FlowState) -> bool:
@@ -171,8 +175,8 @@ def output_node(state: FlowState) -> dict:
             if skill:
                 msg += f" Using {skill} skill."
             start_flag.write_text(msg, encoding="utf-8")
-    except Exception:
-        pass
+    except OSError as exc:
+        logger.debug(f"[output] voice start-flag write skipped: {exc}")
 
     # SYNTHESIS: Create comprehensive prompt from all flow data
     synthesis = synthesize_prompt_with_flow_data(state)
@@ -216,8 +220,8 @@ def output_node(state: FlowState) -> dict:
                 )
                 summary_file = Path(session_dir) / "execution-summary.txt"
                 summary_file.write_text(quick_summary, encoding="utf-8")
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[output] execution-summary write skipped: {exc}")
 
     # SESSION ACCUMULATE - Record this request's data via MCP session tools
     try:
@@ -238,8 +242,8 @@ def output_node(state: FlowState) -> dict:
             context_pct=int(state.get("context_pct", 0)),
             supplementary_skills=",".join(state.get(StepKeys.SKILLS, []) or []),
         )
-    except Exception:
-        pass  # Accumulation is non-blocking, never fail the pipeline
+    except Exception as exc:
+        logger.debug(f"[output] session accumulate skipped: {exc}")
 
     # Return synthesis result with proper status
     return {
@@ -379,5 +383,5 @@ def _save_pipeline_execution_log(state: FlowState, final_status: str) -> None:
         log_path = Path(session_dir) / "execution-log.md"
         log_path.write_text("\n".join(log_lines), encoding="utf-8")
 
-    except Exception:
-        pass  # Never crash on logging
+    except OSError as exc:
+        logger.debug(f"[output] execution-log write skipped: {exc}")

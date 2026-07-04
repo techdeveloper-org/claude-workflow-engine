@@ -175,8 +175,8 @@ def ask_level_minus1_fix(state: FlowState) -> dict:
                     sig_words = entry["signature"].lower().split()
                     if any(w in check_msg.lower() for w in sig_words if len(w) > 3):
                         kb_suggestions.append(entry)
-    except Exception:
-        pass  # Fail-open
+    except Exception as exc:
+        _logger.debug("recovery: KB suggestion matching failed (fail-open): %s", exc)
 
     # Show message to user (including KB suggestions if available)
     message = f"\n[LEVEL -1] VALIDATION CHECKS ({attempt}/{MAX_LEVEL_MINUS1_ATTEMPTS}):\n"

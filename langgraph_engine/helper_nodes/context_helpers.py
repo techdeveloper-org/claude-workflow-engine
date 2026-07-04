@@ -16,7 +16,10 @@ try:
 except ImportError:
     _CONTEXT_HELPERS_CLAUDE_HOME = Path.home() / ".claude"
 
+from ..core.logger_factory import get_logger
 from ..flow_state import FlowState, StepKeys, WorkflowContextOptimizer
+
+logger = get_logger(__name__)
 
 
 def optimize_context_after_level1(state: FlowState) -> dict:
@@ -85,8 +88,7 @@ def save_workflow_memory(state: FlowState) -> dict:
                 )
 
             return {"workflow_memory_file": str(memory_file)}
-    except Exception:
-        # Don't fail if memory save fails - it's non-critical
-        pass
+    except (OSError, TypeError) as exc:
+        logger.debug(f"[context_helpers] workflow memory save skipped: {exc}")
 
     return {}

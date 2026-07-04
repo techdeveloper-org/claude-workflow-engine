@@ -101,8 +101,8 @@ class UMLAstAnalyzer:
                     if item.returns:
                         try:
                             ret = ast.dump(item.returns)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("ast_analyzer: return type dump failed: %s", exc)
 
                     methods.append(make_method_info(item.name, params, ret, vis))
 
@@ -117,8 +117,8 @@ class UMLAstAnalyzer:
                         if item.annotation:
                             try:
                                 hint = ast.dump(item.annotation)
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.debug("ast_analyzer: annotation dump failed: %s", exc)
                         attributes.append(make_attr_info(item.target.id, hint, "+"))
 
             # Also scan __init__ for self.attr assignments
@@ -272,8 +272,8 @@ class UMLAstAnalyzer:
                     )
 
                 return chains
-            except Exception:
-                pass  # Fall through to legacy
+            except Exception as exc:
+                logger.debug("ast_analyzer: call-chain analysis failed, using legacy: %s", exc)
 
         # Legacy fallback (no class context)
         chains = []

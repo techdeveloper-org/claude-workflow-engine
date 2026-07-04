@@ -122,8 +122,8 @@ class UMLDiagramGenerator:
                 ast_classes = self.analyzer.extract_classes(abs_path)
                 for ac in ast_classes:
                     attrs_by_name[ac["name"]] = ac.get("attributes", [])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("legacy_generator: class attribute extraction failed: %s", exc)
 
         results = []
         for fqn, cls_node in cg.classes.items():

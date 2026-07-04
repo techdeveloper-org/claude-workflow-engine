@@ -544,8 +544,8 @@ def _network_classify(name: str, build_system: str) -> Optional[str]:
         with urllib.request.urlopen(req, timeout=3) as resp:
             if resp.status == 200:
                 return "external_known"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("bdr: external dependency check failed: %s", exc)
     return None
 
 
@@ -701,8 +701,8 @@ def _dir_has_code_uncached(path_str: str) -> bool:
                         queue.append((child, depth + 1))
             except PermissionError:
                 continue
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("bdr: source tree scan failed: %s", exc)
     return False
 
 
@@ -729,8 +729,8 @@ def _detect_maven_project_group(root: Path) -> Optional[str]:
         group_el = root_el.find(f"{ns}groupId")
         if group_el is not None:
             return group_el.text.strip()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("bdr: pom groupId parse failed: %s", exc)
     return None
 
 

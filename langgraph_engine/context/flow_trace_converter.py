@@ -11,7 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from langgraph_engine.core.logger_factory import get_logger
 from langgraph_engine.flow_state import FlowState
+
+logger = get_logger(__name__)
 
 try:
     import sys as _sys
@@ -344,8 +347,8 @@ def print_flow_checkpoint(state: FlowState, verbose: bool = False) -> None:
             synthesis_file.write_text(synthesized_prompt, encoding="utf-8")
             print("  Synthesis: Generated ({} chars)".format(len(synthesized_prompt)))
             print("  Location: {}".format(synthesis_file))
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug(f"[flow_trace] synthesis file write skipped: {exc}")
 
         print("\n--- SYNTHESIZED CONTEXT (from 3-level pipeline) ---")
         print(synthesized_prompt)
