@@ -75,8 +75,8 @@ def step0_0_project_context_node(state: FlowState) -> Dict[str, Any]:
                     raw = fpath.read_text(encoding="utf-8", errors="replace")
                     context[fname] = raw[:max_bytes]
                     files_read.append(fname)
-                except Exception:
-                    pass
+                except OSError as exc:
+                    logger.debug(f"[pre_nodes] could not read {fname}: {exc}")
 
         elapsed = (_t.time() - _start) * 1000
         return {
@@ -193,8 +193,8 @@ def level3_init_node(state: FlowState) -> Dict[str, Any]:
                 "complexity_threshold": prefs.get("complexity_threshold", 7),
                 "raw_keys": list(prefs.keys()),
             }
-    except Exception:
-        pass  # Best-effort: preferences context is non-blocking
+    except Exception as exc:
+        logger.debug(f"[pre_nodes] preferences context skipped: {exc}")
 
     return result
 

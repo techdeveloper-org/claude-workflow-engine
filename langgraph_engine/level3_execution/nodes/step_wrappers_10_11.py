@@ -197,8 +197,8 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
                             files=result["step10_modified_files"],
                             operation="modified",
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"[step10] metrics record_files_modified skipped: {exc}")
             return result
         except Exception as llm_exc:
             # Check if this looks like an LLM connectivity issue

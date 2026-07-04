@@ -69,8 +69,8 @@ def _generate_issue_title(user_message: str, task_type: str, complexity: int) ->
             llm_title = llm_title.strip().strip('"').strip("'").split("\n")[0].strip()
             if llm_title and len(llm_title) > 5:
                 return llm_title[:80]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"[step8] LLM issue-title generation skipped: {exc}")
 
     clean = user_message.strip().split("\n")[0][:70]
     if clean and clean[0].islower():

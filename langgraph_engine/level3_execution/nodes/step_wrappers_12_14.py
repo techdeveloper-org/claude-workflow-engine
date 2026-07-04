@@ -164,8 +164,8 @@ def step13_docs_update_node(state: FlowState) -> Dict[str, Any]:
                                 files=updated,
                                 operation="modified",
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(f"[step13] metrics record_files_modified skipped: {exc}")
             return result
         except IOError as io_err:
             infra = get_infra(st)
@@ -213,8 +213,8 @@ def step14_final_summary_node(state: FlowState) -> Dict[str, Any]:
                         operation="modified",
                     )
                 infra["metrics"].print_summary()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"[step14] metrics summary skipped: {exc}")
         return result
 
     return _run_step(

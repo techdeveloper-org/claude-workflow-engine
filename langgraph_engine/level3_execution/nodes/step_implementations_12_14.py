@@ -182,12 +182,12 @@ def step13_project_documentation_update(state: FlowState) -> Dict[str, Any]:
                 try:
                     uml_gen.generate(diagram_type)
                     uml_diagrams_generated.append(diagram_type)
-                except Exception:
-                    pass  # Individual diagram failures are non-blocking
-        except ImportError:
-            pass
-        except Exception:
-            pass
+                except Exception as exc:
+                    logger.debug(f"[step13] UML diagram '{diagram_type}' skipped: {exc}")
+        except ImportError as exc:
+            logger.debug(f"[step13] UML generation skipped (generators unavailable): {exc}")
+        except Exception as exc:
+            logger.debug(f"[step13] UML generation skipped: {exc}")
 
         # Write session-dir audit file (non-critical)
         session_path = state.get("session_dir") or state.get("session_path", "")
@@ -214,8 +214,8 @@ def step13_project_documentation_update(state: FlowState) -> Dict[str, Any]:
                     )
                 )
                 doc_file.write_text(content, encoding="utf-8")
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[step13] execution-docs write skipped: {exc}")
 
         return {
             "step13_updates_prepared": True,

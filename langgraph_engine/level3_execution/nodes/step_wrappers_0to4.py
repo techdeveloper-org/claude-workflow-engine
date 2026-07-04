@@ -219,8 +219,8 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
         if _prompt_file:
             try:
                 Path(_prompt_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[step0] temp prompt file cleanup skipped: {exc}")
 
     # --- Build result from orchestrator output + migration fields ---
     result = _map_step0_result_to_state(state, orchestration_prompt, orch_result)
@@ -253,8 +253,8 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
                     boosted,
                     boost,
                 )
-    except Exception:
-        pass  # Boost adjustment is best-effort
+    except Exception as exc:
+        logger.debug(f"[step0] call-graph complexity boost skipped: {exc}")
 
     return result
 
