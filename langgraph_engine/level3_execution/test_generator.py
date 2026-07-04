@@ -15,7 +15,10 @@ Python 3.8+ compatible. ASCII-only (cp1252-safe).
 
 import ast
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Language detection
@@ -78,8 +81,8 @@ def detect_test_framework(language, project_root):
                         content = req_path.read_text(encoding="utf-8", errors="replace").lower()
                         if "pytest" in content:
                             return "pytest"
-                    except Exception:
-                        pass
+                    except OSError as exc:
+                        logger.debug("test_gen: python test-framework detect read failed: %s", exc)
             return "unittest"
 
         if language == "java":
@@ -92,8 +95,8 @@ def detect_test_framework(language, project_root):
                         return "junit5"
                     if "junit" in content:
                         return "junit4"
-                except Exception:
-                    pass
+                except OSError as exc:
+                    logger.debug("test_gen: pom.xml read failed: %s", exc)
             # Check build.gradle
             for gradle in ("build.gradle", "build.gradle.kts"):
                 gpath = root / gradle
@@ -104,8 +107,8 @@ def detect_test_framework(language, project_root):
                             return "junit5"
                         if "junit" in content:
                             return "junit4"
-                    except Exception:
-                        pass
+                    except OSError as exc:
+                        logger.debug("test_gen: build.gradle read failed: %s", exc)
             return "junit5"
 
         if language == "typescript":
@@ -121,8 +124,8 @@ def detect_test_framework(language, project_root):
                         return "vitest"
                     if "jest" in all_deps or "@jest/core" in all_deps:
                         return "jest"
-                except Exception:
-                    pass
+                except (OSError, ValueError) as exc:
+                    logger.debug("test_gen: package.json read failed: %s", exc)
             return "jest"
 
         if language == "go":
@@ -137,8 +140,8 @@ def detect_test_framework(language, project_root):
         if language == "swift":
             return "xctest"
 
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("test_gen: test-framework detection failed: %s", exc)
 
     return "unknown"
 
@@ -206,8 +209,8 @@ def get_test_file_path(source_file, language):
                 return test_path
             return str(src.parent / ("%sTest.kt" % stem))
 
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("test_gen: test-path derivation failed: %s", exc)
 
     return str(Path(str(source_file)).parent / ("test_%s.txt" % Path(str(source_file)).stem))
 
@@ -261,16 +264,16 @@ def _extract_methods_from_python_ast(file_path):
                 if arg.annotation:
                     try:
                         param_str = "%s: %s" % (arg.arg, ast.unparse(arg.annotation))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("test_gen: param annotation unparse failed: %s", exc)
                 params.append(param_str)
 
             return_type = ""
             if item.returns:
                 try:
                     return_type = ast.unparse(item.returns)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("test_gen: return annotation unparse failed: %s", exc)
 
             cyclomatic = _estimate_cyclomatic(item)
 
@@ -300,16 +303,16 @@ def _extract_methods_from_python_ast(file_path):
             if arg.annotation:
                 try:
                     param_str = "%s: %s" % (arg.arg, ast.unparse(arg.annotation))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("test_gen: param annotation unparse failed: %s", exc)
             params.append(param_str)
 
         return_type = ""
         if node.returns:
             try:
                 return_type = ast.unparse(node.returns)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("test_gen: return annotation unparse failed: %s", exc)
 
         cyclomatic = _estimate_cyclomatic(node)
         methods.append(
@@ -1188,8 +1191,8 @@ def generate_tests_for_modified_files(project_root, modified_files, call_graph=N
                     "test_code": file_result["test_code"],
                 }
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("test_gen: batch result collection failed: %s", exc)
 
     return result
 
@@ -1221,6 +1224,6 @@ def write_test_files(batch_result, dry_run=False):
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_text(test_code, encoding="utf-8")
             written.append(test_path)
-    except Exception:
-        pass
+    except OSError as exc:
+        logger.debug("test_gen: test file write failed: %s", exc)
     return written
