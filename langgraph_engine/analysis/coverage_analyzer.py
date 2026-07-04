@@ -11,8 +11,11 @@ Python 3.8+ compatible. ASCII-only (cp1252-safe). No external dependencies.
 """
 
 import ast
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Lazy import helpers - avoid import-time side effects
@@ -145,8 +148,8 @@ def find_test_references(test_dir):
                 if tf_str not in result["references"][name]:
                     result["references"][name].append(tf_str)
 
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("coverage: test reference scan failed: %s", exc)
 
     return result
 
@@ -360,8 +363,8 @@ def prioritize_untested(untested_methods, call_graph=None):
 
         scored.sort(key=lambda x: x["risk_score"], reverse=True)
 
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("coverage: risk scoring failed: %s", exc)
 
     return scored
 
@@ -515,8 +518,8 @@ def _find_tests_for_modified_files(root, modified_rel, all_references):
                         relevant.add(tf_str)
                         break
 
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("coverage: relevant test scan failed: %s", exc)
 
     return sorted(relevant)
 

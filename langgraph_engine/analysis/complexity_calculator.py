@@ -21,10 +21,14 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from langgraph_engine.core.logger_factory import get_logger
+
 try:
     from langgraph_engine.engine_logging.error_logger import ErrorLogger
 except ImportError:
     ErrorLogger = None  # type: ignore
+
+_LOG = get_logger(__name__)
 
 
 # ============================================================================
@@ -67,8 +71,8 @@ def calculate_complexity(project_path: str, session_id: Optional[str] = None) ->
     if session_id and ErrorLogger:
         try:
             logger = ErrorLogger(session_id)
-        except Exception:
-            pass
+        except Exception as le:
+            _LOG.debug(f"[complexity] ErrorLogger init failed: {le}")
 
     path = Path(project_path)
     if not path.exists():
@@ -96,8 +100,8 @@ def calculate_complexity(project_path: str, session_id: Optional[str] = None) ->
                 lines = py_file.read_text(encoding="utf-8", errors="ignore").splitlines()
                 code_lines = [ln for ln in lines if ln.strip() and not ln.strip().startswith("#")]
                 total_loc += len(code_lines)
-            except Exception:
-                pass
+            except OSError as exc:
+                _LOG.debug(f"[complexity] py file read skipped: {exc}")
 
         dep_count = _count_dependencies(path)
 
@@ -181,8 +185,8 @@ def _count_dependencies(project_root: Path) -> int:
         try:
             lines = req_txt.read_text(encoding="utf-8", errors="ignore").splitlines()
             dep_count += sum(1 for ln in lines if ln.strip() and not ln.strip().startswith("#"))
-        except Exception:
-            pass
+        except OSError as exc:
+            _LOG.debug(f"[complexity] requirements.txt read skipped: {exc}")
 
     pyproject = project_root / "pyproject.toml"
     if pyproject.exists() and dep_count == 0:
@@ -197,8 +201,8 @@ def _count_dependencies(project_root: Path) -> int:
                     in_deps = False
                 elif in_deps and stripped.startswith('"') or (in_deps and stripped.startswith("'")):
                     dep_count += 1
-        except Exception:
-            pass
+        except OSError as exc:
+            _LOG.debug(f"[complexity] pyproject.toml read skipped: {exc}")
 
     pkg_json = project_root / "package.json"
     if pkg_json.exists():
@@ -206,8 +210,8 @@ def _count_dependencies(project_root: Path) -> int:
             data = json.loads(pkg_json.read_text(encoding="utf-8"))
             dep_count += len(data.get("dependencies", {}))
             dep_count += len(data.get("devDependencies", {}))
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            _LOG.debug(f"[complexity] package.json read skipped: {exc}")
 
     return dep_count
 
@@ -266,8 +270,8 @@ def complexity_report(project_path: str) -> dict:
         try:
             lines = pf.read_text(encoding="utf-8", errors="ignore").splitlines()
             total_loc += sum(1 for ln in lines if ln.strip() and not ln.strip().startswith("#"))
-        except Exception:
-            pass
+        except OSError as exc:
+            _LOG.debug(f"[complexity] py file read skipped: {exc}")
 
     dep_count = _count_dependencies(path)
     score = calculate_complexity(project_path)
@@ -399,8 +403,8 @@ def calculate_graph_complexity(
                 "graph_complexity_score": graph_score,
             }
             local_graph_cache.write_text(json.dumps(result_data, indent=2, default=str), encoding="utf-8")
-        except Exception:
-            pass
+        except OSError as exc:
+            _LOG.debug(f"[complexity] graph cache write skipped: {exc}")
 
         call_stack = _extract_method_call_stack(project_root)
         if call_stack and call_stack.get("call_graph_available"):
@@ -420,8 +424,8 @@ def calculate_graph_complexity(
         if session_id and ErrorLogger:
             try:
                 logger = ErrorLogger(session_id)
-            except Exception:
-                pass
+            except Exception as le:
+                _LOG.debug(f"[complexity] ErrorLogger init failed: {le}")
         if logger:
             logger.log_error(
                 "Level 1",
