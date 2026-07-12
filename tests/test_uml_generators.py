@@ -33,6 +33,22 @@ from langgraph_engine.uml_generators import (  # noqa: E402
 # ==================================================================
 
 
+@pytest.fixture(autouse=True)
+def _stub_llm_call(monkeypatch):
+    """Prevent UML tests from spawning a real ``claude`` CLI subprocess.
+
+    ``UMLDiagramGenerator._llm_generate`` lazily imports ``llm_call`` and, when the
+    CLI is on PATH, blocks on a real subprocess for up to 60s per LLM-enriched
+    diagram (state/activity/usecase). Stub it to return None so the generators fall
+    back to their static templates -- tests must not make real external calls.
+    """
+    monkeypatch.setattr(
+        "langgraph_engine.llm_call.llm_call",
+        lambda *args, **kwargs: None,
+        raising=False,
+    )
+
+
 @pytest.fixture
 def tmp_project(tmp_path):
     """Create a temporary Python project for testing."""
