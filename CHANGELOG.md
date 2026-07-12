@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.20.0] - 2026-07-12
+
+Major release: flat -> domain-subpackage migration, Step 0 TODO-decomposition pipeline,
+audited-deficiency remediation, and a standards / logging hardening pass.
+
+### Added
+
+- **Domain subpackages** -- flat `langgraph_engine/*.py` modules reorganized into focused packages: `analysis/`, `context/`, `engine_logging/`, `github/`, `metrics/`, `quality/`, `security/`, `skills/`, `standards/` (backward-compat shims kept at the old paths).
+- **Step 0 TODO-decomposition pipeline** -- the monolithic orchestrator call is replaced by `prompt_gen_expert_caller -> todo_decomposer -> todo_executor` (per-TODO agent execution).
+- **SRS / UML / architecture lifecycle rules** added under `rules/`.
+
+### Changed
+
+- **Graph factory unified** -- `verify_node` runtime-verification wrapping moved into `orchestrator.create_flow_graph`; duplicate `pipeline_builder.py` removed; `ENABLE_RUNTIME_VERIFICATION` now live.
+- **error_logger console output routed through the shared logger** (severity-based dispatch; `_print_error` -> `_log_error`).
+- **~180 silent `except Exception: pass`** across 44 modules narrowed to specific exception types + `logger.debug/warning` (Rule 2: no silently-swallowed exceptions).
+
+### Fixed
+
+- **loguru interpolation bug** -- 124 `logger.<level>("...%s...", arg)` calls across 17 loguru-backed files silently dropped their positional args (loguru uses `str.format`, not %-interpolation); converted to brace-style `"...{}...", arg`.
+- **Step 0 planning chain revived** -- node<->caller CLI-flag mismatch, wrong return-key read, and a hardcoded 30s timeout overriding the STEP0_* budgets; all repaired.
+- **level1_sync hyphen->underscore rename completed** -- session pruning and preference / pattern / context features (previously silent no-ops) restored.
+- **Red CI greened** -- test suites repointed from deleted hyphen modules to real subpackage locations.
+
+### Docs
+
+- CLAUDE.md: corrected directory layout (`langgraph_engine/` is at repo root, not under `scripts/`), rewrote the Step 0 flow (todo-decomposition), and refreshed Quick Info counts. README version + test badges updated (1.20.0, 45 test files).
+
+---
+
 ## [1.19.3] - 2026-04-19
 
 ### Fixed

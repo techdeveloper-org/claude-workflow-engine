@@ -3,7 +3,7 @@
 **Project:** Claude Workflow Engine
 **Version:** 1.20.0
 **Type:** LangGraph Orchestration Pipeline with Call Graph Intelligence + Template Fast-Path
-**Last Updated:** 2026-05-04
+**Last Updated:** 2026-07-12
 
 ---
 
@@ -20,8 +20,8 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Status** | Active Development |
 | **Primary Location** | langgraph_engine/ |
 | **MCP Servers** | 13 servers -- all in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories); 1 also keeps an in-engine copy in `src/mcp/` |
-| **Total Python Files** | 304+ |
-| **Test Files** | 77 |
+| **Total Python Files** | 244 (langgraph_engine/); 395 repo-wide |
+| **Test Files** | 45 (37 unit, 4 integration, 3 e2e, 1 load) |
 | **Call Graph** | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 
 ---
@@ -46,7 +46,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
     |           Template fast-path detected? -> skip Step 0, jump to Step 8
     |           Normal path -> continue to Step 0 with call graph data already in state
     |
-    |-- Step 0: Task Analysis v2 -- PromptGen + Orchestrator        [v1.14.0]
+    |-- Step 0: Task Analysis -- PromptGen -> TODO Decomposition -> Execution   [v1.20.0]
     |   |
     |   |  WHAT CHANGED (v1.12 -> v1.13 -> v1.14):
     |   |  v1.12: Steps 0-7 = 6 separate LLM calls (~75s planning)
@@ -58,9 +58,11 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
     |   |         Step 6: skill validation          [REMOVED in v1.13]
     |   |         Step 7: final prompt generation   [REMOVED in v1.13]
     |   |  v1.13: Step 0 = 2 subprocess calls (~30s planning)
-    |   |  v1.14: Step 0 = 2 subprocess calls (claude CLI, ~15s planning)  <-- CURRENT
+    |   |  v1.14: Step 0 = 2 subprocess calls (claude CLI, ~15s planning)
+    |   |  v1.20: monolithic orchestrator call REPLACED by a TODO-decomposition
+    |   |         pipeline: prompt_gen -> todo_decomposer -> todo_executor  <-- CURRENT
     |   |
-    |   |-- Call 1: prompt_gen_expert_caller  (~10s, stdout captured)
+    |   |-- Phase 1: prompt_gen_expert_caller  (claude CLI subprocess, stdout captured)
     |   |     Reads: level3_execution/templates/orchestration_system_prompt.txt
     |   |     Injects into template:
     |   |       {user_requirements}          <- state["task_description"]
@@ -73,16 +75,15 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
     |   |     claude CLI generates: complete orchestration prompt (agents, phases, contracts)
     |   |     Stores: state["orchestration_prompt"]
     |   |
-    |   |-- Call 2: orchestrator_agent_caller  (~30-90s, stderr streamed live)
-    |         Reads: state["orchestration_prompt"] via temp file
-    |         Executes: full plan (solution-architect -> consensus -> agents -> QA)
-    |         User sees in terminal (real-time, flush=True):
-    |           [ORCHESTRATOR] Reading orchestration prompt...
-    |           [ORCHESTRATOR] Executing plan...
-    |           [ORCHESTRATOR] Done.
-    |         Stores: state["orchestrator_result"]
+    |   |-- Phase 2: todo_decomposer -> execute_todo_list (todo_executor)
+    |         todo_decomposer:   orchestration_prompt -> ordered todo_list
+    |                            (phases, depends_on, one self-contained prompt per agent)
+    |         execute_todo_list: runs each TODO via orchestrator_agent_caller
+    |                            (per-TODO claude CLI call), capturing stdout per TODO
+    |         Stores: state["orchestration_prompt"], state["todo_list"],
+    |                 state["todo_results"], state["orchestrator_result"]
     |         Env vars: STEP0_PROMPT_GEN_TIMEOUT (default 60s)
-    |                   STEP0_ORCHESTRATOR_TIMEOUT (default 300s)
+    |                   STEP0_TODO_DECOMPOSER_TIMEOUT (default 90s)
     |
     |-- Step 8:  GitHub Issue + Jira Issue creation (ENABLE_JIRA, dual-linked)
     |-- Step 9:  Branch Creation (Jira key: feature/PROJ-123)
@@ -121,35 +122,26 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 |   +-- ide_paths.py                  # Path constants (imported by hook packages)
 |   +-- project_session.py            # Session utilities (imported by hook packages)
 |   +-- policy_tracking_helper.py     # Policy tracking (imported by hook packages)
-+-- scripts/                          # Pipeline scripts and tools
-|   +-- langgraph_engine/             # Core orchestration engine
-|   |   +-- core/                     # Cross-cutting abstractions (LazyLoader, ErrorHandler, NodeResult, etc.)
-|   |   +-- state/                    # FlowState split into 6 focused modules
-|   |   +-- routing/                  # All routing functions split by level
-|   |   +-- helper_nodes/             # Helper node functions split by concern
-|   |   +-- diagrams/                 # Strategy Pattern: 13 swappable UML generators
-|   |   +-- parsers/                  # Abstract Factory: 4 language parsers (Py/Java/TS/Kotlin)
-|   |   +-- integrations/             # Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins
-|   |   +-- level_minus1/            # [v1.9] Level -1 Auto-Fix package (nodes, merge, recovery, architecture/)
-|   |   +-- level1_sync/             # [v1.11] Level 1 Sync package (10 modules + architecture/)
-|   |   +-- level3_execution/        # [v1.11] Level 3 Execution package (20+ modules + nodes/ + subgraph.py + sonarqube/ + architecture/)
-|   |   +-- [60+ shared modules]     # Cross-level: LLM, caching, metrics, git, state, etc.
-|   +-- architecture/                 # generate_system_diagram.py (shared utility)
-|   +-- setup/                        # One-time environment setup (install-auto-hooks.sh, setup-global-claude.sh/.ps1, setup_wizard.py, etc.)
-|   +-- bin/                          # Windows .bat operational launchers (start/stop claude-insight, sync-insight, sync-library)
-|   +-- tools/                        # Developer utilities: release.py, sync-version.py, metrics-emitter.py, voice-notifier.py, session-start.sh, etc.
-|   +-- github_operations/            # GitHub helper operations
-|   +-- github_pr_workflow/           # PR workflow package (canonical)
-|   +-- helpers/                      # Shared helper utilities
++-- langgraph_engine/                 # Core orchestration engine (REPO ROOT -- sibling of scripts/, NOT nested under it)
+|   +-- core/  state/  routing/  helper_nodes/          # LazyLoader/ErrorHandler, FlowState, routing, helper nodes
+|   +-- diagrams/ (+drawio/)  parsers/  integrations/   # Strategy/Factory: UML gens, 4 lang parsers, GitHub/Jira/Figma/Jenkins
+|   +-- analysis/ context/ engine_logging/ github/ metrics/ quality/ security/ skills/ standards/   # domain subpackages (v1.20 migration)
+|   +-- build_dependency_resolver/  runtime_verification/   # build-dep parsers; node contracts + verifier
+|   +-- level_minus1/  level1_sync/  level3_execution/  # the 3 pipeline levels (each has architecture/; level3 also nodes/ + subgraph.py + sonarqube/)
+|   +-- [shared modules]              # orchestrator.py, llm_call, patterns, caching, git, etc.
++-- scripts/                          # Pipeline entry point + supporting tools (NOT the engine itself)
 |   +-- 3-level-flow.py               # Main pipeline entry point
-+-- policies/                         # All pipeline policies organized by level (00-auto-fix, 01-sync, 02-standards, 03-execution, testing)
-|   +-- testing/                      # Testing policies (unchanged)
-+-- src/mcp/                          # In-engine copy of session-mgr (repo is source of truth) + bridge (session_hooks, base/)
-+-- tests/                            # 78 test files
-+-- docs/                             # 69 documentation files
-+-- uml/                              # Auto-generated UML diagrams (13 types)
-+-- drawio/                           # Auto-generated draw.io diagrams (13 types)
-+-- rules/                            # 34 coding standard definitions (incl. doc governance + docstrings-only + microservices patterns)
+|   +-- architecture/                 # generate_system_diagram.py (shared utility)
+|   +-- setup/  bin/  tools/          # env setup; Windows .bat launchers; dev utilities (release.py, sync-version.py, etc.)
+|   +-- github_operations/  github_pr_workflow/  helpers/   # GitHub + PR workflow helpers
+|   +-- pre_tool_enforcer/  post_tool_tracker/  agents/     # hook packages + agent definitions
++-- policies/                         # All pipeline policies by level (00-auto-fix, 01-sync, 02-standards, 03-execution, testing)
++-- src/mcp/                          # In-engine copy of session-mgr + bridge (session_hooks, base/)
++-- k8s/                              # Kubernetes manifests (deployment, service, hpa, configmap, secret)
++-- tests/                            # 45 test files (37 unit, 4 integration, 3 e2e, 1 load)
++-- docs/                             # 57 documentation files
++-- uml/  drawio/                     # Auto-generated UML + draw.io diagrams (13 types each)
++-- rules/                            # 46 coding standard definitions (incl. doc governance + docstrings-only + microservices patterns)
 ```
 
 ### Key Components
@@ -195,8 +187,10 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | Input Validator | src/mcp/input_validator.py | Null-byte strip, length limit, prompt injection detection |
 | Secrets Scanner | scripts/secrets_check.py | CI gate: 6 regex patterns, exit 1 on finding |
 | Pin Requirements | scripts/pin_requirements.py | Generates requirements.pinned.txt + requirements.bounds.txt |
-| PromptGen Caller | langgraph_engine/level3_execution/architecture/prompt_gen_expert_caller.py | Step 0 Call 1: fills orchestration template via claude CLI |
-| Orchestrator Caller | langgraph_engine/level3_execution/architecture/orchestrator_agent_caller.py | Step 0 Call 2: executes orchestration plan, streams live to terminal |
+| PromptGen Caller | langgraph_engine/level3_execution/architecture/prompt_gen_expert_caller.py | Step 0 Phase 1: fills orchestration template via claude CLI |
+| TODO Decomposer | langgraph_engine/level3_execution/architecture/todo_decomposer.py | Step 0 Phase 2a: orchestration_prompt -> ordered todo_list (claude CLI) |
+| TODO Executor | langgraph_engine/level3_execution/architecture/todo_executor.py | Step 0 Phase 2b: runs each TODO via orchestrator_agent_caller |
+| Orchestrator Caller | langgraph_engine/level3_execution/architecture/orchestrator_agent_caller.py | Step 0 Phase 2: executes one TODO's agent prompt via claude CLI (per-TODO) |
 
 ### MCP Servers (13 servers, 295 tools) -- All Extracted to Separate Repos
 
