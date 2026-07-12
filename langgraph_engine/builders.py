@@ -98,6 +98,7 @@ class CommitMessageBuilder:
     }
 
     def __init__(self) -> None:
+        """Initialise the builder with empty fields."""
         self._type: Optional[str] = None
         self._scope: Optional[str] = None
         self._subject: Optional[str] = None
@@ -208,6 +209,7 @@ class PRBodyBuilder:
     ]
 
     def __init__(self) -> None:
+        """Initialise the builder with empty fields."""
         self._issue_number: Optional[int] = None
         self._changes_summary: Optional[str] = None
         self._change_types: List[str] = []
@@ -329,6 +331,7 @@ class IssueBodyBuilder:
     """
 
     def __init__(self) -> None:
+        """Initialise the builder with empty fields."""
         self._description: Optional[str] = None
         self._task_summary: Optional[str] = None
         self._implementation_plan: Optional[str] = None

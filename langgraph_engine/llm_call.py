@@ -114,6 +114,7 @@ class ClaudeCLIProvider(LLMProvider):
     }
 
     def __init__(self):
+        """Detect the claude CLI on PATH and record availability."""
         self._claude_path = shutil.which("claude")
         self._available = self._claude_path is not None
 
@@ -193,6 +194,7 @@ class AnthropicProvider(LLMProvider):
     }
 
     def __init__(self):
+        """Read the Anthropic API key and base URL from the environment."""
         self._api_key = os.getenv("ANTHROPIC_API_KEY", "")
         self._base_url = os.getenv("ANTHROPIC_BASE_URL", None)  # SDK handles default
         # Allow model override via env

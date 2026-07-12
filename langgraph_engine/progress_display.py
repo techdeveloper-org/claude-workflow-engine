@@ -104,6 +104,7 @@ class StepRecord:
     """Tracks state of a single pipeline step."""
 
     def __init__(self, step_number: int):
+        """Initialise the step record with its number, label, and PENDING status."""
         self.step_number = step_number
         self.label: str = STEP_LABELS.get(step_number, f"Step {step_number}")
         self.status: str = "PENDING"

@@ -148,6 +148,7 @@ class InteractionManager:
     """
 
     def __init__(self) -> None:
+        """Start with an empty interaction log."""
         self._interactions: List[Dict[str, Any]] = []
 
     # ------------------------------------------------------------------

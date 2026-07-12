@@ -35,6 +35,7 @@ class SecretsMissingError(Exception):
 
     def __init__(self, missing_keys):
         # type: (list) -> None
+        """Record the missing environment-variable keys for this error."""
         self.missing_keys = missing_keys
         key_list = ", ".join(missing_keys)
         super(SecretsMissingError, self).__init__("Required secrets missing or empty: " + key_list)

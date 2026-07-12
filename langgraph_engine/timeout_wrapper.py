@@ -72,6 +72,7 @@ class _StepResult:
     """Thread-safe container to pass result/error from worker thread."""
 
     def __init__(self):
+        """Initialise an empty result/error container."""
         self.value: Optional[Dict[str, Any]] = None
         self.error: Optional[Exception] = None
         self.completed: bool = False
@@ -103,6 +104,7 @@ class StepTimeout:
     """
 
     def __init__(self, timeout_seconds: int):
+        """Store the timeout budget in seconds."""
         self.timeout_seconds = timeout_seconds
 
     def run(
