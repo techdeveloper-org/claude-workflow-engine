@@ -47,6 +47,7 @@ except ImportError:
     _COMPLEXITY_CALCULATOR_AVAILABLE = False
 
     def calculate_graph_complexity(*args, **kwargs):
+        """Fallback stub used when the complexity calculator import fails."""
         return 0, {}, 0.0
 
 
@@ -70,6 +71,7 @@ try:
 except ImportError:
 
     def write_level_log(*args, **kwargs):
+        """Fallback stub used when step_logger import fails."""
         pass
 
 

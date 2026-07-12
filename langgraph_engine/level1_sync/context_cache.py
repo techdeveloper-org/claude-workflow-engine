@@ -68,6 +68,7 @@ class CacheStats:
     """
 
     def __init__(self):
+        """Initialise all counters to zero and stamp the session start time."""
         self._lock = threading.Lock()
         self._hits: int = 0
         self._misses: int = 0
@@ -79,25 +80,30 @@ class CacheStats:
     # ---- public mutators ----
 
     def record_hit(self) -> None:
+        """Record a cache hit."""
         with self._lock:
             self._hits += 1
 
     def record_miss(self, reason: str = "unknown") -> None:
+        """Record a cache miss, tallying it under reason."""
         with self._lock:
             self._misses += 1
             self._miss_reasons[reason] = self._miss_reasons.get(reason, 0) + 1
 
     def record_save(self) -> None:
+        """Record a cache save."""
         with self._lock:
             self._saves += 1
 
     def record_invalidation(self) -> None:
+        """Record a cache invalidation."""
         with self._lock:
             self._invalidations += 1
 
     # ---- public accessors ----
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return a snapshot of the counters plus the derived hit rate."""
         with self._lock:
             total = self._hits + self._misses
             hit_rate = round(self._hits / total, 4) if total > 0 else 0.0
@@ -115,6 +121,7 @@ class CacheStats:
             }
 
     def reset(self) -> None:
+        """Reset all counters to zero."""
         with self._lock:
             self._hits = 0
             self._misses = 0

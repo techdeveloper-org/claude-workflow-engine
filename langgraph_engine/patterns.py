@@ -65,6 +65,7 @@ class _CacheEntry:
     __slots__ = ("value", "timestamp", "ttl")
 
     def __init__(self, value: Any, ttl: float) -> None:
+        """Store the cached value with its creation timestamp and TTL."""
         self.value = value
         self.timestamp: float = time.monotonic()
         self.ttl: float = ttl
@@ -137,12 +138,14 @@ def memoize(
         raise ValueError("max_size must be >= 1")
 
     def decorator(func: F) -> F:
+        """Wrap func with a per-function TTL + LRU cache."""
         # OrderedDict preserves insertion order so we can do O(1) LRU moves.
         cache: OrderedDict = OrderedDict()
         lock = threading.Lock()
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            """Return the cached result if present and unexpired, else compute and store it."""
             key = _make_cache_key(args, kwargs)
 
             with lock:
@@ -242,8 +245,11 @@ def with_timeout(seconds: int) -> Callable[[F], F]:
     """
 
     def decorator(fn: F) -> F:
+        """Wrap fn so it runs with a timeout, raising on overrun."""
+
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
+            """Run fn in a worker thread and enforce the timeout."""
             result_holder: Dict[str, Any] = {}
             exc_holder: Dict[str, Any] = {}
 
@@ -309,8 +315,11 @@ def with_metrics(step_name: str) -> Callable[[F], F]:
     """
 
     def decorator(fn: F) -> F:
+        """Wrap fn to record success/failure and duration metrics."""
+
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
+            """Run fn, timing it and recording the outcome."""
             start = time.perf_counter()
             status = "SUCCESS"
             error_msg: Optional[str] = None
@@ -379,8 +388,11 @@ def with_retry(
         raise ValueError("max_attempts must be >= 1")
 
     def decorator(fn: F) -> F:
+        """Wrap fn with retry-and-backoff on exception."""
+
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
+            """Run fn, retrying with backoff up to max_attempts on failure."""
             delay = backoff
             last_exc: Optional[Exception] = None
 
@@ -443,8 +455,11 @@ def with_logging(step_name: str) -> Callable[[F], F]:
     """
 
     def decorator(fn: F) -> F:
+        """Wrap fn to log START/END around each call."""
+
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
+            """Run fn, logging start and completion for step_name."""
             _logger.info("[{}] START", step_name)
             start = time.perf_counter()
 

@@ -54,6 +54,7 @@ def verify_node(contract: NodeContract) -> Callable:
     """
 
     def decorator(fn: Callable) -> Callable:
+        """Register the contract and wrap fn with verification (no-op when disabled)."""
         # Fast path: disabled at import time -- return original function, zero overhead
         if os.getenv("ENABLE_RUNTIME_VERIFICATION", "0") != "1":
             return fn
@@ -64,6 +65,7 @@ def verify_node(contract: NodeContract) -> Callable:
 
         @functools.wraps(fn)
         def wrapper(state: Any, *args: Any, **kwargs: Any) -> Any:
+            """Run fn with precondition/postcondition checks and tracing."""
             node_name = contract.node_name
             t0 = time.monotonic()
 
