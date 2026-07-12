@@ -121,11 +121,11 @@ def validate_skill(task: Dict[str, Any], skill: Dict[str, Any]) -> Tuple[bool, s
     for cap in required_caps:
         if cap.lower() not in skill_caps:
             msg = "Missing capability: {} (skill '{}' does not provide it)".format(cap, skill_name)
-            logger.debug("[SkillSelectionCriteria] validate_skill FAIL: %s", msg)
+            logger.debug("[SkillSelectionCriteria] validate_skill FAIL: {}", msg)
             return False, msg
 
     logger.debug(
-        "[SkillSelectionCriteria] validate_skill PASS: '%s' covers %s",
+        "[SkillSelectionCriteria] validate_skill PASS: '{}' covers {}",
         skill_name,
         required_caps,
     )
@@ -224,7 +224,7 @@ def detect_conflicts(selected_skills: List[Dict[str, Any]]) -> List[Dict[str, An
                 }
                 conflicts.append(conflict)
                 logger.warning(
-                    "[SkillSelectionCriteria] Conflict detected: '%s' vs '%s': %s",
+                    "[SkillSelectionCriteria] Conflict detected: '{}' vs '{}': {}",
                     conflict["skill1"],
                     conflict["skill2"],
                     conflict["reason"],
@@ -353,14 +353,14 @@ def build_selection(
             selected.append(skill)
         else:
             logger.info(
-                "[SkillSelectionCriteria] Skipping '%s' to avoid conflict",
+                "[SkillSelectionCriteria] Skipping '{}' to avoid conflict",
                 skill.get("name"),
             )
 
     final_conflicts = detect_conflicts(selected)
 
     logger.info(
-        "[SkillSelectionCriteria] Selection complete: %d skills chosen, %d invalid, %d conflicts",
+        "[SkillSelectionCriteria] Selection complete: {} skills chosen, {} invalid, {} conflicts",
         len(selected),
         len(skipped_invalid),
         len(final_conflicts),

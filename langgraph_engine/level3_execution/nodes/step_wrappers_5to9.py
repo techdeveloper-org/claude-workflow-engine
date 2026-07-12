@@ -35,7 +35,7 @@ except ImportError:  # pragma: no cover
         try:
             return fn(state)
         except Exception as exc:
-            logger.error("_run_step fallback caught exception in Step %s: %s", step_number, exc)
+            logger.error("_run_step fallback caught exception in Step {}: {}", step_number, exc)
             return fallback_result or {}
 
 
@@ -50,7 +50,7 @@ except ImportError:  # pragma: no cover
 try:
     from .step_implementations_5to9 import step8_github_issue_creation, step9_branch_creation
 except ImportError as _imp_err:  # pragma: no cover
-    logger.error("step_implementations_5to9 import failed: %s", _imp_err)
+    logger.error("step_implementations_5to9 import failed: {}", _imp_err)
 
     def step8_github_issue_creation(state):  # type: ignore[misc]
         return {
@@ -143,9 +143,9 @@ def step8_github_issue_node(state: FlowState) -> Dict[str, Any]:
             result["jira_issue_created"] = jira_result.get("success", False)
             if not jira_result.get("success"):
                 result["jira_error"] = jira_result.get("error", "Unknown")
-            logger.info("[v2] Jira issue created: %s", jira_result.get("jira_issue_key", ""))
+            logger.info("[v2] Jira issue created: {}", jira_result.get("jira_issue_key", ""))
         except Exception as e:
-            logger.warning("[v2] Jira integration failed (non-blocking): %s", str(e))
+            logger.warning("[v2] Jira integration failed (non-blocking): {}", str(e))
             result["jira_enabled"] = True
             result["jira_issue_created"] = False
             result["jira_error"] = str(e)
@@ -168,7 +168,7 @@ def step9_branch_creation_node(state: FlowState) -> Dict[str, Any]:
             # or via a dedicated override key that step9_branch_creation reads.
             st = dict(st)
             st["step9_jira_branch_override"] = jira_branch
-            logger.info("[v2] Jira branch override: %s", jira_branch)
+            logger.info("[v2] Jira branch override: {}", jira_branch)
 
         last_exc = None
         for attempt in range(3):

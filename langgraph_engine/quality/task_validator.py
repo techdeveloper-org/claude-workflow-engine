@@ -147,7 +147,7 @@ def covers_all_requirements(tasks: List[Dict[str, Any]], requirement: str = "") 
 
     uncovered = [kw for kw in keywords if kw not in combined_task_text]
     if uncovered:
-        logger.debug("[TaskValidator] Uncovered keywords: %s", uncovered)
+        logger.debug("[TaskValidator] Uncovered keywords: {}", uncovered)
         return False
     return True
 
@@ -202,7 +202,7 @@ def all_tasks_reachable(tasks: List[Dict[str, Any]]) -> bool:
 
     unreachable = task_ids - visited
     if unreachable:
-        logger.debug("[TaskValidator] Unreachable task ids: %s", unreachable)
+        logger.debug("[TaskValidator] Unreachable task ids: {}", unreachable)
         return False
     return True
 
@@ -226,7 +226,7 @@ def all_tasks_feasible(tasks: List[Dict[str, Any]]) -> bool:
     for task in tasks:
         name = (task.get("name") or task.get("title") or "").strip()
         if not name:
-            logger.debug("[TaskValidator] Task missing name/title: id=%s", task.get("id"))
+            logger.debug("[TaskValidator] Task missing name/title: id={}", task.get("id"))
             return False
     return True
 
@@ -281,7 +281,7 @@ def cycle_detect(tasks: List[Dict[str, Any]]) -> Tuple[bool, List[Any]]:
         if colour[node] == WHITE:
             cycle_path = _dfs(node)
             if cycle_path is not None:
-                logger.error("[TaskValidator] Cycle detected in dependency graph: %s", cycle_path)
+                logger.error("[TaskValidator] Cycle detected in dependency graph: {}", cycle_path)
                 return True, list(cycle_path)
 
     logger.debug("[TaskValidator] No cycle detected in task dependency graph")
@@ -326,10 +326,10 @@ def validate_feasibility(
     feasible = cost <= available_tokens
     if feasible:
         reason = "Estimated cost {} <= available {} ({})".format(cost, available_tokens, source)
-        logger.debug("[TaskValidator] Feasible '%s': %s", task_name, reason)
+        logger.debug("[TaskValidator] Feasible '{}': {}", task_name, reason)
     else:
         reason = "Estimated cost {} > available {} ({})".format(cost, available_tokens, source)
-        logger.warning("[TaskValidator] NOT feasible '%s': %s", task_name, reason)
+        logger.warning("[TaskValidator] NOT feasible '{}': {}", task_name, reason)
 
     return feasible, reason
 
@@ -386,8 +386,8 @@ def validate_breakdown(
     is_valid = len(errors) == 0
 
     if is_valid:
-        logger.info("[TaskValidator] Validation passed: %d tasks, all checks OK", len(tasks))
+        logger.info("[TaskValidator] Validation passed: {} tasks, all checks OK", len(tasks))
     else:
-        logger.warning("[TaskValidator] Validation failed: %d error(s): %s", len(errors), errors)
+        logger.warning("[TaskValidator] Validation failed: {} error(s): {}", len(errors), errors)
 
     return is_valid, errors

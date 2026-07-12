@@ -134,7 +134,7 @@ class DrawioConverter:
         try:
             cells = gen(data, nid)
         except Exception as exc:
-            logger.warning("DrawioConverter[%s]: %s", diagram_type, exc, exc_info=True)
+            logger.warning("DrawioConverter[{}]: {}", diagram_type, exc, exc_info=True)
             cells = [_vertex(nid(), "Error: %s" % exc, S_ACT_ACTION, 100, 100, 400, 50)]
 
         title = diagram_type.replace("-", " ").title() + " Diagram"

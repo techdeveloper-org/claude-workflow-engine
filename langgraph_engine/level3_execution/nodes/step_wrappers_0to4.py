@@ -80,13 +80,13 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
             call_graph_danger_zones = cg_result.get("danger_zones", [])
             call_graph_affected_methods = cg_result.get("affected_methods", [])
             logger.info(
-                "[v2] Step 0 CallGraph pre-injection: risk=%s danger_zones=%d affected=%d",
+                "[v2] Step 0 CallGraph pre-injection: risk={} danger_zones={} affected={}",
                 call_graph_risk_level,
                 len(call_graph_danger_zones),
                 len(call_graph_affected_methods),
             )
     except Exception as _cg_exc:
-        logger.debug("[v2] Step 0 CallGraph pre-injection skipped (fail-open): %s", _cg_exc)
+        logger.debug("[v2] Step 0 CallGraph pre-injection skipped (fail-open): {}", _cg_exc)
 
     user_message = state.get("user_message", "") or os.environ.get("CURRENT_USER_MESSAGE", "")
 
@@ -156,7 +156,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
             _prompt_file = _tf.name
 
         if DEBUG:
-            logger.debug("[v2] Step 0 orchestration prompt written to %s", _prompt_file)
+            logger.debug("[v2] Step 0 orchestration prompt written to {}", _prompt_file)
 
         # Step 2a: decompose orchestration prompt into TODO list
         _decomp_args = [
@@ -180,11 +180,11 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
                 timeout=_env_int("STEP0_TODO_DECOMPOSER_TIMEOUT", 90) + 15,
             )
         except Exception as _decomp_exc:
-            logger.warning("[v2] Step 0 todo_decomposer failed (fail-open): %s", _decomp_exc)
+            logger.warning("[v2] Step 0 todo_decomposer failed (fail-open): {}", _decomp_exc)
             _decomp_raw = {"status": "FALLBACK", "todo_list": []}
 
         _todo_list = _decomp_raw.get("todo_list", [])
-        logger.info("[v2] Step 0 todo_decomposer: %d todos", len(_todo_list))
+        logger.info("[v2] Step 0 todo_decomposer: {} todos", len(_todo_list))
 
         # Step 2b: execute each TODO via orchestrator_agent_caller
         _todo_results = []
@@ -194,7 +194,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
 
                 _todo_results = _exec_todos(state, _todo_list, step_number=0)
             except Exception as _exec_exc:
-                logger.warning("[v2] Step 0 execute_todo_list failed (fail-open): %s", _exec_exc)
+                logger.warning("[v2] Step 0 execute_todo_list failed (fail-open): {}", _exec_exc)
                 _todo_results = []
 
         # Step 2c: merge todo results into orch_result
@@ -213,7 +213,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
             orch_result.update(_lifted)
 
     except Exception as _orch_exc:
-        logger.warning("[v2] Step 0 orchestrator block failed (fail-open): %s", _orch_exc)
+        logger.warning("[v2] Step 0 orchestrator block failed (fail-open): {}", _orch_exc)
         orch_result = {"success": False, "error": str(_orch_exc)}
     finally:
         if _prompt_file:
@@ -248,7 +248,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
                 result["step0_complexity_boosted"] = True
                 result["step0_complexity_boost_source"] = "call_graph"
                 logger.info(
-                    "[v2] Step 0 complexity adjusted by call graph: %d -> %d (boost=%+d)",
+                    "[v2] Step 0 complexity adjusted by call graph: {} -> {} (boost={:+})",
                     current,
                     boosted,
                     boost,
@@ -375,9 +375,9 @@ def _map_step0_result_to_state(
             sp_file.write_text(execution_prompt, encoding="utf-8")
             result["step7_system_prompt_file"] = str(sp_file)
             result["step7_system_prompt_loaded"] = True
-            logger.info("[v2] Step 0 wrote execution prompt to %s", sp_file)
+            logger.info("[v2] Step 0 wrote execution prompt to {}", sp_file)
     except Exception as _sp_exc:
-        logger.debug("[v2] Step 0 prompt file write skipped: %s", _sp_exc)
+        logger.debug("[v2] Step 0 prompt file write skipped: {}", _sp_exc)
 
     return result
 

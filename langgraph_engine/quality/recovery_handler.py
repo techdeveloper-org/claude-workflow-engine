@@ -130,7 +130,7 @@ def _run_cleanup_callbacks() -> None:
         try:
             cb()
         except Exception as e:
-            logger.warning("[Recovery] Cleanup callback failed: %s", e)
+            logger.warning("[Recovery] Cleanup callback failed: {}", e)
 
 
 # ---------------------------------------------------------------------------

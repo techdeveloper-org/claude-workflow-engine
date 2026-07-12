@@ -128,7 +128,7 @@ def step8_github_issue_creation(state: FlowState) -> Dict[str, Any]:
             skip_reason = "default task type with no analysis"
 
         if should_skip:
-            logger.info("Step 8: Skipping issue creation -- %s", skip_reason)
+            logger.info("Step 8: Skipping issue creation -- {}", skip_reason)
             return {
                 "step8_issue_id": "0",
                 "step8_issue_url": "",
@@ -196,9 +196,9 @@ def step8_github_issue_creation(state: FlowState) -> Dict[str, Any]:
                         "step8_status": "OK",
                     }
                 else:
-                    logger.warning("GitHub issue creation failed: %s. Using fallback.", result.get("error"))
+                    logger.warning("GitHub issue creation failed: {}. Using fallback.", result.get("error"))
             except Exception as gh_err:
-                logger.warning("Level3GitHubWorkflow unavailable: %s. Using fallback.", gh_err)
+                logger.warning("Level3GitHubWorkflow unavailable: {}. Using fallback.", gh_err)
 
         # Fallback
         return {
@@ -257,9 +257,9 @@ def step9_branch_creation(state: FlowState) -> Dict[str, Any]:
                         "step9_status": "OK",
                     }
                 else:
-                    logger.warning("Branch creation failed: %s. Using fallback.", result.get("error"))
+                    logger.warning("Branch creation failed: {}. Using fallback.", result.get("error"))
             except Exception as gh_err:
-                logger.warning("Level3GitHubWorkflow unavailable for branch: %s. Using fallback.", gh_err)
+                logger.warning("Level3GitHubWorkflow unavailable for branch: {}. Using fallback.", gh_err)
 
         # Fallback
         branch_name = "%s/issue-%s" % (branch_label, issue_id)

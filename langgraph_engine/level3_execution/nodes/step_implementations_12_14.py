@@ -100,11 +100,11 @@ def step12_issue_closure(state: FlowState) -> Dict[str, Any]:
                         try:
                             cleanup = workflow.git.post_merge_cleanup(branch_name)
                             if cleanup.get("success"):
-                                logger.info("Post-merge cleanup: %s", cleanup.get("message"))
+                                logger.info("Post-merge cleanup: {}", cleanup.get("message"))
                             else:
-                                logger.warning("Post-merge cleanup issue: %s", cleanup.get("error"))
+                                logger.warning("Post-merge cleanup issue: {}", cleanup.get("error"))
                         except Exception as cleanup_err:
-                            logger.warning("Post-merge cleanup skipped: %s", cleanup_err)
+                            logger.warning("Post-merge cleanup skipped: {}", cleanup_err)
 
                     return {
                         "step12_issue_closed": True,
@@ -112,9 +112,9 @@ def step12_issue_closure(state: FlowState) -> Dict[str, Any]:
                         "step12_status": "OK",
                     }
                 else:
-                    logger.warning("Issue closure failed: %s. Using fallback.", result.get("error"))
+                    logger.warning("Issue closure failed: {}. Using fallback.", result.get("error"))
             except Exception as gh_err:
-                logger.warning("Level3GitHubWorkflow unavailable for closure: %s. Using fallback.", gh_err)
+                logger.warning("Level3GitHubWorkflow unavailable for closure: {}. Using fallback.", gh_err)
 
         # Fallback
         closing_comment = (
@@ -339,9 +339,9 @@ def step14_final_summary_generation(state: FlowState) -> Dict[str, Any]:
                 summary_file = Path(session_dir) / "execution-summary.txt"
                 summary_file.write_text(summary_text, encoding="utf-8")
                 summary_saved = True
-                logger.info("Summary saved to %s", summary_file)
+                logger.info("Summary saved to {}", summary_file)
             except Exception as save_err:
-                logger.warning("Could not save summary: %s", save_err)
+                logger.warning("Could not save summary: {}", save_err)
 
         # Voice notification (best-effort)
         voice_sent = False
@@ -368,11 +368,11 @@ def step14_final_summary_generation(state: FlowState) -> Dict[str, Any]:
                 )
                 voice_sent = result.returncode == 0
                 if not voice_sent:
-                    logger.debug("Voice exited with code %d", result.returncode)
+                    logger.debug("Voice exited with code {}", result.returncode)
         except subprocess.TimeoutExpired:
             logger.debug("Voice notification timed out (60s)")
         except Exception as voice_err:
-            logger.debug("Voice notification skipped: %s", voice_err)
+            logger.debug("Voice notification skipped: {}", voice_err)
 
         # Runtime verification report (non-blocking, best-effort)
         verification_report = None
@@ -386,9 +386,9 @@ def step14_final_summary_generation(state: FlowState) -> Dict[str, Any]:
                 if report is not None:
                     verification_report = report.to_dict()
                     verification_violations = [v["message"] for v in report.violations]
-                    logger.info("[RuntimeVerifier] Report built: %d violations", len(verification_violations))
+                    logger.info("[RuntimeVerifier] Report built: {} violations", len(verification_violations))
             except Exception as rv_err:
-                logger.warning("[RuntimeVerifier] build_report skipped: %s", rv_err)
+                logger.warning("[RuntimeVerifier] build_report skipped: {}", rv_err)
 
         result = {
             "step14_summary": summary,

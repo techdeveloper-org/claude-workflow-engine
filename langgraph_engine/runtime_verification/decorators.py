@@ -83,7 +83,7 @@ def verify_node(contract: NodeContract) -> Callable:
                 if all_violations:
                     span.set_attribute("violation.level", _max_severity(all_violations))
                     _LOG.warning(
-                        "[RuntimeVerifier] %d violation(s) in node '%s'",
+                        "[RuntimeVerifier] {} violation(s) in node '{}'",
                         len(all_violations),
                         node_name,
                     )

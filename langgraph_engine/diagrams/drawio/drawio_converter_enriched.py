@@ -23,7 +23,6 @@ Usage:
     xml_cg_rich = c.convert("call_graph_rich", cg_data, RICH_STYLE_CONFIG)
 """
 
-
 try:
     from loguru import logger
 except ImportError:
@@ -201,7 +200,7 @@ class DrawioConverter(_BaseDrawioConverter):
             try:
                 cells = self._convert_timing(data, style_config)
             except Exception as exc:
-                logger.warning("DrawioConverter[timing]: %s", exc)
+                logger.warning("DrawioConverter[timing]: {}", exc)
                 cells = [_vertex(nid(), "Timing Error: %s" % exc, S_ACT_ACTION, 100, 100, 400, 50)]
             return _wrap_mxfile(cells, "Timing Diagram")
 
@@ -209,7 +208,7 @@ class DrawioConverter(_BaseDrawioConverter):
             try:
                 cells = self._convert_call_graph_rich(data, style_config)
             except Exception as exc:
-                logger.warning("DrawioConverter[call_graph_rich]: %s", exc)
+                logger.warning("DrawioConverter[call_graph_rich]: {}", exc)
                 cells = [_vertex(nid(), "Call Graph Error: %s" % exc, S_ACT_ACTION, 100, 100, 400, 50)]
             return _wrap_mxfile(cells, "Call Graph Diagram")
 
@@ -218,7 +217,7 @@ class DrawioConverter(_BaseDrawioConverter):
             try:
                 cells = self._class_diagram_styled(data, nid, merged_config)
             except Exception as exc:
-                logger.warning("DrawioConverter[class-styled]: %s", exc)
+                logger.warning("DrawioConverter[class-styled]: {}", exc)
                 cells = self._class_diagram(data, nid)
             return _wrap_mxfile(cells, "Class Diagram")
 
