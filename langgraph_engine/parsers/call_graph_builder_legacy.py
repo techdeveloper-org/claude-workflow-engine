@@ -27,6 +27,7 @@ class _RegexVisitor(object):
     """
 
     def __init__(self, filepath, rel_path):
+        """Initialise empty classes/methods/edges buffers for this file."""
         self.filepath = filepath
         self.rel_path = rel_path
         self.classes = []
@@ -73,6 +74,7 @@ class CallGraphBuilder:
     """
 
     def __init__(self, project_root, max_files=MAX_FILES):
+        """Store the project root and the max-files scan cap."""
         self.project_root = Path(project_root)
         self.max_files = max_files
 

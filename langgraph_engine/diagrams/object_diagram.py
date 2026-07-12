@@ -37,6 +37,7 @@ class ObjectDiagramGenerator(AbstractDiagramGenerator):
 
     @property
     def diagram_type(self):
+        """Return the diagram-type identifier for this generator."""
         return "object"
 
     def generate(self, analysis_data, format="mermaid"):

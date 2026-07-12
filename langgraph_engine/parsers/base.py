@@ -133,6 +133,7 @@ class _VisitorResult:
     """
 
     def __init__(self, file_path, rel_path):
+        """Initialise empty classes/methods/edges buffers for this file."""
         self.file_path = file_path
         self.rel_path = rel_path
         self.classes = []  # list of class node dicts

@@ -61,8 +61,11 @@ def node_error_handler(
     """
 
     def decorator(func: Callable) -> Callable:
+        """Wrap func with node-level timing, logging, and fallback handling."""
+
         @functools.wraps(func)
         def wrapper(state: Any, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+            """Run the node, logging OK/FAILED with duration; return the fallback on error."""
             start = time.time()
             try:
                 result = func(state, *args, **kwargs)
@@ -114,8 +117,11 @@ def safe_execute(operation_name: str, default: Any = None) -> Callable:
     """
 
     def decorator(func: Callable) -> Callable:
+        """Wrap func so any exception is logged at debug level and swallowed."""
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            """Run func, returning the default value if it raises."""
             try:
                 return func(*args, **kwargs)
             except Exception as exc:
@@ -154,6 +160,7 @@ class NodeResult:
     """
 
     def __init__(self) -> None:
+        """Initialise empty update and pipeline-entry buffers."""
         self._updates: Dict[str, Any] = {}
         self._pipeline_entries: list = []
 

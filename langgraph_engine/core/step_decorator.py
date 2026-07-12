@@ -81,6 +81,7 @@ class StepExecutionContext:
         step_label: str,
         state: Dict[str, Any],
     ) -> None:
+        """Record the step number, label, and state for this execution context."""
         self.step_number = step_number
         self.step_label = step_label
         self.state = state

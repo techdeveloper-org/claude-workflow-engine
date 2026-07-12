@@ -68,11 +68,13 @@ class KotlinRegexParser(AbstractLanguageParser):
     @property
     def language(self):
         # type: () -> str
+        """Return the language identifier this parser handles."""
         return "kotlin"
 
     @property
     def file_extensions(self):
         # type: () -> Set[str]
+        """Return the file extensions this parser handles."""
         return frozenset({".kt"})
 
     def parse_file(self, file_path, content):

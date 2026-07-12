@@ -58,6 +58,9 @@ class UMLDiagramGenerator:
     """Generate Mermaid/PlantUML syntax from analysis results."""
 
     def __init__(self, project_root, output_dir=None, call_graph=None):
+        """Configure the output directory (UML_OUTPUT_DIR env > output_dir > 'uml'),
+        the AST analyzer, and an optional pre-built call graph.
+        """
         import os
 
         self.project_root = Path(project_root)

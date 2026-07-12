@@ -46,6 +46,7 @@ def create_integration_hook(step_number: int) -> Callable:
     """
 
     def integration_hook(state: Any) -> Dict[str, Any]:
+        """Apply standards for this step and return only the changed state keys."""
         try:
             from ..standards_integration import apply_standards_at_step
 

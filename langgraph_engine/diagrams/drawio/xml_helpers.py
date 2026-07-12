@@ -298,6 +298,7 @@ S_IO_ARROW = "endArrow=classic;html=1;" "strokeColor=%s;strokeWidth=2;" "edgeSty
 
 class _IDGen:
     def __init__(self, start=2):
+        """Start the monotonic cell-ID counter at start."""
         self._n = start
 
     def __call__(self):

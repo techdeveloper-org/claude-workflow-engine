@@ -56,6 +56,7 @@ class UMLAstAnalyzer:
     """Python AST analysis for structural UML diagrams."""
 
     def __init__(self, project_root):
+        """Store the project root that AST analysis walks."""
         self.project_root = Path(project_root)
 
     def extract_classes(self, file_path):
