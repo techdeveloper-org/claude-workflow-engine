@@ -32,6 +32,27 @@ def setup_test_environment():
             del os.environ[key]
 
 
+@pytest.fixture(autouse=True)
+def _neutralize_llm_provider_chain(monkeypatch):
+    """Stop unit tests from spawning a real ``claude`` CLI subprocess.
+
+    ``llm_call()`` iterates ``langgraph_engine.llm_call._provider_chain`` and returns
+    the first non-empty provider response, else None. On a machine where the claude
+    CLI is on PATH, the ClaudeCLIProvider blocks on a real subprocess for up to the
+    call's timeout; several pipeline nodes call ``llm_call()`` transitively (Step 10
+    implementation, UML LLM enrichment, ...), which stalled the suite. Emptying the
+    provider chain makes ``llm_call()`` return None instantly -- the same result CI
+    sees with no provider configured -- so tests stay hermetic and fast. Tests that
+    need a specific LLM response patch ``llm_call`` themselves and are unaffected.
+    """
+    # Import the submodule explicitly and patch the module object -- a dotted string
+    # target would fail with AttributeError for a test that runs before anything else
+    # has imported langgraph_engine.llm_call (getattr on the not-yet-bound submodule).
+    import langgraph_engine.llm_call as _llm_call_mod
+
+    monkeypatch.setattr(_llm_call_mod, "_provider_chain", [], raising=False)
+
+
 @pytest.fixture
 def mock_services():
     """Mock all service classes with flexible MagicMock"""
