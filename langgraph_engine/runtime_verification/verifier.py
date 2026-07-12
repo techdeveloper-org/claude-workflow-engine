@@ -1,3 +1,11 @@
+"""Runtime verification engine.
+
+RuntimeVerifier checks node contracts (preconditions/postconditions) and
+level-transition guards against the pipeline state when
+ENABLE_RUNTIME_VERIFICATION == '1'. When disabled, get_instance() returns a
+NullVerifier whose methods are no-ops (zero hot-path overhead).
+"""
+
 from __future__ import annotations
 
 import os

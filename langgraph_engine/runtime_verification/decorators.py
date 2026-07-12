@@ -1,3 +1,10 @@
+"""verify_node decorator -- wraps pipeline node functions with runtime contract checks.
+
+When ENABLE_RUNTIME_VERIFICATION != '1' the decorator returns the original function
+unchanged (zero overhead). Otherwise it registers the node's NodeContract with the
+singleton RuntimeVerifier and checks preconditions/postconditions around each call.
+"""
+
 from __future__ import annotations
 
 import functools

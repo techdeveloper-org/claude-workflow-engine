@@ -1,3 +1,10 @@
+"""Level-transition invariant guards.
+
+LEVEL_TRANSITION_GUARDS maps (from_level, to_level) to the PreconditionSpecs that
+must hold on the state before the pipeline crosses that boundary. get_transition_guard()
+looks up the specs for a given transition.
+"""
+
 from __future__ import annotations
 
 from typing import Dict, List, Tuple
