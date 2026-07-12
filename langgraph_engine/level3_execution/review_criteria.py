@@ -87,6 +87,7 @@ class CriteriaResult:
     timestamp: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
+        """Return this result as a plain JSON-serialisable dict."""
         return {
             "passed": self.passed,
             "score": round(self.score, 3),
@@ -222,6 +223,7 @@ class ReviewCriteria:
     """
 
     def __init__(self, project_root: Optional[str] = None):
+        """Bind the reviewer to project_root and load the review rules."""
         self.project_root = Path(project_root) if project_root else None
         self.rules = REVIEW_RULES
 

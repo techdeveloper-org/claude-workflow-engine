@@ -200,6 +200,9 @@ def _parse_agent_output(llm_response):
 
 
 def main():
+    """CLI entry point: load the orchestration prompt, execute the plan, and print
+    the orchestrator result as JSON to stdout (progress goes to stderr).
+    """
     print("[orchestrator_agent_caller] Starting", file=sys.stderr, flush=True)
 
     args = _parse_args(sys.argv)

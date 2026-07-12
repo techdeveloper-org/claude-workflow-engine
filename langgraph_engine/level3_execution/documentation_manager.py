@@ -37,6 +37,7 @@ class Level3DocumentationManager:
     """
 
     def __init__(self, project_root: str = ".", session_dir: str = ""):
+        """Store the project root and session directory for the doc cycle."""
         self.project_root = Path(project_root)
         self.session_dir = session_dir
 

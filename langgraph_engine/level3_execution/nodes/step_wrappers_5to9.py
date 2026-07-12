@@ -44,6 +44,7 @@ try:
 except ImportError:  # pragma: no cover
 
     def get_infra(state):  # type: ignore[misc]
+        """Fallback infra bundle used when core.infrastructure import fails."""
         return {"metrics": None, "error_logger": None}
 
 
@@ -53,6 +54,7 @@ except ImportError as _imp_err:  # pragma: no cover
     logger.error("step_implementations_5to9 import failed: {}", _imp_err)
 
     def step8_github_issue_creation(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_5to9 import fails."""
         return {
             "step8_issue_id": "0",
             "step8_issue_url": "",
@@ -62,6 +64,7 @@ except ImportError as _imp_err:  # pragma: no cover
         }
 
     def step9_branch_creation(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_5to9 import fails."""
         return {
             "step9_branch_name": "",
             "step9_branch_created": False,

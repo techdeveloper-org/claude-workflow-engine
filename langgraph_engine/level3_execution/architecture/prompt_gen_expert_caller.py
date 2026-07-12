@@ -233,6 +233,9 @@ def _call_claude_cli(prompt):
 
 
 def main():
+    """CLI entry point: build the orchestration prompt from the task description and
+    runtime context, printing the result as JSON to stdout.
+    """
     if DEBUG:
         print("[prompt_gen_expert_caller] Starting", file=sys.stderr, flush=True)
 

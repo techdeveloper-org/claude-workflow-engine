@@ -46,6 +46,7 @@ except ImportError:  # pragma: no cover
         timeout: int = 120,
         json_mode: bool = False,
     ) -> Optional[str]:
+        """Fallback stub used when langgraph_engine.llm_call import fails."""
         logger.error("llm_call unavailable; returning None")
         return None
 

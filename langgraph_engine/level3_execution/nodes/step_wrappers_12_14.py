@@ -38,6 +38,7 @@ try:
 except ImportError:  # pragma: no cover
 
     def get_infra(state):  # type: ignore[misc]
+        """Fallback infra bundle used when core.infrastructure import fails."""
         return {"metrics": None, "error_logger": None}
 
 
@@ -51,6 +52,7 @@ except ImportError as _imp_err:  # pragma: no cover
     logger.error("step_implementations_12_14 import failed: {}", _imp_err)
 
     def step12_issue_closure(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_12_14 import fails."""
         return {
             "step12_issue_closed": False,
             "step12_status": "ERROR",
@@ -58,6 +60,7 @@ except ImportError as _imp_err:  # pragma: no cover
         }
 
     def step13_project_documentation_update(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_12_14 import fails."""
         return {
             "step13_updates_prepared": False,
             "step13_documentation_status": "ERROR",
@@ -65,6 +68,7 @@ except ImportError as _imp_err:  # pragma: no cover
         }
 
     def step14_final_summary_generation(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_12_14 import fails."""
         return {
             "step14_status": "ERROR",
             "step14_error": "step_implementations_12_14 unavailable",

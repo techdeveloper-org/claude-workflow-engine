@@ -47,6 +47,7 @@ try:
 except ImportError:  # pragma: no cover
 
     def get_infra(state):  # type: ignore[misc]
+        """Fallback infra bundle used when core.infrastructure import fails."""
         return {"metrics": None, "error_logger": None}
 
 
@@ -56,6 +57,7 @@ except ImportError as _imp_err:  # pragma: no cover
     logger.error("step_implementations_10_11 import failed: {}", _imp_err)
 
     def step10_implementation_execution(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_10_11 import fails."""
         return {
             "step10_implementation_status": "ERROR",
             "step10_tasks_executed": 0,
@@ -67,6 +69,7 @@ except ImportError as _imp_err:  # pragma: no cover
         }
 
     def step11_pull_request_review(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_10_11 import fails."""
         return {
             "step11_pr_id": "0",
             "step11_pr_url": "",

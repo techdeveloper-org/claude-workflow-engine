@@ -49,6 +49,7 @@ class CodebaseAnalyzer:
     """Analyzes codebase to understand structure and purpose."""
 
     def __init__(self, project_root: str = "."):
+        """Bind the analyzer to project_root with a module logger."""
         self.root = Path(project_root)
         self.logger = logging.getLogger(__name__)
 
@@ -314,6 +315,7 @@ class DocumentationGenerator:
     """Generate documentation using templates and context."""
 
     def __init__(self, project_root: str = ".", session_dir: str = None):
+        """Bind to project_root/session_dir and create a CodebaseAnalyzer."""
         self.root = Path(project_root)
         self.session_dir = session_dir or str(_DOC_SESSION_LOGS_DIR / "current")
         self.analyzer = CodebaseAnalyzer(project_root)
