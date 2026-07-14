@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 # GitHub base URLs (configurable via env vars for portability)
-_GITHUB_OWNER = os.environ.get("CLAUDE_GITHUB_OWNER", "piyushmakhija28")
+_GITHUB_OWNER = os.environ.get("CLAUDE_GITHUB_OWNER", "techdeveloper-org")
 GITHUB_BASE = f"https://raw.githubusercontent.com/{_GITHUB_OWNER}"
 GLOBAL_LIB_URL = os.environ.get("CLAUDE_GLOBAL_LIB_URL", f"{GITHUB_BASE}/claude-global-library/main")
 PROJECT_URL = os.environ.get("CLAUDE_PROJECT_URL", f"{GITHUB_BASE}/claude-workflow-engine/main")

@@ -109,7 +109,7 @@ if (Test-Path $GlobalClaudeMd) {
         Write-Host "  [OK] Global CLAUDE.md installed from template"
     } else {
         Write-Host "  [WARN] Template not found - creating minimal CLAUDE.md"
-        Set-Content $GlobalClaudeMd "# Claude Memory System`nInstall claude-workflow-engine for full setup.`nSee: https://github.com/piyushmakhija28/claude-workflow-engine" -Encoding UTF8
+        Set-Content $GlobalClaudeMd "# Claude Memory System`nInstall claude-workflow-engine for full setup.`nSee: https://github.com/techdeveloper-org/claude-workflow-engine" -Encoding UTF8
     }
 }
 

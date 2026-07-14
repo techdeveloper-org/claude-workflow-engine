@@ -559,7 +559,7 @@ GITHUB_ISSUES_AUTO_CLOSE = True  # Set False to disable auto-close
 **Repository Configuration:**
 ```python
 # Detect from git config
-GITHUB_OWNER = "piyushmakhija28"  # From git origin
+GITHUB_OWNER = "techdeveloper-org"  # From git origin
 GITHUB_REPO = "claude-code-ide"    # From git origin
 ```
 

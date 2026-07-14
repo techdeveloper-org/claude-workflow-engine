@@ -58,7 +58,7 @@ Claude Workflow Engine v${NEW_VERSION}
 
 ${CHANGELOG_ENTRY}
 
-**Full Changelog**: https://github.com/piyushmakhija28/claude-workflow-engine/compare/${PREV_TAG}...v${NEW_VERSION}
+**Full Changelog**: https://github.com/techdeveloper-org/claude-workflow-engine/compare/${PREV_TAG}...v${NEW_VERSION}
 EOF
 )
     fi
@@ -70,5 +70,5 @@ EOF
 
     echo ""
     echo "[OK] Release created successfully!"
-    echo "View: https://github.com/piyushmakhija28/claude-workflow-engine/releases/tag/v${NEW_VERSION}"
+    echo "View: https://github.com/techdeveloper-org/claude-workflow-engine/releases/tag/v${NEW_VERSION}"
 fi

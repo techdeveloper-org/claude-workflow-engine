@@ -14,7 +14,7 @@ if [ -z "$NEW_REPO_NAME" ]; then
 fi
 
 # New remote URL
-NEW_URL="https://github.com/piyushmakhija28/${NEW_REPO_NAME}.git"
+NEW_URL="https://github.com/techdeveloper-org/${NEW_REPO_NAME}.git"
 
 echo ""
 echo "Updating remote URL to: $NEW_URL"

@@ -133,7 +133,7 @@ else
         cat > "$GLOBAL_CLAUDE_MD" << 'EOF'
 # Claude Memory System
 # Install claude-workflow-engine for the full 3-level architecture setup.
-# See: https://github.com/piyushmakhija28/claude-workflow-engine
+# See: https://github.com/techdeveloper-org/claude-workflow-engine
 EOF
     fi
 fi
