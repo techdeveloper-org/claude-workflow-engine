@@ -18,6 +18,17 @@ os.environ.setdefault("TESTING", "True")
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+# Eagerly bind subpackages that tests patch via dotted-string targets, e.g.
+# patch("langgraph_engine.github.X"). unittest.mock._dot_lookup resolves such
+# targets with getattr(langgraph_engine, "github"), which raises AttributeError
+# unless the submodule is already imported. Import order otherwise left this to
+# chance -- it passed on Python 3.11 but broke every such patch on 3.10 in CI.
+# Importing them here makes resolution deterministic across interpreter versions.
+import langgraph_engine.github  # noqa: E402,F401
+import langgraph_engine.level3_execution  # noqa: E402,F401
+import langgraph_engine.quality  # noqa: E402,F401
+import langgraph_engine.runtime_verification  # noqa: E402,F401
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_environment():
