@@ -64,6 +64,31 @@ def _neutralize_llm_provider_chain(monkeypatch):
     monkeypatch.setattr(_llm_call_mod, "_provider_chain", [], raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _repair_langgraph_engine_attrs():
+    """Re-attach cached ``langgraph_engine.*`` submodules to their parent packages.
+
+    On Python 3.10, importlib does not re-bind a parent package's attribute for an
+    already-cached submodule. Several test files call ``importlib.reload`` /
+    ``sys.modules.pop``; once that drops e.g. the ``github`` attribute off
+    ``langgraph_engine`` (while the module stays in ``sys.modules``),
+    ``patch("langgraph_engine.github.X")`` fails on 3.10 with AttributeError, because
+    mock's ``__import__`` retry is a no-op for the cached module and never rebinds.
+    Python 3.11+ self-heals, which is why this was 3.10-only in CI. Re-attaching the
+    tree before each test keeps dotted-string patch targets resolvable everywhere.
+    """
+    for _name in list(sys.modules):
+        if not _name.startswith("langgraph_engine.") or sys.modules[_name] is None:
+            continue
+        _parent_name, _, _child = _name.rpartition(".")
+        _parent = sys.modules.get(_parent_name)
+        if _parent is not None and not hasattr(_parent, _child):
+            try:
+                setattr(_parent, _child, sys.modules[_name])
+            except (AttributeError, TypeError):
+                pass
+
+
 @pytest.fixture
 def mock_services():
     """Mock all service classes with flexible MagicMock"""
