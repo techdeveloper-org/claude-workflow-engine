@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Computer Use Agent for Claude Insight E2E Testing
+Computer Use Agent for Claude Workflow Engine E2E Testing
 
 Uses Anthropic's Computer Use feature to:
 - Take real screenshots via mss
 - Control browser via pyautogui
-- Test Claude Insight dashboard end-to-end
+- Test Claude Workflow Engine dashboard end-to-end
 - Generate visual test report with actual screenshots
 
 Requires:
@@ -143,7 +143,7 @@ class ComputerUseAgent:
             return False
 
     def test_dashboard_login(self) -> TestResult:
-        """Test: Login to Claude Insight dashboard"""
+        """Test: Login to Claude Workflow Engine dashboard"""
         test_name = "Dashboard Login"
         screenshots = []
         start_time = datetime.now()
@@ -340,7 +340,7 @@ class ComputerUseAgent:
     def run_test_suite(self) -> Dict:
         """Run complete test suite and generate report"""
         print("=" * 80)
-        print("COMPUTER USE E2E TEST SUITE - Claude Insight")
+        print("COMPUTER USE E2E TEST SUITE - Claude Workflow Engine")
         print("=" * 80)
         print()
 
@@ -374,7 +374,7 @@ class ComputerUseAgent:
 
         report = {
             "timestamp": datetime.now().isoformat(),
-            "test_suite": "Claude Insight Computer Use E2E Tests",
+            "test_suite": "Claude Workflow Engine Computer Use E2E Tests",
             "summary": {
                 "total_tests": len(self.test_results),
                 "passed": passed,
@@ -416,9 +416,9 @@ def main():
     """CLI entry point"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Computer Use Agent for Claude Insight E2E Testing")
+    parser = argparse.ArgumentParser(description="Computer Use Agent for Claude Workflow Engine E2E Testing")
     parser.add_argument("--run-tests", action="store_true", help="Run complete test suite")
-    parser.add_argument("--dashboard-url", default="http://localhost:5000", help="Claude Insight dashboard URL")
+    parser.add_argument("--dashboard-url", default="http://localhost:5000", help="Claude Workflow Engine dashboard URL")
 
     args = parser.parse_args()
 

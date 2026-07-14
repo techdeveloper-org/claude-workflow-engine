@@ -1,4 +1,4 @@
 # REMOVED (v1.15.0)
 
-This document described the Smart Adaptive Hybrid check interval for claude-insight (a
+This document described the Smart Adaptive Hybrid check interval for claude-workflow-engine (a
 separate project). It has no relationship to the claude-workflow-engine pipeline.

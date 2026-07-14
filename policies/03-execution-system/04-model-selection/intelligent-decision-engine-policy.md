@@ -53,7 +53,7 @@ The engine receives ALL collected data (~500 tokens):
 | context_pct | context-monitor.py | 65 |
 | task_count | task-breakdown.py | 3 |
 | plan_required | plan-mode check | false |
-| project_name | Path.cwd().name | "claude-insight" |
+| project_name | Path.cwd().name | "claude-workflow-engine" |
 
 ---
 

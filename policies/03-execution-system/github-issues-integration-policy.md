@@ -685,4 +685,4 @@ Branch: refactor/89
 **Status:** ACTIVE
 **Last Updated:** 2026-02-28
 **Maintainer:** Claude Memory System
-**Feedback:** Create issues in claude-insight repo
+**Feedback:** Create issues in claude-workflow-engine repo

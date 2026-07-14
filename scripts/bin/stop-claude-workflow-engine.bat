@@ -1,5 +1,5 @@
 @echo off
-REM Stop Claude Insight Server
+REM Stop Claude Workflow Engine Server
 
 setlocal
 
@@ -8,12 +8,12 @@ set PID_FILE=%PROJECT_DIR%\data\.server.pid
 
 echo.
 echo ========================================
-echo   Stopping Claude Insight Server
+echo   Stopping Claude Workflow Engine Server
 echo ========================================
 echo.
 
 REM Kill Python process running Flask
-taskkill /F /IM python.exe /FI "WINDOWTITLE eq Claude Insight*" 2>nul
+taskkill /F /IM python.exe /FI "WINDOWTITLE eq Claude Workflow Engine*" 2>nul
 
 REM Alternative: Kill all Python processes (careful!)
 REM taskkill /F /IM python.exe 2>nul

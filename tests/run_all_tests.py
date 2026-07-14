@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test Runner for Claude Insight
+Test Runner for Claude Workflow Engine
 
 Runs all unit tests and generates coverage report.
 
@@ -10,17 +10,17 @@ Usage:
     python tests/run_all_tests.py --verbose
 """
 
-import sys
-import unittest
 import argparse
-from pathlib import Path
+import sys
 import time
+import unittest
+from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
-def discover_and_run_tests(verbosity=2, pattern='test_*.py'):
+def discover_and_run_tests(verbosity=2, pattern="test_*.py"):
     """
     Discover and run all tests in the tests directory.
 
@@ -107,13 +107,8 @@ def run_with_coverage(verbosity=2):
 
     # Start coverage
     cov = coverage.Coverage(
-        source=[str(Path(__file__).parent.parent / 'src')],
-        omit=[
-            '*/tests/*',
-            '*/test_*',
-            '*/__pycache__/*',
-            '*/venv/*'
-        ]
+        source=[str(Path(__file__).parent.parent / "src")],
+        omit=["*/tests/*", "*/test_*", "*/__pycache__/*", "*/venv/*"],
     )
     cov.start()
 
@@ -134,7 +129,7 @@ def run_with_coverage(verbosity=2):
     cov.report()
 
     # Generate HTML report
-    html_dir = Path(__file__).parent / 'htmlcov'
+    html_dir = Path(__file__).parent / "htmlcov"
     cov.html_report(directory=str(html_dir))
 
     print()
@@ -146,29 +141,11 @@ def run_with_coverage(verbosity=2):
 
 def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(
-        description='Run Claude Insight test suite'
-    )
-    parser.add_argument(
-        '--coverage',
-        action='store_true',
-        help='Run with coverage reporting'
-    )
-    parser.add_argument(
-        '--verbose',
-        action='store_true',
-        help='Verbose output'
-    )
-    parser.add_argument(
-        '--quiet',
-        action='store_true',
-        help='Minimal output'
-    )
-    parser.add_argument(
-        '--pattern',
-        default='test_*.py',
-        help='Test file pattern (default: test_*.py)'
-    )
+    parser = argparse.ArgumentParser(description="Run Claude Workflow Engine test suite")
+    parser.add_argument("--coverage", action="store_true", help="Run with coverage reporting")
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("--quiet", action="store_true", help="Minimal output")
+    parser.add_argument("--pattern", default="test_*.py", help="Test file pattern (default: test_*.py)")
 
     args = parser.parse_args()
 
@@ -189,5 +166,5 @@ def main():
     sys.exit(0 if success else 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -428,7 +428,7 @@ class TestUtilities:
 class TestIntegration:
 
     def test_analyze_and_generate_this_project(self):
-        """Run analysis on the claude-insight project itself."""
+        """Run analysis on the claude-workflow-engine project itself."""
         project_root = Path(__file__).resolve().parent.parent
         analyzer = UMLAstAnalyzer(str(project_root))
 

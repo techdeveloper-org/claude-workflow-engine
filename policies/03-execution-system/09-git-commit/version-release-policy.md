@@ -19,7 +19,7 @@ After ANY code commit is pushed to a repository, Claude MUST perform these steps
 2. Update `VERSION` file at repo root (must match `APP_VERSION`)
 3. Version strategy: patch (0.x.Y) for fixes, minor (0.X.0) for features
 
-**For claude-insight:**
+**For claude-workflow-engine:**
 1. Update `VERSION` file at repo root
 2. Ensure `README.md` header, badge, and footer version match
 3. Ensure `CLAUDE.md` version header matches
@@ -84,7 +84,7 @@ All version references within a single repo MUST match:
 | Repo | Version Sources (MUST all match) |
 |------|----------------------------------|
 | **claude-code-ide** | `VERSION`, `App.APP_VERSION`, GitHub Release tag |
-| **claude-insight** | `VERSION`, `README.md` (header + badge + footer), `CLAUDE.md` |
+| **claude-workflow-engine** | `VERSION`, `README.md` (header + badge + footer), `CLAUDE.md` |
 | **claude-global-library** | `VERSION`, `README.md` badge |
 
 If any mismatch is detected, fix it immediately before proceeding.

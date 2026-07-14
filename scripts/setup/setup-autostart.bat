@@ -1,14 +1,14 @@
 @echo off
-REM Setup Claude Insight to Auto-Start on Windows Boot
+REM Setup Claude Workflow Engine to Auto-Start on Windows Boot
 
 setlocal
 
-set TASK_NAME=ClaudeInsightServer
-set SCRIPT_PATH=%~dp0start-claude-insight.bat
+set TASK_NAME=ClaudeWorkflowEngineServer
+set SCRIPT_PATH=%~dp0start-claude-workflow-engine.bat
 
 echo.
 echo ========================================
-echo   Setup Auto-Start for Claude Insight
+echo   Setup Auto-Start for Claude Workflow Engine
 echo ========================================
 echo.
 
@@ -37,7 +37,7 @@ if %ERRORLEVEL% EQU 0 (
     echo.
     echo [OK] Auto-start configured successfully!
     echo.
-    echo Claude Insight will now start automatically when you log in to Windows.
+    echo Claude Workflow Engine will now start automatically when you log in to Windows.
     echo.
     echo To disable auto-start, run: scripts\remove-autostart.bat
 ) else (

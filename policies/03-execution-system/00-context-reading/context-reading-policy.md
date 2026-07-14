@@ -105,14 +105,14 @@ Done!
   "version": "1.0.0",
   "context_read_at": "2026-03-06T10:00:00.123456",
   "project_detected": true,
-  "project_name": "claude-insight",
+  "project_name": "claude-workflow-engine",
   "version": "4.4.4",
   "files_found": {
     "readme": {
       "exists": true,
       "size_bytes": 15234,
       "excerpt_lines": 500,
-      "excerpt": "# Claude Insight v4.4.4\n..."
+      "excerpt": "# Claude Workflow Engine v4.4.4\n..."
     },
     "changelog": {
       "exists": true,
@@ -139,7 +139,7 @@ Done!
     "is_new_project": false
   },
   "passed_to_prompt_generation": {
-    "project_name": "claude-insight",
+    "project_name": "claude-workflow-engine",
     "project_overview": "Real-time monitoring dashboard...",
     "current_version": "4.4.4",
     "recent_context": "Latest changes include..."
@@ -273,4 +273,3 @@ Result: Context successfully read from project root
 | Version | Date       | Changes |
 |---------|-----------|---------|
 | 1.0.0   | 2026-03-06 | Initial release. Context reading pre-flight policy. |
-

@@ -43,7 +43,7 @@ if [ $? -eq 0 ] && [ -n "$1" ]; then
     PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
     if [ -z "$PREV_TAG" ]; then
-        NOTES="Initial release of Claude Insight v${NEW_VERSION}"
+        NOTES="Initial release of Claude Workflow Engine v${NEW_VERSION}"
     else
         # Extract from CHANGELOG.md
         CHANGELOG_ENTRY=$(awk "/## \[${NEW_VERSION}\]/,/^---$/" "$PROJECT_ROOT/CHANGELOG.md" | sed '1d;$d')
@@ -54,11 +54,11 @@ if [ $? -eq 0 ] && [ -n "$1" ]; then
         fi
 
         NOTES=$(cat <<EOF
-Claude Insight v${NEW_VERSION}
+Claude Workflow Engine v${NEW_VERSION}
 
 ${CHANGELOG_ENTRY}
 
-**Full Changelog**: https://github.com/piyushmakhija28/claude-insight/compare/${PREV_TAG}...v${NEW_VERSION}
+**Full Changelog**: https://github.com/piyushmakhija28/claude-workflow-engine/compare/${PREV_TAG}...v${NEW_VERSION}
 EOF
 )
     fi
@@ -70,5 +70,5 @@ EOF
 
     echo ""
     echo "[OK] Release created successfully!"
-    echo "View: https://github.com/piyushmakhija28/claude-insight/releases/tag/v${NEW_VERSION}"
+    echo "View: https://github.com/piyushmakhija28/claude-workflow-engine/releases/tag/v${NEW_VERSION}"
 fi

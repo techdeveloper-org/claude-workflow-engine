@@ -2,7 +2,7 @@
 Claude/Anthropic API Integration Service.
 
 Provides credential management, API connectivity testing, and automatic
-session tracking for the Claude Insight dashboard. Credentials are
+session tracking for the Claude Workflow Engine dashboard. Credentials are
 encrypted at rest using Fernet symmetric encryption.
 
 Classes:
@@ -442,7 +442,7 @@ class AnthropicLoginHelper:
                 {
                     "step": 3,
                     "title": "Create New API Key",
-                    "description": 'Click "Create Key" button and give it a name (e.g., "Claude Insight")',
+                    "description": 'Click "Create Key" button and give it a name (e.g., "Claude Workflow Engine")',
                     "url": self.api_keys_url,
                 },
                 {
@@ -453,8 +453,8 @@ class AnthropicLoginHelper:
                 },
                 {
                     "step": 5,
-                    "title": "Add to Claude Insight",
-                    "description": 'Paste the API key in Claude Insight settings and click "Save"',
+                    "title": "Add to Claude Workflow Engine",
+                    "description": 'Paste the API key in Claude Workflow Engine settings and click "Save"',
                     "important": True,
                 },
             ],
@@ -462,7 +462,7 @@ class AnthropicLoginHelper:
                 "[WARN] Never share your API key with anyone",
                 "[lock] API key is stored encrypted on your machine",
                 "[OK] You can revoke the key anytime from Anthropic Console",
-                "[hint] One API key is enough for all Claude Insight features",
+                "[hint] One API key is enough for all Claude Workflow Engine features",
             ],
         }
 

@@ -23,11 +23,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from utils.path_resolver import get_config_dir
-
-from mcp.server.fastmcp import FastMCP
 from base.decorators import mcp_tool_handler
 from base.persistence import AtomicJsonStore
+
+from mcp.server.fastmcp import FastMCP
+from utils.path_resolver import get_config_dir
 
 mcp = FastMCP("session-mgr", instructions="Session management with direct file I/O")
 
@@ -41,17 +41,42 @@ LOGS_PATH = MEMORY_PATH / "logs" / "sessions"
 
 # Chain index store (module-level singleton)
 _chain_store = AtomicJsonStore(
-    CHAIN_INDEX_FILE,
-    default_factory=lambda: {"version": "1.0.0", "sessions": {}, "tag_index": {}}
+    CHAIN_INDEX_FILE, default_factory=lambda: {"version": "1.0.0", "sessions": {}, "tag_index": {}}
 )
 
 # Tech keywords for auto-tag extraction
 _TECH_KEYWORDS = [
-    "spring-boot", "docker", "kubernetes", "jenkins", "angular", "react",
-    "mongodb", "postgresql", "redis", "elasticsearch", "eureka",
-    "config-server", "gateway", "auth", "blog", "scheduler", "sitemap",
-    "python", "java", "kotlin", "swift", "css", "seo", "mcp", "langgraph",
-    "flask", "fastapi", "django", "terraform", "github-actions", "kafka",
+    "spring-boot",
+    "docker",
+    "kubernetes",
+    "jenkins",
+    "angular",
+    "react",
+    "mongodb",
+    "postgresql",
+    "redis",
+    "elasticsearch",
+    "eureka",
+    "config-server",
+    "gateway",
+    "auth",
+    "blog",
+    "scheduler",
+    "sitemap",
+    "python",
+    "java",
+    "kotlin",
+    "swift",
+    "css",
+    "seo",
+    "mcp",
+    "langgraph",
+    "flask",
+    "fastapi",
+    "django",
+    "terraform",
+    "github-actions",
+    "kafka",
 ]
 
 
@@ -105,8 +130,7 @@ def safe_load_session(session_file):
     }
 
 
-def _extract_tags(prompt: str, task_type: str = "", skill: str = "",
-                  project_cwd: str = "") -> list:
+def _extract_tags(prompt: str, task_type: str = "", skill: str = "", project_cwd: str = "") -> list:
     """Auto-extract tags from prompt and metadata."""
     tags = set()
     if task_type:
@@ -126,12 +150,7 @@ def _extract_tags(prompt: str, task_type: str = "", skill: str = "",
 
 @mcp.tool()
 @mcp_tool_handler
-def session_save(
-    session_id: str,
-    data_type: str,
-    content: str,
-    project: str = "default"
-) -> dict:
+def session_save(session_id: str, data_type: str, content: str, project: str = "default") -> dict:
     """Save session data to disk atomically.
 
     Args:
@@ -179,17 +198,13 @@ def session_save(
         "file": str(file_path),
         "data_type": data_type,
         "session_id": session_id,
-        "size_bytes": file_path.stat().st_size
+        "size_bytes": file_path.stat().st_size,
     }
 
 
 @mcp.tool()
 @mcp_tool_handler
-def session_load(
-    session_id: str = "",
-    data_type: str = "state",
-    project: str = "default"
-) -> dict:
+def session_load(session_id: str = "", data_type: str = "state", project: str = "default") -> dict:
     """Load session data from disk.
 
     Args:
@@ -200,11 +215,7 @@ def session_load(
     if data_type == "state":
         file_path = STATE_PATH / f"{project}.json"
         if not file_path.exists():
-            return {
-                "success": True,
-                "data": {},
-                "message": "No state file found"
-            }
+            return {"success": True, "data": {}, "message": "No state file found"}
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return {"success": True, "data": data, "file": str(file_path)}
@@ -264,13 +275,15 @@ def session_list(project: str = "", limit: int = 20) -> dict:
         proj_name = proj_dir.name
         for session_file in sorted(proj_dir.glob("session-*.md"), reverse=True):
             stat = session_file.stat()
-            sessions.append({
-                "project": proj_name,
-                "session_id": session_file.stem.replace("session-", ""),
-                "file": str(session_file),
-                "size_bytes": stat.st_size,
-                "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
-            })
+            sessions.append(
+                {
+                    "project": proj_name,
+                    "session_id": session_file.stem.replace("session-", ""),
+                    "file": str(session_file),
+                    "size_bytes": stat.st_size,
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                }
+            )
             if len(sessions) >= limit:
                 break
 
@@ -278,11 +291,7 @@ def session_list(project: str = "", limit: int = 20) -> dict:
     sessions.sort(key=lambda s: s["modified"], reverse=True)
     sessions = sessions[:limit]
 
-    return {
-        "success": True,
-        "sessions": sessions,
-        "count": len(sessions)
-    }
+    return {"success": True, "sessions": sessions, "count": len(sessions)}
 
 
 @mcp.tool()
@@ -313,18 +322,15 @@ def session_archive(days_old: int = 30) -> dict:
                 dest_dir.mkdir(parents=True, exist_ok=True)
                 dest = dest_dir / session_file.name
                 shutil.move(str(session_file), str(dest))
-                archived.append({
-                    "file": session_file.name,
-                    "project": proj_dir.name,
-                    "age_days": (datetime.now() - file_mtime).days
-                })
+                archived.append(
+                    {
+                        "file": session_file.name,
+                        "project": proj_dir.name,
+                        "age_days": (datetime.now() - file_mtime).days,
+                    }
+                )
 
-    return {
-        "success": True,
-        "archived": archived,
-        "count": len(archived),
-        "archive_dir": str(archive_dir)
-    }
+    return {"success": True, "archived": archived, "count": len(archived), "archive_dir": str(archive_dir)}
 
 
 @mcp.tool()
@@ -335,7 +341,7 @@ def session_query(filters: str = "{}") -> dict:
     Args:
         filters: JSON string with filter criteria.
             Supported keys: project, date_from, date_to, keyword
-            Example: '{"project": "claude-insight", "keyword": "MCP"}'
+            Example: '{"project": "claude-workflow-engine", "keyword": "MCP"}'
     """
     try:
         filter_dict = json.loads(filters)
@@ -382,33 +388,26 @@ def session_query(filters: str = "{}") -> dict:
                 if keyword not in content:
                     continue
 
-            results.append({
-                "project": proj_dir.name,
-                "session_id": session_file.stem.replace("session-", ""),
-                "file": str(session_file),
-                "modified": file_date.isoformat(),
-                "size_bytes": stat.st_size
-            })
+            results.append(
+                {
+                    "project": proj_dir.name,
+                    "session_id": session_file.stem.replace("session-", ""),
+                    "file": str(session_file),
+                    "modified": file_date.isoformat(),
+                    "size_bytes": stat.st_size,
+                }
+            )
 
             if len(results) >= 50:
                 break
 
-    return {
-        "success": True,
-        "results": results,
-        "count": len(results),
-        "filters": filter_dict
-    }
+    return {"success": True, "results": results, "count": len(results), "filters": filter_dict}
 
 
 @mcp.tool()
 @mcp_tool_handler
 def session_create(
-    project: str = "default",
-    task_type: str = "",
-    skill: str = "",
-    prompt: str = "",
-    project_cwd: str = ""
+    project: str = "default", task_type: str = "", skill: str = "", prompt: str = "", project_cwd: str = ""
 ) -> dict:
     """Create a new session with unique ID and register it in the chain index.
 
@@ -440,7 +439,7 @@ def session_create(
         "task_type": task_type,
         "summary": "",
         "created_at": now.isoformat(),
-        "last_prompt": prompt[:200] if prompt else ""
+        "last_prompt": prompt[:200] if prompt else "",
     }
 
     # Update tag index
@@ -454,29 +453,19 @@ def session_create(
 
     # Update current session pointer
     CURRENT_SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CURRENT_SESSION_FILE.write_text(json.dumps({
-        "current_session_id": session_id,
-        "project": project,
-        "created_at": now.isoformat()
-    }, indent=2), encoding="utf-8")
+    CURRENT_SESSION_FILE.write_text(
+        json.dumps({"current_session_id": session_id, "project": project, "created_at": now.isoformat()}, indent=2),
+        encoding="utf-8",
+    )
 
     _ensure_dirs(project)
 
-    return {
-        "success": True,
-        "session_id": session_id,
-        "project": project,
-        "tags": tags,
-        "created_at": now.isoformat()
-    }
+    return {"success": True, "session_id": session_id, "project": project, "tags": tags, "created_at": now.isoformat()}
 
 
 @mcp.tool()
 @mcp_tool_handler
-def session_link(
-    child_id: str,
-    parent_id: str
-) -> dict:
+def session_link(child_id: str, parent_id: str) -> dict:
     """Link a child session to its parent (for /clear continuity).
 
     Args:
@@ -487,17 +476,30 @@ def session_link(
 
     if parent_id not in index["sessions"]:
         index["sessions"][parent_id] = {
-            "parent": None, "children": [], "related": [],
-            "tags": [], "project": "", "skill": "", "task_type": "",
-            "summary": "", "created_at": "", "last_prompt": ""
+            "parent": None,
+            "children": [],
+            "related": [],
+            "tags": [],
+            "project": "",
+            "skill": "",
+            "task_type": "",
+            "summary": "",
+            "created_at": "",
+            "last_prompt": "",
         }
 
     if child_id not in index["sessions"]:
         index["sessions"][child_id] = {
-            "parent": parent_id, "children": [], "related": [],
-            "tags": [], "project": "", "skill": "", "task_type": "",
-            "summary": "", "created_at": datetime.now().isoformat(),
-            "last_prompt": ""
+            "parent": parent_id,
+            "children": [],
+            "related": [],
+            "tags": [],
+            "project": "",
+            "skill": "",
+            "task_type": "",
+            "summary": "",
+            "created_at": datetime.now().isoformat(),
+            "last_prompt": "",
         }
     else:
         index["sessions"][child_id]["parent"] = parent_id
@@ -507,21 +509,12 @@ def session_link(
 
     _chain_store.save(index)
 
-    return {
-        "success": True,
-        "child": child_id,
-        "parent": parent_id,
-        "message": f"Linked {child_id} -> {parent_id}"
-    }
+    return {"success": True, "child": child_id, "parent": parent_id, "message": f"Linked {child_id} -> {parent_id}"}
 
 
 @mcp.tool()
 @mcp_tool_handler
-def session_tag(
-    session_id: str,
-    tags: str,
-    summary: str = ""
-) -> dict:
+def session_tag(session_id: str, tags: str, summary: str = "") -> dict:
     """Add tags and optional summary to a session. Auto-relates by shared tags.
 
     Args:
@@ -534,10 +527,16 @@ def session_tag(
 
     if session_id not in index["sessions"]:
         index["sessions"][session_id] = {
-            "parent": None, "children": [], "related": [],
-            "tags": [], "project": "", "skill": "", "task_type": "",
-            "summary": "", "created_at": datetime.now().isoformat(),
-            "last_prompt": ""
+            "parent": None,
+            "children": [],
+            "related": [],
+            "tags": [],
+            "project": "",
+            "skill": "",
+            "task_type": "",
+            "summary": "",
+            "created_at": datetime.now().isoformat(),
+            "last_prompt": "",
         }
 
     session = index["sessions"][session_id]
@@ -571,21 +570,12 @@ def session_tag(
 
     _chain_store.save(index)
 
-    return {
-        "success": True,
-        "session_id": session_id,
-        "tags": session["tags"],
-        "auto_related": related_found
-    }
+    return {"success": True, "session_id": session_id, "tags": session["tags"], "auto_related": related_found}
 
 
 @mcp.tool()
 @mcp_tool_handler
-def session_get_context(
-    session_id: str,
-    max_ancestors: int = 5,
-    max_related: int = 5
-) -> dict:
+def session_get_context(session_id: str, max_ancestors: int = 5, max_related: int = 5) -> dict:
     """Get chain context for a session (ancestors + related sessions).
 
     Walks the parent chain and finds related sessions for context continuity.
@@ -603,7 +593,7 @@ def session_get_context(
             "session_id": session_id,
             "ancestors": [],
             "related": [],
-            "message": "Session not found in chain index"
+            "message": "Session not found in chain index",
         }
 
     session = index["sessions"][session_id]
@@ -616,14 +606,16 @@ def session_get_context(
         visited.add(current)
         if current in index["sessions"]:
             parent = index["sessions"][current]
-            ancestors.append({
-                "session_id": current,
-                "summary": parent.get("summary", ""),
-                "tags": parent.get("tags", []),
-                "task_type": parent.get("task_type", ""),
-                "skill": parent.get("skill", ""),
-                "created_at": parent.get("created_at", "")
-            })
+            ancestors.append(
+                {
+                    "session_id": current,
+                    "summary": parent.get("summary", ""),
+                    "tags": parent.get("tags", []),
+                    "task_type": parent.get("task_type", ""),
+                    "skill": parent.get("skill", ""),
+                    "created_at": parent.get("created_at", ""),
+                }
+            )
             current = parent.get("parent")
         else:
             break
@@ -634,13 +626,15 @@ def session_get_context(
         if rel_id in index["sessions"]:
             rel = index["sessions"][rel_id]
             shared_tags = set(session.get("tags", [])) & set(rel.get("tags", []))
-            related.append({
-                "session_id": rel_id,
-                "summary": rel.get("summary", ""),
-                "tags": rel.get("tags", []),
-                "shared_tags": sorted(shared_tags),
-                "created_at": rel.get("created_at", "")
-            })
+            related.append(
+                {
+                    "session_id": rel_id,
+                    "summary": rel.get("summary", ""),
+                    "tags": rel.get("tags", []),
+                    "shared_tags": sorted(shared_tags),
+                    "created_at": rel.get("created_at", ""),
+                }
+            )
 
     return {
         "success": True,
@@ -649,20 +643,17 @@ def session_get_context(
             "tags": session.get("tags", []),
             "task_type": session.get("task_type", ""),
             "skill": session.get("skill", ""),
-            "project": session.get("project", "")
+            "project": session.get("project", ""),
         },
         "ancestors": ancestors,
         "related": related,
-        "chain_depth": len(ancestors)
+        "chain_depth": len(ancestors),
     }
 
 
 @mcp.tool()
 @mcp_tool_handler
-def session_search_tags(
-    tags: str,
-    limit: int = 20
-) -> dict:
+def session_search_tags(tags: str, limit: int = 20) -> dict:
     """Search sessions by tags. Returns sessions matching ANY of the given tags.
 
     Args:
@@ -684,15 +675,9 @@ def session_search_tags(
                 matching[sid]["project"] = index["sessions"][sid].get("project", "")
 
     # Sort by number of matched tags (most relevant first)
-    results = sorted(matching.values(),
-                    key=lambda x: len(x["matched_tags"]), reverse=True)[:limit]
+    results = sorted(matching.values(), key=lambda x: len(x["matched_tags"]), reverse=True)[:limit]
 
-    return {
-        "success": True,
-        "results": results,
-        "count": len(results),
-        "searched_tags": tag_list
-    }
+    return {"success": True, "results": results, "count": len(results), "searched_tags": tag_list}
 
 
 @mcp.tool()
@@ -709,7 +694,7 @@ def session_accumulate(
     context_pct: int = 0,
     supplementary_skills: str = "",
     standards_count: int = 0,
-    rules_count: int = 0
+    rules_count: int = 0,
 ) -> dict:
     """Accumulate per-request data for session summary generation.
 
@@ -750,7 +735,7 @@ def session_accumulate(
             "peak_context_pct": 0,
             "total_complexity": 0,
             "max_complexity": 0,
-            "status": "IN_PROGRESS"
+            "status": "IN_PROGRESS",
         }
 
     # Add request entry
@@ -765,7 +750,9 @@ def session_accumulate(
         "cwd": cwd,
         "plan_mode": plan_mode,
         "context_pct": context_pct,
-        "supplementary_skills": [s.strip() for s in supplementary_skills.split(",") if s.strip()] if supplementary_skills else [],
+        "supplementary_skills": (
+            [s.strip() for s in supplementary_skills.split(",") if s.strip()] if supplementary_skills else []
+        ),
         "decision_rationale": f"Complexity {complexity} -> Model {model}, Skill {skill}",
     }
 
@@ -809,7 +796,7 @@ def session_accumulate(
         "session_id": session_id,
         "request_number": data["request_count"],
         "skills_used": data["skills_used"],
-        "peak_context": data["peak_context_pct"]
+        "peak_context": data["peak_context_pct"],
     }
 
 
@@ -832,10 +819,7 @@ def session_finalize(session_id: str) -> dict:
     store = AtomicJsonStore(LOGS_PATH / session_id / "session-summary.json")
     data = store.load()
     if not data:
-        return {
-            "success": False,
-            "error": f"No accumulated data for {session_id}"
-        }
+        return {"success": False, "error": f"No accumulated data for {session_id}"}
 
     # Load flow-trace for pipeline decisions
     flow_trace_file = LOGS_PATH / session_id / "flow-trace.json"
@@ -994,8 +978,7 @@ def session_finalize(session_id: str) -> dict:
     index = _chain_store.load()
     if session_id in index.get("sessions", {}):
         index["sessions"][session_id]["summary"] = (
-            f"{req_count} requests, {', '.join(data.get('skills_used', [])[:3])}, "
-            f"complexity avg {avg_complexity}"
+            f"{req_count} requests, {', '.join(data.get('skills_used', [])[:3])}, " f"complexity avg {avg_complexity}"
         )
         _chain_store.save(index)
 
@@ -1007,18 +990,13 @@ def session_finalize(session_id: str) -> dict:
         "requests": req_count,
         "tools": tool_count,
         "files_modified": len(files_modified),
-        "policies": policy_count
+        "policies": policy_count,
     }
 
 
 @mcp.tool()
 @mcp_tool_handler
-def session_add_work_item(
-    session_id: str,
-    description: str,
-    work_type: str = "TASK",
-    metadata: str = "{}"
-) -> dict:
+def session_add_work_item(session_id: str, description: str, work_type: str = "TASK", metadata: str = "{}") -> dict:
     """Add a work item to a session for tracking tasks within sessions.
 
     Args:
@@ -1051,7 +1029,7 @@ def session_add_work_item(
         "started_at": datetime.now().isoformat(),
         "completed_at": None,
         "status": "IN_PROGRESS",
-        "metadata": meta
+        "metadata": meta,
     }
 
     session.setdefault("work_items", []).append(work_item)
@@ -1062,17 +1040,13 @@ def session_add_work_item(
         "work_id": work_id,
         "session_id": session_id,
         "description": description,
-        "status": "IN_PROGRESS"
+        "status": "IN_PROGRESS",
     }
 
 
 @mcp.tool()
 @mcp_tool_handler
-def session_complete_work_item(
-    session_id: str,
-    work_id: str,
-    status: str = "COMPLETED"
-) -> dict:
+def session_complete_work_item(session_id: str, work_id: str, status: str = "COMPLETED") -> dict:
     """Mark a work item as completed.
 
     Args:
@@ -1106,7 +1080,7 @@ def session_complete_work_item(
         "work_id": work_id,
         "session_id": session_id,
         "status": status,
-        "completed_at": datetime.now().isoformat()
+        "completed_at": datetime.now().isoformat(),
     }
 
 

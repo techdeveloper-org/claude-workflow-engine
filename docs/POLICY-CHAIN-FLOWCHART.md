@@ -2,13 +2,13 @@
 
 **Version:** 5.0.0
 **Last Updated:** 2026-03-05
-**Purpose:** Comprehensive visualization of the entire Claude Insight 3-level policy enforcement pipeline
+**Purpose:** Comprehensive visualization of the entire Claude Workflow Engine 3-level policy enforcement pipeline
 
 ---
 
 ## Overview
 
-This document shows the complete flow of policy execution across all 4 hooks and 3 levels of the Claude Insight system. Every subprocess call, flag read/write, and data flow is visualized using Mermaid flowcharts.
+This document shows the complete flow of policy execution across all 4 hooks and 3 levels of the Claude Workflow Engine system. Every subprocess call, flag read/write, and data flow is visualized using Mermaid flowcharts.
 
 **The 4 Hooks (Execution Order):**
 1. `UserPromptSubmit` → clear-session-handler.py + 3-level-flow.py (Level -1/1/2/3)
@@ -616,7 +616,7 @@ Hook 2 (3-Level Flow)
 
 ## Summary: Complete Policy Chain
 
-The Claude Insight policy chain is a **synchronized 5-hook pipeline** that enforces a **3-level architecture** across every user interaction:
+The Claude Workflow Engine policy chain is a **synchronized 5-hook pipeline** that enforces a **3-level architecture** across every user interaction:
 
 1. **Clear Session Hook** - Initialize session, create flags, reset enforcement
 2. **3-Level Flow Hook** - Run Levels -1/1/2/3, write checkpoint, verify all policies
@@ -636,5 +636,5 @@ The Claude Insight policy chain is a **synchronized 5-hook pipeline** that enfor
 
 **Document Version:** 5.0.0
 **Last Updated:** 2026-03-05
-**Created by:** Claude Insight System Architecture
+**Created by:** Claude Workflow Engine System Architecture
 **All Mermaid diagrams are interactive** - click to expand

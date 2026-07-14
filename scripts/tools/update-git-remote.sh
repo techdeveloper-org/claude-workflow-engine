@@ -6,7 +6,7 @@ echo "Current repository: claude-monitoring-system"
 echo ""
 echo "GitHub पर repository rename करने के बाद ये script run करो:"
 echo ""
-read -p "Enter new repository name (e.g., claude-insight): " NEW_REPO_NAME
+read -p "Enter new repository name (e.g., claude-workflow-engine): " NEW_REPO_NAME
 
 if [ -z "$NEW_REPO_NAME" ]; then
     echo "Error: Repository name cannot be empty!"

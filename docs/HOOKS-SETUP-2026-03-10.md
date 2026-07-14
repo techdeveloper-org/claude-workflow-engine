@@ -1,4 +1,4 @@
-# Claude Insight - Hooks Setup Complete (2026-03-10)
+# Claude Workflow Engine - Hooks Setup Complete (2026-03-10)
 
 ## ✅ Status: PRODUCTION READY
 
