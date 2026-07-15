@@ -38,7 +38,7 @@ Current Size: 2.1 MB
 Files: 411
 
 Large Files:
-- claude-insight/project-summary.md: 170 KB
+- claude-workflow-engine/project-summary.md: 170 KB
 - techdeveloper-ui/project-summary.md: 31 KB
 - chain-index.json: 85 KB
 ```
@@ -123,7 +123,7 @@ These files keep growing as sessions accumulate data:
 - Each project has ONE project-summary.md
 - Gets appended to with each session
 - No rotation or compression
-- 170 KB for claude-insight alone!
+- 170 KB for claude-workflow-engine alone!
 
 ---
 

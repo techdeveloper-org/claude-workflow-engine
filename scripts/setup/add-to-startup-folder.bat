@@ -1,15 +1,15 @@
 @echo off
-REM Add Claude Insight to Windows Startup Folder (No Admin Required)
+REM Add Claude Workflow Engine to Windows Startup Folder (No Admin Required)
 
 setlocal
 
 set STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
-set SHORTCUT_NAME=Claude Insight Server.lnk
-set TARGET_SCRIPT=%~dp0start-claude-insight.bat
+set SHORTCUT_NAME=Claude Workflow Engine Server.lnk
+set TARGET_SCRIPT=%~dp0start-claude-workflow-engine.bat
 
 echo.
 echo ========================================
-echo   Add Claude Insight to Startup Folder
+echo   Add Claude Workflow Engine to Startup Folder
 echo ========================================
 echo.
 echo Startup Folder: %STARTUP_FOLDER%
@@ -23,14 +23,14 @@ $Shortcut = $WshShell.CreateShortcut('%STARTUP_FOLDER%\%SHORTCUT_NAME%'); ^
 $Shortcut.TargetPath = '%TARGET_SCRIPT%'; ^
 $Shortcut.WorkingDirectory = '%~dp0..'; ^
 $Shortcut.WindowStyle = 7; ^
-$Shortcut.Description = 'Start Claude Insight Server on Login'; ^
+$Shortcut.Description = 'Start Claude Workflow Engine Server on Login'; ^
 $Shortcut.Save()"
 
 if %ERRORLEVEL% EQU 0 (
     echo [OK] Shortcut created successfully!
     echo [OK] Location: %STARTUP_FOLDER%\%SHORTCUT_NAME%
     echo.
-    echo Claude Insight will start automatically on next login!
+    echo Claude Workflow Engine will start automatically on next login!
 ) else (
     echo [ERROR] Failed to create shortcut
 )

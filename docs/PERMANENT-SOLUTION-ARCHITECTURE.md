@@ -51,7 +51,7 @@ Proposed (Good):
 ├─ session/*.json (2 MB on disk)
 │  ├─ File: NEVER load entire file
 │  └─ Index: session-index.json (< 50 KB)
-│     ├─ claude-insight: {summary, counts, offsets}
+│     ├─ claude-workflow-engine: {summary, counts, offsets}
 │     └─ techdeveloper-ui: {summary, counts, offsets}
 │
 └─ Query API (in code):
@@ -105,7 +105,7 @@ Instead of loading all session files:
 {
   "version": "1.0",
   "projects": {
-    "claude-insight": {
+    "claude-workflow-engine": {
       "sessions": 45,
       "total_size_kb": 320,
       "last_session": "SESSION-20260309-102721-KFI8",

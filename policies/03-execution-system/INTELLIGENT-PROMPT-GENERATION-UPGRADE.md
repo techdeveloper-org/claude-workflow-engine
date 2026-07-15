@@ -195,7 +195,7 @@ if any(ext in message_lower for ext in [".py", ".java", ".ts"]):
 
 **Input:**
 ```
-"Fix Claude Insight dashboard - admin panel not showing,
+"Fix Claude Workflow Engine dashboard - admin panel not showing,
  UI overlapping in live metrics, no logout button"
 ```
 

@@ -1,5 +1,5 @@
 """
-Import Manager for Claude Insight.
+Import Manager for Claude Workflow Engine.
 
 Provides a unified interface for loading resources from both the local project
 and the remote GitHub repositories. Handles UTF-8 encoding setup for Windows
@@ -8,12 +8,12 @@ consoles before performing any network requests.
 Resources are sourced from:
 1. Local project modules - via Python's import system
 2. claude-global-library - GitHub raw URLs (skills and agents)
-3. claude-insight - GitHub raw URLs (architecture policies)
+3. claude-workflow-engine - GitHub raw URLs (architecture policies)
 
 Module-level constants:
     GITHUB_BASE (str): Base GitHub raw-content URL prefix.
     GLOBAL_LIB_URL (str): Raw URL prefix for claude-global-library main branch.
-    INSIGHT_URL (str): Raw URL prefix for claude-insight main branch.
+    PROJECT_URL (str): Raw URL prefix for claude-workflow-engine main branch.
     PROJECT_ROOT (Path): Absolute path to the project root directory.
     SKILL_URLS (dict): Quick-reference URL map for common skills.
     AGENT_URLS (dict): Quick-reference URL map for common agents.
@@ -25,29 +25,32 @@ Classes:
 
 # Fix encoding for Windows console
 import sys
-if sys.stdout.encoding != 'utf-8':
+
+if sys.stdout.encoding != "utf-8":
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stdout.reconfigure(encoding="utf-8")
     except AttributeError:
         import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-if sys.stderr.encoding != 'utf-8':
+
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+if sys.stderr.encoding != "utf-8":
     try:
-        sys.stderr.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding="utf-8")
     except AttributeError:
         import io
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 import os
 import urllib.request
 from pathlib import Path
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
 
 # GitHub base URLs (configurable via env vars for portability)
-_GITHUB_OWNER = os.environ.get("CLAUDE_GITHUB_OWNER", "piyushmakhija28")
+_GITHUB_OWNER = os.environ.get("CLAUDE_GITHUB_OWNER", "techdeveloper-org")
 GITHUB_BASE = f"https://raw.githubusercontent.com/{_GITHUB_OWNER}"
 GLOBAL_LIB_URL = os.environ.get("CLAUDE_GLOBAL_LIB_URL", f"{GITHUB_BASE}/claude-global-library/main")
-INSIGHT_URL = os.environ.get("CLAUDE_PROJECT_URL", f"{GITHUB_BASE}/claude-workflow-engine/main")
+PROJECT_URL = os.environ.get("CLAUDE_PROJECT_URL", f"{GITHUB_BASE}/claude-workflow-engine/main")
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -62,7 +65,7 @@ class ImportManager:
     GitHub base URLs used:
         Skills:  https://raw.../claude-global-library/main/skills/{name}/skill.md
         Agents:  https://raw.../claude-global-library/main/agents/{name}/agent.md
-        Policies: https://raw.../claude-insight/main/scripts/architecture/{path}
+        Policies: https://raw.../claude-workflow-engine/main/scripts/architecture/{path}
     """
 
     @staticmethod
@@ -88,12 +91,7 @@ class ImportManager:
         url = f"{GLOBAL_LIB_URL}/skills/{skill_name}/skill.md"
         try:
             with urllib.request.urlopen(url) as response:
-                return {
-                    'name': skill_name,
-                    'content': response.read().decode('utf-8'),
-                    'source': 'github',
-                    'url': url
-                }
+                return {"name": skill_name, "content": response.read().decode("utf-8"), "source": "github", "url": url}
         except urllib.error.HTTPError:
             return None
 
@@ -120,21 +118,16 @@ class ImportManager:
         url = f"{GLOBAL_LIB_URL}/agents/{agent_name}/agent.md"
         try:
             with urllib.request.urlopen(url) as response:
-                return {
-                    'name': agent_name,
-                    'content': response.read().decode('utf-8'),
-                    'source': 'github',
-                    'url': url
-                }
+                return {"name": agent_name, "content": response.read().decode("utf-8"), "source": "github", "url": url}
         except urllib.error.HTTPError:
             return None
 
     @staticmethod
     def get_policy(policy_path: str) -> Optional[str]:
-        """Load an architecture policy document from claude-insight on GitHub.
+        """Load an architecture policy document from claude-workflow-engine on GitHub.
 
         Fetches a policy markdown file from the ``scripts/architecture/``
-        directory of the claude-insight repository's main branch.
+        directory of the claude-workflow-engine repository's main branch.
 
         Args:
             policy_path (str): Relative path within scripts/architecture/
@@ -144,10 +137,10 @@ class ImportManager:
             str or None: Raw markdown content of the policy file, or None
                 on HTTP error (file not found).
         """
-        url = f"{INSIGHT_URL}/scripts/architecture/{policy_path}"
+        url = f"{PROJECT_URL}/scripts/architecture/{policy_path}"
         try:
             with urllib.request.urlopen(url) as response:
-                return response.read().decode('utf-8')
+                return response.read().decode("utf-8")
         except urllib.error.HTTPError:
             return None
 
@@ -171,7 +164,7 @@ class ImportManager:
             AttributeError: If any intermediate component of the path is not
                 an attribute of the parent module.
         """
-        parts = module_path.split('.')
+        parts = module_path.split(".")
         module = __import__(module_path)
         for part in parts[1:]:
             module = getattr(module, part)
@@ -190,9 +183,9 @@ class ImportManager:
         url = f"{GLOBAL_LIB_URL}/skills/INDEX.md"
         try:
             with urllib.request.urlopen(url) as response:
-                content = response.read().decode('utf-8')
+                content = response.read().decode("utf-8")
                 # Parse INDEX.md to extract skill list
-                return content.split('\n')
+                return content.split("\n")
         except urllib.error.HTTPError:
             return None
 
@@ -209,50 +202,50 @@ class ImportManager:
         url = f"{GLOBAL_LIB_URL}/agents/README.md"
         try:
             with urllib.request.urlopen(url) as response:
-                content = response.read().decode('utf-8')
+                content = response.read().decode("utf-8")
                 # Parse README.md to extract agent list
-                return content.split('\n')
+                return content.split("\n")
         except urllib.error.HTTPError:
             return None
 
 
 # Quick reference URLs
 SKILL_URLS = {
-    'docker': f"{GLOBAL_LIB_URL}/skills/docker/skill.md",
-    'kubernetes': f"{GLOBAL_LIB_URL}/skills/kubernetes/skill.md",
-    'python-system-scripting': f"{GLOBAL_LIB_URL}/skills/system/python-system-scripting/SKILL.md",
-    'java-spring-boot': f"{GLOBAL_LIB_URL}/skills/backend/java-spring-boot-microservices/SKILL.md",
+    "docker": f"{GLOBAL_LIB_URL}/skills/docker/skill.md",
+    "kubernetes": f"{GLOBAL_LIB_URL}/skills/kubernetes/skill.md",
+    "python-system-scripting": f"{GLOBAL_LIB_URL}/skills/system/python-system-scripting/SKILL.md",
+    "java-spring-boot": f"{GLOBAL_LIB_URL}/skills/backend/java-spring-boot-microservices/SKILL.md",
 }
 
 AGENT_URLS = {
-    'orchestrator': f"{GLOBAL_LIB_URL}/agents/orchestrator-agent/agent.md",
-    'devops': f"{GLOBAL_LIB_URL}/agents/devops-engineer/agent.md",
-    'qa-testing': f"{GLOBAL_LIB_URL}/agents/qa-testing-agent/agent.md",
-    'spring-boot-microservices': f"{GLOBAL_LIB_URL}/agents/spring-boot-microservices/agent.md",
+    "orchestrator": f"{GLOBAL_LIB_URL}/agents/orchestrator-agent/agent.md",
+    "devops": f"{GLOBAL_LIB_URL}/agents/devops-engineer/agent.md",
+    "qa-testing": f"{GLOBAL_LIB_URL}/agents/qa-testing-agent/agent.md",
+    "spring-boot-microservices": f"{GLOBAL_LIB_URL}/agents/spring-boot-microservices/agent.md",
 }
 
 POLICY_URLS = {
-    'sync-system': f"{INSIGHT_URL}/scripts/architecture/01-sync-system/README.md",
-    'standards-system': f"{INSIGHT_URL}/scripts/architecture/02-standards-system/README.md",
-    'execution-system': f"{INSIGHT_URL}/scripts/architecture/03-execution-system/README.md",
+    "sync-system": f"{PROJECT_URL}/scripts/architecture/01-sync-system/README.md",
+    "standards-system": f"{PROJECT_URL}/scripts/architecture/02-standards-system/README.md",
+    "execution-system": f"{PROJECT_URL}/scripts/architecture/03-execution-system/README.md",
 }
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Test
     print("Testing ImportManager...")
 
     # Test skill
-    docker_skill = ImportManager.get_skill('docker')
+    docker_skill = ImportManager.get_skill("docker")
     if docker_skill:
-        print("[OK] Loaded skill: {} ({} bytes)".format(docker_skill['name'], len(docker_skill['content'])))
+        print("[OK] Loaded skill: {} ({} bytes)".format(docker_skill["name"], len(docker_skill["content"])))
     else:
         print("[FAIL] Could not load docker skill")
 
     # Test agent
-    orchestrator = ImportManager.get_agent('orchestrator-agent')
+    orchestrator = ImportManager.get_agent("orchestrator-agent")
     if orchestrator:
-        print("[OK] Loaded agent: {} ({} bytes)".format(orchestrator['name'], len(orchestrator['content'])))
+        print("[OK] Loaded agent: {} ({} bytes)".format(orchestrator["name"], len(orchestrator["content"])))
     else:
         print("[FAIL] Could not load orchestrator agent")
 

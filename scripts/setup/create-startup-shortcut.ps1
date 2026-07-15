@@ -1,8 +1,8 @@
-# Create Startup Shortcut for Claude Insight
+# Create Startup Shortcut for Claude Workflow Engine
 
 $StartupFolder = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
-$ShortcutPath = "$StartupFolder\Claude Insight Server.lnk"
-$TargetPath = "$PSScriptRoot\start-claude-insight.bat"
+$ShortcutPath = "$StartupFolder\Claude Workflow Engine Server.lnk"
+$TargetPath = "$PSScriptRoot\start-claude-workflow-engine.bat"
 $WorkingDir = Split-Path $PSScriptRoot
 
 Write-Host ""
@@ -15,10 +15,10 @@ $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
 $Shortcut.TargetPath = $TargetPath
 $Shortcut.WorkingDirectory = $WorkingDir
 $Shortcut.WindowStyle = 7  # Minimized
-$Shortcut.Description = "Start Claude Insight Server on Login"
+$Shortcut.Description = "Start Claude Workflow Engine Server on Login"
 $Shortcut.Save()
 
 Write-Host ""
 Write-Host "[OK] Shortcut created successfully!"
-Write-Host "[OK] Claude Insight will start on next login"
+Write-Host "[OK] Claude Workflow Engine will start on next login"
 Write-Host ""

@@ -198,7 +198,7 @@ All execution system scripts were focused on backend (Java/Spring Boot) and miss
 
 ## 📊 Before vs After Comparison
 
-### **Test Case:** "Fix Claude Insight dashboard - admin panel not showing, UI overlapping in live metrics, no logout button"
+### **Test Case:** "Fix Claude Workflow Engine dashboard - admin panel not showing, UI overlapping in live metrics, no logout button"
 
 | Step | Aspect | Before ❌ | After ✅ |
 |------|--------|----------|----------|
@@ -288,7 +288,7 @@ All execution system scripts were focused on backend (Java/Spring Boot) and miss
 
 ## 🚀 Next Steps
 
-1. **Test with Real Task:** Use updated system to fix Claude Insight dashboard
+1. **Test with Real Task:** Use updated system to fix Claude Workflow Engine dashboard
 2. **Monitor Performance:** Track if ui-ux-designer agent performs well
 3. **Expand Coverage:** Add more frontend frameworks if needed
 4. **Document Patterns:** Update skills/agents with UI/Dashboard patterns

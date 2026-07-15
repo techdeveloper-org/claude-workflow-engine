@@ -182,7 +182,7 @@ Only explicit BLOCK decisions from healthy hooks should prevent tool calls.
 
 ## Source of Truth
 
-Hook scripts live in `claude-insight/scripts/` (the repo).
+Hook scripts live in `claude-workflow-engine/scripts/` (the repo).
 They are downloaded to `~/.claude/scripts/` by `hook-downloader.py`.
 
 **NEVER edit `~/.claude/scripts/` directly.** Always edit in the repo,

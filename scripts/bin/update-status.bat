@@ -27,8 +27,8 @@ if "%STATUS%"=="success" (
     echo   ✓ hook-downloader.py        Updated to ~/.claude/scripts/
     echo   ✓ post-update.sh            Repository-aware syncing (Unix)
     echo   ✓ post-update.ps1           Repository-aware syncing (Windows)
-    echo   ✓ sync-insight              Quick sync convenience script
-    echo   ✓ sync-insight.bat          Quick sync convenience script (Windows)
+    echo   ✓ sync-workflow-engine              Quick sync convenience script
+    echo   ✓ sync-workflow-engine.bat          Quick sync convenience script (Windows)
     echo   ✓ Selective sync functions  New repo-aware syncing
     echo.
     echo Features:

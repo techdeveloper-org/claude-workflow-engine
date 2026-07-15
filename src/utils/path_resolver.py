@@ -1,5 +1,5 @@
 """
-Path Resolver for Claude Insight.
+Path Resolver for Claude Workflow Engine.
 
 Single source of truth for ALL path resolution across the project.
 No file should ever hardcode absolute paths - everything goes through here.
@@ -14,7 +14,7 @@ Path Standard:
     | Scripts       | CLAUDE_SCRIPTS_DIR      | {CLAUDE_HOME}/scripts/      |
     | Policies      | CLAUDE_POLICIES_DIR     | {CLAUDE_HOME}/policies/     |
     | Settings      | CLAUDE_SETTINGS_FILE    | {CLAUDE_HOME}/settings.json |
-    | Data/Memory   | CLAUDE_INSIGHT_DATA_DIR | {CLAUDE_HOME}/memory/       |
+    | Data/Memory   | CLAUDE_WORKFLOW_ENGINE_DATA_DIR | {CLAUDE_HOME}/memory/       |
     | Logs Root     | CLAUDE_LOGS_DIR         | {CLAUDE_HOME}/logs/         |
     | Telemetry     | (auto)                  | {LOGS}/telemetry/           |
     | Level Logs    | (auto)                  | {LOGS}/level/               |
@@ -27,7 +27,7 @@ Path Standard:
     | Agents        | CLAUDE_AGENTS_DIR       | {CLAUDE_HOME}/agents/       |
 
 Priority chain for data directory:
-    0. CLAUDE_INSIGHT_DATA_DIR environment variable (set by IDE launcher)
+    0. CLAUDE_WORKFLOW_ENGINE_DATA_DIR environment variable (set by IDE launcher)
     1. ~/.claude/memory/ (present when Claude Memory System is installed)
     2. ./data/ within the project root (portable/standalone mode)
 
@@ -83,13 +83,13 @@ def _env_path(var_name, default):
 
 
 class PathResolver:
-    """Resolve data storage paths for Claude Insight with a three-tier priority chain.
+    """Resolve data storage paths for Claude Workflow Engine with a three-tier priority chain.
 
     Single source of truth for ALL paths. No hardcoded absolute paths anywhere.
     Every path is resolved via env var override -> cross-platform default.
 
     Chooses the base data directory according to the following priority:
-    0. CLAUDE_INSIGHT_DATA_DIR env var (IDE launcher override)
+    0. CLAUDE_WORKFLOW_ENGINE_DATA_DIR env var (IDE launcher override)
     1. ~/.claude/memory/ if it exists (Claude Memory System installed)
     2. <project_root>/data/ (portable standalone mode)
 
@@ -113,7 +113,7 @@ class PathResolver:
         self.logs_root = _env_path("CLAUDE_LOGS_DIR", self.claude_home / "logs")
 
         # Priority 0: Environment variable (set by IDE)
-        env_data_dir = os.environ.get("CLAUDE_INSIGHT_DATA_DIR")
+        env_data_dir = os.environ.get("CLAUDE_WORKFLOW_ENGINE_DATA_DIR")
         if env_data_dir:
             self.base_dir = Path(env_data_dir)
             self.mode = "IDE"

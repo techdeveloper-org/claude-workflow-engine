@@ -1,6 +1,6 @@
-"""Claude Insight - Main Package.
+"""Claude Workflow Engine - Main Package.
 
-Claude Insight is a real-time monitoring dashboard for the Claude Memory System.
+Claude Workflow Engine is a real-time monitoring dashboard for the Claude Memory System.
 It tracks 3-Level Architecture execution, policy enforcement, session analytics,
 and provides a web UI to visualize Claude Code behavior across sessions.
 

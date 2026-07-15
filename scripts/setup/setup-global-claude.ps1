@@ -1,5 +1,5 @@
 # =============================================================================
-# Claude Insight - Global Claude Memory System Setup (Windows PowerShell)
+# Claude Workflow Engine - Global Claude Memory System Setup (Windows PowerShell)
 # =============================================================================
 # This script sets up the Claude Memory System (3-Level Architecture) in your
 # ~/.claude directory so Claude Code follows enforcement policies automatically.
@@ -20,7 +20,7 @@ $GlobalClaudeMd = Join-Path $ClaudeDir "CLAUDE.md"
 
 Write-Host ""
 Write-Host "============================================================"
-Write-Host " Claude Insight - Global Memory System Setup (Windows)"
+Write-Host " Claude Workflow Engine - Global Memory System Setup (Windows)"
 Write-Host "============================================================"
 Write-Host ""
 
@@ -109,7 +109,7 @@ if (Test-Path $GlobalClaudeMd) {
         Write-Host "  [OK] Global CLAUDE.md installed from template"
     } else {
         Write-Host "  [WARN] Template not found - creating minimal CLAUDE.md"
-        Set-Content $GlobalClaudeMd "# Claude Memory System`nInstall claude-insight for full setup.`nSee: https://github.com/piyushmakhija28/claude-insight" -Encoding UTF8
+        Set-Content $GlobalClaudeMd "# Claude Memory System`nInstall claude-workflow-engine for full setup.`nSee: https://github.com/techdeveloper-org/claude-workflow-engine" -Encoding UTF8
     }
 }
 
@@ -120,7 +120,7 @@ $ConfigFile = Join-Path $ScriptDir "settings-config.json"
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Host "  [ERROR] settings-config.json not found at $ConfigFile"
-    Write-Host "  [INFO] This file should be in the scripts/ directory of claude-insight"
+    Write-Host "  [INFO] This file should be in the scripts/ directory of claude-workflow-engine"
     exit 1
 }
 
@@ -145,7 +145,7 @@ Write-Host "[5/5] Finalizing..."
 Set-Content (Join-Path $MemoryCurrent "VERSION") "1.0.0" -Encoding UTF8
 
 $manifestContent = @"
-Claude Insight Memory System v1.0.0
+Claude Workflow Engine Memory System v1.0.0
 Installed: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 Platform: Windows
 

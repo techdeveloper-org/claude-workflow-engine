@@ -432,7 +432,7 @@ class SkillManager:
         try:
             req = urllib.request.Request(
                 url,
-                headers={"User-Agent": "claude-insight-skill-manager/1.0"},
+                headers={"User-Agent": "claude-workflow-engine-skill-manager/1.0"},
             )
             with urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT) as response:
                 raw = response.read()

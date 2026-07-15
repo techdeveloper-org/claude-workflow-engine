@@ -11,7 +11,7 @@ Modules:
                         ``ImportManager.get_agent()`` class methods.
     path_resolver    -- Cross-platform path resolution for the memory system
                         directories. Handles Windows/Unix differences and
-                        respects the ``CLAUDE_INSIGHT_DATA_DIR`` env override.
+                        respects the ``CLAUDE_WORKFLOW_ENGINE_DATA_DIR`` env override.
     history_tracker  -- Records activity history (tool calls, sessions,
                         policy hits) into a rolling JSON log for the activity
                         feed widget.

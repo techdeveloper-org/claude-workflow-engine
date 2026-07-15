@@ -2,15 +2,15 @@
 ################################################################################
 # SMART SYNC TO CLAUDE INSIGHT
 #
-# Automatically syncs ONLY global/reusable content to Claude Insight.
+# Automatically syncs ONLY global/reusable content to Claude Workflow Engine.
 # Uses detect-sync-eligibility.py to prevent syncing project-specific content.
 #
 # Usage:
-#   bash smart-sync-to-claude-insight.sh --skill "skill-name"
-#   bash smart-sync-to-claude-insight.sh --agent "agent-name"
-#   bash smart-sync-to-claude-insight.sh --policy "policy-file.md"
-#   bash smart-sync-to-claude-insight.sh --doc "doc-file.md"
-#   bash smart-sync-to-claude-insight.sh --script "script-file.py"
+#   bash smart-sync-to-claude-workflow-engine.sh --skill "skill-name"
+#   bash smart-sync-to-claude-workflow-engine.sh --agent "agent-name"
+#   bash smart-sync-to-claude-workflow-engine.sh --policy "policy-file.md"
+#   bash smart-sync-to-claude-workflow-engine.sh --doc "doc-file.md"
+#   bash smart-sync-to-claude-workflow-engine.sh --script "script-file.py"
 #
 # Exit Codes:
 #   0 = Synced successfully
@@ -25,7 +25,7 @@ set -e
 
 MEMORY_PATH="$HOME/.claude/memory"
 # Auto-detect project path from git root or fallback to env var
-CLAUDE_INSIGHT_PATH="${CLAUDE_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/claude-workflow-engine")}"
+CLAUDE_WORKFLOW_ENGINE_PATH="${CLAUDE_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/claude-workflow-engine")}"
 DETECTOR="$MEMORY_PATH/current/detect-sync-eligibility.py"
 
 # Colors
@@ -78,13 +78,13 @@ while [[ $# -gt 0 ]]; do
             echo "❌ Unknown option: $1"
             echo ""
             echo "Usage:"
-            echo "  bash smart-sync-to-claude-insight.sh --skill 'skill-name'"
-            echo "  bash smart-sync-to-claude-insight.sh --agent 'agent-name'"
-            echo "  bash smart-sync-to-claude-insight.sh --policy 'policy-file.md'"
-            echo "  bash smart-sync-to-claude-insight.sh --doc 'doc-file.md'"
-            echo "  bash smart-sync-to-claude-insight.sh --script 'script-file.py'"
-            echo "  bash smart-sync-to-claude-insight.sh --claude-md"
-            echo "  bash smart-sync-to-claude-insight.sh --master-readme"
+            echo "  bash smart-sync-to-claude-workflow-engine.sh --skill 'skill-name'"
+            echo "  bash smart-sync-to-claude-workflow-engine.sh --agent 'agent-name'"
+            echo "  bash smart-sync-to-claude-workflow-engine.sh --policy 'policy-file.md'"
+            echo "  bash smart-sync-to-claude-workflow-engine.sh --doc 'doc-file.md'"
+            echo "  bash smart-sync-to-claude-workflow-engine.sh --script 'script-file.py'"
+            echo "  bash smart-sync-to-claude-workflow-engine.sh --claude-md"
+            echo "  bash smart-sync-to-claude-workflow-engine.sh --master-readme"
             exit 1
             ;;
     esac
@@ -119,7 +119,7 @@ detect_and_sync() {
 
     if [ $DETECTION_EXIT -eq 0 ]; then
         # Eligible - proceed with sync
-        echo "${GREEN}[2/2] Syncing to Claude Insight...${NC}"
+        echo "${GREEN}[2/2] Syncing to Claude Workflow Engine...${NC}"
         echo ""
 
         # Create destination directory if needed
@@ -158,7 +158,7 @@ detect_and_sync() {
         # Not eligible - project-specific
         echo "${RED}[2/2] SYNC BLOCKED - Project-specific content${NC}"
         echo ""
-        echo "This content should NOT be synced to Claude Insight (public repo)."
+        echo "This content should NOT be synced to Claude Workflow Engine (public repo)."
         echo "It contains project-specific business logic or references."
         echo ""
         return 1
@@ -173,7 +173,7 @@ case $TYPE in
         echo ""
 
         SOURCE="$HOME/.claude/skills/$NAME"
-        DEST="$CLAUDE_INSIGHT_PATH/skills/$NAME"
+        DEST="$CLAUDE_WORKFLOW_ENGINE_PATH/skills/$NAME"
 
         if [ ! -d "$SOURCE" ]; then
             echo "${RED}❌ Error: Skill not found: $SOURCE${NC}"
@@ -189,7 +189,7 @@ case $TYPE in
         echo ""
 
         SOURCE="$HOME/.claude/agents/$NAME"
-        DEST="$CLAUDE_INSIGHT_PATH/agents/$NAME"
+        DEST="$CLAUDE_WORKFLOW_ENGINE_PATH/agents/$NAME"
 
         if [ ! -d "$SOURCE" ]; then
             echo "${RED}❌ Error: Agent not found: $SOURCE${NC}"
@@ -205,7 +205,7 @@ case $TYPE in
         echo ""
 
         SOURCE="$MEMORY_PATH/$NAME"
-        DEST="$CLAUDE_INSIGHT_PATH/policies/$NAME"
+        DEST="$CLAUDE_WORKFLOW_ENGINE_PATH/policies/$NAME"
 
         if [ ! -f "$SOURCE" ]; then
             echo "${RED}❌ Error: Policy not found: $SOURCE${NC}"
@@ -221,7 +221,7 @@ case $TYPE in
         echo ""
 
         SOURCE="$MEMORY_PATH/docs/$NAME"
-        DEST="$CLAUDE_INSIGHT_PATH/docs/$NAME"
+        DEST="$CLAUDE_WORKFLOW_ENGINE_PATH/docs/$NAME"
 
         if [ ! -f "$SOURCE" ]; then
             echo "${RED}❌ Error: Doc not found: $SOURCE${NC}"
@@ -237,7 +237,7 @@ case $TYPE in
         echo ""
 
         SOURCE="$MEMORY_PATH/scripts/$NAME"
-        DEST="$CLAUDE_INSIGHT_PATH/scripts/$NAME"
+        DEST="$CLAUDE_WORKFLOW_ENGINE_PATH/scripts/$NAME"
 
         if [ ! -f "$SOURCE" ]; then
             echo "${RED}❌ Error: Script not found: $SOURCE${NC}"
@@ -263,7 +263,7 @@ case $TYPE in
         echo ""
         echo "What to do instead:"
         echo "   ✅ Each public repo should have its own project-specific CLAUDE.md"
-        echo "   ✅ Claude Insight has: claude-insight/CLAUDE.md (monitoring focused)"
+        echo "   ✅ Claude Workflow Engine has: claude-workflow-engine/CLAUDE.md (monitoring focused)"
         echo "   ✅ Claude Global Library has: claude-global-library/CLAUDE.md (skills/agents focused)"
         echo ""
         echo "Rule: Global CLAUDE.md stays LOCAL ONLY"
@@ -276,7 +276,7 @@ case $TYPE in
         echo ""
 
         SOURCE="$MEMORY_PATH/MASTER-README.md"
-        DEST="$CLAUDE_INSIGHT_PATH/MASTER-README.md"
+        DEST="$CLAUDE_WORKFLOW_ENGINE_PATH/MASTER-README.md"
 
         # MASTER-README is always global - skip detection
         echo "${GREEN}✅ MASTER-README.md is always global - syncing...${NC}"

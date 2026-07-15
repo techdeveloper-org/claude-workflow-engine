@@ -1,4 +1,4 @@
-# Claude Insight - Policies & Scripts Complete Flow
+# Claude Workflow Engine - Policies & Scripts Complete Flow
 
 ## 🎯 Core Concept
 

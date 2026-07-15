@@ -1,6 +1,6 @@
-# Testing Guide for Claude Insight
+# Testing Guide for Claude Workflow Engine
 
-This guide explains how to run and write tests for Claude Insight.
+This guide explains how to run and write tests for Claude Workflow Engine.
 
 ---
 
@@ -19,7 +19,7 @@ pip install -r requirements-test.txt
 ### Run All Tests
 
 ```bash
-cd /path/to/claude-insight
+cd /path/to/claude-workflow-engine
 python tests/run_all_tests.py
 ```
 
@@ -367,7 +367,7 @@ chmod +x .git/hooks/pre-commit
 
 **Solution:** Ensure you're running from the project root:
 ```bash
-cd /path/to/claude-insight
+cd /path/to/claude-workflow-engine
 python tests/run_all_tests.py
 ```
 
