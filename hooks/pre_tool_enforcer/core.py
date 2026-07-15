@@ -194,6 +194,7 @@ _pol_read = _load_submodule(os.path.join("policies", "read_opt.py"), "policies")
 _pol_fkb = _load_submodule(os.path.join("policies", "failure_kb.py"), "policies")
 _pol_sc = _load_submodule(os.path.join("policies", "skill_context.py"), "policies")
 _pol_we = _load_submodule(os.path.join("policies", "write_edit.py"), "policies")
+_pol_ap = _load_submodule(os.path.join("policies", "agent_persona.py"), "policies")
 
 # Re-export constants that tests expect on the module
 FILE_EXT_SKILL_MAP = getattr(_pol_sc, "FILE_EXT_SKILL_MAP", {})
@@ -213,6 +214,7 @@ _new_check_read_opt = _pol_read.check_read_opt
 _new_check_failure_kb_hints = _pol_fkb.check_failure_kb_hints
 _new_check_dynamic_skill_context = _pol_sc.check_dynamic_skill_context
 _new_check_write_edit = _pol_we.check_write_edit
+_new_check_agent_persona = _pol_ap.check_agent_persona
 
 # -----------------------------------------------------------------------
 # Backward-compat wrappers with ORIGINAL signatures and return types
@@ -475,6 +477,7 @@ _BLOCKING_POLICIES = [
     ("bash_commands", check_bash_commands),
     ("grep_opt", check_grep_opt),
     ("read_opt", check_read_opt),
+    ("agent_persona", _new_check_agent_persona),
 ]
 
 
