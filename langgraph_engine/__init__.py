@@ -44,14 +44,18 @@ __all__ = [
 ]
 
 # PEP 562 lazy submodule binding for unittest.mock.patch compatibility.
-# These 4 submodules are NOT imported at module-load time to avoid circular
+# These submodules are NOT imported at module-load time to avoid circular
 # imports on Python 3.10 (their transitive deps -- tracing, core.logger_factory,
 # github_integration -- are not yet bound when __init__.py is still executing).
 # __getattr__ is invoked by Python when getattr(langgraph_engine, name) fails,
 # which is exactly what mock._dot_lookup does for patch targets like
-# 'langgraph_engine.level3_execution.nodes.X'. By the time any test accesses
-# these attributes, the package is fully initialized, so no circular risk.
-_LAZY_SUBMODULES = frozenset({"github_mcp", "github_operation_router", "runtime_verification", "level3_execution"})
+# 'langgraph_engine.github.mcp.X'. This ALSO self-heals the attribute after a
+# test's importlib.reload/sys.modules.pop drops it: on Python 3.10 a re-import
+# of a cached submodule does not re-bind the parent attribute, so without this
+# hook patch("langgraph_engine.github.X") fails with AttributeError (3.11+ self-heal).
+_LAZY_SUBMODULES = frozenset(
+    {"github", "github_mcp", "github_operation_router", "level3_execution", "quality", "runtime_verification"}
+)
 
 
 def __getattr__(name: str):  # noqa: ANN201
