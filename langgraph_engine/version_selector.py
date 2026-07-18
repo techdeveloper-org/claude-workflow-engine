@@ -61,6 +61,7 @@ class Version:
     _PRE_RANK: Dict[str, int] = {"dev": 0, "alpha": 1, "beta": 2, "rc": 3, "": 4, "post": 5}
 
     def __init__(self, major: int = 0, minor: int = 0, patch: int = 0, pre: str = "", pre_num: int = 0):
+        """Initialise the semantic version components."""
         self.major = major
         self.minor = minor
         self.patch = patch

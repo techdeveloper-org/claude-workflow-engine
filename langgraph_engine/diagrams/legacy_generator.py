@@ -7,7 +7,9 @@ Kept for backward compatibility with documentation_manager.py.
 Windows-safe: ASCII only.
 """
 
+import ast
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -56,6 +58,9 @@ class UMLDiagramGenerator:
     """Generate Mermaid/PlantUML syntax from analysis results."""
 
     def __init__(self, project_root, output_dir=None, call_graph=None):
+        """Configure the output directory (UML_OUTPUT_DIR env > output_dir > 'uml'),
+        the AST analyzer, and an optional pre-built call graph.
+        """
         import os
 
         self.project_root = Path(project_root)
@@ -84,7 +89,7 @@ class UMLDiagramGenerator:
             try:
                 from ..call_graph_builder import build_call_graph
             except ImportError:
-                from langgraph_engine.call_graph_builder import build_call_graph
+                from langgraph_engine.analysis.call_graph_builder import build_call_graph
             cg = build_call_graph(str(self.project_root))
             self._call_graph = cg
             return cg
@@ -120,8 +125,8 @@ class UMLDiagramGenerator:
                 ast_classes = self.analyzer.extract_classes(abs_path)
                 for ac in ast_classes:
                     attrs_by_name[ac["name"]] = ac.get("attributes", [])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("legacy_generator: class attribute extraction failed: %s", exc)
 
         results = []
         for fqn, cls_node in cg.classes.items():
@@ -1062,10 +1067,614 @@ class UMLDiagramGenerator:
         )
         return self._llm_generate(prompt)
 
+    def _get_system_prompt(self, diagram_type):
+        # type: (str) -> str
+        """Build a system prompt enriched with Domain 46 skill context.
+
+        Reads M1-M6 sections from the corresponding Domain 46 skill via
+        skill_context.get_skill_context(). Returns the diagram-type-specific
+        base prompt from UML_SYSTEM_PROMPTS._PROMPT_MAP if skill context is
+        unavailable (graceful degradation). Never returns an empty string.
+
+        Args:
+            diagram_type: One of the 14 UML diagram type slugs. Unknown slugs
+                          resolve to the mermaid-syntax-engine-core skill.
+
+        Returns:
+            System prompt string. Guaranteed non-empty (baseline fallback).
+        """
+        import logging as _log
+
+        _logger = _log.getLogger(__name__)
+
+        try:
+            from UML_SYSTEM_PROMPTS import _PROMPT_MAP, BASELINE_SYSTEM_PROMPT
+
+            base_prompt = _PROMPT_MAP.get(diagram_type, BASELINE_SYSTEM_PROMPT)
+        except ImportError:
+            base_prompt = (
+                "You are a UML 2.5.1 diagram expert. Generate syntactically "
+                "correct UML syntax. Follow OMG UML 2.5 notation."
+            )
+
+        _SKILL_MAP = {
+            "class": "uml-class-diagram-core",
+            "package": "uml-package-diagram-core",
+            "component": "uml-component-diagram-core",
+            "deployment": "uml-deployment-diagram-core",
+            "object": "uml-object-diagram-core",
+            "composite": "uml-composite-structure-core",
+            "usecase": "uml-use-case-diagram-core",
+            "activity": "uml-activity-diagram-core",
+            "state": "uml-state-machine-core",
+            "interaction": "uml-interaction-overview-core",
+            "sequence": "uml-sequence-diagram-core",
+            "communication": "uml-communication-diagram-core",
+            "timing": "uml-timing-diagram-core",
+            "call_graph": "diagram-from-code-core",
+            "call_graph_rich": "diagram-layout-algorithms-core",
+        }
+        skill_name = _SKILL_MAP.get(diagram_type, "mermaid-syntax-engine-core")
+        skill_context_text = ""
+
+        try:
+            from skill_context import get_skill_context
+
+            skill_context_text = get_skill_context(skill_name)
+        except ImportError:
+            _logger.debug("skill_context not available; using base prompt only")
+        except Exception as exc:
+            _logger.debug("skill_context read failed for %s: %s", skill_name, exc)
+
+        if not skill_context_text:
+            return base_prompt
+
+        enriched = base_prompt + "\n\n--- DOMAIN 46 SKILL CONTEXT (M1-M6 Foundations) ---\n" + skill_context_text[:4000]
+        return enriched
+
+    def generate_timing_diagram(self, process_name=""):
+        # type: (str) -> str
+        """Generate a UML timing diagram as Mermaid 10.x gantt syntax.
+
+        The four mandatory header lines (gantt, title, dateFormat, axisFormat)
+        are hard-coded and never delegated to the LLM. The LLM fills only the
+        section/task content. Task IDs are post-processed via
+        _sanitize_gantt_sections() to replace invalid characters with underscores.
+        Falls back to _build_stub_gantt_sections() on any LLM error.
+
+        Args:
+            process_name: Human-readable name of the process being timed.
+                          Defaults to "" which renders as "System Process Timeline".
+
+        Returns:
+            Mermaid gantt syntax string. Returns a minimal valid stub gantt
+            on LLM error. Never raises.
+        """
+        import logging as _log
+
+        _logger = _log.getLogger(__name__)
+
+        title = process_name.strip() if process_name and process_name.strip() else "System Process Timeline"
+
+        system_prompt = self._get_system_prompt("timing")
+
+        llm_instruction = (
+            "Generate ONLY the section blocks for a Mermaid 10.x gantt diagram "
+            "for a process named: %s\n\n"
+            "Requirements:\n"
+            "- Output ONLY section blocks (starting with 'section ...')\n"
+            "- Do NOT output gantt, title, dateFormat, or axisFormat lines\n"
+            "- Include exactly 3 sections: Initialization, Processing, Completion\n"
+            "- Each section must have 2-3 tasks\n"
+            "- Task ID: alphanumeric and underscore ONLY (e.g., task_init_A)\n"
+            "- Task format: TaskLabel : taskId, YYYY-MM-DD, Nd\n"
+            "- Dates starting from 2026-01-01, increment by duration\n"
+            "- Duration format: 1d or 2d only\n"
+            "- No hyphens in task IDs. Underscores only.\n"
+            "- No markdown fences.\n"
+        ) % title
+
+        sections_text = None
+        try:
+            sections_text = _llm_generate_with_system(self, llm_instruction, system_prompt)
+        except Exception as exc:
+            _logger.debug("LLM timing generation failed: %s", exc)
+
+        if sections_text:
+            sections_text = _sanitize_gantt_sections(sections_text)
+        else:
+            sections_text = _build_stub_gantt_sections()
+
+        header_lines = [
+            "gantt",
+            "    title %s -- Timing Diagram" % title,
+            "    dateFormat  YYYY-MM-DD",
+            "    axisFormat  %Y-%m-%d",
+        ]
+        return "\n".join(header_lines) + "\n" + sections_text
+
+    def generate_uml_from_code(self, source_code, language="python"):
+        # type: (str, str) -> str
+        """Generate a Mermaid classDiagram from source code via parsing.
+
+        For Python: uses stdlib ast module (Phase 1 priority). Falls back to
+        LLM if ast.parse() raises any exception.
+        For Java/Kotlin: uses regex pattern extraction (Phase 1 best-effort).
+        For TypeScript/JavaScript: uses regex extraction.
+        For all other languages: delegates entirely to LLM.
+
+        Maximum 50 classes rendered. System prompt uses _get_system_prompt("class").
+
+        Args:
+            source_code: Raw source code string to analyze.
+            language: Source language. Supported: "python", "java", "kotlin",
+                      "typescript", "javascript". Defaults to "python".
+
+        Returns:
+            Mermaid classDiagram syntax string. Returns a minimal stub classDiagram
+            on any parse failure. Never raises.
+        """
+        MAX_CLASSES = 50
+
+        if not source_code or not source_code.strip():
+            return 'classDiagram\n    note "No source code provided"'
+
+        lang = language.lower().strip() if language else "python"
+
+        if lang == "python":
+            return _parse_python_to_class_diagram(self, source_code, MAX_CLASSES)
+
+        if lang in ("java", "kotlin"):
+            return _parse_jvm_to_class_diagram(source_code, lang, MAX_CLASSES)
+
+        if lang in ("typescript", "javascript"):
+            return _parse_ts_to_class_diagram(source_code, MAX_CLASSES)
+
+        return _llm_fallback_class_diagram(self, source_code, language)
+
 
 # ======================================================================
 # Kroki Renderer
 # ======================================================================
+
+# ======================================================================
+# Module-level helpers for the 3 new UMLDiagramGenerator methods
+# (must live outside the class; referenced via module-level calls)
+# ======================================================================
+
+_GANTT_TASK_ID_PATTERN = re.compile(r"[^a-zA-Z0-9_]")
+_GANTT_DEFAULT_START = "2026-01-01"
+
+
+def _llm_generate_with_system(self, prompt, system_prompt):
+    # type: (Any, str, str) -> Optional[str]
+    """Call LLM with an explicit system prompt via llm_call.py.
+
+    Attempts to import langgraph_engine.llm_call.llm_call. Falls back to
+    self._llm_generate(prompt) if llm_call is unavailable. Returns None on
+    any unrecoverable error.
+
+    Args:
+        prompt: User-level prompt string passed to the LLM.
+        system_prompt: System-level context and instruction string.
+
+    Returns:
+        LLM response string, or None on failure.
+    """
+    import logging as _log
+
+    _logger = _log.getLogger(__name__)
+    try:
+        from langgraph_engine.llm_call import llm_call
+
+        full_prompt = system_prompt + "\n\n---\n\n" + prompt
+        return llm_call(full_prompt, model="fast", timeout=60)
+    except ImportError:
+        _logger.debug("llm_call not available; falling back to _llm_generate")
+        return self._llm_generate(prompt)
+    except Exception as exc:
+        _logger.debug("LLM call with system prompt failed: %s", exc)
+        return None
+
+
+def _sanitize_gantt_sections(sections_text):
+    # type: (str) -> str
+    """Post-process LLM gantt sections to enforce valid Mermaid 10.x task IDs.
+
+    Scans each task definition line and replaces any character outside
+    [a-zA-Z0-9_] in the task ID field with an underscore. Enforces Nd
+    duration format (appends 'd' if unit is missing).
+
+    Args:
+        sections_text: Raw LLM-generated section block string.
+
+    Returns:
+        Sanitized section string with valid task IDs and duration format.
+    """
+    task_line_pattern = re.compile(
+        r"^(\s+\S[^:]+:\s*)(\w[\w\-\s]*?)\s*," r"\s*([\d]{4}-[\d]{2}-[\d]{2})\s*,\s*(\d+)([a-z]?)\s*$"
+    )
+    output_lines = []
+    for line in sections_text.splitlines():
+        match = task_line_pattern.match(line)
+        if match:
+            label_part = match.group(1)
+            task_id_raw = match.group(2).strip()
+            date_part = match.group(3)
+            duration_num = match.group(4)
+            duration_unit = match.group(5) if match.group(5) else "d"
+
+            task_id_clean = _GANTT_TASK_ID_PATTERN.sub("_", task_id_raw)
+            if not task_id_clean or task_id_clean[0].isdigit():
+                task_id_clean = "task_" + task_id_clean
+
+            output_lines.append(
+                "%s%s, %s, %s%s"
+                % (
+                    label_part,
+                    task_id_clean,
+                    date_part,
+                    duration_num,
+                    duration_unit,
+                )
+            )
+        else:
+            output_lines.append(line)
+    return "\n".join(output_lines)
+
+
+def _build_stub_gantt_sections():
+    # type: () -> str
+    """Build a minimal valid Mermaid 10.x gantt section block as fallback.
+
+    Returns:
+        Hard-coded section block string with valid task IDs and Nd durations.
+    """
+    return (
+        "    section Initialization\n"
+        "        Setup Environment : task_setup_env, %s, 1d\n"
+        "        Load Configuration : task_load_config, 2026-01-02, 1d\n"
+        "    section Processing\n"
+        "        Execute Main Logic : task_execute_main, 2026-01-03, 2d\n"
+        "        Validate Results : task_validate_results, 2026-01-05, 1d\n"
+        "    section Completion\n"
+        "        Write Output : task_write_output, 2026-01-06, 1d\n"
+        "        Cleanup Resources : task_cleanup_resources, 2026-01-07, 1d\n"
+    ) % _GANTT_DEFAULT_START
+
+
+def _ast_name_to_str(node):
+    # type: (Any) -> str
+    """Convert an ast.Name, ast.Attribute, or ast.Subscript node to a string.
+
+    Args:
+        node: AST node (ast.Name, ast.Attribute, or ast.Subscript).
+
+    Returns:
+        String representation of the node, or "" for unrecognized types.
+    """
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _ast_name_to_str(node.value)
+        return ("%s.%s" % (parent, node.attr)) if parent else node.attr
+    if isinstance(node, ast.Subscript):
+        return _ast_name_to_str(node.value)
+    return ""
+
+
+def _extract_method_params(func_node):
+    # type: (Any) -> str
+    """Extract simplified parameter string from an ast.FunctionDef node.
+
+    Skips 'self' and 'cls' parameters. Limits to 4 parameters for readability.
+
+    Args:
+        func_node: ast.FunctionDef or ast.AsyncFunctionDef node.
+
+    Returns:
+        Comma-separated parameter string (up to 4 params, excluding self/cls).
+    """
+    args = func_node.args
+    param_names = []
+    for arg in args.args:
+        if arg.arg in ("self", "cls"):
+            continue
+        param_names.append(arg.arg)
+        if len(param_names) >= 4:
+            break
+    return ", ".join(param_names)
+
+
+def _extract_return_type(func_node):
+    # type: (Any) -> str
+    """Extract return type annotation string from an ast.FunctionDef node.
+
+    Args:
+        func_node: ast.FunctionDef or ast.AsyncFunctionDef node.
+
+    Returns:
+        Return type string derived from the annotation node, or "" if absent.
+    """
+    if func_node.returns is None:
+        return ""
+    return _ast_name_to_str(func_node.returns)
+
+
+def _build_mermaid_class_diagram(classes):
+    # type: (List[Dict[str, Any]]) -> str
+    """Build Mermaid 10.x classDiagram syntax from a parsed class list.
+
+    Args:
+        classes: List of dicts with keys: name (str), bases (list),
+                 methods (list of tuples), attributes (list of tuples),
+                 stereotype (str, optional).
+
+    Returns:
+        Mermaid classDiagram syntax string.
+    """
+    lines = ["classDiagram"]
+    for cls in classes:
+        class_name = cls["name"]
+        stereotype = cls.get("stereotype", "")
+        lines.append("    class %s {" % class_name)
+        if stereotype:
+            lines.append("        %s" % stereotype)
+        for attr_entry in cls.get("attributes", []):
+            vis = attr_entry[0]
+            a_name = attr_entry[1]
+            a_type = attr_entry[2] if len(attr_entry) > 2 else ""
+            if a_type:
+                lines.append("        %s%s %s" % (vis, a_type, a_name))
+            else:
+                lines.append("        %s%s" % (vis, a_name))
+        for method_entry in cls.get("methods", []):
+            vis = method_entry[0]
+            m_name = method_entry[1]
+            params = method_entry[2] if len(method_entry) > 2 else ""
+            ret_type = method_entry[3] if len(method_entry) > 3 else ""
+            if ret_type:
+                lines.append("        %s%s(%s) %s" % (vis, m_name, params, ret_type))
+            else:
+                lines.append("        %s%s(%s)" % (vis, m_name, params))
+        lines.append("    }")
+
+    class_names = set(cls["name"] for cls in classes)
+    for cls in classes:
+        for base in cls.get("bases", []):
+            if base in class_names:
+                lines.append("    %s <|-- %s" % (base, cls["name"]))
+    return "\n".join(lines)
+
+
+def _parse_python_to_class_diagram(self, source_code, max_classes):
+    # type: (Any, str, int) -> str
+    """Parse Python source with ast module and build Mermaid classDiagram.
+
+    Args:
+        source_code: Python source string.
+        max_classes: Maximum number of classes to include in the diagram.
+
+    Returns:
+        Mermaid classDiagram string.
+    """
+    import logging as _log
+
+    _logger = _log.getLogger(__name__)
+    try:
+        tree = ast.parse(source_code)
+    except SyntaxError as exc:
+        _logger.debug("ast.parse SyntaxError: %s -- falling back to LLM", exc)
+        return _llm_fallback_class_diagram(self, source_code, "python")
+    except Exception as exc:
+        _logger.debug("ast.parse failed: %s -- falling back to LLM", exc)
+        return _llm_fallback_class_diagram(self, source_code, "python")
+
+    classes = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        if len(classes) >= max_classes:
+            break
+        class_name = node.name
+        bases = []
+        for base in node.bases:
+            base_name = _ast_name_to_str(base)
+            if base_name and base_name != "object":
+                bases.append(base_name)
+        methods = []
+        attributes = []
+        for item in node.body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                m_name = item.name
+                visibility = "-" if m_name.startswith("__") else ("#" if m_name.startswith("_") else "+")
+                params = _extract_method_params(item)
+                ret_type = _extract_return_type(item)
+                methods.append((visibility, m_name, params, ret_type))
+            elif isinstance(item, ast.Assign):
+                for target in item.targets:
+                    if isinstance(target, ast.Name):
+                        attr_name = target.id
+                        vis = "-" if attr_name.startswith("__") else ("#" if attr_name.startswith("_") else "+")
+                        attributes.append((vis, attr_name, ""))
+            elif isinstance(item, ast.AnnAssign):
+                if isinstance(item.target, ast.Name):
+                    attr_name = item.target.id
+                    vis = "-" if attr_name.startswith("__") else ("#" if attr_name.startswith("_") else "+")
+                    type_str = _ast_name_to_str(item.annotation) if item.annotation else ""
+                    attributes.append((vis, attr_name, type_str))
+        classes.append(
+            {
+                "name": class_name,
+                "bases": bases,
+                "methods": methods[:15],
+                "attributes": attributes[:10],
+            }
+        )
+
+    if not classes:
+        return _llm_fallback_class_diagram(self, source_code, "python")
+    return _build_mermaid_class_diagram(classes)
+
+
+def _parse_jvm_to_class_diagram(source_code, language, max_classes):
+    # type: (str, str, int) -> str
+    """Parse Java or Kotlin source with regex and build Mermaid classDiagram.
+
+    Args:
+        source_code: Java or Kotlin source string.
+        language: "java" or "kotlin".
+        max_classes: Maximum number of classes to render.
+
+    Returns:
+        Mermaid classDiagram string.
+    """
+    class_pattern = re.compile(
+        r"(?:public|private|protected|internal)?\s*"
+        r"(?:abstract\s+|open\s+|sealed\s+|data\s+)?"
+        r"(class|interface|enum|object)\s+(\w+)"
+        r"(?:\s*(?:extends|:)\s*([\w,\s<>]+))?"
+    )
+    method_pattern = re.compile(
+        r"(?:public|private|protected|internal|override|fun|def)?\s+"
+        r"(?:static\s+|abstract\s+|open\s+|override\s+)?"
+        r"(?:[\w<>\[\]]+\s+)?(\w+)\s*\(([^)]{0,200})\)"
+    )
+    classes = []
+    for match in class_pattern.finditer(source_code):
+        if len(classes) >= max_classes:
+            break
+        kind = match.group(1)
+        name = match.group(2)
+        bases_raw = match.group(3) or ""
+        bases = [b.strip().split("<")[0].strip() for b in bases_raw.split(",") if b.strip()]
+        stereotype = ""
+        if kind == "interface":
+            stereotype = "<<interface>>"
+        elif kind == "enum":
+            stereotype = "<<enumeration>>"
+        start_pos = match.end()
+        snippet = source_code[start_pos : start_pos + 1000]
+        methods = []
+        for m_match in method_pattern.finditer(snippet):
+            m_name = m_match.group(1)
+            if m_name in ("if", "for", "while", "return", "new", "class"):
+                continue
+            methods.append(("+", m_name, "", ""))
+            if len(methods) >= 10:
+                break
+        classes.append(
+            {
+                "name": name,
+                "bases": bases,
+                "methods": methods,
+                "attributes": [],
+                "stereotype": stereotype,
+            }
+        )
+    if not classes:
+        return 'classDiagram\n    note "No classes detected in %s source"' % language
+    return _build_mermaid_class_diagram(classes)
+
+
+def _parse_ts_to_class_diagram(source_code, max_classes):
+    # type: (str, int) -> str
+    """Parse TypeScript or JavaScript source with regex and build Mermaid classDiagram.
+
+    Args:
+        source_code: TypeScript or JavaScript source string.
+        max_classes: Maximum number of classes to render.
+
+    Returns:
+        Mermaid classDiagram string.
+    """
+    class_pattern = re.compile(
+        r"(?:export\s+)?(?:abstract\s+)?(class|interface)\s+(\w+)"
+        r"(?:\s+extends\s+([\w,\s<>]+))?"
+        r"(?:\s+implements\s+([\w,\s<>]+))?"
+    )
+    method_pattern = re.compile(
+        r"(?:public|private|protected|static|async|abstract|override)?\s*"
+        r"(\w+)\s*\(([^)]{0,200})\)\s*(?::\s*[\w<>\[\]|]+)?\s*[{;]"
+    )
+    prop_pattern = re.compile(r"(?:public|private|protected|readonly)?\s+" r"(\w+)\s*(?::\s*([\w<>\[\]|]+))?\s*(?:=|;)")
+    classes = []
+    for match in class_pattern.finditer(source_code):
+        if len(classes) >= max_classes:
+            break
+        kind = match.group(1)
+        name = match.group(2)
+        extends_raw = match.group(3) or ""
+        implements_raw = match.group(4) or ""
+        bases = []
+        if extends_raw:
+            bases.extend([b.strip().split("<")[0].strip() for b in extends_raw.split(",") if b.strip()])
+        if implements_raw:
+            bases.extend([b.strip().split("<")[0].strip() for b in implements_raw.split(",") if b.strip()])
+        stereotype = "<<interface>>" if kind == "interface" else ""
+        start_pos = match.end()
+        snippet = source_code[start_pos : start_pos + 1200]
+        methods = []
+        for m_match in method_pattern.finditer(snippet):
+            m_name = m_match.group(1)
+            if m_name in ("if", "for", "while", "return", "new", "const", "let", "var"):
+                continue
+            vis = "-" if m_name.startswith("_") else "+"
+            methods.append((vis, m_name, "", ""))
+            if len(methods) >= 10:
+                break
+        attributes = []
+        for p_match in prop_pattern.finditer(snippet[:500]):
+            p_name = p_match.group(1)
+            p_type = p_match.group(2) or ""
+            if p_name in ("return", "const", "let", "var", "new", "if"):
+                continue
+            vis = "-" if p_name.startswith("_") else "+"
+            attributes.append((vis, p_name, p_type))
+            if len(attributes) >= 8:
+                break
+        classes.append(
+            {
+                "name": name,
+                "bases": bases,
+                "methods": methods,
+                "attributes": attributes,
+                "stereotype": stereotype,
+            }
+        )
+    if not classes:
+        return 'classDiagram\n    note "No classes detected in TypeScript source"'
+    return _build_mermaid_class_diagram(classes)
+
+
+def _llm_fallback_class_diagram(self, source_code, language):
+    # type: (Any, str, str) -> str
+    """Use LLM to generate a classDiagram when AST/regex parsing fails.
+
+    Args:
+        source_code: Raw source code string.
+        language: Source language identifier (e.g., "python", "java").
+
+    Returns:
+        Mermaid classDiagram string, or stub on LLM error.
+    """
+    system_prompt = self._get_system_prompt("class")
+    prompt = (
+        "Parse this %s source code and generate a Mermaid 10.x classDiagram. "
+        "Extract all classes, their public methods, attributes, and inheritance. "
+        "Output ONLY the Mermaid syntax starting with 'classDiagram'. "
+        "No markdown fences.\n\n%s"
+    ) % (language, source_code[:3000])
+
+    result = _llm_generate_with_system(self, prompt, system_prompt)
+    if result:
+        result = result.strip()
+        if result.startswith("```"):
+            result = re.sub(r"^```[a-z]*\n?", "", result).rstrip("`").strip()
+        if result.startswith("classDiagram"):
+            return result
+
+    return 'classDiagram\n    note "Could not parse %s source"' % language
 
 
 def _simplify_type(ast_dump):

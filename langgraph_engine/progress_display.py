@@ -104,6 +104,7 @@ class StepRecord:
     """Tracks state of a single pipeline step."""
 
     def __init__(self, step_number: int):
+        """Initialise the step record with its number, label, and PENDING status."""
         self.step_number = step_number
         self.label: str = STEP_LABELS.get(step_number, f"Step {step_number}")
         self.status: str = "PENDING"
@@ -361,8 +362,8 @@ class ProgressDisplay:
             lines = self._build_display()
             self.stream.write("\n".join(lines) + "\n")
             self.stream.flush()
-        except Exception:
-            pass  # Never crash the pipeline due to display issues
+        except Exception as exc:
+            logger.debug(f"[ProgressDisplay] render skipped (never crash on display issues): {exc}")
 
     def _build_display(self) -> List[str]:
         """Build display lines (no I/O side effects)."""

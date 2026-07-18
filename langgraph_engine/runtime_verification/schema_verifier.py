@@ -1,3 +1,10 @@
+"""Structural schema verifiers for Step-0 orchestration outputs.
+
+Lightweight (no-LLM) checks that the orchestration prompt, decomposed todo_list,
+and orchestrator result are well-formed. Each returns a list of error strings
+(empty = valid) for the Step-0 callers to log.
+"""
+
 from __future__ import annotations
 
 from typing import List

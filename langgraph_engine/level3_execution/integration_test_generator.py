@@ -14,8 +14,11 @@ Usage:
 Python 3.8+ compatible. ASCII-only (cp1252-safe).
 """
 
+import logging
 import re
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -287,8 +290,8 @@ def detect_api_endpoints(call_graph_snapshot):
             if is_endpoint and fqn:
                 endpoints.append(fqn)
 
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("integration_test_gen: endpoint parse failed: %s", exc)
 
     return endpoints
 
@@ -328,8 +331,8 @@ def find_affected_paths(call_graph_snapshot, modified_files):
                     affected.append(path_dict)
                     break
 
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("integration_test_gen: affected-path scan failed: %s", exc)
 
     return affected
 
@@ -629,8 +632,8 @@ def _build_methods_lookup(call_graph_snapshot):
             fqn = node.get("id", "")
             if fqn:
                 result[fqn] = node
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("integration_test_gen: methods lookup build failed: %s", exc)
     return result
 
 
@@ -643,8 +646,8 @@ def _normalize_file_set(modified_files):
             normalized.add(s)
             # Also add just the basename for loose matching
             normalized.add(Path(s).name)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("integration_test_gen: file-set normalize failed: %s", exc)
     return normalized
 
 

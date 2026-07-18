@@ -255,7 +255,7 @@ Exit Code: 0 ✅
    [2] Critical Files: 1 critical files missing
    📋 Fix Instructions:
       • Restore missing files from backup or repository
-      • Run: cp -r claude-insight/scripts/* ~/.claude/memory/scripts/
+      • Run: cp -r claude-workflow-engine/scripts/* ~/.claude/memory/scripts/
       • Verify file permissions
 
 ================================================================================
@@ -360,7 +360,7 @@ Claude must:
 
 ## 📦 Git Status
 
-**Repository:** claude-insight
+**Repository:** claude-workflow-engine
 **Branch:** main
 
 **Commits:**
@@ -525,5 +525,5 @@ ac35b1a - feat: Add Auto-Fix Enforcement System v1.0.0 🚨
 
 **Created By:** Claude Sonnet 4.5
 **Date:** 2026-02-16
-**Version:** 2.5.0 (Claude Insight v2.18.0)
+**Version:** 2.5.0 (Claude Workflow Engine v2.18.0)
 **Status:** 🟢 **FULLY OPERATIONAL** ✅

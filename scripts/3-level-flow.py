@@ -64,7 +64,7 @@ except Exception:
 try:
     # Try importing LangGraph engine
     from langgraph_engine.checkpointer import get_invoke_config
-    from langgraph_engine.flow_trace_converter import print_flow_checkpoint, write_flow_trace_json
+    from langgraph_engine.context.flow_trace_converter import print_flow_checkpoint, write_flow_trace_json
     from langgraph_engine.orchestrator import create_flow_graph, create_initial_state
 
     _LANGGRAPH_AVAILABLE = True

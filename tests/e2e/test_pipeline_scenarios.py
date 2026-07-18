@@ -44,7 +44,7 @@ class TestStaleCallGraphGuard:
             sys.path.insert(0, str(_SCRIPTS_DIR))
 
         try:
-            from langgraph_engine.call_graph_analyzer import refresh_call_graph_if_stale
+            from langgraph_engine.analysis.call_graph_analyzer import refresh_call_graph_if_stale
         except ImportError:
             pytest.skip("call_graph_analyzer not importable")
 
@@ -72,7 +72,7 @@ class TestStaleCallGraphGuard:
             sys.path.insert(0, str(_SCRIPTS_DIR))
 
         try:
-            from langgraph_engine.call_graph_analyzer import refresh_call_graph_if_stale
+            from langgraph_engine.analysis.call_graph_analyzer import refresh_call_graph_if_stale
         except ImportError:
             pytest.skip("call_graph_analyzer not importable")
 
@@ -97,7 +97,7 @@ class TestStaleCallGraphGuard:
             sys.path.insert(0, str(_SCRIPTS_DIR))
 
         try:
-            from langgraph_engine.call_graph_analyzer import refresh_call_graph_if_stale
+            from langgraph_engine.analysis.call_graph_analyzer import refresh_call_graph_if_stale
         except ImportError:
             pytest.skip("call_graph_analyzer not importable")
 
@@ -186,7 +186,7 @@ class TestSecretsValidationBlocksMissingKey:
             sys.path.insert(0, str(_SCRIPTS_DIR))
 
         try:
-            from langgraph_engine.secrets_manager import SecretsMissingError, validate_secrets
+            from langgraph_engine.security.secrets_manager import SecretsMissingError, validate_secrets
         except ImportError:
             pytest.skip("secrets_manager not importable")
 
@@ -208,7 +208,7 @@ class TestSecretsValidationBlocksMissingKey:
             sys.path.insert(0, str(_SCRIPTS_DIR))
 
         try:
-            from langgraph_engine.secrets_manager import SecretsMissingError, validate_secrets
+            from langgraph_engine.security.secrets_manager import SecretsMissingError, validate_secrets
         except ImportError:
             pytest.skip("secrets_manager not importable")
 
@@ -230,7 +230,7 @@ class TestSecretsValidationBlocksMissingKey:
             sys.path.insert(0, str(_SCRIPTS_DIR))
 
         try:
-            from langgraph_engine.secrets_manager import validate_secrets
+            from langgraph_engine.security.secrets_manager import validate_secrets
         except ImportError:
             pytest.skip("secrets_manager not importable")
 

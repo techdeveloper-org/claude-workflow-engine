@@ -52,7 +52,7 @@ CHANGE LOG (v1.16.0):
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Optional
 
 try:
     import sys as _sys
@@ -72,6 +72,7 @@ except ImportError:
     _LANGGRAPH_AVAILABLE = False
 
 from .checkpointer import CheckpointerManager
+from .core.logger_factory import get_logger
 from .flow_state import FlowState, StepKeys, WorkflowContextOptimizer
 from .level1_sync import (
     cleanup_level1_memory,
@@ -105,23 +106,28 @@ from .level_minus1 import (
 )
 
 # Level -1 routing functions (canonical definitions live in routing/)
-from .routing import route_after_level_minus1, route_after_level_minus1_user_choice
+from .routing import route_after_level_minus1, route_after_level_minus1_user_choice, route_after_step11_review
+
+# Runtime Verification wrapping: verify_node reads ENABLE_RUNTIME_VERIFICATION at
+# decoration time and returns the original function unchanged when it is "0"
+# (default), so these wrappers add zero overhead unless verification is enabled.
+from .runtime_verification.decorators import verify_node
+from .runtime_verification.node_contracts import PRE_ANALYSIS_CONTRACT, STEP0_CONTRACT
 from .standards_integration import apply_standards_at_step
+
+logger = get_logger(__name__)
+
+_rv_pre_analysis_node = verify_node(PRE_ANALYSIS_CONTRACT)(orchestration_pre_analysis_node)
+# Step 0 fuses prompt-gen + orchestrator into one node, so it uses the single
+# STEP0_CONTRACT (precondition user_message; postconditions orchestration_prompt +
+# orchestrator_result). The separate-phase PROMPT_GEN/ORCHESTRATOR contracts would
+# false-fire here -- their orchestration_prompt precondition and 200-char bar
+# cannot hold on a node that produces orchestration_prompt internally.
+_rv_step0_node = verify_node(STEP0_CONTRACT)(step0_task_analysis_node)
 
 # REMOVED (v1.14.0): route_after_step0_to_step2_or_step8 -- Step 2 removed from pipeline.
 #   Step 0 now routes directly to Step 8.
-
-
-def route_after_step11_review(state: FlowState) -> Literal["level3_step12", "level3_step11_retry"]:
-    """Conditional routing after PR review: if failed and retries < 3, retry; else continue to closure."""
-    review_passed = state.get(StepKeys.REVIEW_PASSED, False)
-    retry_count = state.get(StepKeys.RETRY_COUNT, 0)
-
-    if review_passed or retry_count >= 3:
-        return "level3_step12"
-    else:
-        # Route to retry node (which will increment count via proper state return)
-        return "level3_step11_retry"
+# route_after_step11_review now imported from .routing (single canonical definition).
 
 
 def step11_retry_increment_node(state: FlowState) -> dict:
@@ -204,9 +210,8 @@ def save_workflow_memory(state: FlowState) -> dict:
                 )
 
             return {"workflow_memory_file": str(memory_file)}
-    except Exception:
-        # Don't fail if memory save fails - it's non-critical
-        pass
+    except (OSError, TypeError) as exc:
+        logger.debug(f"[orchestrator] workflow memory save skipped: {exc}")
 
     return {}
 
@@ -376,8 +381,8 @@ def output_node(state: FlowState) -> dict:
             if skill:
                 msg += f" Using {skill} skill."
             start_flag.write_text(msg, encoding="utf-8")
-    except Exception:
-        pass
+    except OSError as exc:
+        logger.debug(f"[orchestrator] voice start-flag write skipped: {exc}")
 
     # SYNTHESIS: Create comprehensive prompt from all flow data
     synthesis = synthesize_prompt_with_flow_data(state)
@@ -421,8 +426,8 @@ def output_node(state: FlowState) -> dict:
                 )
                 summary_file = Path(session_dir) / "execution-summary.txt"
                 summary_file.write_text(quick_summary, encoding="utf-8")
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[orchestrator] execution-summary write skipped: {exc}")
 
     # SESSION ACCUMULATE - Record this request's data via MCP session tools
     try:
@@ -443,8 +448,8 @@ def output_node(state: FlowState) -> dict:
             context_pct=int(state.get("context_pct", 0)),
             supplementary_skills=",".join(state.get(StepKeys.SKILLS, []) or []),
         )
-    except Exception:
-        pass  # Accumulation is non-blocking, never fail the pipeline
+    except Exception as exc:
+        logger.debug(f"[orchestrator] session accumulate skipped: {exc}")
 
     # Return synthesis result with proper status
     return {
@@ -579,8 +584,8 @@ def _save_pipeline_execution_log(state: FlowState, final_status: str) -> None:
         log_path = Path(session_dir) / "execution-log.md"
         log_path.write_text("\n".join(log_lines), encoding="utf-8")
 
-    except Exception:
-        pass  # Never crash on logging
+    except OSError as exc:
+        logger.debug(f"[orchestrator] execution-log write skipped: {exc}")
 
 
 # ============================================================================
@@ -726,7 +731,7 @@ def create_flow_graph(hook_mode: bool = False):
     # Pre-analysis gate: call graph scan
     # Template fast-path (--orchestration-template): jumps directly to level3_step8
     # Normal path: falls through to level3_step0_0 (pre-flight flow)
-    graph.add_node("level3_pre_analysis", orchestration_pre_analysis_node)
+    graph.add_node("level3_pre_analysis", _rv_pre_analysis_node)
     graph.add_edge("level3_init", "level3_pre_analysis")
     graph.add_conditional_edges(
         "level3_pre_analysis",
@@ -746,7 +751,7 @@ def create_flow_graph(hook_mode: bool = False):
 
     # Step 0: Task Analysis + Orchestration (2 claude CLI subprocess calls).
     # Populates all migration fields for steps 8-14 (previously written by 1/3/4/5/6/7).
-    graph.add_node("level3_step0", step0_task_analysis_node)
+    graph.add_node("level3_step0", _rv_step0_node)
     graph.add_edge("level3_step0_1", "level3_step0")
 
     # Direct edge: Step 0 -> Step 8 (Step 2 removed in v1.14.0)

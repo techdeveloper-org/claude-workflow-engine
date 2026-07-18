@@ -14,9 +14,12 @@ Output: JSON with task_type, complexity, suggested_model, reasoning
 """
 
 import json
+import logging
 import os
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class TaskAnalyzer:
@@ -34,8 +37,8 @@ class TaskAnalyzer:
             result = llm_call(prompt, model="fast", temperature=0.3)
             if result:
                 return result
-        except ImportError:
-            pass
+        except ImportError as exc:
+            logger.debug("prompt_generator: llm_call unavailable: %s", exc)
         return "Error: llm_call not available"
 
     def detect_project_type(self) -> str:

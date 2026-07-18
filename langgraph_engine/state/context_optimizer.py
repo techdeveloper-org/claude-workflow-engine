@@ -5,8 +5,12 @@ Uses smart filtering and compression to minimize tokens while maintaining info f
 
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+from langgraph_engine.core.logger_factory import get_logger
+
 if TYPE_CHECKING:
     from .state_definition import FlowState
+
+logger = get_logger(__name__)
 
 
 class WorkflowContextOptimizer:
@@ -150,8 +154,8 @@ class WorkflowContextOptimizer:
         try:
             size_kb = len(json.dumps(state["workflow_memory"]).encode()) / 1024
             state["workflow_memory_size_kb"] = size_kb
-        except Exception:
-            pass
+        except (TypeError, ValueError) as exc:
+            logger.debug(f"workflow_memory size estimate skipped: {exc}")
 
         return state
 

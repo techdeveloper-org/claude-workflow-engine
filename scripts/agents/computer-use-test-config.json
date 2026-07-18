@@ -1,5 +1,5 @@
 {
-  "test_suite": "Claude Insight Computer Use E2E Testing",
+  "test_suite": "Claude Workflow Engine Computer Use E2E Testing",
   "version": "5.1.0",
   "requires": {
     "anthropic_sdk": ">=0.25.0",

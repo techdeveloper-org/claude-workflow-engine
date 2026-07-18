@@ -124,7 +124,7 @@ def update_readme(project_root, new_version):
     Update README.md with new version.
 
     Patterns to update:
-    - Title: # Claude Insight vX.Y.Z
+    - Title: # Claude Workflow Engine vX.Y.Z
     - Badge: Version-brightgreen?version=X.Y.Z
     """
     readme_file = project_root / "README.md"
@@ -136,11 +136,11 @@ def update_readme(project_root, new_version):
         content = readme_file.read_text(encoding="utf-8")
 
         # Update title
-        content = content.replace("# Claude Insight v", f"# Claude Insight v{new_version} (was v")
+        content = content.replace("# Claude Workflow Engine v", f"# Claude Workflow Engine v{new_version} (was v")
         # Simpler: just replace version in title
         import re
 
-        content = re.sub(r"# Claude Insight v[\d.]+", f"# Claude Insight v{new_version}", content)
+        content = re.sub(r"# Claude Workflow Engine v[\d.]+", f"# Claude Workflow Engine v{new_version}", content)
 
         # Update badge
         content = re.sub(
@@ -206,7 +206,7 @@ def create_auto_commit(project_root, new_version):
             f"- Updated README.md with new version\n"
             f"- Updated SYSTEM_REQUIREMENTS_SPECIFICATION.md\n"
             f"- Timestamp: {datetime.now().isoformat()}\n\n"
-            f"Co-Authored-By: Claude Insight System <noreply@anthropic.com>"
+            f"Co-Authored-By: Claude Workflow Engine System <noreply@anthropic.com>"
         )
 
         # Use git commit with stdin to avoid shell quoting issues

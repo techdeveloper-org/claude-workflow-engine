@@ -155,6 +155,7 @@ class CallGraph:
     """
 
     def __init__(self):
+        """Initialise empty node/class/method/edge/file collections."""
         self.nodes = {}  # fqn -> node dict
         self.classes = {}  # fqn -> class node
         self.methods = {}  # fqn -> method/function node

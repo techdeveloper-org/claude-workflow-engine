@@ -13,6 +13,7 @@ try:
 except ImportError:
     FlowState = dict  # type: ignore[misc,assignment]
 
+from ..core.logger_factory import get_logger
 from .helpers import (
     _CONTEXT_CACHE_AVAILABLE,
     _DEDUPLICATOR_AVAILABLE,
@@ -32,6 +33,8 @@ try:
     from .helpers import deduplicate_context
 except ImportError:
     deduplicate_context = None  # type: ignore[assignment]
+
+logger = get_logger(__name__)
 
 # ============================================================================
 # NODE 3: CONTEXT LOADER (PARALLEL with complexity_calculation)
@@ -258,8 +261,8 @@ def node_context_loader(state):
                             }
                             with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                                 _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-                    except Exception:
-                        pass  # Non-blocking
+                    except OSError as exc:
+                        logger.debug(f"[context_loader] telemetry write skipped: {exc}")
                     return _cache_hit_result
             except Exception as cache_exc:
                 print(
@@ -465,7 +468,7 @@ def node_context_loader(state):
         # ---- Best-effort: detect technology patterns in project root ----
         _detected_patterns = None
         try:
-            _pattern_mod = _load_architecture_script("pattern-detector.py")
+            _pattern_mod = _load_architecture_script("pattern_detector.py")
             if _pattern_mod is not None and hasattr(_pattern_mod, "detect_patterns"):
                 if not state.get("patterns_detected"):
                     _detected_patterns = _pattern_mod.detect_patterns(project_root)
@@ -509,8 +512,8 @@ def node_context_loader(state):
                             "confidence_scores": _detailed.get("confidence_scores", {}),
                             "pattern_count": len(_detected_patterns),
                         }
-        except Exception:
-            pass  # Fail-open: pattern metadata is best-effort
+        except Exception as exc:
+            logger.debug(f"[context_loader] pattern metadata skipped: {exc}")
 
         write_level_log(
             state,
@@ -543,8 +546,8 @@ def node_context_loader(state):
                 }
                 with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                     _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-        except Exception:
-            pass  # Non-blocking
+        except OSError as exc:
+            logger.debug(f"[context_loader] telemetry write skipped: {exc}")
         return result
 
     except Exception as e:
@@ -581,6 +584,6 @@ def node_context_loader(state):
                 }
                 with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                     _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-        except Exception:
-            pass  # Non-blocking
+        except OSError as exc:
+            logger.debug(f"[context_loader] telemetry write skipped: {exc}")
         return result

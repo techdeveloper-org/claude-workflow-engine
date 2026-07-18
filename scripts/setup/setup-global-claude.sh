@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Claude Insight - Global Claude Memory System Setup (Unix/macOS/Linux/WSL)
+# Claude Workflow Engine - Global Claude Memory System Setup (Unix/macOS/Linux/WSL)
 # =============================================================================
 # This script sets up the Claude Memory System (3-Level Architecture) in your
 # ~/.claude directory so Claude Code follows the enforcement policies
@@ -36,7 +36,7 @@ NC='\033[0m'
 
 echo ""
 echo "============================================================"
-echo " Claude Insight - Global Memory System Setup"
+echo " Claude Workflow Engine - Global Memory System Setup"
 echo "============================================================"
 echo ""
 
@@ -132,8 +132,8 @@ else
         echo "  [INFO] Creating minimal CLAUDE.md..."
         cat > "$GLOBAL_CLAUDE_MD" << 'EOF'
 # Claude Memory System
-# Install claude-insight for the full 3-level architecture setup.
-# See: https://github.com/piyushmakhija28/claude-insight
+# Install claude-workflow-engine for the full 3-level architecture setup.
+# See: https://github.com/techdeveloper-org/claude-workflow-engine
 EOF
     fi
 fi
@@ -145,7 +145,7 @@ CONFIG_FILE="$SCRIPT_DIR/settings-config.json"
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "  [ERROR] settings-config.json not found at $CONFIG_FILE"
-    echo "  [INFO] This file should be in the scripts/ directory of claude-insight"
+    echo "  [INFO] This file should be in the scripts/ directory of claude-workflow-engine"
     exit 1
 fi
 
@@ -170,7 +170,7 @@ fi
 # Step 5: Finalize
 echo "[5/5] Finalizing..."
 echo "1.0.0" > "$MEMORY_CURRENT/VERSION"
-echo "Claude Insight Memory System" > "$MEMORY_CURRENT/MANIFEST.md"
+echo "Claude Workflow Engine Memory System" > "$MEMORY_CURRENT/MANIFEST.md"
 echo "Installed: $(date)" >> "$MEMORY_CURRENT/MANIFEST.md"
 
 echo ""

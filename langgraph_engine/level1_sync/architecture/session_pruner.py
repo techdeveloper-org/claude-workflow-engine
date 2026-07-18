@@ -20,12 +20,15 @@ Import usage:
 """
 
 import argparse
+import logging
 import shutil
 import sys
 import tarfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # CONSTANTS
@@ -218,8 +221,8 @@ def _log_action(source: str, action: str, detail: str) -> None:
         line = f"[{timestamp}] {source} | {action} | {detail}\n"
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line)
-    except Exception:
-        pass  # Logging failure must not break the main operation
+    except OSError as exc:
+        logger.debug("policy-hits log write skipped: %s", exc)
 
 
 def _get_stats(sessions_dir: Path) -> Dict[str, Any]:
@@ -262,8 +265,8 @@ def _get_stats(sessions_dir: Path) -> Dict[str, Any]:
                 with tarfile.open(tar_file, "r:gz") as tar:
                     stats["archived_sessions"] += len(tar.getmembers())
                 stats["archive_size_bytes"] += tar_file.stat().st_size
-            except Exception:
-                pass
+            except (OSError, tarfile.TarError) as exc:
+                logger.debug("skipping unreadable archive %s: %s", tar_file.name, exc)
 
     return stats
 

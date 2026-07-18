@@ -40,6 +40,7 @@ class PolicyNodeAdapter:
         description: str = "",
         timeout_seconds: int = 30,
     ):
+        """Configure the adapter with its script path and I/O mappings."""
         self.script_path = Path(script_path)
         self.input_mapping = input_mapping or {}
         self.output_mapping = output_mapping or {}
@@ -204,6 +205,7 @@ class PolicyNodeAdapter:
         """
 
         def composite_node(state: FlowState) -> FlowState:
+            """Run each adapter in turn, threading state through the chain."""
             for adapter in adapters:
                 state = adapter(state)
             return state

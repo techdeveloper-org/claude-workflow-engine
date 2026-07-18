@@ -41,7 +41,7 @@ except ImportError:  # pragma: no cover
         try:
             return fn(state)
         except Exception as exc:
-            logger.error("_run_step fallback caught exception in Step %s: %s", step_number, exc)
+            logger.error("_run_step fallback caught exception in Step {}: {}", step_number, exc)
             return fallback_result or {}
 
 
@@ -75,8 +75,8 @@ def step0_0_project_context_node(state: FlowState) -> Dict[str, Any]:
                     raw = fpath.read_text(encoding="utf-8", errors="replace")
                     context[fname] = raw[:max_bytes]
                     files_read.append(fname)
-                except Exception:
-                    pass
+                except OSError as exc:
+                    logger.debug(f"[pre_nodes] could not read {fname}: {exc}")
 
         elapsed = (_t.time() - _start) * 1000
         return {
@@ -171,7 +171,8 @@ def level3_init_node(state: FlowState) -> Dict[str, Any]:
         if memory_file.is_file():
             workflow_memory = json.loads(memory_file.read_text(encoding="utf-8", errors="replace"))
             logger.info(
-                "[v2] Loaded workflow memory from previous run " "(last_step=%s)", workflow_memory.get("last_step", "?")
+                "[v2] Loaded workflow memory from previous run (last_step={})",
+                workflow_memory.get("last_step", "?"),
             )
     except Exception as e:
         logger.debug("[v2] Workflow memory load skipped: %s" % str(e))
@@ -193,8 +194,8 @@ def level3_init_node(state: FlowState) -> Dict[str, Any]:
                 "complexity_threshold": prefs.get("complexity_threshold", 7),
                 "raw_keys": list(prefs.keys()),
             }
-    except Exception:
-        pass  # Best-effort: preferences context is non-blocking
+    except Exception as exc:
+        logger.debug(f"[pre_nodes] preferences context skipped: {exc}")
 
     return result
 

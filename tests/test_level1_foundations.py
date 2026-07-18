@@ -75,7 +75,7 @@ class TestComplexityCalculator:
 
     def test_score_in_range_1_to_10(self, tmp_project):
         """Any project must produce a score between 1 and 10."""
-        from langgraph_engine.complexity_calculator import calculate_complexity
+        from langgraph_engine.analysis.complexity_calculator import calculate_complexity
 
         score = calculate_complexity(str(tmp_project))
         assert isinstance(score, int)
@@ -83,7 +83,7 @@ class TestComplexityCalculator:
 
     def test_tiny_project_low_score(self, tmp_path):
         """A project with very few files should get a low score."""
-        from langgraph_engine.complexity_calculator import calculate_complexity
+        from langgraph_engine.analysis.complexity_calculator import calculate_complexity
 
         # Create 2 tiny Python files
         (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
@@ -93,7 +93,7 @@ class TestComplexityCalculator:
 
     def test_large_project_high_score(self, tmp_path):
         """A project with many files should get a higher score."""
-        from langgraph_engine.complexity_calculator import calculate_complexity
+        from langgraph_engine.analysis.complexity_calculator import calculate_complexity
 
         # Create 150 Python files each with 50 LOC
         for i in range(150):
@@ -107,7 +107,7 @@ class TestComplexityCalculator:
 
     def test_weighted_formula_correct(self):
         """Verify weighted formula: 40% file_score + 45% loc_score + 15% dep_score."""
-        from langgraph_engine.complexity_calculator import _dep_score, _file_score, _loc_score
+        from langgraph_engine.analysis.complexity_calculator import _dep_score, _file_score, _loc_score
 
         # Test some known values
         # < 5 files -> file_score = 2
@@ -139,7 +139,7 @@ class TestComplexityCalculator:
 
     def test_should_plan_rules(self):
         """Verify planning threshold rules by task type."""
-        from langgraph_engine.complexity_calculator import should_plan
+        from langgraph_engine.analysis.complexity_calculator import should_plan
 
         # Refactoring always requires planning
         assert should_plan(1, "refactoring") is True
@@ -155,14 +155,14 @@ class TestComplexityCalculator:
 
     def test_nonexistent_path_returns_default(self):
         """Non-existent project path should return a safe default."""
-        from langgraph_engine.complexity_calculator import calculate_complexity
+        from langgraph_engine.analysis.complexity_calculator import calculate_complexity
 
         score = calculate_complexity("/nonexistent/path/that/does/not/exist")
         assert 1 <= score <= 10
 
     def test_complexity_report_structure(self, tmp_project):
         """complexity_report() should return a structured dict with all metrics."""
-        from langgraph_engine.complexity_calculator import complexity_report
+        from langgraph_engine.analysis.complexity_calculator import complexity_report
 
         report = complexity_report(str(tmp_project))
         assert "complexity_score" in report
@@ -176,7 +176,7 @@ class TestComplexityCalculator:
 
     def test_requirements_txt_parsed(self, tmp_path):
         """Dependencies in requirements.txt should be counted."""
-        from langgraph_engine.complexity_calculator import _count_dependencies
+        from langgraph_engine.analysis.complexity_calculator import _count_dependencies
 
         # Create requirements.txt with 15 deps
         (tmp_path / "requirements.txt").write_text(
@@ -188,7 +188,7 @@ class TestComplexityCalculator:
 
     def test_package_json_parsed(self, tmp_path):
         """Dependencies in package.json should be counted."""
-        from langgraph_engine.complexity_calculator import _count_dependencies
+        from langgraph_engine.analysis.complexity_calculator import _count_dependencies
 
         pkg_data = {
             "dependencies": {"react": "^18", "axios": "^1"},
@@ -219,7 +219,7 @@ class TestContextDeduplication:
 
     def test_high_duplication_applied(self):
         """Dedup applied when savings >= 20%."""
-        from langgraph_engine.context_deduplicator import deduplicate_context
+        from langgraph_engine.context.deduplicator import deduplicate_context
 
         dup_line = "This line appears in both documents\n"
         context = {
@@ -233,7 +233,7 @@ class TestContextDeduplication:
 
     def test_low_duplication_skipped(self):
         """Dedup NOT applied when savings < 20%."""
-        from langgraph_engine.context_deduplicator import deduplicate_context
+        from langgraph_engine.context.deduplicator import deduplicate_context
 
         # Generate truly unique lines per file - no line in SRS appears in README
         srs_lines = (
@@ -277,7 +277,7 @@ class TestContextDeduplication:
 
     def test_priority_order_respected(self):
         """Primary doc (SRS) lines should not be removed, secondary docs deduplicated."""
-        from langgraph_engine.context_deduplicator import deduplicate_context
+        from langgraph_engine.context.deduplicator import deduplicate_context
 
         dup = "shared content line\n"
         context = {
@@ -296,7 +296,7 @@ class TestContextDeduplication:
 
     def test_single_file_not_deduped(self):
         """Dedup requires at least 2 files."""
-        from langgraph_engine.context_deduplicator import deduplicate_context
+        from langgraph_engine.context.deduplicator import deduplicate_context
 
         context = {
             "srs": "Only SRS content\n" * 50,
@@ -308,7 +308,7 @@ class TestContextDeduplication:
 
     def test_savings_estimate_function(self):
         """dedup_savings_estimate should return ratio and byte counts."""
-        from langgraph_engine.context_deduplicator import dedup_savings_estimate
+        from langgraph_engine.context.deduplicator import dedup_savings_estimate
 
         dup = "duplicate line\n"
         context = {
@@ -322,7 +322,7 @@ class TestContextDeduplication:
 
     def test_dedup_metadata_always_present(self):
         """Dedup metadata fields should be in result even when not applied."""
-        from langgraph_engine.context_deduplicator import deduplicate_context
+        from langgraph_engine.context.deduplicator import deduplicate_context
 
         context = {
             "srs": "unique srs content\n",
@@ -350,13 +350,13 @@ class TestCacheInvalidation:
 
     def test_cache_ttl_is_24_hours(self):
         """CACHE_MAX_AGE_HOURS must be exactly 24."""
-        from langgraph_engine.context_cache import CACHE_MAX_AGE_HOURS
+        from langgraph_engine.context.cache import CACHE_MAX_AGE_HOURS
 
         assert CACHE_MAX_AGE_HOURS == 24
 
     def test_fresh_cache_is_valid(self, tmp_path):
         """A freshly saved cache should be valid."""
-        from langgraph_engine.context_cache import ContextCache
+        from langgraph_engine.context.cache import ContextCache
 
         cache = ContextCache(cache_base_dir=str(tmp_path / "cache"))
         project = str(tmp_path)
@@ -370,7 +370,7 @@ class TestCacheInvalidation:
 
     def test_expired_cache_returns_none(self, tmp_path):
         """Cache older than 24h must be invalidated."""
-        from langgraph_engine.context_cache import ContextCache
+        from langgraph_engine.context.cache import ContextCache
 
         cache = ContextCache(cache_base_dir=str(tmp_path / "cache"))
         project = str(tmp_path)
@@ -380,7 +380,7 @@ class TestCacheInvalidation:
         cache.save_cache(project, context_data)
 
         # Manually backdating the saved_at timestamp
-        from langgraph_engine.context_cache import ContextCache as CC
+        from langgraph_engine.context.cache import ContextCache as CC
 
         key = CC._cache_key(project)
         cache_file = tmp_path / "cache" / (key + ".json")
@@ -395,7 +395,7 @@ class TestCacheInvalidation:
 
     def test_file_change_invalidates_cache(self, tmp_path):
         """Changing a tracked file must invalidate the cache."""
-        from langgraph_engine.context_cache import ContextCache
+        from langgraph_engine.context.cache import ContextCache
 
         cache = ContextCache(cache_base_dir=str(tmp_path / "cache"))
 
@@ -419,7 +419,7 @@ class TestCacheInvalidation:
 
     def test_cache_key_is_md5_of_path(self):
         """Cache key must be derived from project path hash."""
-        from langgraph_engine.context_cache import ContextCache
+        from langgraph_engine.context.cache import ContextCache
 
         project_path = "/some/test/project"
         key = ContextCache._cache_key(project_path)
@@ -431,7 +431,7 @@ class TestCacheInvalidation:
 
     def test_invalidate_removes_cache_file(self, tmp_path):
         """invalidate() must remove the cache file."""
-        from langgraph_engine.context_cache import ContextCache
+        from langgraph_engine.context.cache import ContextCache
 
         cache = ContextCache(cache_base_dir=str(tmp_path / "cache"))
         project = str(tmp_path)
@@ -451,7 +451,7 @@ class TestCacheInvalidation:
 
     def test_cache_info_returns_metadata(self, tmp_path):
         """cache_info() must return metadata about the cache entry."""
-        from langgraph_engine.context_cache import ContextCache
+        from langgraph_engine.context.cache import ContextCache
 
         cache = ContextCache(cache_base_dir=str(tmp_path / "cache"))
         project = str(tmp_path)
@@ -470,7 +470,7 @@ class TestCacheInvalidation:
 
     def test_cache_hit_returns_age_metadata(self, tmp_path):
         """Cache hit must include _cache_age_hours in returned context."""
-        from langgraph_engine.context_cache import ContextCache
+        from langgraph_engine.context.cache import ContextCache
 
         cache = ContextCache(cache_base_dir=str(tmp_path / "cache"))
         project = str(tmp_path)
@@ -483,7 +483,7 @@ class TestCacheInvalidation:
 
     def test_cache_stats_tracked(self, tmp_path):
         """Session hit/miss stats must be tracked."""
-        from langgraph_engine.context_cache import ContextCache
+        from langgraph_engine.context.cache import ContextCache
 
         ContextCache.reset_session_stats()
         cache = ContextCache(cache_base_dir=str(tmp_path / "cache"))

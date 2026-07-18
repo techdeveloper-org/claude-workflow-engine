@@ -22,6 +22,7 @@ class GitOperations:
     """Manages Git operations via CLI for Level 3 execution."""
 
     def __init__(self, repo_path: str = "."):
+        """Resolve the repo path (creating it if needed) and verify git is available."""
         self.repo_path = Path(repo_path)
         self.repo_path.mkdir(parents=True, exist_ok=True)
 

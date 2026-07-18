@@ -65,6 +65,7 @@ class _CacheEntry:
     __slots__ = ("value", "timestamp", "ttl")
 
     def __init__(self, value: Any, ttl: float) -> None:
+        """Store the cached value with its creation timestamp and TTL."""
         self.value = value
         self.timestamp: float = time.monotonic()
         self.ttl: float = ttl
@@ -137,12 +138,14 @@ def memoize(
         raise ValueError("max_size must be >= 1")
 
     def decorator(func: F) -> F:
+        """Wrap func with a per-function TTL + LRU cache."""
         # OrderedDict preserves insertion order so we can do O(1) LRU moves.
         cache: OrderedDict = OrderedDict()
         lock = threading.Lock()
 
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            """Return the cached result if present and unexpired, else compute and store it."""
             key = _make_cache_key(args, kwargs)
 
             with lock:
@@ -242,8 +245,11 @@ def with_timeout(seconds: int) -> Callable[[F], F]:
     """
 
     def decorator(fn: F) -> F:
+        """Wrap fn so it runs with a timeout, raising on overrun."""
+
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
+            """Run fn in a worker thread and enforce the timeout."""
             result_holder: Dict[str, Any] = {}
             exc_holder: Dict[str, Any] = {}
 
@@ -263,7 +269,7 @@ def with_timeout(seconds: int) -> Callable[[F], F]:
 
             if t.is_alive():
                 _logger.warning(
-                    "[with_timeout] '%s' exceeded %ss - returning state unchanged",
+                    "[with_timeout] '{}' exceeded {}s - returning state unchanged",
                     fn.__name__,
                     seconds,
                 )
@@ -309,8 +315,11 @@ def with_metrics(step_name: str) -> Callable[[F], F]:
     """
 
     def decorator(fn: F) -> F:
+        """Wrap fn to record success/failure and duration metrics."""
+
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
+            """Run fn, timing it and recording the outcome."""
             start = time.perf_counter()
             status = "SUCCESS"
             error_msg: Optional[str] = None
@@ -341,7 +350,7 @@ def with_metrics(step_name: str) -> Callable[[F], F]:
                     metrics_list.append(entry)
                     result["_metrics"] = metrics_list
 
-                _logger.debug("[with_metrics] %s => %s (%sms)", step_name, status, elapsed_ms)
+                _logger.debug("[with_metrics] {} => {} ({}ms)", step_name, status, elapsed_ms)
 
         return wrapper  # type: ignore[return-value]
 
@@ -379,8 +388,11 @@ def with_retry(
         raise ValueError("max_attempts must be >= 1")
 
     def decorator(fn: F) -> F:
+        """Wrap fn with retry-and-backoff on exception."""
+
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
+            """Run fn, retrying with backoff up to max_attempts on failure."""
             delay = backoff
             last_exc: Optional[Exception] = None
 
@@ -402,7 +414,7 @@ def with_retry(
                         delay *= 2
                     else:
                         _logger.error(
-                            "[with_retry] '%s' failed after %d attempt(s): %s",
+                            "[with_retry] '{}' failed after {} attempt(s): {}",
                             fn.__name__,
                             max_attempts,
                             exc,
@@ -443,19 +455,22 @@ def with_logging(step_name: str) -> Callable[[F], F]:
     """
 
     def decorator(fn: F) -> F:
+        """Wrap fn to log START/END around each call."""
+
         @functools.wraps(fn)
         def wrapper(state: dict) -> dict:
-            _logger.info("[%s] START", step_name)
+            """Run fn, logging start and completion for step_name."""
+            _logger.info("[{}] START", step_name)
             start = time.perf_counter()
 
             try:
                 result = fn(state)
                 elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
-                _logger.info("[%s] END OK (%sms)", step_name, elapsed_ms)
+                _logger.info("[{}] END OK ({}ms)", step_name, elapsed_ms)
                 return result
             except Exception as exc:  # noqa: BLE001
                 elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
-                _logger.error("[%s] END ERROR (%sms): %s", step_name, elapsed_ms, exc)
+                _logger.error("[{}] END ERROR ({}ms): {}", step_name, elapsed_ms, exc)
                 raise
 
         return wrapper  # type: ignore[return-value]
@@ -555,10 +570,10 @@ class SkillRegistry:
             existing = cls._registry[domain].get(name)
             if existing is not None:
                 existing.metadata.update(metadata or {})
-                _logger.debug("[SkillRegistry] Updated '%s/%s'", domain, name)
+                _logger.debug("[SkillRegistry] Updated '{}/{}'", domain, name)
                 return existing
             cls._registry[domain][name] = info
-            _logger.debug("[SkillRegistry] Registered '%s/%s'", domain, name)
+            _logger.debug("[SkillRegistry] Registered '{}/{}'", domain, name)
         return info
 
     @classmethod
@@ -590,7 +605,7 @@ class SkillRegistry:
                 f"_domain_{domain}",
                 {"type": "domain_placeholder"},
             )
-        _logger.debug("[SkillRegistry] Registered %d default domains", len(defaults))
+        _logger.debug("[SkillRegistry] Registered {} default domains", len(defaults))
 
     # ---------------------------------------------------------------------------
     # Read operations

@@ -34,6 +34,7 @@ class PipelineBenchmark:
     """Collects and aggregates performance metrics for a single pipeline run."""
 
     def __init__(self, session_id="", benchmark_dir=None):
+        """Start a benchmark run, stamping the start time and empty step map."""
         self.session_id = session_id
         self.start_time = time.time()
         self.steps = {}  # step_number -> {duration, status, cache_hit, ...}

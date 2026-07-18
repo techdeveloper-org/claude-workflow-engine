@@ -92,6 +92,7 @@ class Level3GitHubWorkflow:
     """Manages GitHub workflow for Steps 8-12."""
 
     def __init__(self, session_dir: str, repo_path: str = "."):
+        """Configure the session dir and GitHub router (MCP primary, gh CLI fallback)."""
         self.session_dir = session_dir
         # Phase 4: MCP enabled as primary backend with gh CLI fallback
         # Performance: MCP ~80ms vs gh CLI ~300ms (3.33x faster)
@@ -348,8 +349,8 @@ class Level3GitHubWorkflow:
                     # Persist conflict log
                     try:
                         conflict_resolver.save_conflict_log()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"[Step 9] conflict log persist skipped: {exc}")
             else:
                 logger.debug("[Step 9] ConflictResolver unavailable - skipping branch conflict check")
 

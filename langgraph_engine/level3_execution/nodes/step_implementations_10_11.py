@@ -46,6 +46,7 @@ except ImportError:  # pragma: no cover
         timeout: int = 120,
         json_mode: bool = False,
     ) -> Optional[str]:
+        """Fallback stub used when langgraph_engine.llm_call import fails."""
         logger.error("llm_call unavailable; returning None")
         return None
 
@@ -131,11 +132,11 @@ def step10_implementation_execution(state: FlowState) -> Dict[str, Any]:
             try:
                 system_prompt = system_prompt_path.read_text(encoding="utf-8", errors="replace")
                 result["step10_system_prompt_loaded"] = True
-                logger.debug("[Step10] Loaded system_prompt.txt (%d chars)", len(system_prompt))
+                logger.debug("[Step10] Loaded system_prompt.txt ({} chars)", len(system_prompt))
             except Exception as exc:
-                logger.warning("[Step10] Failed to read system_prompt.txt: %s", exc)
+                logger.warning("[Step10] Failed to read system_prompt.txt: {}", exc)
         else:
-            logger.debug("[Step10] system_prompt.txt not found at %s", system_prompt_path)
+            logger.debug("[Step10] system_prompt.txt not found at {}", system_prompt_path)
 
         # --- Load user message from disk (or fall back to state prompt) ---
         user_message = ""
@@ -144,16 +145,16 @@ def step10_implementation_execution(state: FlowState) -> Dict[str, Any]:
             try:
                 user_message = user_message_path.read_text(encoding="utf-8", errors="replace")
                 result["step10_user_message_loaded"] = True
-                logger.debug("[Step10] Loaded user_message.txt (%d chars)", len(user_message))
+                logger.debug("[Step10] Loaded user_message.txt ({} chars)", len(user_message))
             except Exception as exc:
-                logger.warning("[Step10] Failed to read user_message.txt: %s", exc)
+                logger.warning("[Step10] Failed to read user_message.txt: {}", exc)
 
         if not user_message:
             # Use wrapper-injected prompt or the base execution prompt
             user_message = state.get("step10_execution_prompt") or state.get("step7_execution_prompt") or ""
             if user_message:
                 result["step10_user_message_loaded"] = True
-                logger.debug("[Step10] Using execution prompt from state (%d chars)", len(user_message))
+                logger.debug("[Step10] Using execution prompt from state ({} chars)", len(user_message))
 
         # --- Compose final prompt ---
         if system_prompt and user_message:
@@ -165,12 +166,12 @@ def step10_implementation_execution(state: FlowState) -> Dict[str, Any]:
         else:
             result["step10_error"] = "No prompt available: system_prompt.txt missing and step7_execution_prompt empty"
             result["step10_execution_time_ms"] = (time.time() - step_start) * 1000
-            logger.error("[Step10] %s", result["step10_error"])
+            logger.error("[Step10] {}", result["step10_error"])
             return result
 
         # --- Invoke LLM ---
         timeout = int(os.environ.get("STEP10_LLM_TIMEOUT", "300"))
-        logger.info("[Step10] Invoking llm_call (model=deep, timeout=%ds)", timeout)
+        logger.info("[Step10] Invoking llm_call (model=deep, timeout={}s)", timeout)
         result["step10_llm_invoked"] = True
 
         llm_response: Optional[str] = llm_call(
@@ -183,24 +184,24 @@ def step10_implementation_execution(state: FlowState) -> Dict[str, Any]:
         if not llm_response:
             result["step10_error"] = "llm_call returned None or empty response"
             result["step10_execution_time_ms"] = (time.time() - step_start) * 1000
-            logger.error("[Step10] %s", result["step10_error"])
+            logger.error("[Step10] {}", result["step10_error"])
             return result
 
         result["step10_llm_response"] = llm_response
-        logger.info("[Step10] LLM response received (%d chars)", len(llm_response))
+        logger.info("[Step10] LLM response received ({} chars)", len(llm_response))
 
         # --- Persist response to disk ---
         try:
             response_path = Path(session_dir) / "step10_llm_response.txt"
             response_path.write_text(llm_response, encoding="utf-8", errors="replace")
-            logger.debug("[Step10] Persisted response to %s", response_path)
+            logger.debug("[Step10] Persisted response to {}", response_path)
         except Exception as exc:
-            logger.warning("[Step10] Could not persist LLM response: %s", exc)
+            logger.warning("[Step10] Could not persist LLM response: {}", exc)
 
         # --- Extract modified files ---
         modified_files: List[str] = _extract_modified_files(llm_response, project_root)
         result["step10_modified_files"] = modified_files
-        logger.info("[Step10] Extracted %d modified files", len(modified_files))
+        logger.info("[Step10] Extracted {} modified files", len(modified_files))
 
         # --- Build changes summary (read by Figma path in wrapper at line 497) ---
         changes_summary: Dict[str, Any] = {
@@ -219,11 +220,11 @@ def step10_implementation_execution(state: FlowState) -> Dict[str, Any]:
     except Exception as exc:
         result["step10_error"] = str(exc)
         result["step10_implementation_status"] = "ERROR"
-        logger.exception("[Step10] Unexpected error: %s", exc)
+        logger.exception("[Step10] Unexpected error: {}", exc)
 
     result["step10_execution_time_ms"] = (time.time() - step_start) * 1000
     logger.info(
-        "[Step10] Done: status=%s, files=%d, elapsed=%.0fms",
+        "[Step10] Done: status={}, files={}, elapsed={:.0f}ms",
         result["step10_implementation_status"],
         len(result["step10_modified_files"]),
         result["step10_execution_time_ms"],
@@ -286,7 +287,7 @@ def step11_pull_request_review(state: FlowState) -> Dict[str, Any]:
         if not state.get("step9_branch_created", False):
             result["step11_status"] = "SKIPPED"
             result["step11_error"] = "step9_branch_created is False; skipping PR creation"
-            logger.warning("[Step11] %s", result["step11_error"])
+            logger.warning("[Step11] {}", result["step11_error"])
             result["step11_execution_time_ms"] = (time.time() - step_start) * 1000
             return result
 
@@ -294,7 +295,7 @@ def step11_pull_request_review(state: FlowState) -> Dict[str, Any]:
         if Level3GitHubWorkflow is None:
             result["step11_status"] = "SKIPPED"
             result["step11_error"] = "Level3GitHubWorkflow import failed; skipping PR creation"
-            logger.warning("[Step11] %s", result["step11_error"])
+            logger.warning("[Step11] {}", result["step11_error"])
             result["step11_execution_time_ms"] = (time.time() - step_start) * 1000
             return result
 
@@ -314,7 +315,7 @@ def step11_pull_request_review(state: FlowState) -> Dict[str, Any]:
         if not branch_name:
             result["step11_status"] = "SKIPPED"
             result["step11_error"] = "step9_branch_name is empty; cannot create PR"
-            logger.warning("[Step11] %s", result["step11_error"])
+            logger.warning("[Step11] {}", result["step11_error"])
             result["step11_execution_time_ms"] = (time.time() - step_start) * 1000
             return result
 
@@ -339,7 +340,7 @@ def step11_pull_request_review(state: FlowState) -> Dict[str, Any]:
 
         # --- Invoke GitHub workflow ---
         logger.info(
-            "[Step11] Creating PR: issue=#%d, branch=%s, auto_merge=%s",
+            "[Step11] Creating PR: issue=#{}, branch={}, auto_merge={}",
             issue_number,
             branch_name,
             auto_merge,
@@ -371,10 +372,10 @@ def step11_pull_request_review(state: FlowState) -> Dict[str, Any]:
             err = pr_result.get("error", "PR creation returned success=False")
             result["step11_error"] = err
             result["step11_review_issues"] = [err]
-            logger.error("[Step11] PR creation failed: %s", err)
+            logger.error("[Step11] PR creation failed: {}", err)
         else:
             logger.info(
-                "[Step11] PR created: #%s at %s (merged=%s)",
+                "[Step11] PR created: #{} at {} (merged={})",
                 pr_number,
                 pr_url,
                 merged,
@@ -384,11 +385,11 @@ def step11_pull_request_review(state: FlowState) -> Dict[str, Any]:
         result["step11_error"] = str(exc)
         result["step11_status"] = "ERROR"
         result["step11_review_issues"] = [str(exc)]
-        logger.exception("[Step11] Unexpected error: %s", exc)
+        logger.exception("[Step11] Unexpected error: {}", exc)
 
     result["step11_execution_time_ms"] = (time.time() - step_start) * 1000
     logger.info(
-        "[Step11] Done: status=%s, pr=%s, elapsed=%.0fms",
+        "[Step11] Done: status={}, pr={}, elapsed={:.0f}ms",
         result["step11_status"],
         result["step11_pr_id"],
         result["step11_execution_time_ms"],

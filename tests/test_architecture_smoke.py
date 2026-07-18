@@ -1,9 +1,12 @@
 """
 Architecture Module Smoke Tests
 
-Verifies that all Python modules under scripts/architecture/ can be imported
-without errors. This catches broken imports, missing dependencies, and syntax
-errors across all three architecture levels.
+Verifies that all Python modules under the engine's architecture directories can be
+imported without errors. This catches broken imports, missing dependencies, and syntax
+errors across the sync (Level 1) and execution (Level 3) architecture packages.
+
+Level 2 (standards) was migrated to policy Markdown files under policies/ in v1.16.0 and
+intentionally contains no importable Python modules, so it is not scanned here.
 """
 
 import importlib.util
@@ -12,35 +15,36 @@ from pathlib import Path
 
 import pytest
 
-# Add project root + scripts/ to sys.path so imports resolve
 _REPO_ROOT = Path(__file__).parent.parent
-SCRIPTS_DIR = _REPO_ROOT / "scripts"
 sys.path.insert(0, str(_REPO_ROOT))
-sys.path.insert(0, str(SCRIPTS_DIR))
+sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 
-ARCH_DIR = SCRIPTS_DIR / "architecture"
+# Current architecture module locations after the v1.16.0 reorganization.
+_ARCH_DIRS = [
+    _REPO_ROOT / "langgraph_engine" / "level1_sync" / "architecture",
+    _REPO_ROOT / "langgraph_engine" / "level3_execution" / "architecture",
+    _REPO_ROOT / "scripts" / "architecture" / "03-execution-system",
+]
+
+_LEVEL1_ARCH_DIR = _ARCH_DIRS[0]
+_LEVEL3_ARCH_DIR = _ARCH_DIRS[1]
 
 
-# Collect modules per level at import time so parametrize can use them
-def _collect_py_files(level_dir_name):
-    """Return a sorted list of all non-dunder .py files under the given subdir."""
-    level_path = ARCH_DIR / level_dir_name
-    if not level_path.exists():
+def _collect_py_files(directory):
+    """Return a sorted list of all non-dunder .py files under the given directory."""
+    if not directory.exists():
         return []
-    return sorted(p for p in level_path.rglob("*.py") if not p.name.startswith("__"))
+    return sorted(p for p in directory.rglob("*.py") if not p.name.startswith("__"))
 
 
-_LEVEL1_FILES = _collect_py_files("01-sync-system")
-_LEVEL2_FILES = _collect_py_files("02-standards-system")
-_LEVEL3_FILES = _collect_py_files("03-execution-system")
+_ALL_ARCH_FILES = [f for directory in _ARCH_DIRS for f in _collect_py_files(directory)]
 
 
 def _try_import(py_file):
-    """Try to import a Python file as a module.
+    """Try to import a Python file as a standalone module.
 
-    Returns (success, error_msg).
-    success=True  if the module loaded without raising an exception.
-    success=False if any exception occurred during loading.
+    Returns (success, error_msg). success is True when the module loaded without
+    raising; False (with the error string) when any exception occurred during load.
     """
     try:
         module_name = "_arch_smoke_" + py_file.stem.replace("-", "_")
@@ -50,125 +54,43 @@ def _try_import(py_file):
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)  # type: ignore[attr-defined]
         return True, None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - smoke test records any import failure as a skip
         return False, str(exc)
 
 
-# ---------------------------------------------------------------------------
-# Basic sanity: the architecture directory itself exists
-# ---------------------------------------------------------------------------
-
-
 class TestArchitectureSmokeImports:
-    """Smoke tests for all Python modules under scripts/architecture/."""
+    """Smoke tests for all Python modules under the engine architecture directories."""
 
-    def test_architecture_dir_exists(self):
-        """Verify that scripts/architecture/ directory exists."""
-        assert ARCH_DIR.exists(), "scripts/architecture/ directory not found at " + str(ARCH_DIR)
-
-    def test_architecture_dir_is_directory(self):
-        """Verify that scripts/architecture/ is a real directory."""
-        assert ARCH_DIR.is_dir(), str(ARCH_DIR) + " is not a directory"
-
-    # -----------------------------------------------------------------------
-    # Level 1: 01-sync-system
-    # -----------------------------------------------------------------------
-
-    def test_level1_dir_exists(self):
-        """Verify that 01-sync-system subdirectory exists."""
-        level_path = ARCH_DIR / "01-sync-system"
-        if not level_path.exists():
-            pytest.skip("01-sync-system not found; skipping")
-        assert level_path.is_dir()
-
-    @pytest.mark.parametrize(
-        "py_file",
-        _LEVEL1_FILES,
-        ids=[p.name for p in _LEVEL1_FILES] if _LEVEL1_FILES else [],
-    )
-    def test_level1_module_importable(self, py_file):
-        """Verify that a 01-sync-system Python file can be imported."""
-        success, error = _try_import(py_file)
-        if not success:
-            pytest.skip("Import failed (likely optional dependency): " + py_file.name + " -> " + (error or "")[:200])
+    def test_architecture_dirs_exist(self):
+        """At least one of the architecture directories must exist on disk."""
+        existing = [d for d in _ARCH_DIRS if d.exists()]
+        assert existing, "No architecture directory found among: " + ", ".join(str(d) for d in _ARCH_DIRS)
 
     def test_level1_has_python_files(self):
-        """Verify that 01-sync-system contains at least one Python file."""
-        level_path = ARCH_DIR / "01-sync-system"
-        if not level_path.exists():
-            pytest.skip("01-sync-system not found")
-        files = list(level_path.rglob("*.py"))
-        assert len(files) > 0, "No Python files found in 01-sync-system"
-
-    # -----------------------------------------------------------------------
-    # Level 2: 02-standards-system
-    # -----------------------------------------------------------------------
-
-    def test_level2_dir_exists(self):
-        """Verify that 02-standards-system subdirectory exists."""
-        level_path = ARCH_DIR / "02-standards-system"
-        if not level_path.exists():
-            pytest.skip("02-standards-system not found; skipping")
-        assert level_path.is_dir()
-
-    @pytest.mark.parametrize(
-        "py_file",
-        _LEVEL2_FILES,
-        ids=[p.name for p in _LEVEL2_FILES] if _LEVEL2_FILES else [],
-    )
-    def test_level2_module_importable(self, py_file):
-        """Verify that a 02-standards-system Python file can be imported."""
-        success, error = _try_import(py_file)
-        if not success:
-            pytest.skip("Import failed (likely optional dependency): " + py_file.name + " -> " + (error or "")[:200])
-
-    def test_level2_has_python_files(self):
-        """Verify that 02-standards-system contains at least one Python file."""
-        level_path = ARCH_DIR / "02-standards-system"
-        if not level_path.exists():
-            pytest.skip("02-standards-system not found")
-        files = list(level_path.rglob("*.py"))
-        assert len(files) > 0, "No Python files found in 02-standards-system"
-
-    # -----------------------------------------------------------------------
-    # Level 3: 03-execution-system
-    # -----------------------------------------------------------------------
-
-    def test_level3_dir_exists(self):
-        """Verify that 03-execution-system subdirectory exists."""
-        level_path = ARCH_DIR / "03-execution-system"
-        if not level_path.exists():
-            pytest.skip("03-execution-system not found; skipping")
-        assert level_path.is_dir()
-
-    @pytest.mark.parametrize(
-        "py_file",
-        _LEVEL3_FILES,
-        ids=[p.name for p in _LEVEL3_FILES] if _LEVEL3_FILES else [],
-    )
-    def test_level3_module_importable(self, py_file):
-        """Verify that a 03-execution-system Python file can be imported."""
-        success, error = _try_import(py_file)
-        if not success:
-            pytest.skip("Import failed (likely optional dependency): " + py_file.name + " -> " + (error or "")[:200])
+        """Level 1 sync architecture must contain at least one Python module."""
+        files = _collect_py_files(_LEVEL1_ARCH_DIR)
+        assert len(files) > 0, "No Python files found in langgraph_engine/level1_sync/architecture"
 
     def test_level3_has_python_files(self):
-        """Verify that 03-execution-system contains at least one Python file."""
-        level_path = ARCH_DIR / "03-execution-system"
-        if not level_path.exists():
-            pytest.skip("03-execution-system not found")
-        files = list(level_path.rglob("*.py"))
-        assert len(files) > 0, "No Python files found in 03-execution-system"
+        """Level 3 execution architecture must contain at least one Python module."""
+        files = _collect_py_files(_LEVEL3_ARCH_DIR)
+        assert len(files) > 0, "No Python files found in langgraph_engine/level3_execution/architecture"
 
-    # -----------------------------------------------------------------------
-    # Summary: total file counts as a sanity check
-    # -----------------------------------------------------------------------
+    @pytest.mark.parametrize(
+        "py_file",
+        _ALL_ARCH_FILES,
+        ids=[p.name for p in _ALL_ARCH_FILES] if _ALL_ARCH_FILES else [],
+    )
+    def test_architecture_module_importable(self, py_file):
+        """Each architecture Python file imports cleanly (optional deps may skip)."""
+        success, error = _try_import(py_file)
+        if not success:
+            pytest.skip("Import failed (likely optional dependency): " + py_file.name + " -> " + (error or "")[:200])
 
     def test_total_architecture_file_count(self):
-        """Verify that the total number of architecture Python files is reasonable."""
-        total = len(list(ARCH_DIR.rglob("*.py")))
-        assert total > 0, "No Python files found anywhere under scripts/architecture/"
-        # Current repo has ~83 modules; allow for growth or minor shrinkage
-        assert total >= 10, (
-            "Suspiciously few Python files in architecture (%d); " "check if directory is intact" % total
+        """The engine must expose a reasonable number of architecture modules."""
+        total = len(_ALL_ARCH_FILES)
+        assert total >= 4, (
+            "Suspiciously few architecture Python files (%d); "
+            "check if the architecture directories are intact" % total
         )

@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ..core.logger_factory import get_logger
+
+logger = get_logger(__name__)
+
 try:
     import sys as _sys
 
@@ -32,17 +36,24 @@ except ImportError:
 # ============================================================================
 
 
-def call_execution_script(script_name: str, args: list = None, model_tier: str = None) -> dict:
+def call_execution_script(script_name: str, args: list = None, model_tier: str = None, timeout: int = None) -> dict:
     """Call a Level 3 execution script and return parsed output.
 
     Args:
         script_name: Name of the script (without .py) in architecture/03-execution-system/
         args: Command-line arguments to pass
         model_tier: Optional model tier ('fast', 'balanced', 'quality') passed via MODEL_TIER env var
+        timeout: Seconds to wait for the subprocess before raising TimeoutExpired.
+                 Defaults to 30 when not supplied. Callers with a larger inner LLM
+                 budget (Step 0 prompt-gen / todo-decomposer) pass their own value so
+                 the outer subprocess timeout never caps the documented STEP0_* budget.
     """
     import os
 
     DEBUG = os.getenv("CLAUDE_DEBUG") == "1"
+
+    if timeout is None:
+        timeout = 30
 
     try:
         scripts_dir = Path(__file__).parent.parent.parent / "scripts"
@@ -88,7 +99,7 @@ def call_execution_script(script_name: str, args: list = None, model_tier: str =
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=30,
+            timeout=timeout,
             cwd=scripts_dir,
             env=env,
         )
@@ -353,8 +364,8 @@ def _read_project_context_snippets(project_root: str, max_chars: int = 1500) -> 
                 readme_snippet = content[:max_chars]
                 if len(content) > max_chars:
                     readme_snippet += "\n... (truncated)"
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[level3.helpers] README read skipped: {exc}")
             break
 
     # Read SRS
@@ -366,8 +377,8 @@ def _read_project_context_snippets(project_root: str, max_chars: int = 1500) -> 
                 srs_snippet = content[:max_chars]
                 if len(content) > max_chars:
                     srs_snippet += "\n... (truncated)"
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"[level3.helpers] SRS read skipped: {exc}")
             break
 
     return readme_snippet, srs_snippet

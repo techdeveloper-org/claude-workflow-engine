@@ -195,7 +195,7 @@ def test_prometheus_counter_increments_on_violation(monkeypatch):
     monkeypatch.setenv("ENABLE_RUNTIME_VERIFICATION", "1")
     monkeypatch.setenv("ENABLE_METRICS", "1")
 
-    from langgraph_engine.metrics_exporter import inc_verification_violations
+    from langgraph_engine.metrics.exporter import inc_verification_violations
 
     label_set = {"level": "ERROR", "node": "test_prometheus_node"}
 

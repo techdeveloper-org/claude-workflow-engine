@@ -244,7 +244,7 @@ Each session gets auto-generated summary:
   "context_usage": "55%"
 }
 
-Queryable in Claude Insight dashboard
+Queryable in Claude Workflow Engine dashboard
 Searchable by topic/project/skill
 ```
 
@@ -266,7 +266,7 @@ Tag-based organization:
 - Project names: "surgricalswale", "lovepoet"
 - Skill tags: "orchestrator-agent", "devops-engineer"
 
-Query examples (via Claude Insight):
+Query examples (via Claude Workflow Engine):
 - "Show all sessions tagged with 'spring-boot' from last week"
 - "Compare 'bug-fix' sessions across projects"
 - "What was the context usage for 'devops' work?"
@@ -373,7 +373,7 @@ Claude Native (IDE)            Our Custom System
 ├─ Active session              ├─ ~/.claude/memory/sessions/
 ├─ In-IDE history              ├─ ~/.claude/.hook-state-{PID}.json
 └─ Sidebar context             └─ session-chain-index.json
-                               └─ Claude Insight Dashboard
+                               └─ Claude Workflow Engine Dashboard
 ```
 
 **Both work together:**
@@ -393,7 +393,7 @@ All sessions are automatically tracked:
 ~/.claude/memory/sessions/{SESSION_ID}/
 
 # Auto-loaded after /clear:
-# Claude Insight → Sessions dashboard → See all past sessions
+# Claude Workflow Engine → Sessions dashboard → See all past sessions
 ```
 
 ### Manual Access
@@ -408,11 +408,11 @@ cat ~/.claude/memory/sessions/SESSION-20260224-130424-IQAV/session-summary.json
 # View session chain
 cat ~/.claude/memory/sessions/chain-index.json
 
-# Query via Claude Insight Dashboard
+# Query via Claude Workflow Engine Dashboard
 # → Sessions page → Filter by project/tag/date
 ```
 
-### Claude Insight Integration
+### Claude Workflow Engine Integration
 
 View all metrics in dashboard:
 1. **Sessions Page** - See all sessions with summaries
@@ -481,4 +481,4 @@ View all metrics in dashboard:
 - `multi-window-session-isolation.md` - PID-based isolation details
 - `review-checkpoint-consistency-fix.md` - Session startup process
 - `CONTEXT-SESSION-INTEGRATION.md` - Context + Session interaction
-- Claude Insight Dashboard - Visual session explorer
+- Claude Workflow Engine Dashboard - Visual session explorer

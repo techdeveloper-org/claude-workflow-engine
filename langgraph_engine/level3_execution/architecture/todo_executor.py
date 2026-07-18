@@ -48,7 +48,7 @@ def _load_checkpoint(checkpoint_path):
             results = data.get("results", {})
             return completed, results
     except Exception as exc:
-        logger.debug("[todo_executor] checkpoint load failed (ignored): %s", exc)
+        logger.debug("[todo_executor] checkpoint load failed (ignored): {}", exc)
     return set(), {}
 
 
@@ -63,7 +63,7 @@ def _save_checkpoint(checkpoint_path, completed_ids, results):
         }
         path.write_text(json.dumps(data, ensure_ascii=True, indent=2), encoding="utf-8")
     except Exception as exc:
-        logger.debug("[todo_executor] checkpoint save failed (ignored): %s", exc)
+        logger.debug("[todo_executor] checkpoint save failed (ignored): {}", exc)
 
 
 def _resolve_checkpoint_path(session_dir):
@@ -105,7 +105,7 @@ def _execute_single_todo(todo_item):
             prompt_file,
         ]
 
-        logger.info("[todo_executor] Executing TODO %s via orchestrator_agent_caller", todo_id)
+        logger.info("[todo_executor] Executing TODO {} via orchestrator_agent_caller", todo_id)
 
         proc = subprocess.run(
             cmd,
@@ -157,8 +157,8 @@ def _execute_single_todo(todo_item):
         if prompt_file:
             try:
                 Path(prompt_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug(f"todo_executor: temp prompt file cleanup skipped: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +195,7 @@ def execute_todo_list(
     completed_ids, checkpoint_results = _load_checkpoint(checkpoint_path)
     if completed_ids:
         logger.info(
-            "[todo_executor] step=%d Resume: %d already completed TODOs",
+            "[todo_executor] step={} Resume: {} already completed TODOs",
             step_number,
             len(completed_ids),
         )
@@ -206,7 +206,7 @@ def execute_todo_list(
         todo_id = todo_item.get("id", "")
 
         if todo_id and todo_id in completed_ids:
-            logger.info("[todo_executor] step=%d Skipping completed TODO %s", step_number, todo_id)
+            logger.info("[todo_executor] step={} Skipping completed TODO {}", step_number, todo_id)
             skipped_result = checkpoint_results.get(todo_id, {})
             execution_results.append(
                 {
@@ -227,7 +227,7 @@ def execute_todo_list(
             _save_checkpoint(checkpoint_path, completed_ids, checkpoint_results)
 
         logger.info(
-            "[todo_executor] step=%d TODO %s -> %s",
+            "[todo_executor] step={} TODO {} -> {}",
             step_number,
             todo_id,
             item_result.get("status", "UNKNOWN"),

@@ -1,15 +1,15 @@
 """Tests for Session Management MCP Server (src/mcp/session_mcp_server.py)."""
 
+import importlib.util
 import json
-import tempfile
-import pytest
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import sys
-import importlib.util
+import pytest
 
 _MCP_DIR = Path(__file__).parent.parent / "src" / "mcp"
+
 
 def _load_module(name, file_path):
     spec = importlib.util.spec_from_file_location(name, file_path)
@@ -17,6 +17,7 @@ def _load_module(name, file_path):
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
+
 
 _sess_mod = _load_module("session_mcp_server", _MCP_DIR / "session_mcp_server.py")
 
@@ -41,9 +42,11 @@ def temp_session_dir(tmp_path):
     state.mkdir()
 
     # Patch the module-level paths
-    with patch.object(_sess_mod, "SESSIONS_PATH", sessions), \
-         patch.object(_sess_mod, "STATE_PATH", state), \
-         patch.object(_sess_mod, "MEMORY_PATH", tmp_path):
+    with (
+        patch.object(_sess_mod, "SESSIONS_PATH", sessions),
+        patch.object(_sess_mod, "STATE_PATH", state),
+        patch.object(_sess_mod, "MEMORY_PATH", tmp_path),
+    ):
         yield tmp_path, sessions, state
 
 
@@ -53,16 +56,16 @@ class TestSessionSave:
     def test_save_summary(self, temp_session_dir):
         """Test saving a session summary."""
         _, sessions, _ = temp_session_dir
-        result = _parse(session_save(
-            "2026-03-15-14-30", "summary",
-            "# Session Summary\n\nWorked on MCP servers.",
-            "claude-insight"
-        ))
+        result = _parse(
+            session_save(
+                "2026-03-15-14-30", "summary", "# Session Summary\n\nWorked on MCP servers.", "claude-workflow-engine"
+            )
+        )
         assert result["success"] is True
         assert result["data_type"] == "summary"
 
         # Verify file exists
-        saved = sessions / "claude-insight" / "session-2026-03-15-14-30.md"
+        saved = sessions / "claude-workflow-engine" / "session-2026-03-15-14-30.md"
         assert saved.exists()
         assert "MCP servers" in saved.read_text(encoding="utf-8")
 
@@ -81,11 +84,7 @@ class TestSessionSave:
 
     def test_save_context(self, temp_session_dir):
         """Test saving context snapshot."""
-        result = _parse(session_save(
-            "ctx-001", "context",
-            json.dumps({"files": ["a.py", "b.py"]}),
-            "test-project"
-        ))
+        result = _parse(session_save("ctx-001", "context", json.dumps({"files": ["a.py", "b.py"]}), "test-project"))
         assert result["success"] is True
         assert result["data_type"] == "context"
 

@@ -49,6 +49,7 @@ class CodebaseAnalyzer:
     """Analyzes codebase to understand structure and purpose."""
 
     def __init__(self, project_root: str = "."):
+        """Bind the analyzer to project_root with a module logger."""
         self.root = Path(project_root)
         self.logger = logging.getLogger(__name__)
 
@@ -198,8 +199,8 @@ class CodebaseAnalyzer:
                     pkg = json.load(f)
                     if pkg.get("scripts", {}).get("test"):
                         return True, "npm test"
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.debug("doc_gen: package.json test-script read skipped: %s", exc)
 
         return False, ""
 
@@ -229,8 +230,8 @@ class CodebaseAnalyzer:
                 with open(req_file) as f:
                     lines = f.readlines()[:10]  # First 10 deps
                     deps.extend([line.strip() for line in lines if line.strip()])
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("doc_gen: requirements.txt read skipped: %s", exc)
 
         # From package.json
         pkg_file = self.root / "package.json"
@@ -239,8 +240,8 @@ class CodebaseAnalyzer:
                 with open(pkg_file) as f:
                     pkg = json.load(f)
                     deps.extend(list(pkg.get("dependencies", {}).keys())[:10])
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.debug("doc_gen: package.json deps read skipped: %s", exc)
 
         return deps[:15]  # Limit to 15
 
@@ -253,8 +254,8 @@ class CodebaseAnalyzer:
             if vf_path.exists():
                 try:
                     return vf_path.read_text().strip().split("\n")[0]
-                except Exception:
-                    pass
+                except OSError as exc:
+                    logger.debug("doc_gen: version file read skipped: %s", exc)
 
         # Check package.json
         pkg_file = self.root / "package.json"
@@ -262,8 +263,8 @@ class CodebaseAnalyzer:
             try:
                 with open(pkg_file) as f:
                     return json.load(f).get("version", "0.1.0")
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.debug("doc_gen: package.json version read skipped: %s", exc)
 
         # Check setup.py
         setup_file = self.root / "setup.py"
@@ -275,8 +276,8 @@ class CodebaseAnalyzer:
                 match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
                 if match:
                     return match.group(1)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("doc_gen: setup.py version read skipped: %s", exc)
 
         return "0.1.0"
 
@@ -314,6 +315,7 @@ class DocumentationGenerator:
     """Generate documentation using templates and context."""
 
     def __init__(self, project_root: str = ".", session_dir: str = None):
+        """Bind to project_root/session_dir and create a CodebaseAnalyzer."""
         self.root = Path(project_root)
         self.session_dir = session_dir or str(_DOC_SESSION_LOGS_DIR / "current")
         self.analyzer = CodebaseAnalyzer(project_root)

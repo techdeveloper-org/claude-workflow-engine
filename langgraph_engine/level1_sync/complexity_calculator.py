@@ -14,6 +14,7 @@ try:
 except ImportError:
     FlowState = dict  # type: ignore[misc,assignment]
 
+from ..core.logger_factory import get_logger
 from .helpers import (
     _COMPLEXITY_CALCULATOR_AVAILABLE,
     _LEVEL1_TELEMETRY_DIR,
@@ -27,6 +28,8 @@ try:
     from .helpers import calculate_complexity
 except ImportError:
     calculate_complexity = None  # type: ignore[assignment]
+
+logger = get_logger(__name__)
 
 
 # ============================================================================
@@ -97,8 +100,8 @@ def node_complexity_calculation(state):
                     }
                     with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                         _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-            except Exception:
-                pass  # Non-blocking
+            except OSError as exc:
+                logger.debug(f"[complexity] telemetry write skipped: {exc}")
             return result
 
         # --- Legacy path: try the old architecture script ---
@@ -146,11 +149,11 @@ def node_complexity_calculation(state):
                             }
                             with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                                 _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-                    except Exception:
-                        pass  # Non-blocking
+                    except OSError as exc:
+                        logger.debug(f"[complexity] telemetry write skipped: {exc}")
                     return _legacy_result
-                except Exception:
-                    pass
+                except (ValueError, KeyError) as exc:
+                    logger.debug(f"[complexity] legacy output parse failed, using fallback: {exc}")
 
         # --- Final fallback: simple file count heuristic ---
         py_files = list(project_root.glob("**/*.py"))
@@ -181,8 +184,8 @@ def node_complexity_calculation(state):
                 }
                 with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                     _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-        except Exception:
-            pass  # Non-blocking
+        except OSError as exc:
+            logger.debug(f"[complexity] telemetry write skipped: {exc}")
         return result
 
     except Exception as e:
@@ -212,6 +215,6 @@ def node_complexity_calculation(state):
                 }
                 with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                     _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-        except Exception:
-            pass  # Non-blocking
+        except OSError as exc:
+            logger.debug(f"[complexity] telemetry write skipped: {exc}")
         return result

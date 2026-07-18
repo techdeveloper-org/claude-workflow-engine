@@ -94,6 +94,7 @@ class _CallGraphVisitor(ast.NodeVisitor):
     """
 
     def __init__(self, file_path, rel_path):
+        """Track the file being parsed and accumulate classes/methods/edges."""
         self.file_path = file_path
         self.rel_path = rel_path
         self.classes = []  # list of class node dicts
@@ -320,11 +321,13 @@ class PythonASTParser(AbstractLanguageParser):
     @property
     def language(self):
         # type: () -> str
+        """Return the language identifier this parser handles."""
         return "python"
 
     @property
     def file_extensions(self):
         # type: () -> Set[str]
+        """Return the file extensions this parser handles."""
         return frozenset({".py"})
 
     def parse_file(self, file_path, content):

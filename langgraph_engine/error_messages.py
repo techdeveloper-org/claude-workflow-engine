@@ -122,6 +122,7 @@ class _ErrorCatalog:
     """
 
     def __init__(self):
+        """Register all error templates into an empty registry."""
         self._templates: Dict[str, Any] = {}
         self._register_all()
 
@@ -145,6 +146,7 @@ class _ErrorCatalog:
         """Decorator: register a template under one or more error type names."""
 
         def decorator(fn):
+            """Register fn under each name and return it unchanged."""
             for name in names:
                 self._templates[name.upper()] = fn
             return fn

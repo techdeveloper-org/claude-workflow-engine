@@ -116,6 +116,7 @@ class ConflictResolver:
     """
 
     def __init__(self, session_dir: str):
+        """Bind to the session directory and start an empty conflict log."""
         self.session_dir = Path(session_dir)
         self.conflict_log: List[Dict[str, Any]] = []
 

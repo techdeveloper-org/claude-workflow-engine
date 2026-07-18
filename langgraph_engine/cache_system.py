@@ -93,11 +93,13 @@ class _MemoryLayer:
     """Thread-safe in-memory dict with TTL and max-size eviction."""
 
     def __init__(self, max_entries: int = _MEMORY_MAX_ENTRIES):
+        """Initialise the store, lock, and max-entry cap."""
         self._store: Dict[str, Tuple[Any, float]] = {}  # key -> (value, expiry)
         self._lock = threading.RLock()
         self._max_entries = max_entries
 
     def get(self, key: str) -> Optional[Any]:
+        """Return the value for key, or None if absent or expired."""
         with self._lock:
             entry = self._store.get(key)
             if entry is None:
@@ -109,6 +111,7 @@ class _MemoryLayer:
             return value
 
     def set(self, key: str, value: Any, ttl_seconds: int) -> None:
+        """Store value under key with a TTL, evicting the soonest-to-expire entry if full."""
         with self._lock:
             if len(self._store) >= self._max_entries:
                 # Evict the entry with the smallest expiry (soonest to expire)
@@ -117,6 +120,7 @@ class _MemoryLayer:
             self._store[key] = (value, _now_ts() + ttl_seconds)
 
     def invalidate(self, key: str) -> bool:
+        """Drop key from the store; return True if it was present."""
         with self._lock:
             if key in self._store:
                 del self._store[key]
@@ -124,12 +128,14 @@ class _MemoryLayer:
             return False
 
     def clear(self) -> int:
+        """Clear all entries; return the number removed."""
         with self._lock:
             count = len(self._store)
             self._store.clear()
             return count
 
     def stats(self) -> Dict[str, int]:
+        """Return counts of total and live (unexpired) entries."""
         with self._lock:
             now = _now_ts()
             live = sum(1 for _, exp in self._store.values() if exp > now)
@@ -160,6 +166,7 @@ class CacheTier:
         ttl_seconds: int,
         cache_base_dir: str = _DEFAULT_CACHE_BASE,
     ):
+        """Configure this cache tier's name, TTL, and on-disk base directory."""
         self.name = name
         self.ttl_seconds = ttl_seconds
         self._mem = _MemoryLayer()
@@ -225,8 +232,8 @@ class CacheTier:
                     if age_s > self.ttl_seconds:
                         f.unlink(missing_ok=True)
                         removed += 1
-                except Exception:
-                    pass
+                except (OSError, ValueError) as exc:
+                    logger.debug("[Cache:{}] skipping unreadable cache file {}: {}".format(self.name, f.name, exc))
         except Exception as exc:
             logger.warning("[Cache:{}] clear_expired error: {}".format(self.name, exc))
         return removed
@@ -328,8 +335,8 @@ class CacheTier:
             try:
                 p.unlink(missing_ok=True)
                 return True
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("[Cache:{}] disk delete failed for {}: {}".format(self.name, p.name, exc))
         return False
 
 
@@ -354,6 +361,7 @@ class PipelineCache:
     """
 
     def __init__(self, cache_base_dir: str = _DEFAULT_CACHE_BASE):
+        """Create the cache tiers rooted at cache_base_dir."""
         self.llm = CacheTier(
             name="llm",
             ttl_seconds=_LLM_TTL_SECONDS,

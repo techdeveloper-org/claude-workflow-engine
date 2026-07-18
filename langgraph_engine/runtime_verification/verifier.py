@@ -1,3 +1,11 @@
+"""Runtime verification engine.
+
+RuntimeVerifier checks node contracts (preconditions/postconditions) and
+level-transition guards against the pipeline state when
+ENABLE_RUNTIME_VERIFICATION == '1'. When disabled, get_instance() returns a
+NullVerifier whose methods are no-ops (zero hot-path overhead).
+"""
+
 from __future__ import annotations
 
 import os
@@ -13,26 +21,34 @@ _LOG = get_logger(__name__)
 
 
 class NullVerifier:
-    """Returned by RuntimeVerifier.get_instance() when ENABLE_RUNTIME_VERIFICATION != '1'.
-    All methods are no-ops -- zero overhead on the pipeline hot path."""
+    """No-op verifier returned when ENABLE_RUNTIME_VERIFICATION != '1'.
+
+    Every method is a no-op so the pipeline hot path pays zero overhead when
+    runtime verification is disabled. Mirrors the RuntimeVerifier interface so
+    callers never have to branch on whether verification is enabled.
+    """
 
     def register(self, contract: NodeContract) -> None:
-        pass
+        """Ignore the contract; nothing is verified while disabled."""
 
     def check_preconditions(self, node_name: str, state: dict) -> List[Dict]:
+        """Return no violations (verification disabled)."""
         return []
 
     def check_postconditions(self, node_name: str, state: dict) -> List[Dict]:
+        """Return no violations (verification disabled)."""
         return []
 
     def check_level_transition(self, from_level: str, to_level: str, state: dict) -> List[Dict]:
+        """Return no violations (verification disabled)."""
         return []
 
     def build_report(self) -> Optional[VerificationReport]:
+        """Return None; no report is produced while verification is disabled."""
         return None
 
     def reset_for_tests(self) -> None:
-        pass
+        """Reset nothing; present only for interface parity with RuntimeVerifier."""
 
 
 class RuntimeVerifier:
@@ -41,13 +57,24 @@ class RuntimeVerifier:
     _instance: Optional["RuntimeVerifier"] = None
 
     def __init__(self) -> None:
+        """Initialise empty registry, violation log, verified-node list, and timings.
+
+        Violations are stored as plain dicts (via ``asdict(Violation(...))``) so the
+        resulting report is trivially JSON-serialisable.
+        """
         self._registry: Dict[str, NodeContract] = {}
-        self._violations: List[Dict[str, Any]] = []  # plain dicts via asdict(Violation(...))
+        self._violations: List[Dict[str, Any]] = []
         self._verified_nodes: List[str] = []
         self._elapsed: Dict[str, float] = {}
 
     @classmethod
     def get_instance(cls) -> Union["RuntimeVerifier", NullVerifier]:
+        """Return the process-wide verifier, or a NullVerifier when disabled.
+
+        Returns:
+            A singleton RuntimeVerifier when ENABLE_RUNTIME_VERIFICATION == '1',
+            otherwise a NullVerifier whose methods are no-ops.
+        """
         if os.getenv("ENABLE_RUNTIME_VERIFICATION", "0") != "1":
             return NullVerifier()
         if cls._instance is None:
@@ -55,11 +82,29 @@ class RuntimeVerifier:
         return cls._instance
 
     def register(self, contract: NodeContract) -> None:
+        """Register a node contract, keyed by its node_name, for later checks."""
         self._registry[contract.node_name] = contract
 
     def _evaluate_precondition_spec(
         self, node_name: str, spec: PreconditionSpec, state: dict, check_type: str
     ) -> List[Dict]:
+        """Evaluate one precondition spec against state and return any violations.
+
+        Checks presence/non-None (when required), then type, then min/max bounds.
+        Numeric bounds compare the value directly; length bounds apply to
+        str/list/dict. A wrong type short-circuits the range checks.
+
+        Args:
+            node_name: Node the spec belongs to, recorded on each Violation.
+            spec: The precondition specification to evaluate.
+            state: The pipeline state dict being validated.
+            check_type: Label recorded on violations (e.g. "precondition",
+                "transition").
+
+        Returns:
+            A list of violation dicts (via asdict(Violation(...))); empty when
+            the spec is satisfied.
+        """
         violations = []
         if spec.key not in state or state[spec.key] is None:
             if spec.required:
@@ -115,9 +160,19 @@ class RuntimeVerifier:
         return violations
 
     def check_preconditions(self, node_name: str, state: dict) -> List[Dict]:
+        """Validate all preconditions for a node before it executes.
+
+        Args:
+            node_name: Name of the node whose contract to check.
+            state: The pipeline state dict.
+
+        Returns:
+            A list of violation dicts; empty when no contract is registered or
+            all preconditions pass.
+        """
         contract = self._registry.get(node_name)
         if contract is None:
-            _LOG.warning("[RuntimeVerifier] no contract registered for node: %s", node_name)
+            _LOG.warning(f"[RuntimeVerifier] no contract registered for node: {node_name}")
             return []
         violations = []
         for spec in contract.preconditions:
@@ -127,6 +182,16 @@ class RuntimeVerifier:
         return violations
 
     def check_postconditions(self, node_name: str, state: dict) -> List[Dict]:
+        """Validate all postconditions for a node after it executes.
+
+        Args:
+            node_name: Name of the node whose contract to check.
+            state: The pipeline state dict after the node ran.
+
+        Returns:
+            A list of violation dicts; empty when no contract is registered or
+            all postconditions hold.
+        """
         contract = self._registry.get(node_name)
         if contract is None:
             return []
@@ -160,6 +225,17 @@ class RuntimeVerifier:
         return violations
 
     def check_level_transition(self, from_level: str, to_level: str, state: dict) -> List[Dict]:
+        """Validate the guard specs for a level-to-level transition.
+
+        Args:
+            from_level: The level being left.
+            to_level: The level being entered.
+            state: The pipeline state dict at the transition point.
+
+        Returns:
+            A list of violation dicts; empty when no guard is defined or all
+            guard specs pass.
+        """
         specs = get_transition_guard(from_level, to_level)
         if not specs:
             return []
@@ -170,10 +246,7 @@ class RuntimeVerifier:
         if violations:
             self._violations.extend(violations)
             _LOG.warning(
-                "[RuntimeVerifier] %d transition guard violation(s) (%s->%s)",
-                len(violations),
-                from_level,
-                to_level,
+                f"[RuntimeVerifier] {len(violations)} transition guard violation(s) ({from_level}->{to_level})"
             )
             if os.getenv("ENABLE_METRICS", "0") == "1":
                 try:
@@ -189,6 +262,12 @@ class RuntimeVerifier:
         return violations
 
     def build_report(self) -> VerificationReport:
+        """Assemble a VerificationReport snapshot from accumulated state.
+
+        Returns:
+            A report with the verified nodes, all recorded violations, and
+            per-node timings; pass_fail is True only when no violations exist.
+        """
         return VerificationReport(
             verified_nodes=list(self._verified_nodes),
             violations=list(self._violations),

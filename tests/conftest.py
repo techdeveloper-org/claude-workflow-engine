@@ -18,6 +18,17 @@ os.environ.setdefault("TESTING", "True")
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+# Eagerly bind subpackages that tests patch via dotted-string targets, e.g.
+# patch("langgraph_engine.github.X"). unittest.mock._dot_lookup resolves such
+# targets with getattr(langgraph_engine, "github"), which raises AttributeError
+# unless the submodule is already imported. Import order otherwise left this to
+# chance -- it passed on Python 3.11 but broke every such patch on 3.10 in CI.
+# Importing them here makes resolution deterministic across interpreter versions.
+import langgraph_engine.github  # noqa: E402,F401
+import langgraph_engine.level3_execution  # noqa: E402,F401
+import langgraph_engine.quality  # noqa: E402,F401
+import langgraph_engine.runtime_verification  # noqa: E402,F401
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_environment():
@@ -30,6 +41,52 @@ def setup_test_environment():
     for key in ["SECRET_KEY", "DEVELOPMENT_MODE", "TESTING"]:
         if key in os.environ:
             del os.environ[key]
+
+
+@pytest.fixture(autouse=True)
+def _neutralize_llm_provider_chain(monkeypatch):
+    """Stop unit tests from spawning a real ``claude`` CLI subprocess.
+
+    ``llm_call()`` iterates ``langgraph_engine.llm_call._provider_chain`` and returns
+    the first non-empty provider response, else None. On a machine where the claude
+    CLI is on PATH, the ClaudeCLIProvider blocks on a real subprocess for up to the
+    call's timeout; several pipeline nodes call ``llm_call()`` transitively (Step 10
+    implementation, UML LLM enrichment, ...), which stalled the suite. Emptying the
+    provider chain makes ``llm_call()`` return None instantly -- the same result CI
+    sees with no provider configured -- so tests stay hermetic and fast. Tests that
+    need a specific LLM response patch ``llm_call`` themselves and are unaffected.
+    """
+    # Import the submodule explicitly and patch the module object -- a dotted string
+    # target would fail with AttributeError for a test that runs before anything else
+    # has imported langgraph_engine.llm_call (getattr on the not-yet-bound submodule).
+    import langgraph_engine.llm_call as _llm_call_mod
+
+    monkeypatch.setattr(_llm_call_mod, "_provider_chain", [], raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _repair_langgraph_engine_attrs():
+    """Re-attach cached ``langgraph_engine.*`` submodules to their parent packages.
+
+    On Python 3.10, importlib does not re-bind a parent package's attribute for an
+    already-cached submodule. Several test files call ``importlib.reload`` /
+    ``sys.modules.pop``; once that drops e.g. the ``github`` attribute off
+    ``langgraph_engine`` (while the module stays in ``sys.modules``),
+    ``patch("langgraph_engine.github.X")`` fails on 3.10 with AttributeError, because
+    mock's ``__import__`` retry is a no-op for the cached module and never rebinds.
+    Python 3.11+ self-heals, which is why this was 3.10-only in CI. Re-attaching the
+    tree before each test keeps dotted-string patch targets resolvable everywhere.
+    """
+    for _name in list(sys.modules):
+        if not _name.startswith("langgraph_engine.") or sys.modules[_name] is None:
+            continue
+        _parent_name, _, _child = _name.rpartition(".")
+        _parent = sys.modules.get(_parent_name)
+        if _parent is not None and not hasattr(_parent, _child):
+            try:
+                setattr(_parent, _child, sys.modules[_name])
+            except (AttributeError, TypeError):
+                pass
 
 
 @pytest.fixture

@@ -14,11 +14,14 @@ Environment:
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -46,18 +49,18 @@ _DECOMPOSE_TEMPLATE = (
     "4. Each todo must name a specific agent from the orchestration plan.\n\n"
     "COMPLEXITY SCORE: {complexity}/25\n\n"
     "OUTPUT FORMAT (JSON only, no other text):\n"
-    '{{\n'
+    "{{\n"
     '  "todo_list": [\n'
-    '    {{\n'
+    "    {{\n"
     '      "id": "todo_001",\n'
     '      "title": "short title",\n'
     '      "agent": "agent-name",\n'
     '      "prompt": "full self-contained prompt for this agent",\n'
     '      "depends_on": [],\n'
     '      "phase": "A"\n'
-    '    }}\n'
-    '  ]\n'
-    '}}\n\n'
+    "    }}\n"
+    "  ]\n"
+    "}}\n\n"
     "ORCHESTRATION PROMPT:\n"
     "{orchestration_prompt}"
 )
@@ -181,8 +184,8 @@ def _call_claude_cli(prompt):
         if temp_file:
             try:
                 Path(temp_file).unlink(missing_ok=True)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("todo_decomposer: temp file cleanup skipped: %s", exc)
 
 
 def _extract_todo_list(llm_response):

@@ -21,9 +21,12 @@ Import usage:
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # PATTERN DEFINITIONS
@@ -546,8 +549,8 @@ def scan_all_projects(
                 patterns = detect_patterns(item)
                 if patterns:
                     results[item.name] = patterns
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("pattern detection skipped for %s: %s", item.name, exc)
 
     return results
 

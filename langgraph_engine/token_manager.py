@@ -33,6 +33,7 @@ class BudgetExceededError(Exception):
     """Raised when the cumulative token usage exceeds the total budget."""
 
     def __init__(self, step: str, spent: int, total: int, message: str = ""):
+        """Capture the step and the spent/total token counts for this budget error."""
         self.step = step
         self.spent = spent
         self.total = total

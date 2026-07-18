@@ -36,8 +36,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from langgraph_engine.github_mcp import GitHubMCP
-from langgraph_engine.github_operation_router import GitHubOperationRouter
+from langgraph_engine.github.mcp import GitHubMCP
+from langgraph_engine.github.operation_router import GitHubOperationRouter
 
 
 class TestGitHubMCP:
@@ -51,9 +51,11 @@ class TestGitHubMCP:
         installed and Github/GithubException are absent from the module.
         Yields to keep patches active for the full duration of each test.
         """
-        with patch("langgraph_engine.github_mcp.PYGITHUB_AVAILABLE", True), patch(
-            "langgraph_engine.github_mcp.Github", create=True
-        ) as mock_github, patch("langgraph_engine.github_mcp.GithubException", create=True, new=GithubException):
+        with (
+            patch("langgraph_engine.github.mcp.PYGITHUB_AVAILABLE", True),
+            patch("langgraph_engine.github.mcp.Github", create=True) as mock_github,
+            patch("langgraph_engine.github.mcp.GithubException", create=True, new=GithubException),
+        ):
             # Mock the Github client
             mock_user = Mock()
             mock_user.login = "test_user"
@@ -195,8 +197,8 @@ class TestGitHubOperationRouter:
     @pytest.fixture
     def mock_router(self):
         """Create mock router for testing."""
-        with patch("langgraph_engine.github_operation_router.GitHubIntegration") as mock_gh_cli:
-            with patch("langgraph_engine.github_operation_router.GitHubMCP") as mock_mcp:
+        with patch("langgraph_engine.github.operation_router.GitHubIntegration") as mock_gh_cli:
+            with patch("langgraph_engine.github.operation_router.GitHubMCP") as mock_mcp:
                 mock_gh_cli_instance = Mock()
                 mock_mcp_instance = Mock()
 
@@ -312,16 +314,16 @@ class TestIntegration:
         # This is more of a smoke test
         # Real integration would need actual GitHub token
 
-        with patch("langgraph_engine.github_operation_router.GitHubIntegration"):
-            with patch("langgraph_engine.github_operation_router.GitHubMCP"):
+        with patch("langgraph_engine.github.operation_router.GitHubIntegration"):
+            with patch("langgraph_engine.github.operation_router.GitHubMCP"):
                 # Should not raise any exceptions
                 router = GitHubOperationRouter(use_mcp=True, fallback_to_gh=True)
                 assert router is not None
 
     def test_mcp_initialization_failure_falls_back(self):
         """Test when MCP initialization fails, still uses gh CLI."""
-        with patch("langgraph_engine.github_operation_router.GitHubIntegration"):
-            with patch("langgraph_engine.github_operation_router.GitHubMCP") as mock_mcp:
+        with patch("langgraph_engine.github.operation_router.GitHubIntegration"):
+            with patch("langgraph_engine.github.operation_router.GitHubMCP") as mock_mcp:
                 mock_mcp.side_effect = RuntimeError("MCP failed")
 
                 # Should not raise, should use gh CLI

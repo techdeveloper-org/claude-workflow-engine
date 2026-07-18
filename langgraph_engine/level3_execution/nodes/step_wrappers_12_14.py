@@ -29,7 +29,7 @@ except ImportError:  # pragma: no cover
         try:
             return fn(state)
         except Exception as exc:
-            logger.error("_run_step fallback caught exception in Step %s: %s", step_number, exc)
+            logger.error("_run_step fallback caught exception in Step {}: {}", step_number, exc)
             return fallback_result or {}
 
 
@@ -38,6 +38,7 @@ try:
 except ImportError:  # pragma: no cover
 
     def get_infra(state):  # type: ignore[misc]
+        """Fallback infra bundle used when core.infrastructure import fails."""
         return {"metrics": None, "error_logger": None}
 
 
@@ -48,9 +49,10 @@ try:
         step14_final_summary_generation,
     )
 except ImportError as _imp_err:  # pragma: no cover
-    logger.error("step_implementations_12_14 import failed: %s", _imp_err)
+    logger.error("step_implementations_12_14 import failed: {}", _imp_err)
 
     def step12_issue_closure(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_12_14 import fails."""
         return {
             "step12_issue_closed": False,
             "step12_status": "ERROR",
@@ -58,6 +60,7 @@ except ImportError as _imp_err:  # pragma: no cover
         }
 
     def step13_project_documentation_update(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_12_14 import fails."""
         return {
             "step13_updates_prepared": False,
             "step13_documentation_status": "ERROR",
@@ -65,6 +68,7 @@ except ImportError as _imp_err:  # pragma: no cover
         }
 
     def step14_final_summary_generation(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_12_14 import fails."""
         return {
             "step14_status": "ERROR",
             "step14_error": "step_implementations_12_14 unavailable",
@@ -126,7 +130,7 @@ def step12_issue_closure_node(state: FlowState) -> Dict[str, Any]:
             )
             result["jira_issue_closed"] = close_result.get("closed", False)
         except Exception as e:
-            logger.warning("[v2] Jira closure failed (non-blocking): %s", str(e))
+            logger.warning("[v2] Jira closure failed (non-blocking): {}", str(e))
 
     # -- Figma: Comment implementation complete --
     figma_key = state.get("figma_file_key", "")
@@ -141,7 +145,7 @@ def step12_issue_closure_node(state: FlowState) -> Dict[str, Any]:
                 pr_url=state.get("step11_pr_url", ""),
             )
         except Exception as e:
-            logger.warning("Figma Step 12 comment failed: %s", str(e))
+            logger.warning("Figma Step 12 comment failed: {}", str(e))
 
     return result
 
@@ -164,8 +168,8 @@ def step13_docs_update_node(state: FlowState) -> Dict[str, Any]:
                                 files=updated,
                                 operation="modified",
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(f"[step13] metrics record_files_modified skipped: {exc}")
             return result
         except IOError as io_err:
             infra = get_infra(st)
@@ -213,8 +217,8 @@ def step14_final_summary_node(state: FlowState) -> Dict[str, Any]:
                         operation="modified",
                     )
                 infra["metrics"].print_summary()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"[step14] metrics summary skipped: {exc}")
         return result
 
     return _run_step(

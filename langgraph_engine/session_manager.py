@@ -32,6 +32,7 @@ class SessionManager:
     """Manages file-based session persistence."""
 
     def __init__(self, session_id: str):
+        """Bind to the session id and ensure its log directory exists."""
         self.session_id = session_id
         self.session_dir = _SESSION_LOGS_DIR / session_id
         self.session_dir.mkdir(parents=True, exist_ok=True)

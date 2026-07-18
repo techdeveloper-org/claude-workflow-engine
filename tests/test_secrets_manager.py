@@ -30,7 +30,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 # ---------------------------------------------------------------------------
 
 try:
-    from langgraph_engine.secrets_manager import (
+    from langgraph_engine.security.secrets_manager import (
         REQUIRED_SECRETS,
         SecretsMissingError,
         rotate_key_hint,

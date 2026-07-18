@@ -1,4 +1,4 @@
-"""Backward-compat shim -- moved to level3_execution/github_code_review.py."""
+"""Backward-compat shim -- canonical location is langgraph_engine.level3_execution.github_code_review."""
 
 import warnings as _w
 
@@ -8,4 +8,4 @@ _w.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-from .level3_execution.github_code_review import *  # noqa: E402,F401,F403
+from langgraph_engine.level3_execution.github_code_review import *  # noqa: E402,F401,F403

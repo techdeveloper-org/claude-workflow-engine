@@ -241,8 +241,8 @@ def node_windows_path_check(state: FlowState) -> dict:
                 content = py_file.read_text(encoding="utf-8", errors="ignore")
                 if _DRIVE_DETECT_RE.search(content):
                     issues.append(str(py_file.relative_to(project_root)))
-            except Exception:
-                pass
+            except OSError as exc:
+                _logger.debug("level-1: drive-detect read skipped: %s", exc)
 
         if issues:
             updates["windows_path_check"] = False

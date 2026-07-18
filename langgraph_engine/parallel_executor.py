@@ -83,6 +83,7 @@ class ParallelExplorer:
     """
 
     def __init__(self, max_workers: int = _MAX_EXPLORATION_WORKERS):
+        """Validate and store the worker-pool size."""
         if max_workers < 1:
             raise ValueError("max_workers must be >= 1")
         self.max_workers = max_workers
@@ -262,6 +263,7 @@ class ParallelTaskExecutor:
     """
 
     def __init__(self, max_workers: int = _MAX_TASK_WORKERS):
+        """Validate and store the worker-pool size."""
         if max_workers < 1:
             raise ValueError("max_workers must be >= 1")
         self.max_workers = max_workers
@@ -419,6 +421,7 @@ class ConcurrentSkillDownloader:
     MAX_WORKERS: int = _MAX_DOWNLOAD_WORKERS  # hard cap per ACCEPTANCE CRITERIA
 
     def __init__(self, max_workers: int = MAX_WORKERS):
+        """Clamp the worker count to the hard MAX_WORKERS cap."""
         self.max_workers = min(max_workers, self.MAX_WORKERS)
 
     # ------------------------------------------------------------------
@@ -466,8 +469,8 @@ class ConcurrentSkillDownloader:
             for fut in as_completed(futs, timeout=timeout_seconds * len(skill_specs)):
                 try:
                     fut.result(timeout=timeout_seconds)
-                except Exception:
-                    pass  # Already handled inside _load_one
+                except Exception as exc:
+                    logger.debug(f"[ConcurrentSkillDownloader] future raised (already handled in _load_one): {exc}")
 
         elapsed = time.monotonic() - t0
         loaded = sum(1 for v in results.values() if v)

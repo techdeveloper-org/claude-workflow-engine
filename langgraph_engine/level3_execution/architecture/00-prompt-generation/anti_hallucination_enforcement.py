@@ -17,16 +17,19 @@ Usage:
 """
 
 import json
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    except (AttributeError, ValueError, OSError) as exc:
+        logger.debug("stdout/stderr utf-8 reconfigure skipped: %s", exc)
 
 MEMORY_DIR = Path.home() / ".claude" / "memory"
 LOG_FILE = MEMORY_DIR / "logs" / "policy-hits.log"
@@ -44,8 +47,8 @@ def log_policy_hit(action, context=""):
         LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] anti_hallucination_enforcement | {action} | {context}\n")
-    except Exception:
-        pass
+    except OSError as exc:
+        logger.debug("anti_hallucination log write skipped: %s", exc)
 
 
 def validate():

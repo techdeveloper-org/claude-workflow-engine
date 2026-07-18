@@ -62,6 +62,7 @@ class WorkflowEngineError(Exception):
         step: Optional[Any] = None,
         context: Optional[Dict[str, Any]] = None,
     ) -> None:
+        """Build the error with a message, optional step, and context mapping."""
         super().__init__(message)
         self.step: Optional[Any] = step
         self.context: Dict[str, Any] = context if context is not None else {}
@@ -171,6 +172,7 @@ class StepExecutionError(WorkflowEngineError):
         step: Optional[Any] = None,
         context: Optional[Dict[str, Any]] = None,
     ) -> None:
+        """Build the error with a message, step number, and optional context."""
         resolved_step = step if step is not None else step_number
         super().__init__(message, step=resolved_step, context=context)
         self.step_number: int = step_number

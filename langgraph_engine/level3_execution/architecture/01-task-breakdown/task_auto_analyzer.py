@@ -30,6 +30,7 @@ class TaskAutoAnalyzer:
     """
 
     def __init__(self):
+        """Set up the memory and logs paths used for task-breakdown logging."""
         self.memory_path = Path.home() / ".claude" / "memory"
         self.logs_path = self.memory_path / "logs"
         self.task_log = self.logs_path / "task-breakdown.log"

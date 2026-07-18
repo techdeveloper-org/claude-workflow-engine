@@ -202,7 +202,7 @@ find ~/.claude/memory/logs -type f -mmin -5 | head -20
 ```bash
 python run.py
 # Check Flask error output
-# Verify database: test -f instance/claude_insight.db
+# Verify database: test -f instance/claude_workflow_engine.db
 ```
 
 ### Data Not Displaying?

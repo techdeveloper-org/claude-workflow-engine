@@ -92,9 +92,9 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
                         result["step7_system_prompt_loaded"] = True
                         result["step7_execution_prompt"] = system_prompt_text
                         result["step7_prompt_saved"] = True
-                        logger.info("[v2] Template system_prompt written to %s", sp_file)
+                        logger.info("[v2] Template system_prompt written to {}", sp_file)
                 except Exception as sp_err:
-                    logger.debug("[v2] Template system_prompt write skipped: %s", sp_err)
+                    logger.debug("[v2] Template system_prompt write skipped: {}", sp_err)
             # Mark fast-path active
             result["template_fast_path"] = True
             elapsed = (_t.time() - _start) * 1000
@@ -105,13 +105,13 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
                 file=sys.stderr,
             )
             logger.info(
-                "[v2] Template fast-path active: %s complexity=%d -> level3_step8",
+                "[v2] Template fast-path active: {} complexity={} -> level3_step8",
                 result["step0_task_type"],
                 result["step0_complexity"],
             )
             return result
         except Exception as tmpl_exc:
-            logger.warning("[v2] Template fast-path failed, falling back to normal flow: %s", tmpl_exc)
+            logger.warning("[v2] Template fast-path failed, falling back to normal flow: {}", tmpl_exc)
             result["template_fast_path"] = False
 
     # --- 1. Call Graph Scan ---
@@ -131,7 +131,7 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
             leaf_count = len(graph_ctx.get("leaf_nodes", []))
             boost = graph_ctx.get("complexity_boost", 0)
             logger.info(
-                "[v2] Pre-analysis CallGraph: hot=%d leaf=%d boost=%+d",
+                "[v2] Pre-analysis CallGraph: hot={} leaf={} boost={:+}",
                 hot_count,
                 leaf_count,
                 boost,
@@ -142,14 +142,14 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
             )
         else:
             reason = graph_ctx.get("failure_reason") or "unknown reason"
-            logger.warning("[v2] CallGraph UNAVAILABLE: %s", reason)
+            logger.warning("[v2] CallGraph UNAVAILABLE: {}", reason)
             print(
                 "[PRE-ANALYSIS] WARNING: CallGraph failed -- %s\n"
                 "  -> Pipeline continues but call-graph intelligence is DISABLED for this run." % reason,
                 file=sys.stderr,
             )
     except Exception as cg_exc:
-        logger.warning("[v2] Pre-analysis call graph scan raised: %s", cg_exc)
+        logger.warning("[v2] Pre-analysis call graph scan raised: {}", cg_exc)
         print(
             "[PRE-ANALYSIS] WARNING: CallGraph scan raised %s: %s\n"
             "  -> Pipeline continues but call-graph intelligence is DISABLED for this run."

@@ -47,15 +47,17 @@ try:
 except ImportError:  # pragma: no cover
 
     def get_infra(state):  # type: ignore[misc]
+        """Fallback infra bundle used when core.infrastructure import fails."""
         return {"metrics": None, "error_logger": None}
 
 
 try:
     from .step_implementations_10_11 import step10_implementation_execution, step11_pull_request_review
 except ImportError as _imp_err:  # pragma: no cover
-    logger.error("step_implementations_10_11 import failed: %s", _imp_err)
+    logger.error("step_implementations_10_11 import failed: {}", _imp_err)
 
     def step10_implementation_execution(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_10_11 import fails."""
         return {
             "step10_implementation_status": "ERROR",
             "step10_tasks_executed": 0,
@@ -67,6 +69,7 @@ except ImportError as _imp_err:  # pragma: no cover
         }
 
     def step11_pull_request_review(state):  # type: ignore[misc]
+        """Fallback stub used when step_implementations_10_11 import fails."""
         return {
             "step11_pr_id": "0",
             "step11_pr_url": "",
@@ -93,7 +96,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
             jira_wf = Level3JiraWorkflow()
             jira_wf.step10_start_progress(jira_issue_key=jira_key)
         except Exception as e:
-            logger.warning("Jira Step 10 transition failed: %s", str(e))
+            logger.warning("Jira Step 10 transition failed: {}", str(e))
 
     # -- Figma: Comment implementation started --
     figma_key = state.get("figma_file_key", "")
@@ -107,7 +110,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
                 components=state.get("figma_components", []),
             )
         except Exception as e:
-            logger.warning("Figma Step 10 comment failed: %s", str(e))
+            logger.warning("Figma Step 10 comment failed: {}", str(e))
 
     # --- CallGraph: Snapshot before change + implementation context ---
     pre_change_graph = {}
@@ -129,7 +132,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
             suggested_tests = call_context.get("suggested_test_scope", [])
             if call_context.get("call_graph_available"):
                 logger.info(
-                    "[v2] Step 10 CallGraph context: %d entry points, %d test files suggested",
+                    "[v2] Step 10 CallGraph context: {} entry points, {} test files suggested",
                     len(call_context.get("entry_points_affected", [])),
                     len(suggested_tests),
                 )
@@ -144,9 +147,9 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
             else:
                 logger.debug("[v2] Step 10 dependency resolution skipped: pre_change_graph is None")
         except Exception as e:
-            logger.debug("[v2] Step 10 dependency resolution skipped: %s", e)
+            logger.debug("[v2] Step 10 dependency resolution skipped: {}", e)
     except Exception as e:
-        logger.debug("[v2] Step 10 CallGraph context skipped: %s", e)
+        logger.debug("[v2] Step 10 CallGraph context skipped: {}", e)
 
     # Build retry context before execution
     retry_count = state.get("step11_retry_count", 0)
@@ -197,8 +200,8 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
                             files=result["step10_modified_files"],
                             operation="modified",
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"[step10] metrics record_files_modified skipped: {exc}")
             return result
         except Exception as llm_exc:
             # Check if this looks like an LLM connectivity issue
@@ -273,12 +276,12 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
                     fix_result = run_fix_loop(project_root, scan_result["findings"], max_iterations=2)
                     result["step10_auto_fix_result"] = fix_result
                     logger.info(
-                        "[v2] Step 10 auto-fix: %d fixed, %d remaining",
+                        "[v2] Step 10 auto-fix: {} fixed, {} remaining",
                         fix_result.get("findings_fixed", 0),
                         fix_result.get("findings_remaining", 0),
                     )
                 except Exception as e:
-                    logger.debug("[v2] Step 10 auto-fix skipped: %s", e)
+                    logger.debug("[v2] Step 10 auto-fix skipped: {}", e)
 
             # 3. Generate tests for modified files
             try:
@@ -290,12 +293,12 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
                 result["step10_generated_tests"] = test_result
                 if test_result.get("tests_generated", 0) > 0:
                     logger.info(
-                        "[v2] Step 10 generated %d test files for %d methods",
+                        "[v2] Step 10 generated {} test files for {} methods",
                         test_result.get("tests_generated", 0),
                         test_result.get("total_methods_tested", 0),
                     )
             except Exception as e:
-                logger.debug("[v2] Step 10 test generation skipped: %s", e)
+                logger.debug("[v2] Step 10 test generation skipped: {}", e)
 
             # 3b. Generate integration tests from call paths
             try:
@@ -307,11 +310,11 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
                 result["step10_generated_integration_tests"] = integ_result
                 if integ_result.get("paths_tested", 0) > 0:
                     logger.info(
-                        "[v2] Step 10 generated integration tests for %d call paths",
+                        "[v2] Step 10 generated integration tests for {} call paths",
                         integ_result.get("paths_tested", 0),
                     )
             except Exception as e:
-                logger.debug("[v2] Step 10 integration test generation skipped: %s", e)
+                logger.debug("[v2] Step 10 integration test generation skipped: {}", e)
 
             # 4. Coverage analysis
             try:
@@ -320,10 +323,10 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
                 coverage_result = suggest_test_scope(project_root, modified_files)
                 result["step10_coverage_results"] = coverage_result
             except Exception as e:
-                logger.debug("[v2] Step 10 coverage analysis skipped: %s", e)
+                logger.debug("[v2] Step 10 coverage analysis skipped: {}", e)
 
     except Exception as e:
-        logger.debug("[v2] Step 10 quality pipeline skipped: %s", e)
+        logger.debug("[v2] Step 10 quality pipeline skipped: {}", e)
 
     # Mark graph stale: Step 10 wrote files, any cached pre-implementation
     # snapshots (step2_impact_analysis, pre_analysis_result) are no longer
@@ -395,7 +398,7 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
             result["jira_pr_linked"] = link_result.get("linked", False)
             result["jira_transitioned"] = link_result.get("transitioned", False)
         except Exception as e:
-            logger.warning("[v2] Jira PR linking failed (non-blocking): %s", str(e))
+            logger.warning("[v2] Jira PR linking failed (non-blocking): {}", str(e))
 
     # -- Jira: Post-merge update --
     if result.get("step11_merged") and jira_key:
@@ -410,7 +413,7 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
                 branch_name=state.get("step9_branch_name", ""),
             )
         except Exception as e:
-            logger.warning("Jira post-merge update failed: %s", str(e))
+            logger.warning("Jira post-merge update failed: {}", str(e))
 
     # --- CallGraph: Post-change impact review ---
     try:
@@ -442,13 +445,13 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
                     result["step11_review_issues"] = existing_issues
 
                 logger.info(
-                    "[v2] Step 11 CallGraph review: risk=%s, breaking=%d, orphaned=%d",
+                    "[v2] Step 11 CallGraph review: risk={}, breaking={}, orphaned={}",
                     impact_review.get("risk_assessment", "unknown"),
                     len(breaking),
                     len(impact_review.get("orphaned_methods", [])),
                 )
     except Exception as e:
-        logger.debug("[v2] Step 11 CallGraph review skipped: %s", e)
+        logger.debug("[v2] Step 11 CallGraph review skipped: {}", e)
 
     # --- Quality Gate: Evaluate all gates before merge ---
     try:
@@ -479,7 +482,7 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
             result["step11_gate_report"] = gate_report
 
             logger.info(
-                "[v2] Step 11 quality gate FAILED: %s",
+                "[v2] Step 11 quality gate FAILED: {}",
                 ", ".join(gate_result.get("blocking_gates", [])),
             )
         else:
@@ -487,7 +490,7 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
             logger.info("[v2] Step 11 quality gate PASSED")
 
     except Exception as e:
-        logger.debug("[v2] Step 11 quality gate skipped: %s", e)
+        logger.debug("[v2] Step 11 quality gate skipped: {}", e)
 
     # --- User Interaction: Generate questions for breaking changes ---
     try:
@@ -504,7 +507,7 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
                 mgr.apply_defaults()
             result["step11_interaction_questions"] = len(questions)
     except Exception as e:
-        logger.debug("[v2] Step 11 user interaction skipped: %s", e)
+        logger.debug("[v2] Step 11 user interaction skipped: {}", e)
 
     # -- Figma Integration: design implementation review ------------------
     if os.environ.get("ENABLE_FIGMA", "0") == "1":
@@ -526,12 +529,12 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
                         existing_issues.append("DESIGN REVIEW:/n" + checklist_text)
                     result["step11_review_issues"] = existing_issues
                     logger.info(
-                        "[v2] Figma design review completed: %d items",
+                        "[v2] Figma design review completed: {} items",
                         len(review_result.get("review_items", [])),
                     )
                 else:
                     result["figma_error"] = review_result.get("error", "Unknown")
             except Exception as e:
-                logger.warning("[v2] Figma integration (step11) failed (non-blocking): %s", str(e))
+                logger.warning("[v2] Figma integration (step11) failed (non-blocking): {}", str(e))
 
     return result

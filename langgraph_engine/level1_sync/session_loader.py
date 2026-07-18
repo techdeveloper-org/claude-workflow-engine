@@ -13,6 +13,7 @@ try:
 except ImportError:
     FlowState = dict  # type: ignore[misc,assignment]
 
+from ..core.logger_factory import get_logger
 from .helpers import (
     _LEVEL1_SESSION_LOGS_DIR,
     _LEVEL1_TELEMETRY_DIR,
@@ -21,6 +22,8 @@ from .helpers import (
     datetime,
     write_level_log,
 )
+
+logger = get_logger(__name__)
 
 
 def node_session_loader(state):
@@ -80,8 +83,8 @@ def node_session_loader(state):
 
                     link_sessions(session_id, prev_session_id)
                     result["session_parent_id"] = prev_session_id
-                except Exception:
-                    pass  # Fail-open: chaining is best-effort
+                except Exception as exc:
+                    logger.debug(f"[session_loader] session chaining skipped: {exc}")
 
             # Auto-tag from user_message keywords
             _auto_tags = []
@@ -103,8 +106,8 @@ def node_session_loader(state):
                     from session_hooks import tag_session
 
                     tag_session(session_id, ",".join(_auto_tags))
-                except Exception:
-                    pass  # Best-effort tagging
+                except Exception as exc:
+                    logger.debug(f"[session_loader] session tagging skipped: {exc}")
 
             # Set PREVIOUS_SESSION_ID for next session
             os.environ["PREVIOUS_SESSION_ID"] = session_id
@@ -117,7 +120,7 @@ def node_session_loader(state):
 
         # ---- Best-effort: prune old sessions (optional enhancement) ----
         try:
-            _pruner = _load_architecture_script("session-pruner.py")
+            _pruner = _load_architecture_script("session_pruner.py")
             if _pruner is not None and hasattr(_pruner, "prune_sessions"):
                 _sessions_dir = _LEVEL1_SESSION_LOGS_DIR
                 _prune_result = _pruner.prune_sessions(_sessions_dir)
@@ -140,7 +143,7 @@ def node_session_loader(state):
 
         # ---- Best-effort: track user preferences from session history ----
         try:
-            _pref_tracker = _load_architecture_script("preference-tracker.py")
+            _pref_tracker = _load_architecture_script("preference_tracker.py")
             if _pref_tracker is not None and hasattr(_pref_tracker, "track_preferences"):
                 _sessions_dir = _LEVEL1_SESSION_LOGS_DIR
                 if not state.get("preferences_data"):
@@ -172,8 +175,8 @@ def node_session_loader(state):
                 }
                 with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                     _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-        except Exception:
-            pass  # Non-blocking
+        except OSError as exc:
+            logger.debug(f"[session_loader] telemetry write skipped: {exc}")
         return result
     except Exception as e:
         result = {
@@ -199,6 +202,6 @@ def node_session_loader(state):
                 }
                 with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                     _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-        except Exception:
-            pass  # Non-blocking
+        except OSError as exc:
+            logger.debug(f"[session_loader] telemetry write skipped: {exc}")
         return result

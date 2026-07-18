@@ -133,6 +133,7 @@ class SequenceDiagramGenerator(AbstractDiagramGenerator):
 
     @property
     def diagram_type(self):
+        """Return the diagram-type identifier for this generator."""
         return "sequence"
 
     def generate(self, analysis_data, format="mermaid"):

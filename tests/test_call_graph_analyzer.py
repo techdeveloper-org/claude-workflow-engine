@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 import pytest
 
-from langgraph_engine.call_graph_analyzer import (
+from langgraph_engine.analysis.call_graph_analyzer import (
     analyze_impact_before_change,
     get_implementation_context,
     review_change_impact,
@@ -716,7 +716,7 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_scoped_to_phase_files(self, tmp_path):
         """methods_in_phase only includes models.py methods; expanded set adds callers."""
-        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -750,7 +750,7 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_includes_callers(self, tmp_path):
         """1-hop callers from services.py appear in the expanded method set."""
-        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -772,7 +772,7 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_includes_callees(self, tmp_path):
         """1-hop callees from models.py appear when services.py is the phase."""
-        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -793,7 +793,7 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_empty_phase_files(self, tmp_path):
         """Empty phase_files returns an empty structure without raising."""
-        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -809,7 +809,7 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_no_rebuild(self, tmp_path):
         """Function works on a plain dict snapshot without needing CallGraph object."""
-        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -832,7 +832,7 @@ class TestExtractPhaseSubgraph:
 
     def test_subgraph_stats(self, tmp_path):
         """stats dict contains all required keys."""
-        from langgraph_engine.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import extract_phase_subgraph, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -861,7 +861,7 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_basic(self, tmp_path):
         """Basic call: call_graph_available=True, phase_files returned, risk_level valid."""
-        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -881,7 +881,7 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_danger_zones(self, tmp_path):
         """Method called by 6+ callers must appear in danger_zones."""
-        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
 
         project_root, models_path, callers_path = _make_high_callers_phase_project(tmp_path)
 
@@ -903,7 +903,7 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_safe_zones(self, tmp_path):
         """Methods with 0 callers should appear in safe_change_zones."""
-        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -924,7 +924,7 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_cross_phase_callers(self, tmp_path):
         """services.py methods calling models.py appear in cross_phase_callers."""
-        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -954,7 +954,7 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_entry_points(self, tmp_path):
         """Public phase methods not called by other phase methods are entry points."""
-        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -977,7 +977,7 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_no_snapshot(self, tmp_path):
         """None snapshot returns call_graph_available=False gracefully."""
-        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context
+        from langgraph_engine.analysis.call_graph_analyzer import get_phase_scoped_context
 
         result = get_phase_scoped_context(None, ["models.py"])
 
@@ -997,7 +997,7 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_no_phase_files(self, tmp_path):
         """Empty phase_files returns a graceful result without crashing."""
-        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 
@@ -1014,7 +1014,7 @@ class TestGetPhaseScopedContext:
 
     def test_phase_context_summary(self, tmp_path):
         """Summary string contains 'Phase:' and 'risk='."""
-        from langgraph_engine.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
+        from langgraph_engine.analysis.call_graph_analyzer import get_phase_scoped_context, snapshot_call_graph
 
         project_root, models_path, services_path, api_path = _make_three_file_project(tmp_path)
 

@@ -1,3 +1,10 @@
+"""verify_node decorator -- wraps pipeline node functions with runtime contract checks.
+
+When ENABLE_RUNTIME_VERIFICATION != '1' the decorator returns the original function
+unchanged (zero overhead). Otherwise it registers the node's NodeContract with the
+singleton RuntimeVerifier and checks preconditions/postconditions around each call.
+"""
+
 from __future__ import annotations
 
 import functools
@@ -6,9 +13,9 @@ import time
 from typing import Any, Callable
 
 from langgraph_engine.core.logger_factory import get_logger
+from langgraph_engine.engine_logging.tracing import create_span
 from langgraph_engine.runtime_verification.contracts import NodeContract
 from langgraph_engine.runtime_verification.verifier import RuntimeVerifier
-from langgraph_engine.tracing import create_span
 
 _LOG = get_logger(__name__)
 
@@ -47,6 +54,7 @@ def verify_node(contract: NodeContract) -> Callable:
     """
 
     def decorator(fn: Callable) -> Callable:
+        """Register the contract and wrap fn with verification (no-op when disabled)."""
         # Fast path: disabled at import time -- return original function, zero overhead
         if os.getenv("ENABLE_RUNTIME_VERIFICATION", "0") != "1":
             return fn
@@ -57,6 +65,7 @@ def verify_node(contract: NodeContract) -> Callable:
 
         @functools.wraps(fn)
         def wrapper(state: Any, *args: Any, **kwargs: Any) -> Any:
+            """Run fn with precondition/postcondition checks and tracing."""
             node_name = contract.node_name
             t0 = time.monotonic()
 
@@ -83,7 +92,7 @@ def verify_node(contract: NodeContract) -> Callable:
                 if all_violations:
                     span.set_attribute("violation.level", _max_severity(all_violations))
                     _LOG.warning(
-                        "[RuntimeVerifier] %d violation(s) in node '%s'",
+                        "[RuntimeVerifier] {} violation(s) in node '{}'",
                         len(all_violations),
                         node_name,
                     )

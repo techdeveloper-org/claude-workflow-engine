@@ -40,8 +40,11 @@ def with_hooks(
     """
 
     def decorator(node_fn: Callable[[FlowState], FlowState]) -> Callable[[FlowState], FlowState]:
+        """Wrap node_fn so the pre-hook and post-hook run around it."""
+
         @wraps(node_fn)
         def wrapped(state: FlowState) -> FlowState:
+            """Run the pre-hook, the node, then the post-hook, threading state through each."""
             # Pre-execution hook
             if pre_hook:
                 state = pre_hook(state)

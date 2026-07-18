@@ -17,7 +17,10 @@ try:
 except ImportError:
     FlowState = dict  # type: ignore[misc,assignment]
 
+from ..core.logger_factory import get_logger
 from .helpers import _LEVEL1_TELEMETRY_DIR, _load_architecture_script, _time_mod, write_level_log
+
+logger = get_logger(__name__)
 
 # ============================================================================
 # MERGE NODE - Final Level 1 output
@@ -99,8 +102,8 @@ def level1_merge_node(state):
             }
             with open(str(_tfile_tel), "a", encoding="utf-8") as _f_tel:
                 _f_tel.write(_json_tel.dumps(_entry_tel) + "\n")
-    except Exception:
-        pass  # Non-blocking
+    except OSError as exc:
+        logger.debug(f"[level1_merge] telemetry write skipped: {exc}")
     return updates
 
 
@@ -153,7 +156,7 @@ def cleanup_level1_memory(state):
     # ---- Best-effort: estimate context window usage after cleanup ----
     _context_monitor_result = {}
     try:
-        _monitor_mod = _load_architecture_script("context-monitor.py")
+        _monitor_mod = _load_architecture_script("context_monitor.py")
         if _monitor_mod is not None and hasattr(_monitor_mod, "estimate_context_usage"):
             _session_path_val = state.get("session_path", "")
             _session_dir = Path(_session_path_val) if _session_path_val else None
