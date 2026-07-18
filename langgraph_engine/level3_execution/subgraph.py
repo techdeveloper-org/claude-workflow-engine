@@ -194,7 +194,7 @@ def _write_telemetry(
     """Append one telemetry entry for the completed step to a JSONL file.
 
     File path: ~/.claude/logs/telemetry/{session_id}.jsonl
-    Non-blocking: all errors are silently swallowed.
+    Non-blocking: OSError during the write is caught and logged at debug; never raises.
     ASCII-only strings used throughout for cp1252 compatibility.
     """
     try:

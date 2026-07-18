@@ -29,7 +29,8 @@ audited-deficiency remediation, and a standards / logging hardening pass.
 - **loguru interpolation bug** -- 124 `logger.<level>("...%s...", arg)` calls across 17 loguru-backed files silently dropped their positional args (loguru uses `str.format`, not %-interpolation); converted to brace-style `"...{}...", arg`.
 - **Step 0 planning chain revived** -- node<->caller CLI-flag mismatch, wrong return-key read, and a hardcoded 30s timeout overriding the STEP0_* budgets; all repaired.
 - **level1_sync hyphen->underscore rename completed** -- session pruning and preference / pattern / context features (previously silent no-ops) restored.
-- **Red CI greened** -- test suites repointed from deleted hyphen modules to real subpackage locations.
+- **Red CI greened** -- test suites repointed from deleted hyphen modules to real subpackage locations; `llm_call` neutralized in the unit suite (no real `claude` subprocess) and `github`/`quality` added to the PEP 562 `_LAZY_SUBMODULES` self-heal so `unittest.mock.patch` dotted targets resolve on Python 3.10.
+- **Post-migration review fixes** -- the `step_logger` shim now re-exports `_summarize_result` (previously `ImportError` on every step-log write, escaping the `OSError`-only handler); fixed an `exc` name-clobber in the SonarQube auto-fixer backup-restore path (`NameError` on double-failure); the `metrics` aggregator counts `"COMPLETED"` status toward `success_rate` again. The legacy `complexity_distribution` histogram (tied to the removed 1-10 `complexity` field) is intentionally dropped in favor of the 1-25 `combined_complexity_score`.
 
 ### Docs
 
