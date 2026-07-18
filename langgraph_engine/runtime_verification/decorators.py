@@ -91,11 +91,7 @@ def verify_node(contract: NodeContract) -> Callable:
 
                 if all_violations:
                     span.set_attribute("violation.level", _max_severity(all_violations))
-                    _LOG.warning(
-                        "[RuntimeVerifier] {} violation(s) in node '{}'",
-                        len(all_violations),
-                        node_name,
-                    )
+                    _LOG.warning(f"[RuntimeVerifier] {len(all_violations)} violation(s) in node '{node_name}'")
                     # Append violation messages to result state (list of strings)
                     if isinstance(result, dict):
                         existing = result.get("verification_violations") or []

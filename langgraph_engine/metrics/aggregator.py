@@ -261,7 +261,7 @@ def aggregate_step_performance(days: int = 7) -> Dict[str, Any]:
                     duration_ms = float(entry["duration_seconds"]) * 1000
 
                 status = entry.get("status") or entry.get("result") or "UNKNOWN"
-                is_success = str(status).upper() in ("SUCCESS", "OK", "DONE", "COMPLETE")
+                is_success = str(status).upper() in ("SUCCESS", "OK", "DONE", "COMPLETE", "COMPLETED")
 
                 if step_name not in step_data:
                     step_data[step_name] = {"durations": [], "successes": 0, "total": 0}
