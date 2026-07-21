@@ -1,0 +1,90 @@
+{
+  "meta": {
+    "phase": "1",
+    "mode": "B-brownfield-delta",
+    "project": "claude-workflow-engine",
+    "engine_version": "1.20.0",
+    "author": "solution-architect",
+    "date": "2026-07-21",
+    "india_regulatory_flag": false,
+    "capacity_estimation": "N/A - single-developer local dev tool, no load/throughput dimension"
+  },
+  "recon_verification": {
+    "FR-1": {"claim": "SkillManager + ImportManager fetch via GitHub HTTP, never check local sibling", "verdict": "CONFIRMED", "evidence": "SkillManager._download_with_retry uses urllib->raw.githubusercontent.com; disk cache is ~/.claude/skills not ../claude-global-library. ImportManager.get_skill/get_agent are pure GitHub HTTP."},
+    "FR-2": {"claim": "hook-downloader.py referenced in 3 places but does not exist -> sync 100% broken", "verdict": "CONFIRMED", "evidence": "scripts/tools/sync-library.py subprocesses a non-existent hook-downloader.py; referenced by sync-library.bat, sync-workflow-engine.bat, update-status.bat, README, 2 docs."},
+    "FR-3": {"claim": "Step-0 routing is raw LLM guess; never consults decision tree/Master KG/agent catalog; Steps 5/6 deleted", "verdict": "CONFIRMED_DECISIVE", "evidence": "grep 'knowledge-graph|decision_nodes|patterns.json|Master KG' across entire langgraph_engine = 0 files. prompt_generator=LLM task_type/complexity only. todo_decomposer=claude CLI guesses agents. decision_explainer.py still documents 'Skill Selection Decision (Step 5)'."},
+    "FR-4": {"claim": "standards/selector.py hand-writes Flask/Django/Spring only; FastAPI/React/Angular/Vue/Express empty", "verdict": "PARTIALLY_WRONG", "evidence": "Selector hand-writes nothing; reads docs/*.md. load_framework_standards returns empty for EVERY framework (no framework docs bundled for anyone). All frameworks fall back to language-level docs. Underlying gap (no framework depth) is real; premise is not."},
+    "FR-5": {"claim": "Flask/FastAPI/Django/Spring-MockMvc generators are literal 'pass # TODO'", "verdict": "PARTIALLY_WRONG", "evidence": "Each emits a structured commented test skeleton ending in 'pass # TODO: configure <fw> test client and route' - deliberate stubs, not unimplemented. Path-based generation fully implemented. Enhancement valid but lower urgency."},
+    "FR-6": {"claim": "scripts/pre_tool_enforcer/ and hooks/pre_tool_enforcer/ both exist; one dead", "verdict": "CONFIRMED", "evidence": "Both exist. hooks/pre-tool-enforcer.py is a shim loading hooks/pre_tool_enforcer/ (LIVE). scripts/pre_tool_enforcer/ referenced only by 2 docs (zero live code), lacks newest policy agent_persona.py -> dead."},
+    "FR-7": {"claim": "SRS version stuck at 1.15.1 vs shipped 1.20.0", "verdict": "CONFIRMED", "evidence": "SRS.md header Version: 1.15.1 (2026-03-21); VERSION file 1.20.0. Second SRS also exists at docs/SYSTEM_REQUIREMENTS_SPECIFICATION.md."},
+    "FR-8": {"claim": "CLAUDE.md/SRS describe policies/ tree that doesn't exist; content in docs/", "verdict": "CONFIRMED_NUANCED", "evidence": "CLAUDE.md documents policies/{00-auto-fix,01-sync,02-standards,03-execution,testing}. On disk policies/ has exactly one file (03-execution-system/failure-prevention/failure-kb.json). ~60 *-policy.md live in docs/. Standards loader reads team policies from ~/.claude/policies (home), not repo."},
+    "FR-9": {"claim": "cli.py and decision_explainer.py reference deleted Step 1/5 numbering", "verdict": "PARTIALLY_WRONG", "evidence": "decision_explainer.py CONFIRMED (Step 1/5/10). scripts/cli.py has NO Step references. Only decision_explainer.py carries stale numbering."}
+  },
+  "classification": {
+    "KEEP": [
+      {"id": "C15", "component": "hooks/pre_tool_enforcer/", "fr": "FR-6", "reason": "Live enforcement package (loaded by hooks/pre-tool-enforcer.py shim)."},
+      {"id": "C19", "component": "scripts/cli.py", "fr": "FR-9", "reason": "No stale Step references found; recon wrong; no change."},
+      {"id": "C20", "component": "backward-compat shims (skills/manager callers, integration_test_generator.py root shim)", "fr": "-", "reason": "Re-export shims retained for compatibility."}
+    ],
+    "CHANGE": [
+      {"id": "C1", "component": "langgraph_engine/skills/manager.py :: SkillManager", "fr": "FR-1", "reason": "Insert local-sibling tier ahead of GitHub; delegate to ResourceResolver."},
+      {"id": "C2", "component": "src/utils/import_manager.py :: ImportManager", "fr": "FR-1", "reason": "Add local-sibling tier; fix skill.md->SKILL.md casing bug."},
+      {"id": "C4", "component": "scripts/tools/sync-library.py", "fr": "FR-2", "reason": "Replace dead hook-downloader subprocess with verify-sibling + optional git pull wrapper."},
+      {"id": "C9", "component": "level3_execution/architecture/00-prompt-generation/prompt_generator.py", "fr": "FR-3", "reason": "Consume FlowState.routing grounding; stop guessing agents."},
+      {"id": "C10", "component": "level3_execution/architecture/todo_decomposer.py", "fr": "FR-3", "reason": "Inject resolved real agent roster + skills into orchestration prompt."},
+      {"id": "C11", "component": "standards/selector.py :: load_framework_standards/select_standards", "fr": "FR-4", "reason": "Add library-skill-backed standards tier (priority 1.5)."},
+      {"id": "C13", "component": "level3_execution/integration_test_generator.py", "fr": "FR-5", "reason": "Enrich framework stubs from library quality-testing/backend skills; keep no-LLM template approach. P2/low."},
+      {"id": "C16", "component": "SRS.md", "fr": "FR-7", "reason": "Version 1.15.1 -> 1.20.0; reconcile duplicate docs/SYSTEM_REQUIREMENTS_SPECIFICATION.md."},
+      {"id": "C17", "component": "CLAUDE.md", "fr": "FR-8", "reason": "Correct policies/ tree description to match disk (content in docs/); add new routing/ + library/ packages."},
+      {"id": "C18", "component": "langgraph_engine/decision_explainer.py", "fr": "FR-9", "reason": "Update stale Step 1/5/10 numbering to current node names."}
+    ],
+    "NEW": [
+      {"id": "C3", "component": "langgraph_engine/library/resolver.py :: ResourceResolver + Local/GitHub/HardFail chain", "fr": "FR-1", "reason": "Single Strategy/Chain-of-Responsibility resolver both loaders delegate to (DRY)."},
+      {"id": "C6", "component": "thin sync wrapper (replaces hook-downloader.py rebuild)", "fr": "FR-2", "reason": "Verify sibling + optional git pull; NOT a full downloader."},
+      {"id": "C7", "component": "langgraph_engine/routing/kg_router.py :: KGRouter node", "fr": "FR-3", "reason": "Deterministic pre-LLM node: decision-tree traversal -> domain -> agent -> persona/skill grounding."},
+      {"id": "C8", "component": "langgraph_engine/routing/kg_lookup.py :: DecisionTreeTraverser + DomainKGReader", "fr": "FR-3", "reason": "Pure-Python KG reader ports behind KGRouter."},
+      {"id": "C12", "component": "langgraph_engine/standards/library_adapter.py :: LibrarySkillStandardsAdapter", "fr": "FR-4", "reason": "Adapter: framework -> library skill -> extracted standards section."}
+    ],
+    "DEPRECATE": [
+      {"id": "C5", "component": "hook-downloader.py references in sync-library.bat / sync-workflow-engine.bat / update-status.bat", "fr": "FR-2", "reason": "Remove/redirect to eliminated script."},
+      {"id": "C14", "component": "scripts/pre_tool_enforcer/ directory", "fr": "FR-6", "reason": "Dead duplicate; zero live references; delete."},
+      {"id": "HOOK-DL-REBUILD", "component": "hook-downloader.py full-downloader rebuild option", "fr": "FR-2", "reason": "Superseded by thin wrapper C6 (ADR-2)."}
+    ]
+  },
+  "counts": {"KEEP": 3, "CHANGE": 10, "NEW": 5, "DEPRECATE": 3},
+  "adrs": [
+    {"id": "ADR-1", "title": "Local-path bridge: resolution order, versioning, fallback", "fr": "FR-1", "status": "PROPOSED", "decision": "Chain: local sibling (default, rolling disk state) -> GitHub HTTP (opt-in via CLAUDE_ALLOW_GITHUB_FALLBACK) -> hard-fail with typed LibrarySetupError. Local=rolling, remote fallback=pinnable.", "supersedes": "undocumented 'always fetch from GitHub'"},
+    {"id": "ADR-2", "title": "Sync mechanism: eliminate hook-downloader.py, thin verify+pull wrapper", "fr": "FR-2", "status": "PROPOSED", "decision": "Delete references; replace sync-library.py with verify-sibling + optional git pull --ff-only. No new downloader.", "supersedes": "undocumented 'sync via hook-downloader.py'"},
+    {"id": "ADR-3", "title": "KG routing integration: new deterministic node vs rewrite step", "fr": "FR-3", "status": "PROPOSED_RECOMMENDATION_FIRM", "decision": "Option A: NEW deterministic KGRouter node before prompt_generator; existing LLM steps consume routing grounding. Chosen for SRP, offline testability, OCP, backward-compat, explainability. On unresolved domain -> status=unresolved + legacy path (never forces wrong agent).", "alternatives": "Option B (rewrite prompt_generator/todo_decomposer inline) rejected: mixes deterministic+LLM, higher regression risk, harder to test.", "supersedes": "undocumented 'LLM guesses the agent / former Step 5-6 selection'", "needs_user_confirmation": true},
+    {"id": "ADR-4", "title": "Standards content sourced from library skills", "fr": "FR-4", "status": "PROPOSED", "decision": "LibrarySkillStandardsAdapter tier (priority 1.5) maps framework->library skill->standards section, read via ADR-1 resolver. Bundled docs/{fw}-standards.md still overrides.", "supersedes": null}
+  ],
+  "tech_debt_found": [
+    "import_manager.get_skill fetches lowercase skill.md but library ships SKILL.md -> latently broken against real library (fixed by C2).",
+    "Two overlapping resource loaders (SkillManager, ImportManager) with duplicated GitHub-fetch logic -> consolidate behind ResourceResolver (C3).",
+    "Duplicate SRS: SRS.md (root) + docs/SYSTEM_REQUIREMENTS_SPECIFICATION.md.",
+    "Repo policies/ directory vestigial (1 file); CLAUDE.md over-describes it.",
+    "Dead code duplicate scripts/pre_tool_enforcer/ shadows live hooks/pre_tool_enforcer/.",
+    "decision_explainer.py documents removed Step 5/6 selection numbering -> corroborates FR-3 that KG selection was deleted."
+  ],
+  "nfr_reframe": {
+    "product_nfrs": "N/A (no QPS/DAU/SLA/capacity - internal dev tool)",
+    "real_nfrs": ["routing reliability (never silently wrong agent)", "zero network on happy path", "fail-fast on missing library", "backward compatibility of hook + FlowState contracts", "offline unit testability", "determinism/reproducibility", "idempotent sync"]
+  },
+  "security_threats": [
+    {"threat": "path traversal via skill/agent/domain names", "mitigation": "validate ^[a-z0-9][a-z0-9-]*$ + resolve()-within-root assertion"},
+    {"threat": "supply-chain via opt-in GitHub HTTP fallback", "mitigation": "off by default; pin ref via CLAUDE_SKILL_REPO_URL; content never exec'd; https only"},
+    {"threat": "malformed library JSON crashes router", "mitigation": "defensive parse -> status=unresolved, not pipeline abort"}
+  ],
+  "open_questions": [
+    "ADR-3 Option A confirmation (recommendation firm; core routing seam).",
+    "Domain-signal derivation: lexical-only vs optional single-shot LLM classifier fallback.",
+    "Standards priority slot: 1.5 (recommended) vs reuse 2.",
+    "policies/ dir fate: correct docs to match disk vs relocate failure-kb.json (verify failure_kb.py load path first).",
+    "FR-5 stays P2/low (recommended)."
+  ],
+  "implementation_order": {
+    "sequence": ["FR-1 (C1,C2,C3)", "FR-2 (C4,C5,C6)", "FR-3 (C7,C8,C9,C10)", "FR-4 (C11,C12)", "FR-5 (C13) + FR-6 (C14) parallel", "FR-7/8/9 (C16,C17,C18) last"],
+    "endorsement": "Recon's 1->2->3->4 then 5/6 parallel then 7-9 endorsed; single adjustment: FR-7/8/9 docs updates follow FR-1..4 so they document final structure.",
+    "dependency_notes": "FR-2/FR-3/FR-4 all depend on FR-1 ResourceResolver + locate_library_root(). FR-3 is the main value-add. FR-5/FR-6 independent. FR-7/8/9 zero code risk."
+  }
+}
