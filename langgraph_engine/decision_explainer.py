@@ -2,9 +2,19 @@
 Decision Explainer - Human-readable explanations for all pipeline decisions.
 
 Explains three categories of decisions:
-1. Plan Required Decision (Step 1) - Why detailed planning was or was not needed
-2. Skill Selection Decision (Step 5) - Why a particular skill was chosen
-3. Approach Decision (Step 10) - Why a specific implementation approach was chosen
+1. Plan Required Decision (pre-v1.13.0 Step 1, now decided within Step 0's
+   unified LLM analysis) - Why detailed planning was or was not needed
+2. Skill Selection Decision (pre-v1.13.0 Step 5, now decided within Step 0's
+   unified LLM analysis) - Why a particular skill was chosen
+3. Approach Decision (Step 10, still an active pipeline step) - Why a
+   specific implementation approach was chosen
+
+Only "approach" is populated by explain_from_state() against the live
+FlowState -- "plan" and "skill" state fields no longer exist as of v1.13.0
+(see explain_from_state()'s docstring). explain_plan_decision() and
+explain_skill_selection() remain available for direct/manual use (e.g.
+tests, or a caller with pre-v1.13.0-shaped data) but are not driven by the
+current live pipeline.
 
 Each explanation includes:
 - Primary reason (the main factor that drove the decision)
@@ -139,11 +149,12 @@ class DecisionExplainer:
         Explain why plan mode was required or skipped.
 
         Args:
-            plan_required:        True if Step 1 decided detailed planning was needed.
+            plan_required:        True if the plan-required decision (pre-v1.13.0 Step 1,
+                                   now made within Step 0) determined detailed planning was needed.
             task_complexity:      Complexity score (1-10) from complexity_calculator.
             task_count:           Number of sub-tasks identified in breakdown.
             files_affected:       Number of files expected to change.
-            reasoning:            Raw reasoning string from the LLM (Step 1 output).
+            reasoning:            Raw reasoning string from the LLM (Step 0 output).
             model_used:           Which inference model was used for this decision.
             user_message_snippet: Short excerpt of the user message (for context).
 
@@ -253,7 +264,8 @@ class DecisionExplainer:
         llm_query_used: bool = False,
     ) -> DecisionExplanation:
         """
-        Explain why a specific skill was selected in Step 5.
+        Explain why a specific skill was selected (pre-v1.13.0 Step 5,
+        now decided within Step 0's unified LLM analysis).
 
         Args:
             selected_skill:       Name of the skill that was selected.

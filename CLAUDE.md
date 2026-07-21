@@ -134,8 +134,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 |   +-- architecture/                 # generate_system_diagram.py (shared utility)
 |   +-- setup/  bin/  tools/          # env setup; Windows .bat launchers; dev utilities (release.py, sync-version.py, etc.)
 |   +-- github_operations/  github_pr_workflow/  helpers/   # GitHub + PR workflow helpers
-|   +-- pre_tool_enforcer/  post_tool_tracker/  agents/     # hook packages + agent definitions
-+-- policies/                         # All pipeline policies by level (00-auto-fix, 01-sync, 02-standards, 03-execution, testing)
++-- policies/03-execution-system/failure-prevention/  # failure-kb.json only (read by hooks/pre_tool_enforcer/policies/failure_kb.py); the historical 00-auto-fix/01-sync/02-standards/testing subtrees do not exist on disk -- see docs/ for standards content instead
 +-- src/mcp/                          # In-engine copy of session-mgr + bridge (session_hooks, base/)
 +-- k8s/                              # Kubernetes manifests (deployment, service, hpa, configmap, secret)
 +-- tests/                            # 45 test files (37 unit, 4 integration, 3 e2e, 1 load)
@@ -161,7 +160,7 @@ Level 3: Execution (8 active steps: Pre-0, Step 0, Steps 8-14)
 | Integrations Package | langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
 | Level -1 | langgraph_engine/level_minus1/ | Auto-fix enforcement (canonical) |
 | Level 1 | langgraph_engine/level1_sync/ | Session/context sync (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
-| Level 2 | policies/02-standards-system/ | Standards policies (.md files, no pipeline nodes) |
+| Level 2 | docs/ (standards) + langgraph_engine/standards/ (selector + library_adapter) | Standards policies (.md files, no pipeline nodes); `policies/02-standards-system/` does not exist on disk -- corrected from a stale reference during FR-8 doc-drift cleanup |
 | Level 3 | langgraph_engine/level3_execution/subgraph.py | 8-step active execution (Pre-0, Step 0, Steps 8-14) -- ACTIVE (nodes in level3_execution/nodes/) |
 | Pre-Analysis Node | langgraph_engine/level3_execution/subgraph.py | orchestration_pre_analysis_node: CallGraph scan before Step 0; template fast-path detection |
 | Hooks | hooks/pre-tool-enforcer.py, post-tool-tracker.py, stop-notifier.py | Tool enforcement + session maintenance |
