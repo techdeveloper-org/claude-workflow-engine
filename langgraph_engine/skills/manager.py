@@ -57,6 +57,7 @@ from langgraph_engine.dependency_resolver import (
     parse_skill_metadata,
     resolve_dependencies,
 )
+from langgraph_engine.library.resolver import LocalSiblingAdapter, locate_library_root
 from langgraph_engine.patterns import SkillRegistry
 from langgraph_engine.version_selector import handle_deprecated, validate_version_set
 
@@ -108,16 +109,28 @@ class SkillManager:
         self,
         skills_root: Optional[Path] = None,
         github_raw_base: str = _GITHUB_RAW_BASE,
+        local_library_root: Optional[Path] = None,
     ):
         """Initialize SkillManager.
 
         Args:
             skills_root: Root directory for skill storage. Defaults to ~/.claude/skills/
             github_raw_base: Base URL for GitHub raw content downloads.
+            local_library_root: Root of the sibling claude-global-library checkout,
+                used for the local-sibling resolver tier (ADR-1). Defaults to the
+                result of ``locate_library_root()``; pass explicitly to override
+                or to inject a test double.
         """
         self.skills_root = skills_root or _SKILLS_ROOT_DEFAULT
         self.github_raw_base = github_raw_base.rstrip("/")
         self._cache: Dict[str, Dict[str, Any]] = {}
+
+        library_root = local_library_root if local_library_root is not None else locate_library_root()
+        self._local_adapter: Optional[LocalSiblingAdapter] = (
+            LocalSiblingAdapter(library_root) if library_root is not None else None
+        )
+        if self._local_adapter is None:
+            logger.info("[SkillManager] No local sibling library found; skills served from disk cache / GitHub only.")
 
         logger.info(
             "[SkillManager] Initialized: skills_root={}, cache_size={}".format(self.skills_root, len(self._cache))
@@ -162,6 +175,18 @@ class SkillManager:
                     attempts=0,
                     version=cached.get("version"),
                     metadata=cached.get("metadata"),
+                )
+
+        if not force_download:
+            local_content, local_path = self._try_local_tier(skill_name)
+            if local_content is not None:
+                logger.info("[SkillManager] Local sibling hit for '{}' ({})".format(skill_name, local_path))
+                self._store_in_memory_cache(skill_name, local_content)
+                return self._build_result(
+                    skill_name=skill_name,
+                    content=local_content,
+                    source="local",
+                    attempts=0,
                 )
 
         if not force_download:
@@ -486,6 +511,34 @@ class SkillManager:
             urls.append(url)
 
         return urls
+
+    # -----------------------------------------------------------------------
+    # Local sibling resolver tier (ADR-1)
+    # -----------------------------------------------------------------------
+
+    def _try_local_tier(self, skill_name: str) -> "tuple[Optional[str], Optional[str]]":
+        """Probe the local-sibling resolver tier for a skill.
+
+        Never raises: an invalid skill name or an absent local library is
+        treated as a soft miss so the existing disk-cache / GitHub-download
+        pipeline continues unchanged when the sibling library is unavailable.
+
+        Args:
+            skill_name: Skill to look up in the sibling library.
+
+        Returns:
+            Tuple of (content, source_path) on a hit, or (None, None) on a miss.
+        """
+        if self._local_adapter is None:
+            return None, None
+        try:
+            resource = self._local_adapter.try_fetch_skill(skill_name)
+        except ValueError as exc:
+            logger.warning("[SkillManager] Invalid skill name for local tier '{}': {}".format(skill_name, exc))
+            return None, None
+        if resource is None:
+            return None, None
+        return resource.content, resource.path_or_url
 
     # -----------------------------------------------------------------------
     # Cache management

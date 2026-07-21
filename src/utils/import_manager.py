@@ -41,10 +41,13 @@ if sys.stderr.encoding != "utf-8":
 
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
+import logging
 import os
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 # GitHub base URLs (configurable via env vars for portability)
 _GITHUB_OWNER = os.environ.get("CLAUDE_GITHUB_OWNER", "techdeveloper-org")
@@ -54,6 +57,23 @@ PROJECT_URL = os.environ.get("CLAUDE_PROJECT_URL", f"{GITHUB_BASE}/claude-workfl
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+# Ensure the project root is importable so `langgraph_engine.library.resolver`
+# (the ADR-1 local-path bridge) can be resolved regardless of caller's cwd.
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from langgraph_engine.library.resolver import LibrarySetupError, build_default_resolver  # noqa: E402
+
+_resolver = None  # lazily constructed module-level singleton -- keeps ImportManager's static-method ergonomics
+
+
+def _get_resolver():
+    """Return the module-level ``ResourceResolver`` singleton, building it on first use."""
+    global _resolver
+    if _resolver is None:
+        _resolver = build_default_resolver(engine_root=PROJECT_ROOT)
+    return _resolver
 
 
 class ImportManager:
@@ -70,10 +90,12 @@ class ImportManager:
 
     @staticmethod
     def get_skill(skill_name: str) -> Optional[Dict]:
-        """Load a skill definition from claude-global-library on GitHub.
+        """Load a skill definition via the ADR-1 local-path bridge.
 
-        Fetches the ``skill.md`` file for the given skill from the
-        claude-global-library repository's main branch.
+        Resolves through the ``ResourceResolver`` chain: the sibling
+        claude-global-library checkout first (no network call, tries
+        ``SKILL.md`` then ``skill.md``), then an opt-in GitHub HTTP fallback
+        (``CLAUDE_ALLOW_GITHUB_FALLBACK=1``), then a typed failure.
 
         Args:
             skill_name (str): Skill identifier matching the directory name
@@ -83,24 +105,30 @@ class ImportManager:
         Returns:
             dict or None: On success, a dict with keys:
                 name (str): The skill_name argument.
-                content (str): Raw skill.md markdown content.
-                source (str): Always 'github'.
-                url (str): The full raw URL that was fetched.
-            Returns None on HTTP error (skill not found).
+                content (str): Raw skill markdown content.
+                source (str): 'local' or 'github'.
+                url (str): The local file path or GitHub raw URL that was resolved.
+            Returns None if the skill could not be resolved by any tier, or
+            if skill_name fails the resolver's name-safety validation.
         """
-        url = f"{GLOBAL_LIB_URL}/skills/{skill_name}/skill.md"
         try:
-            with urllib.request.urlopen(url) as response:
-                return {"name": skill_name, "content": response.read().decode("utf-8"), "source": "github", "url": url}
-        except urllib.error.HTTPError:
+            resource = _get_resolver().fetch_skill(skill_name)
+        except LibrarySetupError as exc:
+            logger.warning("ImportManager.get_skill('%s') failed: %s", skill_name, exc)
             return None
+        except ValueError as exc:
+            logger.warning("ImportManager.get_skill('%s') rejected: %s", skill_name, exc)
+            return None
+        return {"name": skill_name, "content": resource.content, "source": resource.source, "url": resource.path_or_url}
 
     @staticmethod
     def get_agent(agent_name: str) -> Optional[Dict]:
-        """Load an agent definition from claude-global-library on GitHub.
+        """Load an agent definition via the ADR-1 local-path bridge.
 
-        Fetches the ``agent.md`` file for the given agent from the
-        claude-global-library repository's main branch.
+        Resolves through the ``ResourceResolver`` chain: the sibling
+        claude-global-library checkout first (no network call), then an
+        opt-in GitHub HTTP fallback (``CLAUDE_ALLOW_GITHUB_FALLBACK=1``),
+        then a typed failure.
 
         Args:
             agent_name (str): Agent identifier matching the directory name
@@ -111,16 +139,20 @@ class ImportManager:
             dict or None: On success, a dict with keys:
                 name (str): The agent_name argument.
                 content (str): Raw agent.md markdown content.
-                source (str): Always 'github'.
-                url (str): The full raw URL that was fetched.
-            Returns None on HTTP error (agent not found).
+                source (str): 'local' or 'github'.
+                url (str): The local file path or GitHub raw URL that was resolved.
+            Returns None if the agent could not be resolved by any tier, or
+            if agent_name fails the resolver's name-safety validation.
         """
-        url = f"{GLOBAL_LIB_URL}/agents/{agent_name}/agent.md"
         try:
-            with urllib.request.urlopen(url) as response:
-                return {"name": agent_name, "content": response.read().decode("utf-8"), "source": "github", "url": url}
-        except urllib.error.HTTPError:
+            resource = _get_resolver().fetch_agent(agent_name)
+        except LibrarySetupError as exc:
+            logger.warning("ImportManager.get_agent('%s') failed: %s", agent_name, exc)
             return None
+        except ValueError as exc:
+            logger.warning("ImportManager.get_agent('%s') rejected: %s", agent_name, exc)
+            return None
+        return {"name": agent_name, "content": resource.content, "source": resource.source, "url": resource.path_or_url}
 
     @staticmethod
     def get_policy(policy_path: str) -> Optional[str]:
