@@ -2,8 +2,8 @@
 
 ## Status: 🔴 CRITICAL - ALWAYS ACTIVE
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-02-16  
+**Version:** 1.0.0
+**Last Updated:** 2026-02-16
 **Enforcement Level:** BLOCKING (Cannot proceed without compliance)
 
 ---
@@ -30,7 +30,7 @@ This is a **BLOCKING REQUIREMENT** - violations prevent execution.
 
 **Usage:**
 ```
-1. TaskCreate("Description") 
+1. TaskCreate("Description")
    → Creates task, returns task_id
 
 2. TaskUpdate(task_id, status="in_progress")
@@ -378,9 +378,8 @@ Remedy: Create tasks and define phases first
 
 ---
 
-**STATUS:** 🟢 ACTIVE  
-**ENFORCEMENT:** BLOCKING  
+**STATUS:** 🟢 ACTIVE
+**ENFORCEMENT:** BLOCKING
 **REQUIRED:** ALWAYS
 
 **This policy is NON-NEGOTIABLE and ALWAYS ENFORCED.**
-
