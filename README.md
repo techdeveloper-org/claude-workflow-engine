@@ -190,6 +190,47 @@ flowchart TD
     style L3  fill:#dcfce7,stroke:#16a34a
 ```
 
+### Exact Node Wiring
+
+The mermaid diagrams above are the summary view. This is the literal edge order from `create_flow_graph()` in `langgraph_engine/orchestrator.py`, including the two conditional branches that change the path at runtime.
+
+**Level −1 · Auto-Fix** — three sequential checks, merged, with an interactive repair loop on failure:
+
+```
+level_minus1_unicode → level_minus1_encoding → level_minus1_windows → level_minus1_merge
+                                                                            │
+                                            fail ─ ask_level_minus1_fix ─ fix_level_minus1 ─⤺ back to unicode
+```
+
+**Level 1 · Sync** — session load fans out to two parallel branches, merges, then prunes memory:
+
+```
+level1_session ⇉ [level1_complexity ‖ level1_context] → level1_merge → level1_cleanup
+```
+
+**Level 2 · Standards** — genuinely a no-op. No `add_node` / `add_edge` calls exist for it — Level 3 nodes read standards `.md` files straight off disk when they need them, so there is nothing for the StateGraph to schedule.
+
+**Level 3 · Execution** — Pre-0 decides whether Step 0's planning phase runs at all; Step 11 can loop back into Step 10 on a failed review:
+
+```
+level3_init → level3_pre_analysis
+                  │
+                  ├─ template fast-path ──────────────────────────────────────┐
+                  │                                                            │
+                  └─ miss → level3_step0_0 → level3_step0_1 → level3_step0 ────┤
+                                                                                ▼
+                                                              level3_step8 → level3_step9
+                                                                                │
+                                          hook mode ⤷ level3_output → END ─────┤ (steps 10-14 skipped)
+                                                                                ▼
+                            level3_step10 → standards_hook_step10 → level3_step11
+                                    ▲                                    │
+                                    └──── level3_step11_retry ⤺ review fail
+                                                                          │ pass / max-retry
+                                                                          ▼
+             level3_step12 → level3_step13 → standards_hook_step13 → level3_step14 → level3_output → END
+```
+
 ### Execution Modes
 
 | Mode | Env Var | Steps Active | Use Case |
@@ -283,6 +324,74 @@ See `orchestration_template.example.json` for the full field reference.
 
 ---
 
+## Hook System
+
+> Interactive version of this section + the pipeline diagram above: [Pipeline & Hook Architecture](https://claude.ai/code/artifact/6045b61f-00e5-411d-a2a6-d62b267ba29c)
+
+Claude Code exposes 9 hook events. This project registers **4 of them** in `~/.claude/settings.json`. The table below was produced by tracing every registered entry point down to which internal policy modules actually execute, not by reading the prose docs — `docs/hook-system-policy.md` has drifted from the real wiring (see Findings below).
+
+### Registration Status
+
+| Event | Registered | Entry Point | Wired Policies |
+|---|:---:|---|---|
+| `UserPromptSubmit` | Yes | `scripts/3-level-flow.py` | Runs the full 3-level pipeline; also the only entry point driving `src/mcp/session_hooks.py` |
+| `PreToolUse` | Yes | `hooks/pre-tool-enforcer.py` → `pre_tool_enforcer/core.py` | 12 / 13 loaded policies wired (1 dead — see Findings) |
+| `PostToolUse` | Yes | `hooks/post-tool-tracker.py` → `post_tool_tracker/core.py` | 6 / 6 wired |
+| `Stop` | Yes | `hooks/stop-notifier.py` → `stop_notifier/core.py` | `voice.py` + `post_impl.py` fully wired |
+| `SessionStart` | **No** | — | — |
+| `SessionEnd` | **No** | — | — |
+| `SubagentStop` | **No** | — | — |
+| `PreCompact` | **No** | — | — |
+| `Notification` | **No** | — | — |
+
+```mermaid
+flowchart TD
+    subgraph REG["Registered — settings.json"]
+        direction TB
+        UPS["UserPromptSubmit\n→ scripts/3-level-flow.py"]
+        PRE["PreToolUse\n→ hooks/pre-tool-enforcer.py"]
+        POST["PostToolUse\n→ hooks/post-tool-tracker.py"]
+        STOP["Stop\n→ hooks/stop-notifier.py"]
+    end
+
+    UPS --> PIPE["Full 3-level LangGraph pipeline\n+ session_hooks.py bridge"]
+    PRE --> PREP["pre_tool_enforcer/core.py\n12/13 policies wired · 1 dead\nPolicyRegistry loaded, never used"]
+    POST --> POSTP["post_tool_tracker/core.py\n6/6 policies wired"]
+    STOP --> STOPP["stop_notifier/core.py\nvoice.py + post_impl.py wired\n+ session save/archive/prune\n(SessionEnd-shaped work)"]
+
+    subgraph MISS["Never registered — no entry, no orphaned code"]
+        direction LR
+        SS["SessionStart"] ~~~ SE["SessionEnd"] ~~~ SA["SubagentStop"] ~~~ PC["PreCompact"] ~~~ NT["Notification"]
+    end
+
+    style REG  fill:#dcfce7,stroke:#16a34a
+    style MISS fill:#fee2e2,stroke:#dc2626
+    style PREP fill:#fef3c7,stroke:#d97706
+```
+
+### PreToolUse — full policy breakdown
+
+`pre_tool_enforcer/core.py` loads all 13 files under `hooks/pre_tool_enforcer/policies/`:
+
+| Policy | Status |
+|---|---|
+| `checkpoint.py`, `task_breakdown.py`, `skill_selection.py`, `context_read.py`, `level1_sync.py`, `python_unicode.py`, `bash_commands.py`, `grep_opt.py`, `read_opt.py`, `agent_persona.py` | Wired — blocking (`_BLOCKING_POLICIES`, core.py:470-481) |
+| `skill_context.py`, `failure_kb.py` | Wired — non-blocking hints (core.py:543-549, 562-568) |
+| `write_edit.py` | **Loaded, never called** — see Findings #2 |
+
+### PostToolUse — full policy breakdown
+
+All 6 files under `hooks/post_tool_tracker/policies/` are loaded and invoked: `uncommitted_push.py`, `post_merge_update.py`, `task_tracking.py`, `phase_complexity.py`, `task_breakdown_clear.py`, `skill_selection_clear.py`.
+
+### Findings
+
+1. **`PolicyRegistry` is a dead abstraction.** `hooks/pre_tool_enforcer/registry.py` defines a `PolicyRegistry` class meant to register and run policies generically. `core.py:182` imports it, but nothing in the repo ever instantiates it — `core.py` hand-builds its own `_BLOCKING_POLICIES` list instead. Either wire real policies through it or delete it.
+2. **`write_edit.py` never executes.** Loaded and wrapped at `core.py:216` / `367-369`, but no call site in `main()` reaches it — and its own body is a stub that always returns `False`. A second, non-stub-looking copy also sits unused directly in the `pre-tool-enforcer.py` shim (lines 204-222), likewise never called. Two dead implementations of the same check.
+3. **No dedicated `SessionEnd` hook.** `stop_notifier/core.py` runs session archiving, pruning, and preference tracking on every `Stop` event — work a real `SessionEnd` hook would own instead. Since `Stop` fires on every response (not just session close), this logic runs far more often than necessary.
+4. **`docs/hook-system-policy.md` no longer matches the implementation.** It describes a `script-chain-executor.py` dispatcher and a `hook-downloader.py` sync-from-repo model — neither file exists in the repo anymore. Its example `settings.json` snippets point at `~/.claude/scripts/...py`, while the real registration points directly into this repo's `hooks/...py`. Its policy counts ("8" PreToolUse checks, "6" PostToolUse functions) use a different taxonomy than the actual files and only coincidentally match on PostToolUse.
+
+---
+
 ## Directory Structure
 
 ```
@@ -349,11 +458,8 @@ claude-workflow-engine/           # 369 Python files total
 │   ├── rate_limiter.py           # TokenBucket per client: 100/min tools, 10/min LLM
 │   └── input_validator.py        # Null-byte strip, length limit, prompt injection detection
 │
-├── policies/                     # 46 policy .md files (read directly at runtime, no nodes)
-│   ├── 00-auto-fix/              # Level -1 enforcement rules
-│   ├── 01-sync/                  # Level 1 context sync policies
-│   ├── 02-standards-system/      # Coding standards (Python, Java, TS, Kotlin, etc.)
-│   └── 03-execution/             # Level 3 execution policies
+├── policies/                     # non-.md policy state only (failure-kb.json) — see note below
+│   └── 03-execution-system/failure-prevention/failure-kb.json
 │
 ├── tests/                        # 44 test_*.py files (56 total Python files)
 │   ├── test_*.py                 # 36 unit tests
@@ -361,9 +467,10 @@ claude-workflow-engine/           # 369 Python files total
 │   ├── e2e/                      # 3 end-to-end scenario tests
 │   └── load/                     # 1 concurrency / load test
 │
-├── rules/                        # 43 coding standard definitions
-├── docs/                         # 55 architecture + implementation documentation files
-├── uml/                          # Auto-generated UML diagrams (13 types, Mermaid/PlantUML)
+├── docs/                         # 156 files — architecture docs, ADRs, runbooks, ALL policy/rule
+│                                 # .md files (flattened here, no subfolders), CONTRIBUTING.md,
+│                                 # CODE_OF_CONDUCT.md, and the GitHub issue/PR templates
+├── uml/                          # Regenerated per pipeline run (13 types, Mermaid/PlantUML)
 ├── drawio/                       # Auto-generated draw.io diagrams (.drawio files)
 ├── k8s/                          # Kubernetes manifests: deployment, service, HPA, configmap
 ├── Makefile                      # Common developer tasks: test, lint, docker, k8s targets
@@ -699,6 +806,8 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 
 **Complexity score is not ground truth:** `combined_complexity_score` is a heuristic: `simple_score × 0.3 + graph_score × 0.7`. It is on a 1-25 scale and correlates with effort, but it does not map to story points and should not be treated as precise.
 
+**Level 2 standards auto-load is currently broken.** `langgraph_engine/standards/selector.py` (and 8 other files) hardcode lookups under `policies/02-standards-system/*.md` and `~/.claude/policies/02-standards-system/*.md`. All policy `.md` files were flattened into `docs/` (see Directory Structure), so `policies/02-standards-system/` no longer exists — these lookups now silently return nothing. `hooks/pre-tool-enforcer.py` reads `rules/*.md` the same way and has the same problem. Needs either a path-config update or the standards loader repointed at `docs/`.
+
 ### Trade-offs by Design
 
 | Decision | What You Gain | What You Give Up |
@@ -716,7 +825,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, coding standards, and PR guidelines.
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for setup instructions, coding standards, and PR guidelines.
 
 Key rules:
 - No `# ruff: noqa: F821` file-level suppressors
