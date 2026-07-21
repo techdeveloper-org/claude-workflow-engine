@@ -124,12 +124,23 @@ _FLASK_API_TEST = '''\
 _FASTAPI_API_TEST = '''\
     def test_api_endpoint_{safe_name}(self):
         """FastAPI endpoint test for {endpoint_method}."""
-        # from fastapi.testclient import TestClient
+        # Async pytest pattern (pytest-asyncio + httpx.AsyncClient over ASGITransport),
+        # matching the FastAPI app's async route handlers and dependency-override
+        # fixture convention:
+        # import pytest
+        # from httpx import AsyncClient, ASGITransport
         # from myapp.main import app
-        # client = TestClient(app)
-        # response = client.get('/your-route')  # adjust method and route
-        # assert response.status_code == 200
-        pass  # TODO: configure FastAPI TestClient and route
+        # from myapp.dependencies.db import get_db
+        #
+        # @pytest.mark.asyncio
+        # async def test_{safe_name}():
+        #     app.dependency_overrides[get_db] = lambda: test_db_session
+        #     transport = ASGITransport(app=app)
+        #     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        #         response = await client.get('/your-route')  # adjust method and route
+        #         assert response.status_code == 200
+        #     app.dependency_overrides.clear()
+        pass  # TODO: configure FastAPI AsyncClient(ASGITransport) test and route
 '''
 
 _DJANGO_API_TEST = '''\
