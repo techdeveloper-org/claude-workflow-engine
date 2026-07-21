@@ -806,7 +806,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 
 **Complexity score is not ground truth:** `combined_complexity_score` is a heuristic: `simple_score × 0.3 + graph_score × 0.7`. It is on a 1-25 scale and correlates with effort, but it does not map to story points and should not be treated as precise.
 
-**Level 2 standards auto-load is currently broken.** `langgraph_engine/standards/selector.py` (and 8 other files) hardcode lookups under `policies/02-standards-system/*.md` and `~/.claude/policies/02-standards-system/*.md`. All policy `.md` files were flattened into `docs/` (see Directory Structure), so `policies/02-standards-system/` no longer exists — these lookups now silently return nothing. `hooks/pre-tool-enforcer.py` reads `rules/*.md` the same way and has the same problem. Needs either a path-config update or the standards loader repointed at `docs/`.
+**`load_framework_standards()` / `load_language_standards()` in `standards/selector.py` return nothing.** They look under `scripts/architecture/02-standards-system/`, which doesn't exist — only `scripts/architecture/03-execution-system/` does. This is a pre-existing gap, unrelated to the `docs/` flatten: `load_team_standards()` in the same file reads from `~/.claude/policies/02-standards-system/` (the global Claude home directory, not this repo), which was never touched and still resolves correctly. The handful of `# Policy Reference: policies/...` lines in files under `langgraph_engine/*/architecture/` are stale docstring comments only — they're never read as file paths at runtime.
 
 ### Trade-offs by Design
 
