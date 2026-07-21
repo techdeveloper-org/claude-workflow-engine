@@ -6,6 +6,7 @@ Re-exports all public symbols from sub-modules so callers can use:
 """
 
 from .integration import STANDARDS_INTEGRATION_POINTS, apply_standards_at_step, load_standards  # noqa: F401
+from .library_adapter import PRIORITY_LIBRARY_SKILL, LibrarySkillStandardsAdapter  # noqa: F401
 from .selector import (  # noqa: F401
     PRIORITY_CUSTOM,
     PRIORITY_FRAMEWORK,

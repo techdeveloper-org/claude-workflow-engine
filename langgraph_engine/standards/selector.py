@@ -10,7 +10,7 @@ Implements:
 - Conflict detection and resolution with priority ordering
 
 Priority ordering (higher number wins conflicts):
-  custom=4 > team=3 > framework=2 > language=1
+  custom=4 > team=3 > framework=2 > library_skill=1.5 > language=1
 
 Windows-safe: ASCII only (cp1252 compatible).
 """
@@ -22,6 +22,7 @@ from typing import Any, Dict, List
 from langgraph_engine.core.logger_factory import get_logger
 from langgraph_engine.engine_logging.error_logger import ErrorLogger
 from langgraph_engine.patterns import memoize
+from langgraph_engine.standards.library_adapter import PRIORITY_LIBRARY_SKILL, LibrarySkillStandardsAdapter
 
 logger = get_logger(__name__)
 
@@ -441,11 +442,12 @@ def select_standards(project_path: str, session_id: str = "default") -> Dict[str
     Detection order:
       1. detect_project_type()
       2. detect_framework()
-      3. load_custom_standards()    (priority=4 - highest precedence)
-      4. load_team_standards()      (priority=3)
-      5. load_framework_standards() (priority=2)
-      6. load_language_standards()  (priority=1 - lowest precedence)
-      7. detect_conflicts() + resolve_conflicts()
+      3. load_custom_standards()             (priority=4 - highest precedence)
+      4. load_team_standards()               (priority=3)
+      5. load_framework_standards()          (priority=2)
+      6. LibrarySkillStandardsAdapter.load() (priority=1.5)
+      7. load_language_standards()           (priority=1 - lowest precedence)
+      8. detect_conflicts() + resolve_conflicts()
 
     Args:
         project_path: Absolute path to project root.
@@ -467,7 +469,7 @@ def select_standards(project_path: str, session_id: str = "default") -> Dict[str
         "session_id": session_id,
         "detection_steps": [],
         "sources_checked": [],
-        "priority_chain": "custom(4) > team(3) > framework(2) > language(1)",
+        "priority_chain": "custom(4) > team(3) > framework(2) > library_skill(1.5) > language(1)",
     }
 
     project_type = detect_project_type(project_path)
@@ -529,6 +531,17 @@ def select_standards(project_path: str, session_id: str = "default") -> Dict[str
         }
     )
 
+    library_skill_loaded = LibrarySkillStandardsAdapter().load(project_type, framework)
+    all_standards.extend(library_skill_loaded)
+    traceability["sources_checked"].append(
+        {
+            "source": "library_skill_standards",
+            "priority": PRIORITY_LIBRARY_SKILL,
+            "loaded": len(library_skill_loaded),
+            "locations": ["claude-global-library sibling: skills/{skill-name}/SKILL.md (via ResourceResolver)"],
+        }
+    )
+
     language_loaded = load_language_standards(project_type)
     all_standards.extend(language_loaded)
     traceability["sources_checked"].append(
@@ -546,8 +559,12 @@ def select_standards(project_path: str, session_id: str = "default") -> Dict[str
         step="Standard Selector",
         decision="Loaded {} standards from all sources".format(len(all_standards)),
         reasoning=(
-            "custom({}) > team({}) > framework({}) > language({})".format(
-                len(custom_loaded), len(team_loaded), len(framework_loaded), len(language_loaded)
+            "custom({}) > team({}) > framework({}) > library_skill({}) > language({})".format(
+                len(custom_loaded),
+                len(team_loaded),
+                len(framework_loaded),
+                len(library_skill_loaded),
+                len(language_loaded),
             )
         ),
         chosen_option="standards_loaded",
@@ -565,7 +582,9 @@ def select_standards(project_path: str, session_id: str = "default") -> Dict[str
             error_message="{} conflict(s) detected between standards".format(len(conflicts)),
             severity="WARNING",
             error_type="StandardsConflict",
-            recovery_action="Higher numeric priority wins: custom(4) > team(3) > framework(2) > language(1)",
+            recovery_action=(
+                "Higher numeric priority wins: custom(4) > team(3) > framework(2) > " "library_skill(1.5) > language(1)"
+            ),
             context={"conflicts": [c.get("conflicts") for c in conflicts]},
         )
 
@@ -644,21 +663,22 @@ def resolve_conflicts(standards_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Resolve conflicts by applying standards in priority order.
 
     Priority ordering (higher numeric value = higher precedence):
-      custom=4 > team=3 > framework=2 > language=1
+      custom=4 > team=3 > framework=2 > library_skill=1.5 > language=1
 
     Args:
-        standards_list: List of standard dicts each with a ``priority`` int field.
+        standards_list: List of standard dicts each with a ``priority`` field
+            (int or float).
 
     Returns:
         Merged rules dict with conflicts resolved (higher-priority source wins).
     """
 
-    def _priority_key(std: Dict[str, Any]) -> int:
+    def _priority_key(std: Dict[str, Any]) -> float:
         raw = std.get("priority", 0)
         try:
-            return int(raw)
+            return float(raw)
         except (TypeError, ValueError):
-            return 0
+            return 0.0
 
     sorted_standards = sorted(standards_list, key=_priority_key)
 
