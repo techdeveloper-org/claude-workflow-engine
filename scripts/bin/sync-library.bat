@@ -1,30 +1,31 @@
 @echo off
-REM Selective Sync Script for Claude Global Library (Windows)
-REM Downloads and syncs only skills and agents
+REM Verify+pull wrapper for the claude-global-library sibling (ADR-2 / FR-2, Windows)
 REM
-REM PURPOSE: Quick sync for claude-global-library updates
-REM This is a convenience wrapper around hook-downloader.py sync-claude-global-library
+REM PURPOSE: Verify the sibling claude-global-library checkout exists next to
+REM this repo, and optionally fast-forward it. Replaces the removed
+REM hook-downloader.py-based sync flow -- there is nothing to "download" in a
+REM sibling layout (the engine reads skills/agents/KG files directly from disk).
 REM
 REM USAGE:
-REM   sync-library.bat
-REM   sync-library
+REM   sync-library.bat           (verify only)
+REM   sync-library.bat --pull    (verify + git pull --ff-only in the sibling)
 REM
-REM What it syncs:
-REM   - All skills from claude-global-library
-REM   - All agents from claude-global-library
+REM Exit codes:
+REM   0 = verified (and, with --pull, up to date / fast-forwarded)
+REM   2 = sibling not found
+REM   3 = --pull failed (non-fast-forward or other git error)
 REM
-REM Version: 1.0.0
+REM Version: 2.0.0
 
 setlocal enabledelayedexpansion
 
 set "SCRIPT_DIR=%~dp0"
-set "HOOK_DOWNLOADER=%SCRIPT_DIR%hook-downloader.py"
+set "SYNC_LIBRARY=%SCRIPT_DIR%..\tools\sync-library.py"
 
-if not exist "%HOOK_DOWNLOADER%" (
-    echo [ERROR] hook-downloader.py not found
+if not exist "%SYNC_LIBRARY%" (
+    echo [ERROR] sync-library.py not found at %SYNC_LIBRARY%
     exit /b 1
 )
 
-REM Call hook-downloader with selective sync parameter
-python "%HOOK_DOWNLOADER%" sync-claude-global-library
+python "%SYNC_LIBRARY%" %*
 exit /b %ERRORLEVEL%
