@@ -16,9 +16,9 @@ Environment:
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -130,62 +130,38 @@ def _build_decompose_prompt(orchestration_prompt, complexity_score):
 
 
 def _call_claude_cli(prompt):
-    """Call claude CLI as subprocess. Returns (response_text, error)."""
-    temp_file = None
+    """Call claude CLI in headless print mode via stdin. Returns (response_text, error)."""
+    claude_path = shutil.which("claude")
+    if not claude_path:
+        return None, "claude CLI binary not found in PATH"
+
+    if DEBUG:
+        print("[todo_decomposer] Running: claude CLI -p", file=sys.stderr, flush=True)
+
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".txt",
-            delete=False,
-            encoding="utf-8",
-        ) as tf:
-            tf.write(prompt)
-            temp_file = tf.name
-
-        cmd = [
-            "claude",
-            "--json",
-            "--no-stream",
-            "@" + temp_file,
-        ]
-
-        if DEBUG:
-            print("[todo_decomposer] Running: claude CLI", file=sys.stderr, flush=True)
-
         result = subprocess.run(
-            cmd,
+            [claude_path, "-p"],
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=_TIMEOUT,
+            encoding="utf-8",
+            errors="replace",
         )
 
         if result.returncode != 0 and not result.stdout:
             stderr_preview = (result.stderr or "")[:300]
             return None, "claude CLI non-zero exit (%d): %s" % (result.returncode, stderr_preview)
 
-        response_text = result.stdout or ""
-        try:
-            json_out = json.loads(response_text)
-            if isinstance(json_out, dict) and "result" in json_out:
-                return json_out["result"], None
+        response_text = (result.stdout or "").strip()
+        if response_text:
             return response_text, None
-        except (json.JSONDecodeError, ValueError):
-            if response_text.strip():
-                return response_text.strip(), None
-            return None, "claude CLI returned empty response"
+        return None, "claude CLI returned empty response"
 
     except subprocess.TimeoutExpired:
         return None, "claude CLI timed out after %ds" % _TIMEOUT
-    except FileNotFoundError:
-        return None, "claude CLI binary not found in PATH"
     except Exception as exc:
         return None, "claude CLI call failed: " + str(exc)
-    finally:
-        if temp_file:
-            try:
-                Path(temp_file).unlink(missing_ok=True)
-            except OSError as exc:
-                logger.debug("todo_decomposer: temp file cleanup skipped: %s", exc)
 
 
 def _extract_todo_list(llm_response):
