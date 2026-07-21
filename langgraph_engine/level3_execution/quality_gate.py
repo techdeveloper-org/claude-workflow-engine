@@ -6,6 +6,10 @@ Combines all quality signals before allowing a PR to merge:
     - Test coverage percentage (before/after)
     - CallGraph breaking-change detection
     - Test existence check for every modified file
+    - Runtime verification (opt-in via ENABLE_RUNTIME_VERIFICATION=1)
+    - Faithfulness: does the diff actually implement the task, grounded in
+      the hallucination-detection-core NLI rubric (opt-in via
+      ENABLE_FAITHFULNESS_GATE=1 -- see faithfulness_gate.py)
 
 Each gate runs independently in a try/except block so a failure in one
 gate never prevents the others from evaluating.
@@ -562,6 +566,59 @@ def _evaluate_verification_gate(
     return gate
 
 
+def _evaluate_faithfulness_gate(
+    project_root: str,
+    state: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Gate 6: Faithfulness. Skipped entirely when ENABLE_FAITHFULNESS_GATE != '1'.
+
+    Calls faithfulness_gate.run_faithfulness_check() to judge whether Step 10's
+    diff actually implements the original task, grounded in the sibling
+    library's hallucination-detection-core NLI faithfulness rubric (this is an
+    anti-hallucination check on the implementation itself, not a code-quality
+    check). Follows the same two-tier opt-in pattern as Gate 5
+    (_evaluate_verification_gate):
+
+      - ENABLE_FAITHFULNESS_GATE != '1' (default): gate skipped entirely,
+        no `claude -p` subprocess is ever spawned.
+      - ENABLE_FAITHFULNESS_GATE=1, STRICT_FAITHFULNESS_GATE != '1' (default):
+        a "flag" verdict warns but does not block; "block" always blocks;
+        "uncertain" always passes but the reason recommends human review.
+      - ENABLE_FAITHFULNESS_GATE=1, STRICT_FAITHFULNESS_GATE=1: a "flag"
+        verdict also blocks.
+
+    Returns a gate result dict.
+    """
+    gate: Dict[str, Any] = {
+        "passed": True,
+        "reason": "",
+        "verdict": "uncertain",
+        "faithfulness_score": None,
+        "flagged_claims": [],
+        "checked": False,
+    }
+
+    if os.getenv("ENABLE_FAITHFULNESS_GATE", "0") != "1":
+        gate["reason"] = "faithfulness gate disabled"
+        return gate
+
+    try:
+        from .faithfulness_gate import run_faithfulness_check
+
+        task_description = state.get("user_message") or state.get("step7_execution_prompt") or ""
+        modified_files: List[str] = list(state.get("step10_modified_files") or [])
+
+        check_result = run_faithfulness_check(task_description, modified_files, project_root)
+        gate.update(check_result)
+
+    except Exception as exc:
+        logger.warning("quality_gate: faithfulness gate evaluation failed: %s", exc)
+        gate["passed"] = True
+        gate["reason"] = f"Gate evaluation error (fail-safe pass): {exc}"
+
+    return gate
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -594,6 +651,9 @@ def evaluate_quality_gate(
                                 "modified_without_tests": [], ...},
                 "verification": {"passed": bool, "reason": str,
                                  "violation_count": int, "violations": [], ...},
+                "faithfulness": {"passed": bool, "reason": str, "verdict": str,
+                                 "faithfulness_score": float | None,
+                                 "flagged_claims": [], "checked": bool, ...},
             },
             "summary": str,
             "recommendation": str,   # "MERGE" | "FIX_AND_RETRY" | "MANUAL_REVIEW"
@@ -616,12 +676,13 @@ def evaluate_quality_gate(
         effective_config,
     )
 
-    # Run all five gates independently
+    # Run all six gates independently
     sonar_gate = _evaluate_sonar_gate(project_root, state, effective_config, modified_files)
     coverage_gate = _evaluate_coverage_gate(project_root, state, effective_config, modified_files)
     breaking_gate = _evaluate_breaking_changes_gate(state, effective_config)
     tests_gate = _evaluate_tests_exist_gate(project_root, state, effective_config, modified_files)
     verification_gate = _evaluate_verification_gate(state)
+    faithfulness_gate = _evaluate_faithfulness_gate(project_root, state)
 
     gates = {
         "sonar": sonar_gate,
@@ -629,6 +690,7 @@ def evaluate_quality_gate(
         "breaking_changes": breaking_gate,
         "tests_exist": tests_gate,
         "verification": verification_gate,
+        "faithfulness": faithfulness_gate,
     }
 
     # Determine which gates are blocking
@@ -692,6 +754,7 @@ def generate_gate_report(gate_result: Dict[str, Any]) -> str:
             "breaking_changes": "Breaking Changes",
             "tests_exist": "Tests Exist",
             "verification": "Runtime Verification",
+            "faithfulness": "Faithfulness",
         }
         for key, label in gate_display.items():
             result = gates.get(key, {})
@@ -734,6 +797,15 @@ def generate_gate_report(gate_result: Dict[str, Any]) -> str:
                     detail = "0 violations"
                 else:
                     detail = f"{count} violation(s) detected"
+            elif key == "faithfulness":
+                if result.get("reason") == "faithfulness gate disabled":
+                    detail = "Gate disabled (ENABLE_FAITHFULNESS_GATE != 1)"
+                elif not result.get("checked", False):
+                    detail = f"Not checked: {reason}"
+                else:
+                    score = result.get("faithfulness_score")
+                    score_str = f"{score:.2f}" if isinstance(score, (int, float)) else "n/a"
+                    detail = f"verdict={result.get('verdict', 'unknown')}, score={score_str}"
             else:
                 detail = reason
 
@@ -905,6 +977,26 @@ def get_fix_suggestions(gate_result: Dict[str, Any]) -> List[Dict[str, str]]:
                     ),
                     "priority": "HIGH",
                     "estimated_effort": "1-4 hours",
+                }
+            )
+
+        # --- Faithfulness suggestions ---
+        faithfulness = gates.get("faithfulness", {})
+        if not faithfulness.get("passed", True):
+            claims = faithfulness.get("flagged_claims", [])
+            claims_str = "; ".join(claims[:3]) if claims else "see gate reason for details"
+            suggestions.append(
+                {
+                    "gate": "faithfulness",
+                    "action": (
+                        "Review flagged faithfulness claim(s): "
+                        + claims_str
+                        + ". Verify the diff actually implements what the task requested, "
+                        "without fabricated scope or capability, then either fix the diff "
+                        "or clarify the task description."
+                    ),
+                    "priority": "HIGH",
+                    "estimated_effort": "30 min - 2 hours",
                 }
             )
 
