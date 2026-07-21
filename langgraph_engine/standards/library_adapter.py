@@ -8,6 +8,13 @@ module contains no filesystem or network logic of its own.
 Priority: 1.5 -- between framework=2 (an explicit bundled ``docs/{fw}-standards.md``
 still wins) and language=1 (the floor when no library skill is mapped).
 
+Also defines ``LibrarySkillLanguageAdapter`` -- the same pattern one tier down,
+sourcing language-tier standards content from the sibling library's ``*-core``
+skills at priority 0.5, one rung below the bundled ``docs/{lang}.md`` doc
+(``PRIORITY_LANGUAGE=1``) so an explicit bundled language doc still wins a
+conflict, mirroring how ``PRIORITY_FRAMEWORK=2`` outranks the framework
+adapter's ``PRIORITY_LIBRARY_SKILL=1.5`` above.
+
 Windows-safe: ASCII only (cp1252 compatible).
 """
 
@@ -20,6 +27,7 @@ from langgraph_engine.library.resolver import LibrarySetupError, build_default_r
 logger = get_logger(__name__)
 
 PRIORITY_LIBRARY_SKILL = 1.5
+PRIORITY_LIBRARY_LANGUAGE_SKILL = 0.5
 
 # (project_type, framework) -> library skill name under skills/{name}/SKILL.md.
 # Every entry below was verified against a real file in the sibling
@@ -108,5 +116,79 @@ class LibrarySkillStandardsAdapter:
                 "file": resource.path_or_url,
                 "content": content,
                 "priority": PRIORITY_LIBRARY_SKILL,
+            }
+        ]
+
+
+# project_type -> library skill name under skills/{name}/SKILL.md, for the
+# language tier. Every entry below was verified against a real file in the
+# sibling claude-global-library checkout before being added (see comment on
+# each line). A csharp-core-equivalent skill does not exist in the sibling
+# library at the time this map was built, so "csharp" is intentionally
+# omitted -- the adapter returns [] for it (same ADR-4 accepted trade-off as
+# the framework map above), a safe no-op that leaves the language tier to
+# whatever bundled docs/{lang}.md already provides.
+_LANGUAGE_SKILL_MAP: Dict[str, str] = {
+    # verified: skills/python-core/SKILL.md exists
+    "python": "python-core",
+    # verified: skills/typescript-core/SKILL.md exists
+    "typescript": "typescript-core",
+    # verified: skills/javascript-core/SKILL.md exists
+    "javascript": "javascript-core",
+    # verified: skills/go-runtime-internals-core/SKILL.md exists
+    "go": "go-runtime-internals-core",
+    # verified: skills/rust-ownership-formal-core/SKILL.md exists
+    "rust": "rust-ownership-formal-core",
+    # verified: skills/java-design-patterns-core/SKILL.md exists
+    "java": "java-design-patterns-core",
+}
+
+
+class LibrarySkillLanguageAdapter:
+    """Adapter (HLD Section 6.2 pattern, one tier down) translating a library
+    ``SKILL.md`` into a language-tier standards entry at priority 0.5.
+
+    Sits one rung below the bundled ``docs/{lang}.md`` doc (``PRIORITY_LANGUAGE
+    = 1``) rather than sharing its priority slot: both sources are loaded
+    unconditionally when a mapping exists (same additive-then-rank-by-priority
+    design as the framework tier above), so an explicit bundled language doc
+    always wins a conflicting rule, while the library-sourced skill still
+    contributes non-conflicting content and still outranks having nothing at
+    all for languages with no bundled doc.
+    """
+
+    def load(self, project_type: str) -> List[Dict[str, Any]]:
+        """Load language standards content sourced from a library skill.
+
+        Args:
+            project_type: Language string from ``detect_project_type()``.
+
+        Returns:
+            A single-item list with keys ``id``, ``source``, ``file``,
+            ``content``, ``priority``, or ``[]`` when no mapping exists,
+            the sibling library is unavailable, or the mapped skill cannot
+            be resolved. Never raises (same §7.4 MUST NOT contract as
+            ``LibrarySkillStandardsAdapter``).
+        """
+        skill_name = _LANGUAGE_SKILL_MAP.get(project_type)
+        if not skill_name:
+            return []
+
+        try:
+            resolver = build_default_resolver()
+            resource = resolver.fetch_skill(skill_name)
+        except LibrarySetupError as exc:
+            logger.debug(f"[library_adapter] language skill '{skill_name}' unavailable: {exc}")
+            return []
+
+        content = _extract_standards_content(resource.content)
+
+        return [
+            {
+                "id": "library_language_{}".format(project_type),
+                "source": "library_language_standards",
+                "file": resource.path_or_url,
+                "content": content,
+                "priority": PRIORITY_LIBRARY_LANGUAGE_SKILL,
             }
         ]

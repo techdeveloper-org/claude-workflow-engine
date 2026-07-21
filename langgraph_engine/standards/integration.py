@@ -132,7 +132,7 @@ def load_standards(state: FlowState) -> Dict[str, Any]:
         "level2_status": state.get("level2_status", "UNKNOWN"),
         "project_type": project_type,
         "framework": detected_framework or (standards_selection or {}).get("framework", "unknown"),
-        "priority_chain": "custom(4) > team(3) > framework(2) > language(1)",
+        "priority_chain": "custom(4) > team(3) > framework(2) > library_skill(1.5) > language(1) > library_language_skill(0.5)",
     }
 
     return standards
@@ -230,7 +230,7 @@ def _apply_step1_standards(
         "tool_rules_loaded": "tool_optimization" in standards,
         "merged_rules_available": has_merged_rules,
         "standards_selection_available": has_selection,
-        "priority_chain": "custom(4) > team(3) > framework(2) > language(1)",
+        "priority_chain": "custom(4) > team(3) > framework(2) > library_skill(1.5) > language(1) > library_language_skill(0.5)",
         "note": (
             "Account for {}/{} standards when scoring complexity. "
             "Higher standard count may increase required steps.".format(project_type, framework)
@@ -355,7 +355,10 @@ def _apply_step5_standards(
         "agent_checked": selected_agent,
         "traceability": {
             "checks_run": len(cross_type_checks),
-            "priority_chain": meta.get("priority_chain", "custom(4) > team(3) > framework(2) > language(1)"),
+            "priority_chain": meta.get(
+                "priority_chain",
+                "custom(4) > team(3) > framework(2) > library_skill(1.5) > language(1) > library_language_skill(0.5)",
+            ),
         },
     }
 
@@ -524,7 +527,34 @@ def _build_review_checklist(
             {"check": "exception_handling", "description": "Exceptions handled via @ControllerAdvice or similar"},
         ]
 
+    checklist += _build_selected_standards_checklist_items(standards)
+
     return checklist
+
+
+def _build_selected_standards_checklist_items(standards: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Surface each standard select_standards() loaded (FR-3/FR-4, ADR-4) as a
+    checklist item.
+
+    Reads ``standards["selection"]["standards_list"]`` -- populated via
+    ``state["standards_selection"]``, which Step 0's PRE-INJECTION D block
+    sets from ``select_standards()`` -- so custom/team/framework/
+    library_skill/language/library_language-sourced content actually reaches
+    Step 10's review checklist instead of only the hardcoded project_type
+    defaults above.
+    """
+    items: List[Dict[str, str]] = []
+    selection = standards.get("selection") or {}
+    for std in selection.get("standards_list", []):
+        std_id = std.get("id", "unknown")
+        source = std.get("source", "unknown")
+        items.append(
+            {
+                "check": "standards_source_{}".format(std_id),
+                "description": "Code complies with '{}' ({})".format(std_id, source),
+            }
+        )
+    return items
 
 
 def _build_doc_requirements(
@@ -557,7 +587,38 @@ def _build_doc_requirements(
             },
         ]
 
+    requirements += _build_selected_standards_doc_requirements(standards)
+
     return requirements
+
+
+def _build_selected_standards_doc_requirements(standards: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Surface library-sourced standards loaded by select_standards() (FR-4,
+    ADR-4) as a documentation requirement note.
+
+    Reads ``standards["selection"]["standards_list"]`` the same way
+    ``_build_selected_standards_checklist_items`` does, but scoped to the
+    ``library_skill_standards``/``library_language_standards`` sources only
+    -- these are the newly-introduced FR-4 content this fix is closing the
+    loop for, and are worth calling out explicitly in doc requirements
+    rather than adding a requirement row per custom/team markdown file.
+    """
+    items: List[Dict[str, str]] = []
+    selection = standards.get("selection") or {}
+    for std in selection.get("standards_list", []):
+        source = std.get("source", "unknown")
+        if source not in ("library_skill_standards", "library_language_standards"):
+            continue
+        items.append(
+            {
+                "file": std.get("file", "unknown"),
+                "action": "reference",
+                "note": "Documentation should reflect the '{}' standard sourced from {}".format(
+                    std.get("id", "unknown"), source
+                ),
+            }
+        )
+    return items
 
 
 def _is_python_only_skill(skill_name: str) -> bool:

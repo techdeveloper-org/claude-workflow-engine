@@ -93,7 +93,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     # --- PRE-INJECTION C: KG-based deterministic routing (FR-3, ADR-3) ---
     kg_routing_result: Dict[str, Any] = {"status": "unresolved", "notes": "kg routing not attempted"}
     try:
-        from ..routing.kg_router import route_task as _kg_route_task
+        from ...routing.kg_router import route_task as _kg_route_task
 
         kg_routing_result = _kg_route_task(user_message)
         logger.info(
@@ -105,6 +105,24 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     except Exception as _kg_exc:
         logger.debug("[v2] Step 0 KG routing pre-injection skipped (fail-open): {}", _kg_exc)
         kg_routing_result = {"status": "unresolved", "notes": f"kg routing pre-injection failed: {_kg_exc}"}
+
+    # --- PRE-INJECTION D: standards selection (FR-4, ADR-4) ---
+    standards_selection_result: Dict[str, Any] = {}
+    try:
+        from ...standards.selector import select_standards as _select_standards
+
+        _standards_project_root = state.get("project_root", ".")
+        _standards_session_id = state.get("session_id") or os.environ.get("CURRENT_SESSION_ID", "") or "unknown-session"
+        standards_selection_result = _select_standards(_standards_project_root, _standards_session_id)
+        logger.info(
+            "[v2] Step 0 standards selection pre-injection: project_type={} framework={} total_loaded={}",
+            standards_selection_result.get("project_type"),
+            standards_selection_result.get("framework"),
+            standards_selection_result.get("total_loaded"),
+        )
+    except Exception as _std_exc:
+        logger.debug("[v2] Step 0 standards selection pre-injection skipped (fail-open): {}", _std_exc)
+        standards_selection_result = {}
 
     # --- PHASE 1: prompt_gen_expert_caller (claude CLI subprocess) ---
     _pg_inner_timeout = _env_int("STEP0_PROMPT_GEN_TIMEOUT", 60)
@@ -250,6 +268,10 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     result["step0_call_graph_affected_methods_count"] = len(call_graph_affected_methods)
     result["step0_complexity_injected"] = complexity_score
     result["routing"] = kg_routing_result
+    result["standards_selection"] = standards_selection_result
+    result["standards_merged_rules"] = standards_selection_result.get("merged_rules", {})
+    if "standards_count" not in state:
+        result["standards_count"] = standards_selection_result.get("total_loaded", 0)
     result["orchestration_prompt"] = orchestration_prompt
     result["orchestrator_result"] = orch_result
     result["todo_list"] = orch_result.get("todo_list", [])
