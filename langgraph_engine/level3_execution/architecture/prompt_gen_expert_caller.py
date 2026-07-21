@@ -3,7 +3,8 @@
 Level 3 - Prompt Generation Expert Caller
 
 Reads CLI args, loads the orchestration system prompt template,
-fills the 7 placeholders, calls the claude CLI subprocess, and writes
+fills the 8 placeholders (including the KG ROUTING grounding block from
+FR-3's KGRouter pre-injection), calls the claude CLI subprocess, and writes
 JSON to stdout.
 
 Invoked by: call_execution_script("prompt_gen_expert_caller", args)
@@ -66,12 +67,14 @@ def _parse_args(argv):
       --complexity-score <int>        (space-separated)
       --complexity-score=<int>        (equals form)
       --call-graph-json <json-string>
+      --kg-routing-json <json-string>
       --runtime-context-json <json-string>
     """
     args = {
         "task_description": "",
         "complexity_score": 5,
         "call_graph_json": "{}",
+        "kg_routing_json": "{}",
         "runtime_context_json": "{}",
     }
 
@@ -96,6 +99,9 @@ def _parse_args(argv):
         elif token == "--call-graph-json" and i + 1 < len(argv):
             args["call_graph_json"] = argv[i + 1]
             i += 2
+        elif token == "--kg-routing-json" and i + 1 < len(argv):
+            args["kg_routing_json"] = argv[i + 1]
+            i += 2
         elif token == "--runtime-context-json" and i + 1 < len(argv):
             args["runtime_context_json"] = argv[i + 1]
             i += 2
@@ -116,13 +122,53 @@ def _load_template():
         return None, "Failed to read template: " + str(exc)
 
 
+def _render_kg_routing_block(kg_routing):
+    """Render the KG ROUTING grounding block for the ``{kg_routing_block}``
+    placeholder.
+
+    Summarizes a resolved ``KGRouter`` route (lead agent, skills, a
+    persona-loaded marker) or emits a one-line legacy-path note when
+    unresolved/library_missing. Never embeds the full ``persona_markdown`` --
+    it can be large; a concise summary plus size marker is enough grounding
+    for the LLM to trust the pre-resolved route without re-deriving it.
+    """
+    legacy_note = "No confident KG match -- proceed with keyword-based domain detection below (legacy path)."
+    if not isinstance(kg_routing, dict) or kg_routing.get("status") != "resolved":
+        notes = kg_routing.get("notes") if isinstance(kg_routing, dict) else ""
+        return legacy_note + (f" ({notes})" if notes else "")
+
+    lead_agent = kg_routing.get("lead_agent") or {}
+    agent_name = lead_agent.get("name", "unknown")
+    agent_role = lead_agent.get("role", "")
+    skills = kg_routing.get("skills") or []
+    skills_str = ", ".join(skills) if skills else "none"
+    persona = kg_routing.get("persona_markdown") or ""
+    persona_note = "full persona loaded, %d chars" % len(persona) if persona else "persona not loaded"
+    role_line = ("  Role: " + agent_role + "\n") if agent_role else ""
+
+    return ("Domain: %s | Pattern: %s\n" "Lead agent: %s\n" "%s" "Skills: %s\n" "Persona: %s") % (
+        kg_routing.get("domain", "unknown"),
+        kg_routing.get("pattern_id", "unknown"),
+        agent_name,
+        role_line,
+        skills_str,
+        persona_note,
+    )
+
+
 def _build_filled_prompt(template, args):
-    """Fill the 7 placeholders in the template with runtime values."""
+    """Fill the 8 placeholders in the template with runtime values."""
     call_graph = {}
     try:
         call_graph = json.loads(args["call_graph_json"]) if args["call_graph_json"] else {}
     except (json.JSONDecodeError, TypeError):
         call_graph = {}
+
+    kg_routing = {}
+    try:
+        kg_routing = json.loads(args["kg_routing_json"]) if args["kg_routing_json"] else {}
+    except (json.JSONDecodeError, TypeError):
+        kg_routing = {}
 
     runtime_context = {}
     try:
@@ -159,6 +205,7 @@ def _build_filled_prompt(template, args):
     filled = filled.replace("{codebase_danger_zones}", danger_zones_str)
     filled = filled.replace("{codebase_affected_methods}", affected_str)
     filled = filled.replace("{codebase_hot_nodes}", hot_nodes_str)
+    filled = filled.replace("{kg_routing_block}", _render_kg_routing_block(kg_routing))
 
     return filled
 

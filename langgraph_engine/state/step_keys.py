@@ -115,6 +115,7 @@ class StepKeys:
     STEP0_TARGET_FILES = "step0_target_files"
     STEP0_ERROR = "step0_error"
     ORCHESTRATION_PROMPT = "orchestration_prompt"
+    ROUTING = "routing"
     ORCHESTRATOR_RESULT = "orchestrator_result"
 
     # ------------------------------------------------------------------

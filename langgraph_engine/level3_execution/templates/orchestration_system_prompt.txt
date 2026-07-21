@@ -15,6 +15,9 @@ DANGER ZONES    : {codebase_danger_zones}
 AFFECTED METHODS: {codebase_affected_methods}
 HOT NODES       : {codebase_hot_nodes}
 
+KG ROUTING (pre-resolved, authoritative when status=resolved — do NOT re-derive from scratch if present):
+{kg_routing_block}
+
 GENERATE THE FOLLOWING (all mandatory — skip nothing):
 
 ### STEP 1 — TASK & CONSTRAINTS
@@ -31,7 +34,9 @@ GENERATE THE FOLLOWING (all mandatory — skip nothing):
 ### STEP 3 — DOMAIN DETECTION & AGENT SELECTION
 4. Detect all technical domains using the DOMAIN DETECTION TABLE (28 domains, 106 agents).
    For each detected domain, list: primary agent + support agent.
-   Do NOT guess agents — match keywords from the Domain Detection Table.
+   Do NOT guess agents — match keywords from the Domain Detection Table,
+   unless KG ROUTING above already shows status=resolved, in which case use
+   that lead_agent/skills directly.
 5. Select the matching COLLABORATION PATTERN (17 patterns available):
    - Pattern 1: Standard Web App | Pattern 2: Enterprise Full-Stack
    - Pattern 3: AI/LLM Product | Pattern 4: Next.js Full-Stack

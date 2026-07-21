@@ -90,6 +90,22 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
 
     user_message = state.get("user_message", "") or os.environ.get("CURRENT_USER_MESSAGE", "")
 
+    # --- PRE-INJECTION C: KG-based deterministic routing (FR-3, ADR-3) ---
+    kg_routing_result: Dict[str, Any] = {"status": "unresolved", "notes": "kg routing not attempted"}
+    try:
+        from ..routing.kg_router import route_task as _kg_route_task
+
+        kg_routing_result = _kg_route_task(user_message)
+        logger.info(
+            "[v2] Step 0 KG routing pre-injection: status={} domain={} pattern={}",
+            kg_routing_result.get("status"),
+            kg_routing_result.get("domain"),
+            kg_routing_result.get("pattern_id"),
+        )
+    except Exception as _kg_exc:
+        logger.debug("[v2] Step 0 KG routing pre-injection skipped (fail-open): {}", _kg_exc)
+        kg_routing_result = {"status": "unresolved", "notes": f"kg routing pre-injection failed: {_kg_exc}"}
+
     # --- PHASE 1: prompt_gen_expert_caller (claude CLI subprocess) ---
     _pg_inner_timeout = _env_int("STEP0_PROMPT_GEN_TIMEOUT", 60)
     _call_graph_json = _json.dumps(
@@ -99,6 +115,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
             "affected_methods": call_graph_affected_methods,
         }
     )
+    _kg_routing_json = _json.dumps(kg_routing_result)
     prompt_gen_args = [
         "--task-description",
         user_message,
@@ -106,6 +123,8 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
         str(complexity_score),
         "--call-graph-json",
         _call_graph_json,
+        "--kg-routing-json",
+        _kg_routing_json,
     ]
 
     try:
@@ -230,6 +249,7 @@ def step0_task_analysis_node(state: FlowState) -> Dict[str, Any]:
     result["step0_call_graph_danger_zones_count"] = len(call_graph_danger_zones)
     result["step0_call_graph_affected_methods_count"] = len(call_graph_affected_methods)
     result["step0_complexity_injected"] = complexity_score
+    result["routing"] = kg_routing_result
     result["orchestration_prompt"] = orchestration_prompt
     result["orchestrator_result"] = orch_result
     result["todo_list"] = orch_result.get("todo_list", [])
