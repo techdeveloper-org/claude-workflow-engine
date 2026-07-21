@@ -806,7 +806,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 
 **Complexity score is not ground truth:** `combined_complexity_score` is a heuristic: `simple_score × 0.3 + graph_score × 0.7`. It is on a 1-25 scale and correlates with effort, but it does not map to story points and should not be treated as precise.
 
-**`load_framework_standards()` / `load_language_standards()` in `standards/selector.py` return nothing.** They look under `scripts/architecture/02-standards-system/`, which doesn't exist — only `scripts/architecture/03-execution-system/` does. This is a pre-existing gap, unrelated to the `docs/` flatten: `load_team_standards()` in the same file reads from `~/.claude/policies/02-standards-system/` (the global Claude home directory, not this repo), which was never touched and still resolves correctly. The handful of `# Policy Reference: policies/...` lines in files under `langgraph_engine/*/architecture/` are stale docstring comments only — they're never read as file paths at runtime.
+**No bundled framework-specific standards yet.** `load_framework_standards()` in `standards/selector.py` looks in `docs/` for a `{language}-{framework}-standards.md` or `{framework}-standards.md` file (e.g. Flask- or Django-specific rules) — none are bundled yet, so it always returns empty. `load_language_standards()` covers the language level instead, reading `docs/02-backend-standards.md` (python), `docs/06-typescript-standards.md` (javascript/typescript), `docs/07-go-standards.md` (go), and `docs/08-rust-standards.md` (rust); java and csharp have no bundled doc yet either.
 
 ### Trade-offs by Design
 

@@ -43,6 +43,18 @@ PRIORITY_TEAM = 3
 PRIORITY_FRAMEWORK = 2
 PRIORITY_LANGUAGE = 1
 
+# project_type -> bundled language-standards filename under docs/.
+# Only languages with an actual standards doc are listed here; project
+# types absent from this map (java, csharp, unknown) simply yield no
+# language standards until a doc for them is added.
+_LANGUAGE_STANDARDS_FILES = {
+    "python": "02-backend-standards.md",
+    "javascript": "06-typescript-standards.md",
+    "typescript": "06-typescript-standards.md",
+    "go": "07-go-standards.md",
+    "rust": "08-rust-standards.md",
+}
+
 
 def detect_project_type(project_path: str) -> str:
     """Detect the primary programming language of a project.
@@ -338,7 +350,12 @@ def load_team_standards(project_path: str) -> List[Dict[str, Any]]:
 def load_framework_standards(project_type: str, framework: str) -> List[Dict[str, Any]]:
     """Load built-in framework standards (bundled with Claude Workflow Engine).
 
-    Looks in: scripts/architecture/02-standards-system/**/<framework>-standards.md
+    Looks in docs/ for a framework-specific standards file, e.g.
+    docs/python-flask-standards.md or docs/flask-standards.md. No such
+    files are bundled yet -- every standards doc under docs/ covers a
+    language as a whole, not a specific framework -- so this returns
+    empty until a framework-specific doc is added. Language-level
+    fallback is handled separately by load_language_standards().
 
     Args:
         project_type: Language string.
@@ -349,16 +366,13 @@ def load_framework_standards(project_type: str, framework: str) -> List[Dict[str
     """
     built_in: List[Dict[str, Any]] = []
 
-    here = Path(__file__).parent.parent.parent / "scripts"
-    arch_dir = here / "architecture" / "02-standards-system"
-
+    arch_dir = Path(__file__).parent.parent.parent / "docs"
     if not arch_dir.exists():
         return built_in
 
     candidate_names = [
         "{}-{}-standards.md".format(project_type, framework),
         "{}-standards.md".format(framework),
-        "{}-standards.md".format(project_type),
     ]
 
     for name in candidate_names:
@@ -385,6 +399,9 @@ def load_framework_standards(project_type: str, framework: str) -> List[Dict[str
 def load_language_standards(project_type: str) -> List[Dict[str, Any]]:
     """Load language-level standards (lowest priority).
 
+    Looks up project_type in _LANGUAGE_STANDARDS_FILES and reads the
+    matching file from docs/ if one is bundled for that language.
+
     Args:
         project_type: Language string.
 
@@ -393,13 +410,11 @@ def load_language_standards(project_type: str) -> List[Dict[str, Any]]:
     """
     lang: List[Dict[str, Any]] = []
 
-    here = Path(__file__).parent.parent.parent / "scripts"
-    arch_dir = here / "architecture" / "02-standards-system"
-
-    if not arch_dir.exists():
+    filename = _LANGUAGE_STANDARDS_FILES.get(project_type)
+    if not filename:
         return lang
 
-    candidate = arch_dir / "{}-standards.md".format(project_type)
+    candidate = Path(__file__).parent.parent.parent / "docs" / filename
     if candidate.exists():
         try:
             content = candidate.read_text(encoding="utf-8", errors="replace")
@@ -505,7 +520,10 @@ def select_standards(project_path: str, session_id: str = "default") -> Dict[str
             "source": "framework_standards",
             "priority": PRIORITY_FRAMEWORK,
             "loaded": len(framework_loaded),
-            "locations": ["architecture/02-standards-system/{}-{}-standards.md".format(project_type, framework)],
+            "locations": [
+                "docs/{}-{}-standards.md".format(project_type, framework),
+                "docs/{}-standards.md".format(framework),
+            ],
         }
     )
 
@@ -516,7 +534,9 @@ def select_standards(project_path: str, session_id: str = "default") -> Dict[str
             "source": "language_standards",
             "priority": PRIORITY_LANGUAGE,
             "loaded": len(language_loaded),
-            "locations": ["architecture/02-standards-system/{}-standards.md".format(project_type)],
+            "locations": [
+                "docs/{}".format(_LANGUAGE_STANDARDS_FILES.get(project_type, "<no doc bundled for this language>"))
+            ],
         }
     )
 
