@@ -45,14 +45,16 @@ PRIORITY_LANGUAGE = 1
 
 # project_type -> bundled language-standards filename under docs/.
 # Only languages with an actual standards doc are listed here; project
-# types absent from this map (java, csharp, unknown) simply yield no
-# language standards until a doc for them is added.
+# types absent from this map ("unknown") simply yield no language
+# standards until a doc for them is added.
 _LANGUAGE_STANDARDS_FILES = {
     "python": "02-backend-standards.md",
     "javascript": "06-typescript-standards.md",
     "typescript": "06-typescript-standards.md",
     "go": "07-go-standards.md",
     "rust": "08-rust-standards.md",
+    "java": "java-standards.md",
+    "csharp": "csharp-standards.md",
 }
 
 
