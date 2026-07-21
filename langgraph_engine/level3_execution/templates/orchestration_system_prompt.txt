@@ -32,12 +32,17 @@ GENERATE THE FOLLOWING (all mandatory — skip nothing):
    State the classification explicitly in the generated prompt.
 
 ### STEP 3 — DOMAIN DETECTION & AGENT SELECTION
-4. Detect all technical domains using the DOMAIN DETECTION TABLE (28 domains, 106 agents).
-   For each detected domain, list: primary agent + support agent.
-   Do NOT guess agents — match keywords from the Domain Detection Table,
-   unless KG ROUTING above already shows status=resolved, in which case use
-   that lead_agent/skills directly.
-5. Select the matching COLLABORATION PATTERN (17 patterns available):
+4. If KG ROUTING above shows status=resolved, use that lead_agent/skills directly —
+   it was matched against the library's full, current agent/domain catalog and is
+   authoritative. Only when KG ROUTING shows status=unresolved or library_missing,
+   fall back to detecting technical domains yourself from the requirements text
+   below and naming a primary agent + support agent per domain. Do NOT guess a
+   specific agent name in the fallback case unless you are confident it is real —
+   prefer naming the domain/specialty needed over inventing an agent name.
+5. Select the matching COLLABORATION PATTERN. The list below is an illustrative,
+   NON-EXHAUSTIVE fallback subset (used only when KG ROUTING is unresolved) — the
+   library's decision tree is the authoritative, current pattern catalog and is
+   already consulted via KG ROUTING above:
    - Pattern 1: Standard Web App | Pattern 2: Enterprise Full-Stack
    - Pattern 3: AI/LLM Product | Pattern 4: Next.js Full-Stack
    - Pattern 5: Mobile App | Pattern 6: SEO + Marketing Launch
@@ -46,10 +51,17 @@ GENERATE THE FOLLOWING (all mandatory — skip nothing):
    - Pattern 11: Auto-Generate Prompt | Pattern 12: Healthcare/Clinical
    - Pattern 13: Supply Chain/Logistics | Pattern 14: PropTech/Real Estate
    - Pattern 15: LegalTech | Pattern 16: EdTech | Pattern 17: AgriTech
-   If no pattern fits exactly, compose a custom pattern from the building blocks.
+   If no pattern fits exactly (including any domain not in this fallback subset),
+   compose a custom pattern from the building blocks rather than forcing a
+   mismatched one from this list.
 
 ### STEP 4 — MATH ROUTING
-6. Detect math requirements — for each math need, route to the correct math master:
+6. Detect math requirements — for each math need, route to the correct math master.
+   If KG ROUTING above shows status=resolved and lists a lead_math_agent, prefer
+   that. The list below is an illustrative, NON-EXHAUSTIVE fallback covering some
+   common domains — the library maintains additional math masters not listed here;
+   if the detected domain isn't below, name the specialty needed rather than
+   forcing a mismatched entry from this list:
    - Algorithm / ML / signal / crypto / GPU / NLP / robotics -> mathematics-engineer
    - Finance / derivatives / risk / DeFi / trading -> fintech-mathematics-expert
    - UI layout / color / animation / typography -> ui-ux-mathematics-engineer

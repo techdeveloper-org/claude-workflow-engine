@@ -359,11 +359,15 @@ def load_framework_standards(project_type: str, framework: str) -> List[Dict[str
     """Load built-in framework standards (bundled with Claude Workflow Engine).
 
     Looks in docs/ for a framework-specific standards file, e.g.
-    docs/python-flask-standards.md or docs/flask-standards.md. No such
-    files are bundled yet -- every standards doc under docs/ covers a
-    language as a whole, not a specific framework -- so this returns
-    empty until a framework-specific doc is added. Language-level
-    fallback is handled separately by load_language_standards().
+    docs/{project_type}-{framework}-standards.md or docs/{framework}-standards.md.
+    Bundled today: flask-standards.md, django-standards.md, and
+    spring-boot-standards.md -- these three frameworks get this bundled doc
+    at priority 2 rather than falling through to the LibrarySkillStandardsAdapter
+    (priority 1.5), per the "explicit bundled doc wins" precedence rule (ADR-4).
+    Any other framework (fastapi, react, angular, nextjs, langgraph, langchain,
+    etc.) has no bundled doc and returns empty here, falling through to the
+    library-skill tier (see LibrarySkillStandardsAdapter in library_adapter.py)
+    and then to load_language_standards() as the final fallback.
 
     Args:
         project_type: Language string.
