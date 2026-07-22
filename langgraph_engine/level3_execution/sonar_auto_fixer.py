@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -71,6 +72,105 @@ _LLM_ONLY_RULES = {
     "python:function-too-long",
     "python:cognitive-complexity",
 }
+
+# OWASP Top 10 (2021) category guidance, sourced from the sibling
+# claude-global-library's application-security-core skill (SKILL.md
+# "## OWASP Top 10 (2021)" section) rather than a vague "consult the
+# guidelines" pointer. Keyed by keyword sets matched against the finding's
+# rule id + message (lowercased); first match wins. Falls back to a
+# generic OWASP pointer only when no keyword matches -- see
+# _owasp_guidance_for_finding().
+_OWASP_GUIDANCE: List["tuple[frozenset, str, str]"] = [
+    (
+        frozenset({"injection", "sql", "nosql", "xpath", "ldap", "command-injection", "os-command"}),
+        "A03: Injection",
+        "Use parameterized queries (prepared statements) for all database interactions "
+        "without exception. Validate and sanitize all input server-side; allowlist expected "
+        "characters/formats. Use ORM frameworks with parameterized queries -- avoid raw "
+        "string concatenation in queries. Apply least privilege to the DB account used.",
+    ),
+    (
+        frozenset({"xss", "cross-site-scripting"}),
+        "A03: Injection (XSS)",
+        "Escape/encode all user-controlled output for its rendering context (HTML, JS, URL, "
+        "attribute). Prefer templating engines with auto-escaping enabled by default over "
+        "manual string concatenation into HTML.",
+    ),
+    (
+        frozenset({"path-traversal", "idor", "access-control", "authorization", "directory-listing"}),
+        "A01: Broken Access Control",
+        "Enforce access control server-side only -- never rely on client-side checks or hidden "
+        "UI. Deny by default: require an explicit grant for every resource/action. Validate "
+        "object-level authorization on every request (confirm the caller actually owns/can "
+        "access the specific resource, not just that they are authenticated).",
+    ),
+    (
+        frozenset({"weak-crypto", "insecure-hash", "md5", "sha1", "des", "cleartext", "plaintext-storage"}),
+        "A02: Cryptographic Failures",
+        "Use strong, current algorithms; MD5/SHA-1/DES and custom encryption schemes are "
+        "deprecated -- do not use them for security purposes. Encrypt sensitive data in transit "
+        "(TLS 1.2+) and at rest (AES-256-GCM); never store sensitive data in plaintext. Manage "
+        "keys properly: rotate, store in a KMS/HSM, never hardcode in source.",
+    ),
+    (
+        frozenset({"hardcoded-credentials", "hardcoded-secret", "hardcoded-password"}),
+        "A02: Cryptographic Failures (secrets)",
+        "Never hardcode credentials, API keys, or passwords in source. Load from a secrets "
+        "manager or environment variables; ensure the value is not also committed to git history.",
+    ),
+    (
+        frozenset({"auth", "authentication", "session", "credential-stuffing", "weak-password"}),
+        "A07: Identification and Authentication Failures",
+        "Use strong password hashing (Argon2id or bcrypt) with proper cost parameters. Rate "
+        "limit and monitor authentication endpoints to detect credential stuffing. Invalidate "
+        "sessions on logout, password change, and after an idle timeout.",
+    ),
+    (
+        frozenset({"misconfiguration", "default-credentials", "verbose-error", "debug-enabled"}),
+        "A05: Security Misconfiguration",
+        "Remove or disable unused features, frameworks, components, and sample/debug files. "
+        "Implement uniform error handling that never leaks stack traces, version numbers, or "
+        "internal paths to the client. Automate hardening via infrastructure-as-code baselines "
+        "rather than manual configuration.",
+    ),
+]
+
+_GENERIC_OWASP_GUIDANCE = (
+    "This finding did not match a specific OWASP category by rule/message keyword -- review "
+    "against the full OWASP Top 10 (2021): Broken Access Control, Cryptographic Failures, "
+    "Injection, Insecure Design, Security Misconfiguration, Vulnerable/Outdated Components, "
+    "Authentication Failures, Software/Data Integrity Failures, Logging/Monitoring Failures, "
+    "SSRF -- and apply the category's standard mitigation."
+)
+
+
+def _owasp_guidance_for_finding(rule: str, message: str) -> str:
+    """Return real OWASP category guidance for a vulnerability finding.
+
+    Matches the finding's rule id + message (lowercased, hyphen/underscore/
+    space treated as word boundaries) against keyword sets drawn from the
+    library's application-security-core skill. Falls back to a generic
+    OWASP Top 10 pointer (still concrete -- lists all 10 categories) rather
+    than an unresolved template placeholder when no keyword matches.
+
+    Args:
+        rule: SonarQube-style rule id, e.g. "python:sql-injection".
+        message: Human-readable finding message from the scanner.
+
+    Returns:
+        A guidance string ready to embed in the fix instruction.
+    """
+    haystack = re.sub(r"[-_]", " ", (rule + " " + message).lower())
+    haystack_tokens = set(haystack.split())
+
+    for keywords, category, guidance in _OWASP_GUIDANCE:
+        keyword_tokens = set()
+        for kw in keywords:
+            keyword_tokens.update(re.sub(r"[-_]", " ", kw).split())
+        if haystack_tokens & keyword_tokens or any(kw in haystack for kw in keywords):
+            return f"[{category}] {guidance}"
+
+    return _GENERIC_OWASP_GUIDANCE
 
 
 # ---------------------------------------------------------------------------
@@ -282,9 +382,10 @@ def generate_fix_instruction(
     elif finding_type == "VULNERABILITY":
         fix_type = "llm"
         template_fix = None
+        owasp_guidance = _owasp_guidance_for_finding(rule, message)
         instruction = (
-            f"Security vulnerability detected: {message}. "
-            "Consult the OWASP guidelines for rule '{rule}'. "
+            f"Security vulnerability detected ({rule}): {message}. "
+            f"{owasp_guidance} "
             "Do not suppress this finding without documented justification. "
             "Review the affected code carefully before applying any change."
         )

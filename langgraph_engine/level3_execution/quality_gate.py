@@ -468,12 +468,22 @@ def _evaluate_tests_exist_gate(
             ):
                 continue
 
-            # Possible test file names for this module
+            # Possible test file names for this module. Source stems may use
+            # hyphens (e.g. "sync-library.py"), but Python test module names
+            # cannot contain hyphens -- pytest/import machinery requires
+            # test_sync_library.py, not test_sync-library.py. Without the
+            # underscore-normalized variant, every hyphenated source file
+            # with a real, passing test was reported as missing one.
+            stem_normalized = stem.replace("-", "_")
             candidates = {
                 f"test_{stem}.py",
                 f"{stem}_test.py",
                 f"test_{stem.lower()}.py",
                 f"{stem.lower()}_test.py",
+                f"test_{stem_normalized}.py",
+                f"{stem_normalized}_test.py",
+                f"test_{stem_normalized.lower()}.py",
+                f"{stem_normalized.lower()}_test.py",
             }
 
             is_found = any(c.lower() in test_file_names for c in candidates)
