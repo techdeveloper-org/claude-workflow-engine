@@ -39,7 +39,12 @@ logger = logging.getLogger(__name__)
 
 CallerFn = Callable[[str], Tuple[Optional[str], Optional[str]]]
 
-_TIMEOUT = int(os.getenv("FAITHFULNESS_GATE_TIMEOUT", "60"))
+# 300s matches STEP0_ORCHESTRATOR_TIMEOUT's default in orchestrator_agent_caller.py --
+# this call sends a comparably large prompt (full rubric + diff summary), and a real
+# measured run took 84.6s. 60s (copied from the smaller prompt_gen_expert_caller.py
+# budget without recalibrating) was too tight and hit the fail-open timeout path on
+# ordinary latency, not just genuine hangs.
+_TIMEOUT = int(os.getenv("FAITHFULNESS_GATE_TIMEOUT", "300"))
 _MAX_FILE_PREVIEW_LINES = 40
 _RUBRIC_SKILL_NAME = "hallucination-detection-core"
 _VALID_VERDICTS = ("pass", "flag", "block", "uncertain")
