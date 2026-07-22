@@ -80,7 +80,7 @@ def _extract_standards_content(raw_content: str) -> str:
 
 class LibrarySkillStandardsAdapter:
     """Adapter (HLD Section 6.2) translating a library ``SKILL.md`` into a
-    standards-tier entry at priority 1.5. Implements the §7.4 contract.
+    standards-tier entry at priority 1.5. Implements the Section 7.4 contract.
     """
 
     def load(self, project_type: str, framework: str) -> List[Dict[str, Any]]:
@@ -94,7 +94,7 @@ class LibrarySkillStandardsAdapter:
             A single-item list with keys ``id``, ``source``, ``file``,
             ``content``, ``priority``, or ``[]`` when no mapping exists,
             the sibling library is unavailable, or the mapped skill cannot
-            be resolved. Never raises (§7.4 MUST NOT).
+            be resolved. Never raises (Section 7.4 MUST NOT).
         """
         skill_name = _FRAMEWORK_SKILL_MAP.get((project_type, framework))
         if not skill_name:
@@ -167,7 +167,7 @@ class LibrarySkillLanguageAdapter:
             A single-item list with keys ``id``, ``source``, ``file``,
             ``content``, ``priority``, or ``[]`` when no mapping exists,
             the sibling library is unavailable, or the mapped skill cannot
-            be resolved. Never raises (same §7.4 MUST NOT contract as
+            be resolved. Never raises (same Section 7.4 MUST NOT contract as
             ``LibrarySkillStandardsAdapter``).
         """
         skill_name = _LANGUAGE_SKILL_MAP.get(project_type)
