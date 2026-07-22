@@ -154,7 +154,7 @@ def level3_init_node(state: FlowState) -> Dict[str, Any]:
 
     # Install signal handlers once per session (best-effort, main thread only)
     try:
-        from ..recovery_handler import RecoveryHandler
+        from ...recovery_handler import RecoveryHandler
 
         handler = RecoveryHandler(session_id=session_id)
         handler.install_signal_handlers()

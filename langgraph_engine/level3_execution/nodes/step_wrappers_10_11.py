@@ -140,7 +140,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
         # D1: guard-and-skip -- resolve_and_enhance requires a valid graph object,
         # not None. Only call when pre_change_graph is a non-None object.
         try:
-            from ..build_dependency_resolver import resolve_and_enhance
+            from ...build_dependency_resolver import resolve_and_enhance
 
             if call_context.get("call_graph_available") and pre_change_graph is not None:
                 _dep_result = resolve_and_enhance(project_root, pre_change_graph)
@@ -318,7 +318,7 @@ def step10_implementation_note(state: FlowState) -> Dict[str, Any]:
 
             # 4. Coverage analysis
             try:
-                from ..coverage_analyzer import suggest_test_scope
+                from ...coverage_analyzer import suggest_test_scope
 
                 coverage_result = suggest_test_scope(project_root, modified_files)
                 result["step10_coverage_results"] = coverage_result
@@ -494,7 +494,7 @@ def step11_pull_request_node(state: FlowState) -> Dict[str, Any]:
 
     # --- User Interaction: Generate questions for breaking changes ---
     try:
-        from ..user_interaction import InteractionManager, generate_step11_questions
+        from ...user_interaction import InteractionManager, generate_step11_questions
 
         questions = generate_step11_questions({**state, **result})
         if questions:

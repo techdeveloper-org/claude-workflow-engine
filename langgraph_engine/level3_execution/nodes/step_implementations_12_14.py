@@ -379,7 +379,7 @@ def step14_final_summary_generation(state: FlowState) -> Dict[str, Any]:
         verification_violations = []
         if os.getenv("ENABLE_RUNTIME_VERIFICATION", "0") == "1":
             try:
-                from ....runtime_verification.verifier import RuntimeVerifier
+                from ...runtime_verification.verifier import RuntimeVerifier
 
                 verifier = RuntimeVerifier.get_instance()
                 report = verifier.build_report()

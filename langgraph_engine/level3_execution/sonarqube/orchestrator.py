@@ -90,7 +90,7 @@ def create_issues_for_findings(
     # ------------------------------------------------------------------
     mcp_available = False
     try:
-        from ..github_mcp import create_issue_via_mcp  # type: ignore[import]
+        from ...github_mcp import create_issue_via_mcp  # type: ignore[import]
 
         mcp_available = True
     except ImportError:
@@ -123,7 +123,7 @@ def create_issues_for_findings(
     # ------------------------------------------------------------------
     workflow_available = False
     try:
-        from .steps8to12_github import Level3GitHubWorkflow  # type: ignore[import]
+        from ..steps8to12_github import Level3GitHubWorkflow  # type: ignore[import]
 
         workflow_available = True
     except ImportError:

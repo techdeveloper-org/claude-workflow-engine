@@ -306,10 +306,7 @@ class Level3DocumentationManager:
             List of relative file paths created (e.g. "drawio/class-diagram.drawio").
         """
         try:
-            try:
-                from .diagrams.drawio_converter import DrawioConverter
-            except ImportError:
-                from langgraph_engine.diagrams.drawio_converter import DrawioConverter
+            from langgraph_engine.diagrams.drawio_converter import DrawioConverter
         except ImportError:
             logger.debug("DrawioConverter not available, skipping draw.io generation")
             return []
