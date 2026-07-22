@@ -2,7 +2,7 @@
 
 > Automate your entire software development lifecycle — from task to merged PR — using Claude AI.
 
-[![Version](https://img.shields.io/badge/Version-1.20.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.20.2-blue)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-green)](https://python.org)
 [![PyPI](https://img.shields.io/badge/PyPI-claude--workflow--engine-orange)](https://pypi.org/project/claude-workflow-engine/)
 [![CI](https://github.com/techdeveloper-org/claude-workflow-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/techdeveloper-org/claude-workflow-engine/actions/workflows/ci.yml)
@@ -842,4 +842,4 @@ Key rules:
 
 ---
 
-**Version:** 1.20.1 | **Last Updated:** 2026-07-22
+**Version:** 1.20.2 | **Last Updated:** 2026-07-22

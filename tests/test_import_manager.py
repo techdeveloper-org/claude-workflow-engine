@@ -36,33 +36,9 @@ def _reset_resolver_singleton():
     _reset_library_root_cache()
 
 
-class TestGetSkillLocalHit:
-    def test_docker_skill_resolves_locally_zero_network(self, monkeypatch):
-        """Real integration: skills/docker/SKILL.md exists in the sibling checkout."""
-        monkeypatch.delenv("CLAUDE_GLOBAL_LIB_PATH", raising=False)
-        monkeypatch.delenv("CLAUDE_ALLOW_GITHUB_FALLBACK", raising=False)
-
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            result = ImportManager.get_skill("docker")
-
-        mock_urlopen.assert_not_called()
-        assert result is not None
-        assert result["name"] == "docker"
-        assert result["source"] == "local"
-        assert "content" in result and len(result["content"]) > 0
-        assert "url" in result
-
-    def test_agent_resolves_locally(self, monkeypatch):
-        monkeypatch.delenv("CLAUDE_GLOBAL_LIB_PATH", raising=False)
-        monkeypatch.delenv("CLAUDE_ALLOW_GITHUB_FALLBACK", raising=False)
-
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            result = ImportManager.get_agent("python-backend-engineer")
-
-        mock_urlopen.assert_not_called()
-        assert result is not None
-        assert result["source"] == "local"
-        assert result["name"] == "python-backend-engineer"
+# TestGetSkillLocalHit moved to
+# tests/integration/test_library_resolver_real_sibling.py (requires the real
+# claude-global-library sibling checkout, absent in CI)
 
 
 class TestGetSkillFailureModes:
