@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.20.1] - 2026-07-22
+
+### Fixed
+
+- **Non-ASCII characters in `library_adapter.py` docstrings** -- three section-symbol characters replaced with "Section" to satisfy the Windows/cp1252 ASCII-only file check.
+
+---
+
 ## [1.20.0] - 2026-07-12
 
 Major release: flat -> domain-subpackage migration, Step 0 TODO-decomposition pipeline,
