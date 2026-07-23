@@ -34,8 +34,6 @@ from langgraph_engine.library.resolver import (  # noqa: E402
     locate_library_root,
 )
 
-_REAL_LIBRARY_ROOT = _PROJECT_ROOT.parent / "claude-global-library"
-
 
 @pytest.fixture(autouse=True)
 def _clear_cache():
@@ -196,13 +194,9 @@ class TestLocateLibraryRoot:
         engine_root.mkdir()
         assert locate_library_root(engine_root) is None
 
-    def test_real_sibling_repo_resolves(self, monkeypatch):
-        """Integration check against the REAL sibling checkout on this machine."""
-        monkeypatch.delenv("CLAUDE_GLOBAL_LIB_PATH", raising=False)
-        result = locate_library_root(_PROJECT_ROOT)
-        assert result == _REAL_LIBRARY_ROOT
-        assert (result / "skills" / "docker" / "SKILL.md").is_file()
-        assert (result / "agents" / "python-backend-engineer" / "agent.md").is_file()
+    # test_real_sibling_repo_resolves moved to
+    # tests/integration/test_library_resolver_real_sibling.py (requires the
+    # real claude-global-library sibling checkout, absent in CI)
 
 
 # ---------------------------------------------------------------------------
@@ -351,15 +345,6 @@ class TestBuildDefaultResolver:
 
         assert resource.source == "github"
 
-    def test_real_sibling_resolves_locally_with_zero_network(self, monkeypatch):
-        """End-to-end against the REAL sibling repo: docker skill resolves locally."""
-        monkeypatch.delenv("CLAUDE_GLOBAL_LIB_PATH", raising=False)
-        monkeypatch.delenv("CLAUDE_ALLOW_GITHUB_FALLBACK", raising=False)
-        resolver = build_default_resolver(engine_root=_PROJECT_ROOT)
-
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            resource = resolver.fetch_skill("docker")
-
-        mock_urlopen.assert_not_called()
-        assert resource.source == "local"
-        assert "docker" in resource.content.lower()
+    # test_real_sibling_resolves_locally_with_zero_network moved to
+    # tests/integration/test_library_resolver_real_sibling.py (requires the
+    # real claude-global-library sibling checkout, absent in CI)

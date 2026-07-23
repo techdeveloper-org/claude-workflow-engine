@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.20.2] - 2026-07-22
+
+### Fixed
+
+- **CI red on `main` for 5 consecutive runs** -- 9 tests (`test_faithfulness_gate.py`, `test_import_manager.py`, `test_kg_routing.py`, `test_library_resolver.py`) required the real `claude-global-library` sibling checkout, which exists on developer machines but is never checked out on the GitHub Actions runner. Moved all 9 to `tests/integration/test_library_resolver_real_sibling.py` with a `pytest.mark.skipif` guard keyed on sibling-directory presence, so they run fully in local dev and skip cleanly in CI instead of hard-failing.
+
+---
+
 ## [1.20.1] - 2026-07-22
 
 ### Fixed

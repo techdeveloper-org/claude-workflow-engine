@@ -296,36 +296,9 @@ def test_gate6_evaluation_error_fails_safe(tmp_path, monkeypatch):
     assert "fail-safe" in result["reason"].lower()
 
 
-# ---------------------------------------------------------------------------
-# Rubric grounding: prove the prompt uses the REAL SKILL.md content
-# ---------------------------------------------------------------------------
-
-
-def test_prompt_contains_real_skill_content():
-    """build_faithfulness_prompt() must embed genuine hallucination-detection-core
-    content, not an invented rubric. This reads the real SKILL.md from the
-    sibling claude-global-library and asserts a specific, real phrase from it
-    appears verbatim in the generated prompt."""
-    from langgraph_engine.library.resolver import build_default_resolver
-
-    resolver = build_default_resolver()
-    resource = resolver.fetch_skill("hallucination-detection-core")
-
-    # Real, specific phrases lifted directly from SKILL.md section 1 and 2
-    # (not paraphrased): the extrinsic hallucination definition and the
-    # source-level faithfulness aggregation formula.
-    assert "The source neither entails nor contradicts c" in resource.content
-    assert "faithfulness(g, S) = (1/|C(g)|)" in resource.content
-
-    rubric_content = faithfulness_gate._extract_rubric_sections(resource.content)
-    prompt = build_faithfulness_prompt(
-        task_description="Add a function that returns 1",
-        diff_summary="--- mod.py ---\ndef f():\n    return 1",
-        rubric_content=rubric_content,
-    )
-
-    assert "faithfulness(g, S) = (1/|C(g)|)" in prompt, "Real NLI faithfulness formula must appear in the prompt"
-    assert "Extrinsic Hallucination" in prompt, "Real taxonomy heading must appear in the prompt"
+# test_prompt_contains_real_skill_content moved to
+# tests/integration/test_library_resolver_real_sibling.py (requires the real
+# claude-global-library sibling checkout, absent in CI)
 
 
 def test_prompt_asks_for_structured_json_and_thresholds():
