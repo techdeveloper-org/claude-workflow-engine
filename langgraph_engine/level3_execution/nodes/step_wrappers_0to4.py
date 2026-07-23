@@ -424,28 +424,10 @@ def _map_step0_result_to_state(
     return result
 
 
-def step2_plan_execution_node(state: FlowState) -> Dict[str, Any]:
-    """Step 2: Plan Execution -- DEPRECATED (v1.14.0).
-
-    This node is no longer part of the active pipeline graph.
-    The orchestrator subprocess in Step 0 already produces a comprehensive plan,
-    making a separate plan execution step redundant.
-
-    Kept as a no-op stub for backward compatibility with test imports.
-    """
-    logger.warning("[v2] step2_plan_execution_node called but Step 2 is deprecated (v1.14.0)")
-    return {
-        "step2_plan_status": "DEPRECATED",
-        "step2_plan_execution": {"phases": [], "note": "Step 2 removed in v1.14.0"},
-        "step2_phases": 0,
-        "step2_total_estimated_steps": 0,
-    }
-
-
 # REMOVED: step1_plan_mode_decision_node -- collapsed into Step 0 template (v1.13.0)
+# REMOVED: step2_plan_execution_node -- dead stub removed (v1.20.2 dead-code sweep)
 # REMOVED: step3_task_breakdown_node -- collapsed into Step 0 template (v1.13.0)
 # REMOVED: step4_toon_refinement_node -- collapsed into Step 0 template (v1.13.0)
-# REMOVED: step2_plan_execution_node active code -- deprecated in v1.14.0 (stub above)
 #
 # These functions are intentionally absent or stubbed. Their FlowState outputs are now
 # populated by step0_task_analysis_node after the orchestration subprocess calls.

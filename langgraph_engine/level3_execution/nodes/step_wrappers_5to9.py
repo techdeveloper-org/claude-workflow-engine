@@ -78,7 +78,7 @@ except ImportError as _imp_err:  # pragma: no cover
 # REMOVED: step7_final_prompt_node -- collapsed into Step 0 template (v1.13.0)
 #
 # Outputs these nodes used to produce are now written by step0_task_analysis_node
-# after the orchestration template LLM call. See impact_map.md Section 2.
+# after the orchestration template LLM call.
 
 
 def step8_github_issue_node(state: FlowState) -> Dict[str, Any]:

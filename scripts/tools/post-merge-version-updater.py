@@ -16,6 +16,7 @@ Version: 1.0.0
 """
 
 import json
+import shlex
 import subprocess
 import sys
 from datetime import datetime
@@ -33,9 +34,19 @@ if sys.platform == "win32":
 
 
 def run_command(cmd, cwd=None, timeout=30):
-    """Run shell command safely."""
+    """Run a command without invoking a shell.
+
+    Args:
+        cmd: Command string (parsed with shlex) or a pre-split argument list.
+        cwd: Working directory for the subprocess.
+        timeout: Maximum seconds to wait before aborting.
+
+    Returns:
+        Tuple of (success, stdout, stderr).
+    """
     try:
-        result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, timeout=timeout, text=True)
+        argv = shlex.split(cmd) if isinstance(cmd, str) else cmd
+        result = subprocess.run(argv, shell=False, cwd=cwd, capture_output=True, timeout=timeout, text=True)
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
         return False, "", str(e)

@@ -16,6 +16,7 @@ Prerequisites:
     - Git configured with user name/email
 """
 
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -704,8 +705,22 @@ def make_env_example(server):
 
 # -- Helpers -------------------------------------------------------------------
 def run(cmd, cwd=None, check=True):
+    """Run a command without invoking a shell.
+
+    Args:
+        cmd: Command string (parsed with shlex) or a pre-split argument list.
+        cwd: Working directory for the subprocess.
+        check: Raise RuntimeError if the command exits non-zero.
+
+    Returns:
+        The completed subprocess.CompletedProcess instance.
+
+    Raises:
+        RuntimeError: If the command exits non-zero and check is True.
+    """
     print(f"  $ {cmd}")
-    result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+    argv = shlex.split(cmd) if isinstance(cmd, str) else cmd
+    result = subprocess.run(argv, shell=False, cwd=cwd, capture_output=True, text=True)
     if result.stdout.strip():
         print(f"    {result.stdout.strip()[:200]}")
     if result.returncode != 0 and check:

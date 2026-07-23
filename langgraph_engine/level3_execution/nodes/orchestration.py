@@ -200,20 +200,8 @@ def route_to_plan_or_breakdown(state: FlowState) -> str:
     return "level3_step8"
 
 
-def route_to_closure_or_retry(state: FlowState) -> str:
-    """Route after Step 11 PR review."""
-    from ..routing import route_after_step11_review
-
-    return route_after_step11_review(state)
-
-
-# ============================================================================
-# MERGE NODE - Final status determination
-# ============================================================================
-
-
-def level3_merge_node(state):
-    """Re-export merge node from routing module."""
-    from ..routing import level3_merge_node
-
-    return level3_merge_node(state)
+# REMOVED (v1.20.2): route_to_closure_or_retry -- dead duplicate of the canonical
+#   route_after_step11_review (langgraph_engine/routing/level3_routes.py:33, imported
+#   directly by orchestrator.py's create_flow_graph()). Never wired into the live graph.
+# REMOVED (v1.20.2): level3_merge_node -- dead re-export wrapper, never wired into the
+#   live graph. orchestrator.py computes final_status inline.

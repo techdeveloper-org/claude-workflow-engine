@@ -20,7 +20,6 @@ Requires:
 import base64
 import json
 import os
-import subprocess
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -151,7 +150,7 @@ class ComputerUseAgent:
         try:
             # Step 1: Open browser to dashboard
             print("  [1/4] Opening browser to localhost:5000")
-            subprocess.Popen(["start", "http://localhost:5000"], shell=True)
+            os.startfile("http://localhost:5000")
             time.sleep(3)
 
             # Step 2: Screenshot login page
@@ -161,11 +160,18 @@ class ComputerUseAgent:
                 screenshots.append(img_path)
 
             # Step 3: Enter credentials
-            print("  [3/4] Entering admin/admin credentials")
+            dashboard_username = os.environ.get("DASHBOARD_TEST_USERNAME")
+            dashboard_password = os.environ.get("DASHBOARD_TEST_PASSWORD")
+            if not dashboard_username or not dashboard_password:
+                raise RuntimeError(
+                    "DASHBOARD_TEST_USERNAME and DASHBOARD_TEST_PASSWORD must be set to run "
+                    "test_dashboard_login (no hardcoded default credentials permitted)."
+                )
+            print("  [3/4] Entering dashboard test credentials")
             self.click(400, 400)  # Click username field
-            self.type_text("admin")
+            self.type_text(dashboard_username)
             self.click(400, 450)  # Click password field
-            self.type_text("admin")
+            self.type_text(dashboard_password)
             self.press_key("return")
             time.sleep(2)
 
