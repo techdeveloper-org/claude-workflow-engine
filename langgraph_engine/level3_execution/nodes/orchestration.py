@@ -114,6 +114,42 @@ def orchestration_pre_analysis_node(state: FlowState) -> Dict[str, Any]:
             logger.warning("[v2] Template fast-path failed, falling back to normal flow: {}", tmpl_exc)
             result["template_fast_path"] = False
 
+    # --- 0.5 Fast Mode: skip the AST call-graph scan for low-complexity tasks ---
+    # WORKFLOW_FAST_MODE=1 forces skip, =0 forces full scan, unset/"auto" skips
+    # only when Level 1's combined_complexity_score (1-25 scale) is below the
+    # threshold - i.e. heavy analysis still runs for genuinely complex/risky
+    # changes, matching the "fast mode for small tasks, full pipeline for
+    # complex PRs" behavior requested for this project.
+    import os as _os
+
+    _fast_mode_env = _os.environ.get("WORKFLOW_FAST_MODE", "auto")
+    _complexity_score = state.get("combined_complexity_score")
+    _fast_mode_threshold = 8
+    _skip_call_graph = False
+    if _fast_mode_env == "1":
+        _skip_call_graph = True
+    elif _fast_mode_env == "0":
+        _skip_call_graph = False
+    elif _fast_mode_env == "auto" and isinstance(_complexity_score, (int, float)) and _complexity_score > 0:
+        _skip_call_graph = _complexity_score < _fast_mode_threshold
+
+    if _skip_call_graph:
+        result["call_graph_metrics"] = {"call_graph_available": False, "fast_mode_skipped": True}
+        result["pre_analysis_result"] = {"fast_mode_skipped": True}
+        elapsed = (_t.time() - _start) * 1000
+        result["pre_analysis_execution_time_ms"] = round(elapsed, 1)
+        print(
+            "[PRE-ANALYSIS] FAST MODE: combined_complexity_score=%s (threshold=%d) -> "
+            "skipping AST call-graph scan" % (str(_complexity_score), _fast_mode_threshold),
+            file=sys.stderr,
+        )
+        logger.info(
+            "[v2] Fast mode active: complexity={} below threshold {} -> call-graph scan skipped",
+            _complexity_score,
+            _fast_mode_threshold,
+        )
+        return result
+
     # --- 1. Call Graph Scan ---
     try:
         from ..call_graph_analyzer import get_orchestration_context

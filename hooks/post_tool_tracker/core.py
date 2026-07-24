@@ -33,24 +33,19 @@ else:
         sys.path.insert(0, _HOOKS_DIR)
 
     # ------------------------------------------------------------------
-    # Metrics emitter (fire-and-forget, never blocks)
+    # Metrics emitter: no metrics_emitter module exists in this repo
+    # (dead reference removed in the fast-path cleanup) - stays no-op.
     # ------------------------------------------------------------------
-    try:
-        from metrics_emitter import emit_context_sample, emit_flag_lifecycle, emit_hook_execution
+    _METRICS_AVAILABLE = False
 
-        _METRICS_AVAILABLE = True
-    except Exception:
+    def emit_hook_execution(*a, **kw):
+        """No-op: no metrics_emitter module is present in this repo."""
 
-        def emit_hook_execution(*a, **kw):
-            """No-op fallback when metrics_emitter is unavailable."""
+    def emit_context_sample(*a, **kw):
+        """No-op: no metrics_emitter module is present in this repo."""
 
-        def emit_context_sample(*a, **kw):
-            """No-op fallback when metrics_emitter is unavailable."""
-
-        def emit_flag_lifecycle(*a, **kw):
-            """No-op fallback when metrics_emitter is unavailable."""
-
-        _METRICS_AVAILABLE = False
+    def emit_flag_lifecycle(*a, **kw):
+        """No-op: no metrics_emitter module is present in this repo."""
 
     # ------------------------------------------------------------------
     # Policy tracking integration
@@ -74,17 +69,12 @@ else:
             return None
 
     # ------------------------------------------------------------------
-    # Failure detection integration (3.7 middleware)
+    # Failure detection integration (3.7 middleware): common_failures_
+    # prevention.py does not exist anywhere in this repo, so this always
+    # stayed None - the probe (sys.path.insert + failed import) was pure
+    # per-call overhead. Re-add if that module is ever implemented.
     # ------------------------------------------------------------------
     _failure_detector = None
-    try:
-        _fp_path = Path(_SCRIPTS_DIR) / "architecture" / "03-execution-system" / "failure-prevention"
-        sys.path.insert(0, str(_fp_path))
-        from common_failures_prevention import FailureDetector
-
-        _failure_detector = FailureDetector()
-    except Exception:
-        pass
 
     # ------------------------------------------------------------------
     # Path constants (with ide_paths fallback)
@@ -261,10 +251,16 @@ else:
         sys.stderr.write("[L3.9] Post-tool tracking...\n")
         sys.stderr.flush()
 
-        # Debug log (always-on lightweight file logger)
+        # Debug log - opt-in only (WORKFLOW_DEBUG_LOG=1). Off by default so a
+        # normal tool call does not pay ~15 separate file-open/write/close
+        # calls per PostToolUse invocation; set the env var when diagnosing
+        # a specific hook issue.
         debug_file = Path.home() / ".claude" / "memory" / "logs" / "post-tool-tracker-debug.log"
+        _debug_log_enabled = os.environ.get("WORKFLOW_DEBUG_LOG", "0") == "1"
 
         def debug_log(msg):
+            if not _debug_log_enabled:
+                return
             try:
                 with open(debug_file, "a", encoding="utf-8") as f:
                     f.write("[" + datetime.now().isoformat() + "] " + msg + "\n")
@@ -776,29 +772,11 @@ else:
                                     + str(tasks_created)
                                     + " tasks done)\n"
                                 )
+                                sys.stderr.write(
+                                    "[AUTO] Voice/PR-workflow will run on the natural Stop event "
+                                    "(reads this flag file - no nested subprocess needed)\n"
+                                )
                                 sys.stderr.flush()
-
-                                # Call stop-notifier.py immediately with summary context
-                                try:
-                                    import subprocess as _subprocess
-
-                                    _stop_script = os.path.join(_HOOKS_DIR, "stop-notifier.py")
-                                    if os.path.exists(_stop_script):
-                                        _env = os.environ.copy()
-                                        _env["WORK_DONE_SUMMARY"] = summary_text
-                                        _sr = _subprocess.run(
-                                            [sys.executable, _stop_script], timeout=90, capture_output=True, env=_env
-                                        )
-                                        if _sr.returncode == 0:
-                                            sys.stderr.write("[VOICE] Voice notification triggered with task summary\n")
-                                        else:
-                                            sys.stderr.write(
-                                                "[VOICE] Voice trigger sent (result: " + str(_sr.returncode) + ")\n"
-                                            )
-                                        sys.stderr.flush()
-                                except Exception:
-                                    sys.stderr.write("[VOICE] Voice notification attempt made (may be async)\n")
-                                    sys.stderr.flush()
                         except Exception:
                             pass
 

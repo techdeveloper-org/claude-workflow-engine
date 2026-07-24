@@ -18,6 +18,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Cap on retained detail records in flow-trace.json's all_policies_executed /
+# decisions_timeline lists. The file is fully read + rewritten on every
+# policy-tracked tool call, so leaving these unbounded turns every call
+# progressively slower across a long session (real sessions observed at
+# 1.4MB / tens of thousands of records). See record_policy_execution().
+_MAX_RETAINED_POLICY_RECORDS = 200
+
 # Windows-safe encoding
 if sys.platform == "win32":
     import io
@@ -110,9 +117,25 @@ def record_policy_execution(
         # Ensure directory exists
         session_dir.mkdir(parents=True, exist_ok=True)
 
-        # Load existing flow-trace or create new one
+        # Load existing flow-trace or create new one. This file is read,
+        # modified, and fully rewritten on every single policy-tracked tool
+        # call, so an unbounded "all_policies_executed" list turns every
+        # call progressively slower over a long session (observed: 1.4MB /
+        # tens of thousands of lines in real sessions). If the file is
+        # corrupted (e.g. an interleaved concurrent write), archive it and
+        # start clean instead of failing on every call from then on.
         if flow_trace_file.exists():
-            flow_trace = json.loads(flow_trace_file.read_text(encoding="utf-8"))
+            try:
+                flow_trace = json.loads(flow_trace_file.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                try:
+                    _corrupt_backup = flow_trace_file.with_name(
+                        "flow-trace.corrupt-" + datetime.now().strftime("%Y%m%d%H%M%S") + ".json"
+                    )
+                    flow_trace_file.rename(_corrupt_backup)
+                except Exception:
+                    pass
+                flow_trace = _create_empty_flow_trace(session_id)
         else:
             flow_trace = _create_empty_flow_trace(session_id)
 
@@ -131,25 +154,33 @@ def record_policy_execution(
         if sub_operations:
             policy_record["sub_operations"] = sub_operations
 
-        # Append to all_policies_executed
+        # Append to all_policies_executed, then cap retained detail records
+        # so the file's read/rewrite cost stays bounded for the rest of the
+        # session. total_policies_executed is a running counter independent
+        # of the retained window, so it still reflects the true lifetime count.
         if "all_policies_executed" not in flow_trace:
             flow_trace["all_policies_executed"] = []
 
         flow_trace["all_policies_executed"].append(policy_record)
 
-        # Update summary
         if "execution_summary" not in flow_trace:
             flow_trace["execution_summary"] = {}
+        flow_trace["execution_summary"]["total_policies_executed"] = (
+            flow_trace["execution_summary"].get("total_policies_executed", 0) + 1
+        )
 
-        flow_trace["execution_summary"]["total_policies_executed"] = len(flow_trace["all_policies_executed"])
+        if len(flow_trace["all_policies_executed"]) > _MAX_RETAINED_POLICY_RECORDS:
+            flow_trace["all_policies_executed"] = flow_trace["all_policies_executed"][-_MAX_RETAINED_POLICY_RECORDS:]
 
-        # Update decisions timeline
+        # Update decisions timeline (same bounded-retention rationale)
         if "decisions_timeline" not in flow_trace:
             flow_trace["decisions_timeline"] = []
 
         flow_trace["decisions_timeline"].append(
             {"timestamp": policy_record["timestamp"], "policy": policy_name, "decision": decision}
         )
+        if len(flow_trace["decisions_timeline"]) > _MAX_RETAINED_POLICY_RECORDS:
+            flow_trace["decisions_timeline"] = flow_trace["decisions_timeline"][-_MAX_RETAINED_POLICY_RECORDS:]
 
         # Save updated flow-trace
         flow_trace_file.write_text(json.dumps(flow_trace, indent=2), encoding="utf-8")

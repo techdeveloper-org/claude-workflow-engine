@@ -26,24 +26,23 @@ if str(_hooks_dir) not in sys.path:
     sys.path.insert(0, str(_hooks_dir))
 
 # ---------------------------------------------------------------------------
-# Metrics emitter (fire-and-forget, never blocks)
+# Metrics emitter: no metrics_emitter module exists in this repo (dead
+# reference removed in the fast-path cleanup) - these stay no-ops.
 # ---------------------------------------------------------------------------
-try:
-    from metrics_emitter import emit_enforcement_event, emit_flag_lifecycle, emit_hook_execution
+_METRICS_AVAILABLE = False
 
-    _METRICS_AVAILABLE = True
-except Exception:
 
-    def emit_hook_execution(*a, **kw):
-        """No-op fallback when metrics_emitter is unavailable."""
+def emit_hook_execution(*a, **kw):
+    """No-op: no metrics_emitter module is present in this repo."""
 
-    def emit_enforcement_event(*a, **kw):
-        """No-op fallback when metrics_emitter is unavailable."""
 
-    def emit_flag_lifecycle(*a, **kw):
-        """No-op fallback when metrics_emitter is unavailable."""
+def emit_enforcement_event(*a, **kw):
+    """No-op: no metrics_emitter module is present in this repo."""
 
-    _METRICS_AVAILABLE = False
+
+def emit_flag_lifecycle(*a, **kw):
+    """No-op: no metrics_emitter module is present in this repo."""
+
 
 # ---------------------------------------------------------------------------
 # Policy tracking integration
@@ -59,30 +58,15 @@ except Exception:
 
 
 # ---------------------------------------------------------------------------
-# Tool optimization integration (3.6 Middleware)
+# Tool optimization (3.6) / failure prevention (3.7) middleware: the backing
+# modules (tool_usage_optimization_policy.py, common_failures_prevention.py)
+# do not exist anywhere in this repo, so these always stayed None - the
+# probe (2x sys.path.insert + failed import) was pure per-call overhead
+# with zero effect and has been removed. Re-add the try/except here if
+# those modules are ever implemented.
 # ---------------------------------------------------------------------------
 _optimizer = None
-try:
-    _arch_path = _scripts_dir / "architecture" / "03-execution-system"
-    sys.path.insert(0, str(_arch_path / "06-tool-optimization"))
-    from tool_usage_optimization_policy import ToolUsageOptimizer
-
-    _optimizer = ToolUsageOptimizer()
-except Exception:
-    pass
-
-# ---------------------------------------------------------------------------
-# Failure prevention integration (3.7 Pre-Execution Middleware)
-# ---------------------------------------------------------------------------
 _pre_checker = None
-try:
-    _arch_path2 = _scripts_dir / "architecture" / "03-execution-system"
-    sys.path.insert(0, str(_arch_path2 / "failure-prevention"))
-    from common_failures_prevention import PreExecutionChecker
-
-    _pre_checker = PreExecutionChecker()
-except Exception:
-    pass
 
 # ---------------------------------------------------------------------------
 # MCP auto-route integration
@@ -481,47 +465,14 @@ _BLOCKING_POLICIES = [
 ]
 
 
-def main():
-    """PreToolUse hook entry point.
+def _evaluate_tool_call(tool_name, tool_input, flow_ctx):
+    """Run every PreToolUse policy check for one tool call.
 
-    Reads tool name and input from Claude Code hook stdin (JSON), then runs
-    all enforcement checks in order.  Hints are written to stdout (non-blocking).
-    Blocks are written to stderr and the process exits with code 2 (blocking
-    exit code per Claude Code hook protocol).
-
-    Never raises exceptions; all errors are silently swallowed so a broken
-    hook never disrupts the underlying tool call.
+    Pure computation only - no stdin/stdout/stderr I/O, no sys.exit. Returns
+    (all_hints: list[str], all_blocks: list[str], blocked_policy: str|None).
+    Shared verbatim by main() (direct/fallback path) and daemon.py (warm
+    daemon path) so both paths can never drift out of sync.
     """
-    _track_start_time = datetime.now()
-
-    # Load flow-trace context from 3-level-flow (cached per invocation)
-    flow_ctx = _load_flow_trace_context()
-
-    # Warm up token-optimizer MCP module (non-blocking)
-    try:
-        _src_mcp_dir = _project_root / "src" / "mcp"
-        if str(_src_mcp_dir) not in sys.path:
-            sys.path.insert(0, str(_src_mcp_dir))
-        from token_optimization_mcp_server import context_budget_status
-
-        context_budget_status()
-    except Exception:
-        pass
-
-    # Read tool info from stdin
-    try:
-        raw = sys.stdin.read()
-        if not raw or not raw.strip():
-            sys.exit(0)
-        data = json.loads(raw)
-    except Exception:
-        sys.exit(0)
-
-    tool_name = data.get("tool_name", "")
-    tool_input = data.get("tool_input", {})
-    if not isinstance(tool_input, dict):
-        tool_input = {}
-
     all_hints = []
     all_blocks = []
 
@@ -534,7 +485,7 @@ def main():
 
         if blocked and msg:
             all_blocks.append(msg)
-            _emit_block_and_exit(tool_name, all_hints, all_blocks, policy_name)
+            return all_hints, all_blocks, policy_name
         elif not blocked and msg:
             # msg may be a multi-line hint block (e.g. failure_kb non-blocking hints)
             all_hints.append(msg)
@@ -598,6 +549,63 @@ def main():
                                     log_mcp_routing_decision("read_smart", "Read", True)
         except Exception:
             pass
+
+    return all_hints, all_blocks, None
+
+
+def main(_pre_read_raw=None):
+    """PreToolUse hook entry point.
+
+    Reads tool name and input from Claude Code hook stdin (JSON), then runs
+    all enforcement checks in order.  Hints are written to stdout (non-blocking).
+    Blocks are written to stderr and the process exits with code 2 (blocking
+    exit code per Claude Code hook protocol).
+
+    Args:
+        _pre_read_raw: optional pre-read stdin string. The daemon-mode shim
+            (pre-tool-enforcer.py) must read stdin exactly once (it is a
+            pipe) before deciding daemon-vs-fallback, so it passes the raw
+            text through here instead of letting this function read stdin
+            a second time. None (default) preserves the original behavior
+            of reading stdin directly.
+
+    Never raises exceptions; all errors are silently swallowed so a broken
+    hook never disrupts the underlying tool call.
+    """
+    _track_start_time = datetime.now()
+
+    # Load flow-trace context from 3-level-flow (cached per invocation)
+    flow_ctx = _load_flow_trace_context()
+
+    # Warm up token-optimizer MCP module (non-blocking)
+    try:
+        _src_mcp_dir = _project_root / "src" / "mcp"
+        if str(_src_mcp_dir) not in sys.path:
+            sys.path.insert(0, str(_src_mcp_dir))
+        from token_optimization_mcp_server import context_budget_status
+
+        context_budget_status()
+    except Exception:
+        pass
+
+    # Read tool info from stdin (or use the pre-read text, see docstring)
+    try:
+        raw = _pre_read_raw if _pre_read_raw is not None else sys.stdin.read()
+        if not raw or not raw.strip():
+            sys.exit(0)
+        data = json.loads(raw)
+    except Exception:
+        sys.exit(0)
+
+    tool_name = data.get("tool_name", "")
+    tool_input = data.get("tool_input", {})
+    if not isinstance(tool_input, dict):
+        tool_input = {}
+
+    all_hints, all_blocks, blocked_policy = _evaluate_tool_call(tool_name, tool_input, flow_ctx)
+
+    if blocked_policy:
+        _emit_block_and_exit(tool_name, all_hints, all_blocks, blocked_policy)
 
     # Write all hints to stdout (non-blocking)
     for hint in all_hints:

@@ -20,6 +20,39 @@ from ..step_logger import write_level_log
 
 _logger = logging.getLogger(__name__)
 
+_VENDOR_DIR_NAMES = {
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    "site-packages",
+    ".git",
+    "__pycache__",
+    "dist",
+    "build",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".eggs",
+}
+
+
+def _iter_project_py_files(project_root: Path, cap: int = 500):
+    """Yield up to `cap` project-owned .py files, skipping vendor/dependency dirs.
+
+    Excludes .venv, node_modules, site-packages, .git, __pycache__ and
+    similar directories so the cap is never consumed by third-party code
+    and vendor files never trip the project's own encoding/path checks.
+    """
+    count = 0
+    for py_file in project_root.glob("**/*.py"):
+        if any(part in _VENDOR_DIR_NAMES or part.endswith(".egg-info") for part in py_file.parts):
+            continue
+        yield py_file
+        count += 1
+        if count >= cap:
+            return
+
 
 # ============================================================================
 # AUTO-FIX NODES
@@ -137,10 +170,7 @@ def node_encoding_validation(state: FlowState) -> dict:
             write_level_log(state, "level-minus1", "encoding-validation", "SKIP", time.time() - _step_start, updates)
             return updates
 
-        py_files = list(project_root.glob("**/*.py"))
-        if len(py_files) > 500:
-            _logger.warning("project_root has %d Python files (>500), capping scan at 500", len(py_files))
-            py_files = py_files[:500]
+        py_files = list(_iter_project_py_files(project_root))
 
         non_ascii_files = []
 
@@ -231,10 +261,7 @@ def node_windows_path_check(state: FlowState) -> dict:
         import re as _re_detect
 
         _DRIVE_DETECT_RE = _re_detect.compile(r"(?<![A-Za-z0-9_])([A-Za-z]):\\(?:[A-Za-z0-9_][A-Za-z0-9_\-\. \\]+)")
-        _path_files = list(project_root.glob("**/*.py"))
-        if len(_path_files) > 500:
-            _logger.warning("project_root has %d Python files (>500), capping scan at 500", len(_path_files))
-            _path_files = _path_files[:500]
+        _path_files = list(_iter_project_py_files(project_root))
         issues = []
         for py_file in _path_files:
             try:

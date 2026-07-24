@@ -238,5 +238,97 @@ def check_failure_kb_hints(tool_name, tool_input):
     return hints, blocks
 
 
+def _run_via_daemon_or_fallback():
+    """Try the warm daemon fast path (WORKFLOW_DAEMON_MODE=1); else run direct.
+
+    stdin is a pipe and can only be read once, so it is read here exactly
+    one time and handed to whichever path is used. Any daemon failure
+    (not running, timeout, bad response) falls back to the exact same
+    direct in-process path used when daemon mode is off - zero behavior
+    change on failure.
+    """
+    try:
+        raw_stdin = sys.stdin.read()
+    except Exception:
+        raw_stdin = ""
+
+    daemon_mod = None
+    try:
+        import importlib.util as _dilu
+
+        _dpath = _PACKAGE_DIR / "daemon.py"
+        _dspec = _dilu.spec_from_file_location("_pre_tool_enforcer_daemon", str(_dpath))
+        daemon_mod = _dilu.module_from_spec(_dspec)
+        _dspec.loader.exec_module(daemon_mod)
+    except Exception:
+        daemon_mod = None
+
+    daemon_result = None
+    if daemon_mod is not None:
+        try:
+            daemon_result = daemon_mod.try_daemon_fast_path(raw_stdin)
+        except Exception:
+            daemon_result = None
+
+    if daemon_result is None:
+        # Daemon unreachable - best-effort spawn it for next time, then run
+        # the full direct path exactly as if daemon mode were off.
+        if daemon_mod is not None:
+            try:
+                daemon_mod.ensure_daemon_running(_core_mod._project_root)
+            except Exception:
+                pass
+        main(_pre_read_raw=raw_stdin)
+        return
+
+    hints = daemon_result.get("hints", []) or []
+    blocks = daemon_result.get("blocks", []) or []
+    blocked_policy = daemon_result.get("blocked_policy")
+
+    for hint in hints:
+        sys.stdout.write(hint + "\n")
+    sys.stdout.flush()
+
+    if blocked_policy:
+        for block in blocks:
+            sys.stderr.write(block + "\n")
+        sys.stderr.flush()
+        try:
+            _core_mod.record_policy_execution(
+                session_id=get_current_session_id() or "unknown",
+                policy_name="pre-tool-enforcer",
+                policy_script="pre-tool-enforcer.py",
+                policy_type="Core Hook (daemon)",
+                input_params={},
+                output_results={"status": "BLOCKED", "policy": blocked_policy},
+                decision="Blocked by " + blocked_policy + " (daemon)",
+                duration_ms=0,
+            )
+        except Exception:
+            pass
+        sys.exit(2)
+
+    try:
+        _core_mod.record_policy_execution(
+            session_id=get_current_session_id() or "unknown",
+            policy_name="pre-tool-enforcer",
+            policy_script="pre-tool-enforcer.py",
+            policy_type="Core Hook (daemon)",
+            input_params={},
+            output_results={"status": "ALLOWED", "hints_provided": len(hints)},
+            decision="Tool allowed with optimization hints (daemon)",
+            duration_ms=0,
+        )
+    except Exception:
+        pass
+
+    sys.stdout.write("[L3.6] Tool optimization verified (daemon)\n")
+    sys.stdout.flush()
+    sys.exit(0)
+
+
 if __name__ == "__main__":
-    main()
+    if os.environ.get("WORKFLOW_DAEMON_MODE", "0") == "1":
+        _run_via_daemon_or_fallback()
+    else:
+        main()
