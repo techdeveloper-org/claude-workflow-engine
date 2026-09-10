@@ -193,6 +193,14 @@ def check_agent_persona(tool_name, tool_input):
     """PreToolUse policy: block general-purpose subagent spawns lacking a
     real, skill-carrying persona.
 
+    SIBLING IMPLEMENTATION NOTICE: this function is not reachable from any
+    live hook (ADR-006, Hook-Free Execution Model -- PreToolUse was
+    deregistered 2026-08-04) and is kept only for its own equivalence tests.
+    The reachable backstop is the ported `validate_agent_dispatch` MCP tool
+    in mcp-pre-tool-gate/server.py (github.com/techdeveloper-org/mcp-pre-tool-gate).
+    If you change the semantics here, check whether that port needs the same
+    change (and vice versa), or the two copies will silently diverge.
+
     A general-purpose (or unset) subagent_type must carry a library agent
     persona injected as a '---persona---' YAML block at the top of its
     prompt, per the Subagent Dispatch Contract -- and that block must
