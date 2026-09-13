@@ -7,7 +7,7 @@ of failing:
 1. No agent or skill name appears as a string literal on the selection code
    path outside test fixtures. Asserted by parsing every module in
    ``langgraph_engine/selection`` and intersecting its string literals and
-   comments against the live 508-agent / 996-skill catalogue. The companion
+   comments against the live 528-agent / 1034-skill catalogue. The companion
    negative plants a real name into a temporary module and requires the same
    detector to flag it.
 2. Ten sample task descriptions each return a ranked agent set in which every
@@ -25,7 +25,8 @@ that returns the same agents for every task has no collisions and no value.
 its negative substitutes a deliberately non-discriminating scorer and requires
 the same measurement to fail.
 
-Every count asserted here was measured against claude-global-library 29.73.0.
+Every count asserted here was measured against claude-global-library 29.97.4
+(re-measured 2026-09-13; first measured against 29.73.0).
 Where a figure could drift with an upstream library release the assertion says
 so and is written as a bound rather than an equality.
 
@@ -70,15 +71,15 @@ ROUTING_MAP = PROJECT_ROOT / "docs" / "phase-7-routing" / "routing_map.json"
 SAMPLE_STRIDE = 4
 SAMPLE_SIZE = 10
 
-EXPECTED_DOMAIN_COUNT = 100
-EXPECTED_TOTAL_EDGES = 7266
-EXPECTED_AGENT_COUNT = 508
-EXPECTED_SKILL_COUNT = 996
-NAIVE_READER_BLIND_SPOT_EDGES = 486
+EXPECTED_DOMAIN_COUNT = 104
+EXPECTED_TOTAL_EDGES = 7527
+EXPECTED_AGENT_COUNT = 528
+EXPECTED_SKILL_COUNT = 1034
+NAIVE_READER_BLIND_SPOT_EDGES = 490
 NAIVE_READER_BLIND_SPOT_DOMAINS = 7
 
 MEASURED_CONTAINER_CENSUS = {
-    ("bare", "type"): 58,
+    ("bare", "type"): 62,
     ("edges", "type"): 23,
     ("bare", "edge_type"): 7,
     ("relationships", "type"): 7,
@@ -308,7 +309,7 @@ class TestKgAdapterConformance:
     """The adapter reads all six measured schema shapes and never empties out."""
 
     def test_every_domain_parses(self, adapter):
-        """All 100 domain graphs parse; none degrades to an empty result."""
+        """All 104 domain graphs parse; none degrades to an empty result."""
         domains = _all_domains()
         assert len(domains) == EXPECTED_DOMAIN_COUNT
 
@@ -322,7 +323,7 @@ class TestKgAdapterConformance:
     def test_container_and_edge_type_census_matches_the_measured_shapes(self, adapter):
         """The six container/edge-type combinations occur at their measured counts.
 
-        Counts are for library 29.73.0. An upstream release may legitimately
+        Counts are for library 29.97.4. An upstream release may legitimately
         move a domain between shapes; what must not change is that all six
         forms are handled and every domain lands in one of them.
         """
@@ -355,7 +356,7 @@ class TestKgAdapterConformance:
         assert total == EXPECTED_TOTAL_EDGES
 
     def test_the_naive_edges_only_reader_loses_edges_this_adapter_keeps(self, adapter):
-        """NEGATIVE CONTROL: the pre-ADR-015 reader silently drops 486 edges.
+        """NEGATIVE CONTROL: the pre-ADR-015 reader silently drops 490 edges.
 
         If this control ever passes -- if the naive reader loses nothing -- then
         the assertion above is no longer testing anything, because the corpus

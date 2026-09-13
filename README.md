@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-green)](https://python.org)
 [![CI](https://github.com/techdeveloper-org/claude-workflow-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/techdeveloper-org/claude-workflow-engine/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-105%20files%20·%205%20integration-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-106%20files%20·%205%20integration-brightgreen)](tests/)
 [![Discussions](https://img.shields.io/badge/Discussions-GitHub-blueviolet)](../../discussions)
 
 ---
@@ -469,8 +469,8 @@ claude-workflow-engine/           # 369 Python files total
 ├── policies/                     # non-.md policy state only (failure-kb.json) — see note below
 │   └── 03-execution-system/failure-prevention/failure-kb.json
 │
-├── tests/                        # 105 test_*.py files (126 total Python files)
-│   ├── test_*.py                 # 96 unit tests
+├── tests/                        # 106 test_*.py files (127 total Python files)
+│   ├── test_*.py                 # 97 unit tests
 │   ├── integration/              # 5 integration tests (GitHub, MCP, runtime verification)
 │   ├── e2e/                      # 3 end-to-end scenario tests
 │   └── load/                     # 1 concurrency / load test
@@ -628,11 +628,11 @@ ENABLE_HEALTH_SERVER=1 ENABLE_METRICS=1 LOG_FORMAT=json \
 
 ## Testing
 
-105 test_*.py files (126 total Python files in `tests/` including conftest and `__init__` files):
+106 test_*.py files (127 total Python files in `tests/` including conftest and `__init__` files):
 
 | Category | Files | Notes |
 |---|:---:|---|
-| Unit tests | 96 | In `tests/test_*.py` — no external dependencies required |
+| Unit tests | 97 | In `tests/test_*.py` — no external dependencies required |
 | Integration tests | 5 | `tests/integration/` — require live GitHub token or MCP servers |
 | E2E tests | 3 | `tests/e2e/` — require full pipeline environment |
 | Load tests | 1 | `tests/load/` — enabled with `RUN_LOAD_TESTS=1` |

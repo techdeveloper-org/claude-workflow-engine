@@ -87,9 +87,10 @@ DOCUMENTED_CHAIN_BLOCK = "\n".join(
     [
         "## Fallback Chain",
         "```",
-        _chain_line("haiku", "sonnet", "opus", "escalate to user"),
-        _chain_line("sonnet", "opus", "escalate to user"),
-        _chain_line("opus", "escalate to user (no further fallback)"),
+        _chain_line("haiku", "sonnet", "opus", "fable", "escalate to user"),
+        _chain_line("sonnet", "opus", "fable", "escalate to user"),
+        _chain_line("opus", "fable", "escalate to user"),
+        _chain_line("fable", "escalate to user (no further fallback, Fable is the top tier)"),
         "```",
         "",
     ]
@@ -220,7 +221,7 @@ class TestChainMatchesTheAuthoredRule:
         """
         parsed = parse_documented_chain(DOCUMENTED_CHAIN_BLOCK)
         assert parsed == TIER_CHAIN
-        assert len(parsed) == 3
+        assert len(parsed) == 4
 
     def test_the_parser_rejects_a_mutated_chain(self):
         """NEGATIVE CONTROL: the same parser must disagree when the chain is wrong.

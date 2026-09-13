@@ -71,7 +71,7 @@ from typing import Any, Callable, List, Optional, Tuple
 
 _log = logging.getLogger(__name__)
 
-TIER_CHAIN: Tuple[str, ...] = ("haiku", "sonnet", "opus")
+TIER_CHAIN: Tuple[str, ...] = ("haiku", "sonnet", "opus", "fable")
 
 RATE_LIMIT_STATUS_CODES: Tuple[int, ...] = (429, 529)
 

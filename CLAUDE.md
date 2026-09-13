@@ -20,8 +20,8 @@ Claude Workflow Engine is a 3-level LangGraph-based orchestration pipeline for a
 | **Status** | Active Development |
 | **Primary Location** | langgraph_engine/ |
 | **MCP Servers** | 13 servers -- all in separate repos under [techdeveloper-org](https://github.com/orgs/techdeveloper-org/repositories); 1 also keeps an in-engine copy in `src/mcp/` |
-| **Total Python Files** | 248 (langgraph_engine/); 493 repo-wide |
-| **Test Files** | 105 (96 unit, 5 integration, 3 e2e, 1 load) |
+| **Total Python Files** | 248 (langgraph_engine/); 494 repo-wide |
+| **Test Files** | 106 (97 unit, 5 integration, 3 e2e, 1 load) |
 | **Call Graph** | 578 classes, 3,985 methods, 4 languages (Python/Java/TS/Kotlin) |
 
 ---
