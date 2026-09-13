@@ -3,7 +3,7 @@
 **Project:** Claude Workflow Engine
 **Version:** 2.1.0
 **Type:** LangGraph Orchestration Pipeline with Call Graph Intelligence + Template Fast-Path
-**Last Updated:** 2026-08-07
+**Last Updated:** 2026-09-13
 
 ---
 
@@ -233,8 +233,10 @@ unversioned: if that machine is lost, so are they.
 
 All 13 MCP servers have been extracted to individual private repos under
 [`techdeveloper-org`](https://github.com/orgs/techdeveloper-org/repositories)
-for independent versioning, testing, and reuse. Each is registered in `~/.claude/settings.json`
-and points to `mcp-{name}/server.py` in the local workspace.
+for independent versioning, testing, and reuse. Each is registered at user scope in `~/.claude.json`
+(via `claude mcp add --scope user`) and points to `mcp-{name}/server.py` in the local workspace.
+Claude Code does not load MCP servers from `~/.claude/settings.json`; a server declared only there
+never starts (#321).
 
 > **Note:** `session-mgr` also keeps an in-engine copy in `src/mcp/` because
 > it is imported in-process by `session_hooks.py`.
@@ -455,7 +457,7 @@ See environment variables in `.env.example`:
 
 ---
 
-**Last Updated:** 2026-08-07
+**Last Updated:** 2026-09-13
 
 
 <!-- execution-insight- -->

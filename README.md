@@ -850,4 +850,4 @@ Key rules:
 
 ---
 
-**Version:** 2.1.0 | **Last Updated:** 2026-08-10
+**Version:** 2.1.0 | **Last Updated:** 2026-09-13
