@@ -204,7 +204,7 @@ not recomputed here and is owned elsewhere (PRD NFR-4).
 that a blocking policy returns exit code 2 from the `PreToolUse` hook so the tool call does not
 proceed. Deleting `PreToolUse` and `PostToolUse` falsifies this for two of the four events.
 
-Per `rules/44` (mirrored in this repo at `docs/standards/44-srs-lifecycle.md`) the SRS is
+Per `rules/44` (`~/.claude/rules/44-srs-lifecycle.md`; the repo copy was removed in #320) the SRS is
 append-only, so FR-9 cannot be quietly edited in place. The
 required handling is a superseding append that retires FR-9's four-event guarantee, states the v2.0.0
 replacement guarantee, and adds a Change Log row. An agent that silently rewrites FR-9 in place is in

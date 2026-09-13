@@ -475,7 +475,7 @@ claude-workflow-engine/           # 369 Python files total
 │   ├── e2e/                      # 3 end-to-end scenario tests
 │   └── load/                     # 1 concurrency / load test
 │
-├── docs/                         # 253 files — architecture docs, ADRs, runbooks, ALL policy/rule
+├── docs/                         # 201 files — architecture docs, ADRs, runbooks, ALL policy/rule
 │                                 # .md files (flattened here, no subfolders), CONTRIBUTING.md,
 │                                 # CODE_OF_CONDUCT.md, and the GitHub issue/PR templates
 ├── uml/                          # Regenerated per pipeline run (13 types, Mermaid/PlantUML)
@@ -814,7 +814,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 
 **Complexity score is not ground truth:** `combined_complexity_score` is a heuristic: `simple_score × 0.3 + graph_score × 0.7`. It is on a 1-25 scale and correlates with effort, but it does not map to story points and should not be treated as precise.
 
-**Framework-specific standards cover only Flask, Django, and Spring Boot so far.** `load_framework_standards()` in `standards/selector.py` looks in `docs/standards/` for a `{framework}-standards.md` file; `docs/standards/flask-standards.md`, `docs/standards/django-standards.md`, and `docs/standards/spring-boot-standards.md` are bundled. `detect_framework()` also recognizes FastAPI, Pyramid, Tornado, Celery, Scrapy, plain Spring, Quarkus, Micronaut, and the common JS/TS frameworks (React, Angular, Vue, Express, etc.) — none of those have a bundled doc yet, so detection succeeds but the framework tier returns empty for them. `load_language_standards()` has full coverage: all 6 project types `detect_project_type()` recognizes except `unknown` resolve real content (`docs/standards/02-backend-standards.md` python, `docs/standards/06-typescript-standards.md` javascript/typescript, `docs/standards/07-go-standards.md` go, `docs/standards/08-rust-standards.md` rust, `docs/standards/java-standards.md` java, `docs/standards/csharp-standards.md` csharp).
+**Framework-specific standards cover only Flask, Django, and Spring Boot so far.** `load_framework_standards()` in `standards/selector.py` looks in `~/.claude/rules/` (the only copy of the Claude rules; the repo no longer keeps one) for a `{framework}-standards.md` file; `flask-standards.md`, `django-standards.md`, and `spring-boot-standards.md` exist there. `detect_framework()` also recognizes FastAPI, Pyramid, Tornado, Celery, Scrapy, plain Spring, Quarkus, Micronaut, and the common JS/TS frameworks (React, Angular, Vue, Express, etc.) — none of those have a bundled doc yet, so detection succeeds but the framework tier returns empty for them. `load_language_standards()` has full coverage: all 6 project types `detect_project_type()` recognizes except `unknown` resolve real content (all under `~/.claude/rules/`: `02-backend-standards.md` python, `06-typescript-standards.md` javascript/typescript, `07-go-standards.md` go, `08-rust-standards.md` rust, `java-standards.md` java, `csharp-standards.md` csharp). On a machine without `~/.claude/rules/` both tiers return empty and fall through to the library-skill tiers.
 
 ### Trade-offs by Design
 

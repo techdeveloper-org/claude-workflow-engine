@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+- **`docs/standards/` (52 files).** It duplicated the Claude rules in `~/.claude/rules/` and had drifted: 8 files were older than the live rules, and 6 existed only in the repo. The 6 repo-only files (java, csharp, django, flask, spring-boot, TOOL-OPTIMIZATION) moved to `~/.claude/rules/` with `paths:` frontmatter. `load_framework_standards()` and `load_language_standards()` in `standards/selector.py` now read `~/.claude/rules/`, and `TestRuleFilePaths` reads it too, skipping where it is not installed. (#320)
+
 ## [2.1.0] - 2026-08-07
 
 **Step 1 emits its prompt instead of executing it, and three things that were only

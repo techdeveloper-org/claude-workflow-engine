@@ -21,6 +21,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GENERATOR = REPO_ROOT / "langgraph_engine" / "sdlc_pipeline" / "documentation_generator.py"
 MANAGER = REPO_ROOT / "langgraph_engine" / "sdlc_pipeline" / "documentation_manager.py"
+RULES_DIR = Path.home() / ".claude" / "rules"
 
 REQUIRED_SECTIONS = [
     "## 1. Purpose",
@@ -183,6 +184,7 @@ class TestManagerAppend:
         assert text.find("**FR-2:**") < text.find("## Non-Functional Requirements")
 
 
+@pytest.mark.skipif(not RULES_DIR.is_dir(), reason="rules not installed at ~/.claude/rules")
 class TestRuleFilePaths:
     """Every engine path a rule names must exist.
 
@@ -190,12 +192,15 @@ class TestRuleFilePaths:
     pointed at `langgraph_engine/level3_execution/`, a package renamed to
     `sdlc_pipeline` in v1.20. A rule that names a module nobody can find is
     indistinguishable from a rule nobody implements.
+
+    The rules live only in ~/.claude/rules/ (issue #320 removed the repo's
+    docs/standards/ copy), so the class skips where they are not installed.
     """
 
-    RULE_COPIES = sorted((REPO_ROOT / "docs" / "standards").glob("4[0-6]-*.md"))
+    RULE_COPIES = sorted(RULES_DIR.glob("4[0-6]-*.md"))
 
     def test_rule_copies_are_present(self):
-        assert self.RULE_COPIES, "no rule copies found under docs/"
+        assert self.RULE_COPIES, "no rule files found under ~/.claude/rules"
 
     def test_no_rule_names_a_missing_engine_path(self):
         pattern = re.compile(r"`(langgraph_engine/[A-Za-z0-9_./-]+\.py)`")

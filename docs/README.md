@@ -22,70 +22,10 @@ permits: `README.md`, `CLAUDE.md`, `SRS.md`, `CHANGELOG.md` and `VERSION`.
 | [`policies/`](policies/) | Pipeline policies | 44 |
 | [`releases/`](releases/) | Per-release design notes | 7 |
 | [`reports/`](reports/) | Investigations and audits | 26 |
-| [`standards/`](standards/) | Coding and testing standards | 52 |
+
+Coding and testing standards (numbered rules 01-46 plus per-language standards) are not kept in this repository. They live only in `~/.claude/rules/`, which is what Claude Code and `standards/selector.py` load (#320).
 
 ---
-
-## `standards/` -- Coding and testing standards
-
-Numbered rules 01-46 plus per-language standards. These mirror `~/.claude/rules/`, which is what the Standards mechanism loads at runtime; the copies here are for reading, not execution.
-
-<details><summary>52 file(s)</summary>
-
-- [01-common-standards.md](standards/01-common-standards.md)
-- [02-backend-standards.md](standards/02-backend-standards.md)
-- [03-microservices-standards.md](standards/03-microservices-standards.md)
-- [04-frontend-standards.md](standards/04-frontend-standards.md)
-- [05-security-standards.md](standards/05-security-standards.md)
-- [06-typescript-standards.md](standards/06-typescript-standards.md)
-- [07-go-standards.md](standards/07-go-standards.md)
-- [08-rust-standards.md](standards/08-rust-standards.md)
-- [09-swift-standards.md](standards/09-swift-standards.md)
-- [10-kotlin-standards.md](standards/10-kotlin-standards.md)
-- [11-documentation-files.md](standards/11-documentation-files.md)
-- [12-docstrings-only.md](standards/12-docstrings-only.md)
-- [13-spring-cloud-infrastructure.md](standards/13-spring-cloud-infrastructure.md)
-- [14-entity-design-patterns.md](standards/14-entity-design-patterns.md)
-- [15-dto-form-separation.md](standards/15-dto-form-separation.md)
-- [16-validation-sequence-pattern.md](standards/16-validation-sequence-pattern.md)
-- [17-api-response-wrapper.md](standards/17-api-response-wrapper.md)
-- [18-service-layer-conventions.md](standards/18-service-layer-conventions.md)
-- [19-exception-handling-hierarchy.md](standards/19-exception-handling-hierarchy.md)
-- [20-inter-service-communication.md](standards/20-inter-service-communication.md)
-- [21-caching-strategy.md](standards/21-caching-strategy.md)
-- [22-common-library-design.md](standards/22-common-library-design.md)
-- [23-enum-as-domain-model.md](standards/23-enum-as-domain-model.md)
-- [24-constants-organization.md](standards/24-constants-organization.md)
-- [25-jpa-auditing-pattern.md](standards/25-jpa-auditing-pattern.md)
-- [26-openapi-documentation.md](standards/26-openapi-documentation.md)
-- [27-centralized-logging.md](standards/27-centralized-logging.md)
-- [28-test-coverage-enforcement.md](standards/28-test-coverage-enforcement.md)
-- [29-container-deployment.md](standards/29-container-deployment.md)
-- [30-maven-build-conventions.md](standards/30-maven-build-conventions.md)
-- [31-security-authentication.md](standards/31-security-authentication.md)
-- [32-repository-conventions.md](standards/32-repository-conventions.md)
-- [33-test-case-roadmap.md](standards/33-test-case-roadmap.md)
-- [34-frontend-package-structure.md](standards/34-frontend-package-structure.md)
-- [35-positive-testing-standards.md](standards/35-positive-testing-standards.md)
-- [36-negative-testing-standards.md](standards/36-negative-testing-standards.md)
-- [37-edge-case-testing-standards.md](standards/37-edge-case-testing-standards.md)
-- [38-test-mocking-strategy.md](standards/38-test-mocking-strategy.md)
-- [39-cross-cutting-test-patterns.md](standards/39-cross-cutting-test-patterns.md)
-- [40-universal-test-patterns-abstract.md](standards/40-universal-test-patterns-abstract.md)
-- [41-testing-standards-python-fastapi.md](standards/41-testing-standards-python-fastapi.md)
-- [42-testing-standards-nodejs-express.md](standards/42-testing-standards-nodejs-express.md)
-- [43-testing-standards-go.md](standards/43-testing-standards-go.md)
-- [44-srs-lifecycle.md](standards/44-srs-lifecycle.md)
-- [45-uml-diagram-lifecycle.md](standards/45-uml-diagram-lifecycle.md)
-- [46-architecture-documentation.md](standards/46-architecture-documentation.md)
-- [TOOL-OPTIMIZATION-LEVEL2-STANDARD.md](standards/TOOL-OPTIMIZATION-LEVEL2-STANDARD.md)
-- [csharp-standards.md](standards/csharp-standards.md)
-- [django-standards.md](standards/django-standards.md)
-- [flask-standards.md](standards/flask-standards.md)
-- [java-standards.md](standards/java-standards.md)
-- [spring-boot-standards.md](standards/spring-boot-standards.md)
-
-</details>
 
 ## `policies/` -- Pipeline policies
 

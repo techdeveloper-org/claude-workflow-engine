@@ -42,7 +42,7 @@ actually enforced at runtime and which are prose only.
 
 Corpus to read in full:
 - `docs/policies/` — 46 markdown policy documents (the authored corpus)
-- `docs/standards/` — 52 files: numbered rules 01–46 plus per-language standards
+- `~/.claude/rules/` — numbered rules 01–46 plus per-language standards (the only copy; no repo `docs/standards/` since #320)
 - `~/.claude/policies/` — 5 directories: `01-sync-system`, `02-standards-system`,
   `03-execution-system`, `failure-prevention`, `testing` (this is what `get_policies_dir()` reads today)
 - `policies/` in-repo — contains **only** `03-execution-system/failure-prevention/failure-kb.json`
@@ -1716,7 +1716,7 @@ AGREED CONTRACTS
 
 INPUT CONTEXT
 - `structural_inventory.json`, `ast_call_graph.json`, `audit_surface.json`.
-- `docs/policies/` — 46 files. `docs/standards/` — 52 files (numbered rules 01–46 + language standards).
+- `docs/policies/` — 46 files. `~/.claude/rules/` — numbered rules 01–46 + language standards (no repo copy).
 - Known enforcement readers to check: `hooks/pre_tool_enforcer/policies/failure_kb.py` reads
   `policies/03-execution-system/failure-prevention/failure-kb.json`; `get_policies_dir()` resolves
   `~/.claude/policies/`.

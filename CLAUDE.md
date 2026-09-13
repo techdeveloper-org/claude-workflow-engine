@@ -152,12 +152,11 @@ Level 2: SDLC Execution Core (9 active steps: Steps 0-8)
 |   +-- architecture/                 # generate_system_diagram.py (shared utility)
 |   +-- setup/  bin/  tools/          # env setup; Windows .bat launchers; dev utilities (release.py, sync-version.py, etc.)
 |   +-- github_operations/  github_pr_workflow/  helpers/   # GitHub + PR workflow helpers
-+-- policies/03-execution-system/failure-prevention/  # failure-kb.json only (read by hooks/pre_tool_enforcer/policies/failure_kb.py); the historical 00-auto-fix/01-sync/02-standards/testing subtrees do not exist on disk -- see docs/ for standards content instead
++-- policies/03-execution-system/failure-prevention/  # failure-kb.json only (read by hooks/pre_tool_enforcer/policies/failure_kb.py); the historical 00-auto-fix/01-sync/02-standards/testing subtrees do not exist on disk -- standards live only in ~/.claude/rules/ (no repo copy, #320)
 +-- src/mcp/                          # In-engine copy of session-mgr + bridge (session_hooks, base/)
 +-- k8s/                              # Kubernetes manifests (deployment, service, hpa, configmap, secret)
 +-- tests/                            # 45 test files (37 unit, 4 integration, 3 e2e, 1 load)
 +-- docs/                             # ALL documentation, segregated by kind -- see docs/README.md for the index
-|   +-- standards/ (52)               # numbered rules 01-46 + per-language standards; the loaded copy is ~/.claude/rules/, NOT this one
 |   +-- policies/ (46)                # pipeline policy documentation. NOT a mirror of ~/.claude/policies/ -- see the note below
 |   +-- architecture/ (17)            # ADRs, pipeline/level design, flow diagrams, orchestration prompt
 |   +-- guides/ (14)                  # getting started, deployment, testing, troubleshooting, runbooks
@@ -202,7 +201,7 @@ unversioned: if that machine is lost, so are they.
 | Integrations Package | langgraph_engine/integrations/ | Abstract Factory + Lifecycle: GitHub/Jira/Figma/Jenkins |
 | Level 0 | langgraph_engine/preflight_guard/ | Pre-Flight Sanity Guard -- auto-fix enforcement (canonical) |
 | Level 1 | langgraph_engine/context_sync/ | Session & Context Synchronization (canonical). Outputs: `complexity_score` [1-10] (simple heuristic), `combined_complexity_score` [1-25] (simple x 0.3 + graph x 0.7 after linear scaling). **Note: `combined_complexity_score` is on a 1-25 scale -- do NOT treat it as 1-10.** |
-| Standards (non-numbered) | docs/ (standards) + langgraph_engine/standards/ (selector + library_adapter) | Standards policies (.md files, no pipeline nodes) -- always-on, loaded from disk; retired from the level count since it has never had pipeline nodes |
+| Standards (non-numbered) | ~/.claude/rules/ (the only copy; no repo docs/standards/) + langgraph_engine/standards/ (selector + library_adapter) | Standards policies (.md files, no pipeline nodes) -- always-on, loaded from disk; retired from the level count since it has never had pipeline nodes |
 | Level 2 | langgraph_engine/sdlc_pipeline/subgraph.py | SDLC Execution Core -- 9-step active execution (Steps 0-8) -- ACTIVE (nodes in sdlc_pipeline/nodes/) |
 | Pre-Analysis Node | langgraph_engine/sdlc_pipeline/subgraph.py | orchestration_pre_analysis_node: CallGraph scan at Step 0; template fast-path detection |
 | Hooks | hooks/pre-tool-enforcer.py, post-tool-tracker.py, stop-notifier.py | Tool enforcement + session maintenance |
