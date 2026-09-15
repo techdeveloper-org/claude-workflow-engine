@@ -130,12 +130,12 @@ Level 2: SDLC Execution Core (9 active steps: Steps 0-8)
 
 ```
 /
-+-- hooks/                            # Claude Code hook scripts (PreToolUse, PostToolUse, Stop)
-|   +-- pre-tool-enforcer.py          # PreToolUse hook entry point (shim -> pre_tool_enforcer/)
-|   +-- post-tool-tracker.py          # PostToolUse hook entry point (shim -> post_tool_tracker/)
-|   +-- stop-notifier.py              # Stop hook entry point (shim -> stop_notifier/)
-|   +-- pre_tool_enforcer/            # PreToolUse hook package (canonical)
-|   +-- post_tool_tracker/            # PostToolUse hook package (canonical)
++-- hooks/                            # Hook scripts. ONLY Stop is registered (ADR-006, v2.0.0)
+|   +-- pre-tool-enforcer.py          # UNREGISTERED since v2.0.0 -- retained, never invoked
+|   +-- post-tool-tracker.py          # UNREGISTERED since v2.0.0 -- retained, never invoked
+|   +-- stop-notifier.py              # Stop hook entry point (shim -> stop_notifier/) -- THE ONLY LIVE HOOK
+|   +-- pre_tool_enforcer/            # UNREGISTERED since v2.0.0 -- retained, never invoked
+|   +-- post_tool_tracker/            # UNREGISTERED since v2.0.0 -- retained, never invoked
 |   +-- stop_notifier/                # Stop hook package (canonical)
 |   +-- ide_paths.py                  # Path constants (imported by hook packages)
 |   +-- project_session.py            # Session utilities (imported by hook packages)
@@ -204,7 +204,8 @@ unversioned: if that machine is lost, so are they.
 | Standards (non-numbered) | ~/.claude/rules/ (the only copy; no repo docs/standards/) + langgraph_engine/standards/ (selector + library_adapter) | Standards policies (.md files, no pipeline nodes) -- always-on, loaded from disk; retired from the level count since it has never had pipeline nodes |
 | Level 2 | langgraph_engine/sdlc_pipeline/subgraph.py | SDLC Execution Core -- 9-step active execution (Steps 0-8) -- ACTIVE (nodes in sdlc_pipeline/nodes/) |
 | Pre-Analysis Node | langgraph_engine/sdlc_pipeline/subgraph.py | orchestration_pre_analysis_node: CallGraph scan at Step 0; template fast-path detection |
-| Hooks | hooks/pre-tool-enforcer.py, post-tool-tracker.py, stop-notifier.py | Tool enforcement + session maintenance |
+| Hooks (live) | hooks/stop-notifier.py | Session maintenance. **The only registered hook since v2.0.0** |
+| Hooks (retained, inactive) | hooks/pre-tool-enforcer.py, post-tool-tracker.py | **NOT registered.** ADR-006 removed the `PreToolUse`/`PostToolUse`/`UserPromptSubmit` registrations in v2.0.0 (commit `2e371f6`, 2026-08-04) and deliberately kept the source. These scripts never run. Do not route an enforcement need to them -- see the note under "Hook status" below |
 | Call Graph Builder | langgraph_engine/call_graph_builder.py | AST-based FQN call stack (compat shim -> parsers/) |
 | Call Graph Analyzer | langgraph_engine/call_graph_analyzer.py | Pipeline impact analysis (Steps 0/4/5) |
 | UML Generators | langgraph_engine/uml_generators.py | Compat shim -> diagrams/DiagramFactory |
@@ -228,6 +229,33 @@ unversioned: if that machine is lost, so are they.
 | Secrets Scanner | scripts/secrets_check.py | CI gate: 6 regex patterns, exit 1 on finding |
 | Pin Requirements | scripts/pin_requirements.py | Generates requirements.pinned.txt + requirements.bounds.txt |
 | PromptGen Caller | langgraph_engine/sdlc_pipeline/architecture/prompt_gen_expert_caller.py | Step 1 Phase 1: assembles the orchestration prompt from the master template (no LLM call) |
+
+### Hook status -- read before routing any enforcement need to a hook
+
+<!-- Added 2026-09-15 | GH #323 | Cause: docs across this repo still described PreToolUse as live -->
+
+**`Stop` is the only registered hook.** ADR-006 (`docs/architecture/ADR-006-hook-free-execution.md`,
+executed 2026-08-04, commit `2e371f6`) removed the `UserPromptSubmit`, `PreToolUse` and
+`PostToolUse` **registrations** in v2.0.0 while deliberately retaining the source files. Verified
+2026-09-15: `~/.claude/settings.json` registers `Stop` only, and `scripts/settings-config.json`
+now lists `Stop` only.
+
+`hooks/pre-tool-enforcer.py` and `hooks/post-tool-tracker.py` **cannot fire.** Neither can anything
+under `hooks/pre_tool_enforcer/` or `hooks/post_tool_tracker/`.
+
+This is not a theoretical warning. It has already cost a downstream error: an APPROVED harness
+control policy in a sibling repo routed a merge-gate fix to *"a PreToolUse deny-pattern in
+`hooks/pre-tool-enforcer.py`"* — a control that reads as enforcement and enforces nothing, filed as
+`techdeveloper-org/youtube-monetization-tool#211`. The remediation for that failure class was itself
+an instance of it, one level up.
+
+**The pre-tool deny capability does exist, and it is not a hook.** Claude Code's native
+`permissions.deny` in `settings.json` refuses matching tool calls before execution. It is a settings
+rule, so using it reinstates nothing ADR-006 removed and does not reopen a settled decision.
+
+Descriptions of the removed hooks elsewhere in `docs/architecture/` are retained as accurate
+*history* — `POLICY-CHAIN-FLOWCHART.md` in particular documents real mechanism and would be the
+starting point if the decision were ever revisited. They are labelled, not deleted.
 
 ### MCP Servers (13 servers, 295 tools) -- All Extracted to Separate Repos
 

@@ -427,11 +427,11 @@ LEVEL 3 (EXECUTION):
   └─ Failure Prevention: 8 scripts ✅
      Total: 66 scripts, 11 steps
 
-HOOKS:
-  ├─ UserPromptSubmit: 3-level-flow + github_issue_manager ✅
-  ├─ PreToolUse: pre-tool-enforcer (5 enforcement levels) ✅
-  ├─ PostToolUse: post-tool-tracker (6 tracking levels) ✅
-  └─ Stop: stop-notifier ✅
+HOOKS:  (status corrected 2026-09-15, GH #323 -- only Stop is registered)
+  ├─ UserPromptSubmit: 3-level-flow + github_issue_manager   [UNREGISTERED v2.0.0]
+  ├─ PreToolUse: pre-tool-enforcer (5 enforcement levels)    [UNREGISTERED v2.0.0]
+  ├─ PostToolUse: post-tool-tracker (6 tracking levels)      [UNREGISTERED v2.0.0]
+  └─ Stop: stop-notifier ✅                                   [LIVE]
 
 OVERALL: 45 POLICIES + 74+ SCRIPTS = FULLY INTEGRATED 3-LEVEL SYSTEM ✅
 ```

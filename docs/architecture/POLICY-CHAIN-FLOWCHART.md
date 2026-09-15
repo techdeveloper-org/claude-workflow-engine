@@ -8,13 +8,28 @@
 
 ## Overview
 
+> ## ⚠ THREE OF THE FOUR HOOKS BELOW NO LONGER RUN
+>
+> **Status corrected 2026-09-15 (GH #323).** ADR-006 removed the `UserPromptSubmit`,
+> `PreToolUse` and `PostToolUse` **registrations** in v2.0.0 (executed 2026-08-04,
+> commit `2e371f6`), keeping the source files deliberately. **`Stop` is the only
+> registered hook.**
+>
+> Everything below is accurate as a record of how those hooks worked and is retained
+> for exactly that reason — it documents real mechanism and is the starting point if
+> the decision is ever revisited. **It is not a description of the running system.**
+> Do not route an enforcement need to `pre-tool-enforcer.py`; it cannot fire. The
+> pre-tool deny capability that does exist is Claude Code's native `permissions.deny`
+> in `settings.json`, which is a settings rule rather than a hook. See
+> `CLAUDE.md` → "Hook status" and `ADR-006-hook-free-execution.md`.
+
 This document shows the complete flow of policy execution across all 4 hooks and 3 levels of the Claude Workflow Engine system. Every subprocess call, flag read/write, and data flow is visualized using Mermaid flowcharts.
 
-**The 4 Hooks (Execution Order):**
-1. `UserPromptSubmit` → clear-session-handler.py + 3-level-flow.py (Level -1/1/2/3)
-2. `PreToolUse` → pre-tool-enforcer.py (Level 3.6/3.7)
-3. `PostToolUse` → post-tool-tracker.py (Level 3.9)
-4. `Stop` → stop-notifier.py (Level 3.10)
+**The 4 Hooks (Execution Order) — as designed in v1.x; see the status notice above:**
+1. `UserPromptSubmit` → clear-session-handler.py + 3-level-flow.py (Level -1/1/2/3) **[UNREGISTERED since v2.0.0]**
+2. `PreToolUse` → pre-tool-enforcer.py (Level 3.6/3.7) **[UNREGISTERED since v2.0.0]**
+3. `PostToolUse` → post-tool-tracker.py (Level 3.9) **[UNREGISTERED since v2.0.0]**
+4. `Stop` → stop-notifier.py (Level 3.10) **[LIVE — the only registered hook]**
 
 ---
 
@@ -234,6 +249,10 @@ flowchart TD
 ---
 
 ## Section 4: pre-tool-enforcer.py Check Sequence
+
+> **This sequence does not execute.** `PreToolUse` was unregistered in v2.0.0 (ADR-006);
+> the script is retained but never invoked. Read this as design history, not as a control
+> that runs. See the status notice at the top of this file. (GH #323)
 
 ```mermaid
 flowchart TD
