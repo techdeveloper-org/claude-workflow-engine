@@ -614,14 +614,39 @@ class DrawioConverter(_BaseDrawioConverter):
         nid = _IDGen(start=100)
 
         classes = analysis_data.get("classes") or []
-        edges_data = analysis_data.get("edges") or []
+        edges_data = (
+            analysis_data.get("edges")
+            or analysis_data.get("links")
+            or analysis_data.get("calls")
+            or analysis_data.get("relationships")
+            or []
+        )
+
+        if not classes and analysis_data.get("methods"):
+            methods = analysis_data.get("methods", [])
+            by_class = {}
+            standalone = []
+            for m in methods:
+                fqn = m.get("fqn", "")
+                if not fqn:
+                    continue
+                parent = m.get("parent_class")
+                if parent:
+                    cls_name = parent.split("::")[-1] if "::" in parent else parent
+                    by_class.setdefault(cls_name, []).append(m)
+                else:
+                    standalone.append(m)
+            for cls_name, cls_meths in sorted(by_class.items()):
+                classes.append({"name": cls_name, "methods": cls_meths})
+            if standalone:
+                classes.append({"name": "Functions", "methods": standalone})
 
         total_nodes = sum(len(c.get("methods", [])) for c in classes)
         apply_coloring = len(classes) <= max_nodes and total_nodes <= max_nodes
 
         all_callees = []  # type: List[str]
         for e in edges_data:
-            callee = e.get("callee", "")
+            callee = e.get("callee", e.get("to", e.get("target", "")))
             if callee:
                 all_callees.append(callee)
         callee_set = set(all_callees)
@@ -681,8 +706,8 @@ class DrawioConverter(_BaseDrawioConverter):
                 )
 
         for edge in edges_data[:50]:
-            caller_fqn = edge.get("caller", "")
-            callee_fqn = edge.get("callee", "")
+            caller_fqn = edge.get("caller", edge.get("from", edge.get("source", "")))
+            callee_fqn = edge.get("callee", edge.get("to", edge.get("target", "")))
             freq = edge.get("frequency", 1)
             label = "x%d" % freq if isinstance(freq, int) and freq > 1 else ""
 
