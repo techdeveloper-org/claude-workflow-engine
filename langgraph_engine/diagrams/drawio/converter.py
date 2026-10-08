@@ -168,10 +168,14 @@ class DrawioConverter:
         id_map = {}  # class name -> cell id
 
         for idx, cls in enumerate(classes[:40]):
+            if isinstance(cls, str):
+                cls = {"name": cls}
+            elif not isinstance(cls, dict):
+                continue
+
             name = cls.get("name", "Class%d" % idx)
             attrs = cls.get("attributes", [])[:10]
             meths = cls.get("methods", [])[:12]
-            cls.get("bases", [])
             is_iface = cls.get("is_interface", "interface" in name.lower())
             is_abst = cls.get("is_abstract", False)
 
@@ -204,10 +208,13 @@ class DrawioConverter:
             # Attributes section (child of container)
             attr_lines = []
             for a in attrs:
-                vis = a.get("visibility", "+")
-                hint = a.get("type_hint", "")
-                t = (": " + hint) if hint else ""
-                attr_lines.append("%s %s%s" % (vis, a["name"], t))
+                if isinstance(a, dict):
+                    vis = a.get("visibility", "+")
+                    hint = a.get("type_hint", "")
+                    t = (": " + hint) if hint else ""
+                    attr_lines.append("%s %s%s" % (vis, a.get("name", ""), t))
+                else:
+                    attr_lines.append(str(a))
             attr_text = "&#xa;".join(attr_lines) if attr_lines else " "
             cells.append(_vertex_child(nid(), attr_text, S_CLASS_ROW, 0, HDR_H, BOX_W, attr_h, cid))
 
@@ -217,15 +224,21 @@ class DrawioConverter:
             # Methods section
             meth_lines = []
             for m in meths:
-                vis = m.get("visibility", "+")
-                params = ", ".join(m.get("params", [])[:4])
-                ret = (": " + m["return_type"]) if m.get("return_type") else ""
-                meth_lines.append("%s %s(%s)%s" % (vis, m["name"], params, ret))
+                if isinstance(m, dict):
+                    vis = m.get("visibility", "+")
+                    params = ", ".join(str(p) for p in m.get("params", [])[:4])
+                    ret = (": " + m["return_type"]) if m.get("return_type") else ""
+                    mname = m.get("name", "method")
+                    meth_lines.append("%s %s(%s)%s" % (vis, mname, params, ret))
+                else:
+                    meth_lines.append(str(m))
             meth_text = "&#xa;".join(meth_lines) if meth_lines else " "
             cells.append(_vertex_child(nid(), meth_text, S_CLASS_ROW, 0, HDR_H + attr_h + DIV_H, BOX_W, meth_h, cid))
 
-        # Relationships
+        # Relationships embedded in classes
         for cls in classes[:40]:
+            if not isinstance(cls, dict):
+                continue
             src_id = id_map.get(cls.get("name", ""))
             if not src_id:
                 continue
@@ -236,7 +249,10 @@ class DrawioConverter:
                     cells.append(_edge(nid(), "", S_INHERIT, src_id, tgt_id))
             # Explicit relationships list
             for rel in cls.get("relationships", [])[:4]:
-                tgt_id = id_map.get(rel.get("target", ""))
+                if not isinstance(rel, dict):
+                    continue
+                tgt_n = rel.get("to", rel.get("target", ""))
+                tgt_id = id_map.get(tgt_n)
                 if not tgt_id:
                     continue
                 rtype = rel.get("type", "associate").lower()
@@ -248,6 +264,34 @@ class DrawioConverter:
                     cells.append(_edge(nid(), "", S_REALIZE, src_id, tgt_id))
                 elif rtype == "depend":
                     cells.append(_edge(nid(), "", S_DEPEND, src_id, tgt_id))
+                else:
+                    cells.append(_edge(nid(), "", S_ASSOCIATE, src_id, tgt_id))
+
+        # Top-level relationships
+        top_rels = data.get("relationships") or data.get("edges") or data.get("links") or data.get("dependencies") or []
+        for rel in top_rels[:20]:
+            if isinstance(rel, (list, tuple)) and len(rel) >= 2:
+                src_n, tgt_n = str(rel[0]), str(rel[1])
+                rtype = str(rel[2]).lower() if len(rel) > 2 else "associate"
+            elif isinstance(rel, dict):
+                src_n = rel.get("from", rel.get("source", ""))
+                tgt_n = rel.get("to", rel.get("target", ""))
+                rtype = rel.get("type", rel.get("label", "associate")).lower()
+            else:
+                continue
+            src_id = id_map.get(src_n)
+            tgt_id = id_map.get(tgt_n)
+            if src_id and tgt_id:
+                if "compose" in rtype or "composition" in rtype:
+                    cells.append(_edge(nid(), "", S_COMPOSE, src_id, tgt_id))
+                elif "aggregate" in rtype or "aggregation" in rtype:
+                    cells.append(_edge(nid(), "", S_AGGREGATE, src_id, tgt_id))
+                elif "realize" in rtype or "implements" in rtype:
+                    cells.append(_edge(nid(), "", S_REALIZE, src_id, tgt_id))
+                elif "depend" in rtype or "uses" in rtype:
+                    cells.append(_edge(nid(), "", S_DEPEND, src_id, tgt_id))
+                elif "inherit" in rtype or "extends" in rtype:
+                    cells.append(_edge(nid(), "", S_INHERIT, src_id, tgt_id))
                 else:
                     cells.append(_edge(nid(), "", S_ASSOCIATE, src_id, tgt_id))
 
