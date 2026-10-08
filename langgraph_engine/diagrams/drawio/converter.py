@@ -624,7 +624,8 @@ class DrawioConverter:
                 cells.append(_vertex(pid, prov, S_COMP_PROV, x + CW + 5, y + 20 + k * 40, 20, 20))
 
         # Dependencies
-        for dep in (data.get("dependencies") or [])[:20]:
+        deps = data.get("dependencies") or data.get("edges") or data.get("relationships") or data.get("links") or []
+        for dep in deps[:20]:
             if isinstance(dep, (list, tuple)) and len(dep) >= 2:
                 src_n, tgt_n = str(dep[0]), str(dep[1])
                 label = str(dep[2]) if len(dep) > 2 else "uses"
@@ -752,7 +753,15 @@ class DrawioConverter:
                 cells.append(_vertex_child(nid(), str(art), S_DEP_COMP, 10, art_y, NW - 20, ART_H, nid_))
 
         # Connections between nodes
-        for conn in (data.get("connections") or data.get("links") or [])[:15]:
+        conns = (
+            data.get("connections")
+            or data.get("links")
+            or data.get("edges")
+            or data.get("relationships")
+            or data.get("dependencies")
+            or []
+        )
+        for conn in conns[:15]:
             if isinstance(conn, (list, tuple)) and len(conn) >= 2:
                 src_n, tgt_n = str(conn[0]), str(conn[1])
                 label = str(conn[2]) if len(conn) > 2 else ""
@@ -780,7 +789,7 @@ class DrawioConverter:
         actors = data.get("actors") or ["User", "Admin"]
         use_cases = data.get("use_cases") or data.get("usecases") or []
         system_name = data.get("system_name", "System")
-        assocs = data.get("associations") or []
+        assocs = data.get("associations") or data.get("edges") or data.get("relationships") or data.get("links") or []
 
         if not use_cases:
             use_cases = [
@@ -840,8 +849,8 @@ class DrawioConverter:
                     a_name, uc_name = str(assoc[0]), str(assoc[1])
                     label = str(assoc[2]) if len(assoc) > 2 else ""
                 elif isinstance(assoc, dict):
-                    a_name = assoc.get("actor", "")
-                    uc_name = assoc.get("use_case", assoc.get("usecase", ""))
+                    a_name = assoc.get("actor", assoc.get("from", assoc.get("source", "")))
+                    uc_name = assoc.get("use_case", assoc.get("usecase", assoc.get("to", assoc.get("target", ""))))
                     label = assoc.get("label", "")
                 else:
                     continue
@@ -928,7 +937,8 @@ class DrawioConverter:
                 cells.append(_vertex_child(nid(), val_lines, S_OBJ_ROW, 0, HDR_H + DIV_H, OW, val_h, oid))
 
         # Links between objects
-        for link in (data.get("links") or [])[:15]:
+        links = data.get("links") or data.get("edges") or data.get("relationships") or data.get("connections") or []
+        for link in links[:15]:
             if isinstance(link, (list, tuple)) and len(link) >= 2:
                 src_n, tgt_n = str(link[0]), str(link[1])
                 label = str(link[2]) if len(link) > 2 else ""
@@ -1135,7 +1145,8 @@ class DrawioConverter:
     def _call_graph_diagram(self, data, nid):
         cells = []
         methods = data.get("methods") or []
-        edges = [e for e in (data.get("edges") or []) if e.get("type") != "inheritance"]
+        _edges_data = data.get("edges") or data.get("links") or data.get("calls") or data.get("relationships") or []
+        edges = [e for e in _edges_data if e.get("type") != "inheritance"]
 
         if not methods:
             return [_vertex(nid(), "No call graph data", S_ACT_ACTION, 100, 100, 240, 50)]
@@ -1153,7 +1164,7 @@ class DrawioConverter:
             else:
                 standalone.append(m)
 
-        callee_fqns = set(e.get("to", "") for e in edges)
+        callee_fqns = set(e.get("to", e.get("target", "")) for e in edges)
 
         MAX_COLS = 4
         BOX_W = 220
@@ -1212,8 +1223,8 @@ class DrawioConverter:
 
         edge_count = 0
         for e in edges[:60]:
-            from_id = fqn_to_row.get(e.get("from", ""))
-            to_id = fqn_to_row.get(e.get("to", ""))
+            from_id = fqn_to_row.get(e.get("from", e.get("source", "")))
+            to_id = fqn_to_row.get(e.get("to", e.get("target", "")))
             if from_id and to_id and from_id != to_id:
                 cells.append(_edge(nid(), "", S_COMP_DEP, from_id, to_id))
                 edge_count += 1
