@@ -892,25 +892,35 @@ class UMLDiagramGenerator:
         lines = ["classDiagram"]
 
         for cls in classes:
+            if isinstance(cls, str):
+                lines.append("    class %s" % cls)
+                continue
+
             lines.append("    class %s {" % cls["name"])
 
             for attr in cls.get("attributes", [])[:10]:
-                vis = attr.get("visibility", "+")
-                hint = attr.get("type_hint", "")
-                type_str = ""
-                if hint:
-                    # Simplify AST dump to readable type
-                    type_str = _simplify_type(hint)
-                    type_str = ": %s" % type_str if type_str else ""
-                lines.append("        %s%s%s" % (vis, attr["name"], type_str))
+                if isinstance(attr, str):
+                    lines.append("        +%s" % attr)
+                else:
+                    vis = attr.get("visibility", "+")
+                    hint = attr.get("type_hint", "")
+                    type_str = ""
+                    if hint:
+                        type_str = _simplify_type(hint)
+                        type_str = ": %s" % type_str if type_str else ""
+                    lines.append("        %s%s%s" % (vis, attr.get("name", "attr"), type_str))
 
             for method in cls.get("methods", [])[:15]:
+                if isinstance(method, str):
+                    lines.append("        +%s()" % method)
+                    continue
+
                 vis = method.get("visibility", "+")
                 params = ", ".join(method.get("params", [])[:4])
                 ret = ""
                 if method.get("return_type"):
                     ret = " %s" % _simplify_type(method["return_type"])
-                lines.append("        %s%s(%s)%s" % (vis, method["name"], params, ret))
+                lines.append("        %s%s(%s)%s" % (vis, method.get("name", "method"), params, ret))
 
             lines.append("    }")
 
